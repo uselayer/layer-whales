@@ -234,7 +234,8 @@ async function traderPage(venue, id) {
     <a class="back" href="#/">← All traders</a>
     <div class="who"><h2>${esc(t.name)}</h2>${venueTag(venue)}
       ${t.x_handle ? `<span class="muted">@${esc(t.x_handle)}</span>` : ""}
-      ${t.url ? `<a class="muted" href="${esc(t.url)}" target="_blank" rel="noopener">profile ↗</a>` : ""}</div>
+      ${t.url ? `<a class="muted" href="${esc(t.url)}" target="_blank" rel="noopener">profile ↗</a>` : ""}
+      ${venue === "polymarket" ? `<a class="muted" href="${worthHref(t.id)}">worth following? →</a>` : ""}</div>
     ${d.bio ? `<p class="muted" style="margin:4px 0">${esc(d.bio)}</p>` : ""}
     <div class="stats">${statCards.map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join("")}</div>
     ${hidden ? `<p class="note">${esc(t.name)} hides their trades and positions on Kalshi, so they can't be copied directly. If they trade on Polymarket too, you can follow that account instead (see below).</p>` : ""}
