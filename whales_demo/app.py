@@ -8,6 +8,7 @@ fake money) in their own store, ~/.uselayer/whales-demo/paper.db unless WHALES_S
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
@@ -100,6 +101,104 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
     return {"needs_layer_key": not os.environ.get("LAYER_API_KEY"), "links": [x.to_dict() for x in found]}
 
 
+# ---- worth following (Polymarket) ----
+# Finding and scoring ~200 wallets takes several minutes, so it runs in the background and the result
+# is kept in the store dir. A wallet that isn't in it is scored when its page is opened.
+
+WORTH_WALLETS = int(os.environ.get("WHALES_WORTH_WALLETS", "200"))
+WORTH_MAX_AGE_S = 24 * 3600
+_worth: dict[str, Any] = {"running": False, "done": 0, "total": 0, "error": None}
+_worth_data: dict[str, Any] | None = None
+_worth_one: dict[str, dict[str, Any]] = {}
+
+
+def worth_file() -> Path:
+    return STORE_DIR / "worth-following.json"
+
+
+def _worth_load() -> dict[str, Any] | None:
+    global _worth_data
+    if _worth_data is None and worth_file().exists():
+        try:
+            _worth_data = json.loads(worth_file().read_text())
+        except ValueError:
+            _worth_data = None
+    return _worth_data
+
+
+def _worth_run() -> None:
+    global _worth_data
+    try:
+        reads.whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
+
+        def progress(done: int, total: int, _s: Any) -> None:
+            _worth.update(done=done, total=total)
+
+        d = reads.whales.discover(wallets=WORTH_WALLETS, on_progress=progress)
+        data = d.to_dict(sample=True)
+        for s in data["scores"]:
+            s["sample"] = s["sample"][:30]
+        STORE_DIR.mkdir(parents=True, exist_ok=True)
+        worth_file().write_text(json.dumps(data))
+        _worth_data = data
+        _worth_one.clear()
+        _worth["error"] = None
+    except Exception as e:  # show it on the page; the last good result stays
+        _worth["error"] = str(e)
+    finally:
+        _worth["running"] = False
+
+
+def worth_refresh() -> None:
+    if _worth["running"]:
+        return
+    _worth.update(running=True, done=0, total=0, error=None)
+    threading.Thread(target=_worth_run, daemon=True).start()
+
+
+@app.get("/api/worth")
+def worth() -> dict[str, Any]:
+    """Every scored wallet without its bets, plus whether a refresh is running."""
+    data = _worth_load()
+    stale = data is None or time.time() - _iso_ts(data["finished"]) > WORTH_MAX_AGE_S
+    if stale and not _worth["running"] and _worth["error"] is None:
+        worth_refresh()
+    out: dict[str, Any] = {"status": dict(_worth), "result": None}
+    if data is not None:
+        out["result"] = {k: v for k, v in data.items() if k != "scores"} | {
+            "scores": [{k: v for k, v in s.items() if k != "sample"} for s in data["scores"]]
+        }
+    return out
+
+
+@app.post("/api/worth/refresh")
+def worth_refresh_route() -> dict[str, Any]:
+    worth_refresh()
+    return {"status": dict(_worth)}
+
+
+@app.get("/api/worth/{wallet}")
+def worth_wallet(wallet: str) -> dict[str, Any]:
+    """One wallet's score with its checked bets: from the last refresh, or scored now (5–30 s)."""
+    w = wallet.lower()
+    data = _worth_load()
+    for s in (data or {}).get("scores", []):
+        if s["wallet"] == w:
+            return s
+    if w not in _worth_one:
+        try:
+            _worth_one[w] = reads.whales.score(w).to_dict()
+        except VenueError as e:
+            raise venue_error(e) from e
+    return _worth_one[w]
+
+
+def _iso_ts(s: str) -> float:
+    from datetime import datetime
+
+    return datetime.fromisoformat(s).timestamp()
+
+
 # ---- following (paper) ----
 
 
@@ -110,6 +209,7 @@ class FollowRequest(BaseModel):
     size: float = 5
     copy_to: str = "polymarket_us"
     max_slippage: float = 0.03
+    categories: list[str] = []
 
 
 _copier: Copier | None = None
@@ -152,6 +252,7 @@ def follow(req: FollowRequest) -> dict[str, Any]:
             size=req.size,
             venue=req.copy_to,  # type: ignore[arg-type]
             max_slippage=req.max_slippage,
+            categories=tuple(req.categories),
         )
     _stop.clear()
     _thread = threading.Thread(target=_loop, args=(_copier,), daemon=True)
@@ -179,6 +280,7 @@ def following() -> dict[str, Any]:
         "following": cp.trader.to_dict(),
         "copy_to": cp.venue,
         "size": cp.size,
+        "categories": list(cp.categories),
         "started": cp._started,
         "checked_s_ago": None if _checked_at is None else round(time.time() - _checked_at, 1),
         "error": _error,

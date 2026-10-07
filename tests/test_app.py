@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -48,3 +49,35 @@ def test_follow_and_stop(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
     assert api.get("/api/follow").json()["following"]["id"] == "amy"
     assert api.delete("/api/follow").json()["following"] is None
     assert api.get("/api/paper").json()["net"] == 0
+
+
+SCORE = {"wallet": "0xabc", "name": "sharpie", "segment": "quiet", "action": "follow", "sample": [{"market": "m"}]}
+
+
+class _Score:
+    def to_dict(self) -> dict[str, Any]:
+        return SCORE | {"wallet": "0xnew"}
+
+
+def test_worth_lists_the_last_check_without_bets_and_scores_new_wallets_on_demand(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(engine, "_worth_data", None)
+    monkeypatch.setattr(engine, "worth_refresh", lambda: None)
+    assert api.get("/api/worth").json()["result"] is None
+    engine.STORE_DIR.joinpath("worth-following.json").write_text(
+        '{"finished": "2026-10-07T00:00:00+00:00", "counts": {"quiet": 1}, "coverage": {}, "sources": {},'
+        f' "scores": [{json.dumps(SCORE)}]}}'
+    )
+    r = api.get("/api/worth").json()["result"]
+    assert r["counts"] == {"quiet": 1} and r["scores"][0]["name"] == "sharpie" and "sample" not in r["scores"][0]
+    assert api.get("/api/worth/0xABC").json()["sample"] == [{"market": "m"}]
+    monkeypatch.setattr(engine.reads.whales, "score", lambda w: _Score())
+    assert api.get("/api/worth/0xnew").json()["wallet"] == "0xnew"
+
+
+def test_follow_passes_the_categories_to_the_copier(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
+    r = api.post("/api/follow", json={"venue": "polymarket", "id": "0xabc", "categories": ["Sports"]}).json()
+    assert r["categories"] == ["Sports"]
+    api.delete("/api/follow")

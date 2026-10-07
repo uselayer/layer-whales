@@ -11,6 +11,10 @@
     --kalshi: #0b7a5c; --poly: #2f5bd8;
   }
   @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .act.follow { background: #12301c; color: #4cc26b; }
+    :root:not([data-theme="light"]) .act.watch { background: #10243d; color: #6aa0ff; }
+    :root:not([data-theme="light"]) .act.avoid { background: #3a1616; color: #ff8a80; }
+    :root:not([data-theme="light"]) .tier.likely { background: #10243d; color: #6aa0ff; }
     :root:not([data-theme="light"]) {
       --bg: #191919; --fg: #ececec; --muted: #9b9b9b; --line: #2c2c2c; --soft: #222222;
       --accent: #6aa0ff; --up: #4cc26b; --down: #ff6b6b; --warn-bg: #2d2610; --warn-fg: #e9c46a;
@@ -78,6 +82,31 @@
   .spin::after { content: "…"; animation: dots 1.2s steps(4) infinite; display: inline-block; width: 1em; overflow: hidden; vertical-align: bottom; }
   @keyframes dots { from { width: 0; } to { width: 1em; } }
   .scroll { overflow-x: auto; }
+  nav.top { display: flex; gap: 14px; font-size: 14px; }
+  nav.top a { color: var(--muted); text-decoration: none; }
+  nav.top a.on { color: var(--fg); font-weight: 500; }
+  .seg { margin: 30px 0 8px; }
+  .seg h3 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 16px; }
+  .seg .what { color: var(--muted); font-size: 14px; margin: 2px 0 8px; }
+  .act { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--soft); color: var(--muted); font-weight: 500; }
+  .act.follow { background: #e6f4ea; color: #1a7f37; } .act.watch { background: #e7f3ff; color: #0b4fa8; }
+  .act.signal { background: var(--warn-bg); color: var(--warn-fg); } .act.avoid { background: #fdecea; color: #b42318; }
+  .row { padding: 11px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .row:hover { background: var(--soft); }
+  .row .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .row .ev { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .chip { font-size: 11px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .chip.strong { border-color: var(--up); color: var(--up); }
+  details.how { background: var(--soft); border-radius: 8px; padding: 10px 14px; font-size: 14px; margin: 0 0 14px; }
+  details.how summary { cursor: pointer; font-weight: 500; }
+  details.how ol { margin: 8px 0 4px; padding-left: 20px; } details.how li { margin: 4px 0; }
+  .checks { list-style: none; margin: 0; padding: 0; }
+  .checks li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .checks li:first-child { border-top: 0; padding-top: 0; }
+  .mark { font-weight: 700; } .mark.yes { color: var(--up); } .mark.no { color: var(--down); } .mark.unk { color: var(--muted); }
+  .reason { font-size: 17px; margin: 8px 0 4px; }
+  .cats label { margin-right: 12px; white-space: nowrap; }
+  .status { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
   @media (max-width: 640px) { .hide-sm { display: none; } .who h2 { font-size: 20px; } }
 </style>
 </head>
@@ -85,6 +114,8 @@
 <div class="wrap">
   <header>
     <h1><a href="#/">Layer Whales</a></h1>
+    <nav class="top"><a href="#/" id="nav-home">Traders</a><a href="#/worth" id="nav-worth">Worth following</a></nav>
+    <span class="spacer"></span>
     <span class="credit">Built on <a href="https://uselayer.sh" target="_blank" rel="noopener">uselayer</a> · paper money</span>
   </header>
   <div id="following" class="following"></div>
@@ -327,11 +358,194 @@ async function poll() {
 }
 setInterval(poll, 4000);
 
+
+// ---- worth following (Polymarket) ----
+const SEG = {
+  proven: ["Proven sharps", "follow", "A long record that beats the price, holds up without their best bets, and still pays when you copy a few minutes late."],
+  quiet: ["Quiet sharps", "follow", "Smaller accounts that no leaderboard lists, with a steady edge you can copy. The hidden gems."],
+  rising: ["Rising", "watch", "Good early signs, but too few bets to be sure yet. Worth watching."],
+  too_fast: ["Sharp but too fast", "signal", "Their edge is real, but the price has already moved by the time a copier gets in. Use their trades as a signal; copying isn't offered."],
+  lucky: ["Lucky big bettors", "avoid", "Big profit, but the price doesn't move their way after they buy, or one win carries the record. Don't follow."],
+};
+const ACT = { follow: "Follow", watch: "Watch", signal: "Signal only", avoid: "Don't follow", skip: "Left out" };
+const ct = (x, signed = true) => x == null ? "—" : `${signed ? (x >= 0 ? "+" : "−") : ""}${Math.abs(x * 100).toFixed(1)}¢`;
+const signedCents = (x) => x == null ? '<span class="muted">—</span>' : `<span class="${x > 0 ? "up" : x < 0 ? "down" : ""}">${ct(x)}</span>`;
+const CONF = { high: "high confidence", medium: "medium confidence", low: "low confidence" };
+const worthHref = (w) => `#/worth/${w}`;
+
+function evidenceLine(s) {
+  const bits = [];
+  if (s.edge) bits.push(`price ${ct(s.edge.mean)} their way within 5 min`);
+  if (s.copy && s.action !== "skip") bits.push(`copying late ${ct(s.copy.mean)} after fees`);
+  bits.push(`${s.bets} bets`);
+  bits.push(CONF[s.confidence]);
+  if (s.segment === "lucky" && s.pnl != null) bits.unshift(`profit ${money(s.pnl).replace(/<[^>]+>/g, "")}`);
+  return bits.join(" · ");
+}
+function chips(s) {
+  return s.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join(" ")
+    + " " + s.strong_categories.map((c) => `<span class="chip strong" title="Clear edge in ${esc(c)}">${esc(c)}</span>`).join(" ");
+}
+
+let worthTimer = null;
+async function worthPage() {
+  const app = $("#app");
+  app.innerHTML = `
+    <p class="sub">Polymarket traders whose bets beat the price, found on the leaderboards and beyond them, and checked on their last 30 days of public trades. Copying is paper money only.</p>
+    <details class="how"><summary>How we judge a trader</summary>
+      <p style="margin:8px 0 0">A contract pays $1 if its outcome wins, so its price is in cents. We check up to 60 of each trader's bets against Polymarket's own price history, which comes in 5-minute steps.</p>
+      <ol>
+        <li><b>Beats the price.</b> After they buy, does the price move their way? We look 1, 5, 15 and 60 minutes later; the test is the 5-minute move, the one that held up from a trader's earlier bets to their later ones. This is the main test of skill.</li>
+        <li><b>Enough bets to trust it.</b> One bet per market, and bets on the same event (a game's winner and its total) count once. Confidence is high, medium or low.</li>
+        <li><b>Steady.</b> The edge holds with their two best bets removed, and their profit holds without their biggest win.</li>
+        <li><b>Copyable.</b> Buying the same thing 1 to 6 minutes later (about when a copier sees their trade) and paying Polymarket's taker fee still gains by the hour mark.</li>
+        <li><b>Takes a side.</b> Market makers (trading both ways in the same market) and arbitrage (buying both outcomes for under $1) have no view to follow, so they're left out. Bots are fine: "bot" is only a tag.</li>
+        <li><b>Where their edge is.</b> The same test per category (sports, crypto…), so you can follow someone only there.</li>
+      </ol>
+      <p class="muted" style="margin:4px 0 0">A reading of the past, not a promise.</p>
+    </details>
+    <p class="status" id="wstatus"></p>
+    <div id="wlist"><p class="empty spin">Loading</p></div>`;
+  await loadWorth();
+}
+
+async function loadWorth() {
+  clearTimeout(worthTimer);
+  let r;
+  try { r = await api("/api/worth"); } catch (e) { $("#wlist").innerHTML = `<p class="note">${esc(e.message)}</p>`; return; }
+  if (!$("#wlist")) return;
+  const st = r.status, res = r.result;
+  let status = "";
+  if (st.running) status = `<span class="spin">Checking traders${st.total ? ` (${st.done} of ${st.total})` : ""}</span> · takes a few minutes`;
+  else if (res) status = `Checked ${res.scores.length} traders (${res.sources.beyond_leaderboards} found beyond the leaderboards) · ${ago(res.finished)} · <a href="#" id="wrefresh">Check again</a>`;
+  if (st.error) status += ` <span class="down">Last check failed: ${esc(st.error)}</span>`;
+  $("#wstatus").innerHTML = status;
+  const btn = $("#wrefresh");
+  if (btn) btn.onclick = async (e) => { e.preventDefault(); await api("/api/worth/refresh", { method: "POST" }); loadWorth(); };
+  if (st.running) worthTimer = setTimeout(() => { if (location.hash === "#/worth") loadWorth(); }, 3000);
+  if (!res) { if (!st.running) $("#wlist").innerHTML = `<p class="empty">No traders checked yet.</p>`; else $("#wlist").innerHTML = `<p class="empty">The first check takes a few minutes. This page fills in when it's done.</p>`; return; }
+  const by = {};
+  res.scores.forEach((s) => (by[s.segment] ||= []).push(s));
+  let html = Object.entries(SEG).map(([k, [title, act, what]]) => {
+    const rows = by[k] || [];
+    return `<section class="seg"><h3>${title} <span class="muted" style="font-weight:400">${rows.length}</span> <span class="act ${act}">${ACT[act]}</span></h3>
+      <p class="what">${what}</p>
+      ${rows.length ? rows.map((s) => `
+        <div class="row" data-href="${worthHref(s.wallet)}">
+          <div class="top"><b>${esc(s.name)}</b> ${chips(s)}</div>
+          <div>${esc(s.reason)}</div>
+          <div class="ev">${esc(evidenceLine(s))}</div>
+        </div>`).join("") : `<p class="empty" style="padding:6px 0">None right now.</p>`}
+    </section>`;
+  }).join("");
+  const nv = by.no_view || [], ne = by.no_edge || [];
+  html += `<section class="seg"><h3>Left out <span class="act">${ACT.skip}</span></h3>
+    <p class="what">${nv.length} market makers and arbitrage traders (no view to follow), and ${ne.length} traders whose bets don't clearly beat the price.</p>
+    <details><summary class="muted" style="cursor:pointer;font-size:14px">Show them</summary>
+      ${[...nv, ...ne].map((s) => `<div class="row" data-href="${worthHref(s.wallet)}"><div class="top"><b>${esc(s.name)}</b> ${chips(s)}</div><div class="ev">${esc(s.reason)}</div></div>`).join("")}
+    </details></section>
+    <p class="muted" style="font-size:13px">Price history found for ${(res.coverage.priced_5m ?? res.coverage.priced_1h).toLocaleString()} of ${res.coverage.bets.toLocaleString()} bets checked${res.coverage.combos ? `; ${res.coverage.combos.toLocaleString()} combo bets (parlays) can't be checked and are left out` : ""}.</p>`;
+  $("#wlist").innerHTML = html;
+  $("#wlist").querySelectorAll("[data-href]").forEach((el) => (el.onclick = () => (location.hash = el.dataset.href)));
+}
+
+async function worthTraderPage(wallet) {
+  const app = $("#app");
+  const back = `<a class="back" href="#/worth">← Worth following</a>`;
+  app.innerHTML = `${back}<p class="empty spin">Checking this trader's bets (up to 30 seconds)</p>`;
+  let s;
+  try { s = await api(`/api/worth/${wallet}`); } catch (e) { app.innerHTML = `${back}<p class="note">${esc(e.message)}</p>`; return; }
+  const seg = SEG[s.segment];
+  const mark = (p) => p === true ? '<span class="mark yes">✓</span>' : p === false ? '<span class="mark no">✗</span>' : '<span class="mark unk">?</span>';
+  const delays = [["60", "1 min"], ["300", "5 min"], ["900", "15 min"], ["3600", "1 hour"]];
+  app.innerHTML = `${back}
+    <div class="who"><h2>${esc(s.name)}</h2>${venueTag("polymarket")} <span class="act ${s.action}">${seg ? seg[0] : s.label} · ${ACT[s.action]}</span> ${chips(s)}
+      <a class="muted" href="https://polymarket.com/profile/${esc(s.wallet)}" target="_blank" rel="noopener">profile ↗</a></div>
+    <p class="reason">${esc(s.reason)}</p>
+    <p class="muted" style="margin:0;font-size:13px">${esc(s.source)} · last ${Math.round((new Date(s.window[1]) - new Date(s.window[0])) / 864e5)} days · ${CONF[s.confidence]}</p>
+    <div class="stats">
+      <div class="stat"><span>Price move their way, 5 min</span><b>${signedCents(s.edge?.mean)} <span class="muted">± ${ct(s.edge?.margin, false)}</span></b></div>
+      <div class="stat"><span>Copying late, after fees</span><b>${signedCents(s.copy?.mean)} <span class="muted">± ${ct(s.copy?.margin, false)}</span></b></div>
+      <div class="stat"><span>Separate bets checked</span><b>${s.bets}</b></div>
+      <div class="stat"><span>Profit, all time</span><b>${money(s.pnl, true)}</b></div>
+      <div class="stat"><span>Profit, last 30 days</span><b>${money(s.pnl_window, true)}</b></div>
+    </div>
+    <section><h3>The checks</h3><div class="card"><ul class="checks">${s.checks.map((c) => `<li>${mark(c.passed)}<div><b>${esc(c.title)}.</b> ${esc(c.detail)}</div></li>`).join("")}</ul></div></section>
+    <section><h3>Copy their trades</h3><div class="card" id="wfollow"></div></section>
+    <section><h3>How the price moved after they bought</h3><p class="muted" style="margin:-4px 0 8px;font-size:14px">Average over their bets, in cents a contract, with the 95% margin. Positive means the price moved their way. Each is the first 5-minute price at least that long after the buy.</p>
+      <div class="scroll"><table><thead><tr><th>After</th><th class="num">Their way</th><th class="num">± margin</th><th class="num">Bets</th></tr></thead><tbody>
+      ${delays.map(([k, l]) => { const d = s.edge_by_delay[k]; return `<tr><td>${l}</td><td class="num">${signedCents(d?.mean)}</td><td class="num muted">${d ? ct(d.margin, false) : "—"}</td><td class="num">${d?.n ?? "—"}</td></tr>`; }).join("")}
+      </tbody></table></div></section>
+    <section><h3>By category</h3>${s.categories.length ? `<div class="scroll"><table><thead><tr><th>Category</th><th class="num">Bets</th><th class="num">Their way, 5 min</th><th class="num">Copying, after fees</th><th></th></tr></thead><tbody>
+      ${s.categories.map((c) => `<tr><td>${esc(c.category)}</td><td class="num">${c.bets}</td><td class="num">${signedCents(c.edge?.mean)}</td><td class="num">${signedCents(c.copy?.mean)}</td><td>${c.strong ? '<span class="chip strong">clear edge</span>' : ""}</td></tr>`).join("")}
+      </tbody></table></div>` : `<p class="empty">No bets checked.</p>`}</section>
+    <section><h3>What they're doing now</h3><div id="wnow"><p class="muted spin">Loading their open bets</p></div></section>
+    <section><h3>Bets we checked</h3><p class="muted" style="margin:-4px 0 8px;font-size:14px">Their most recent checked bets. "Copy" is what buying 1 to 6 minutes later made by the hour mark, after the fee.</p>
+      <div class="scroll"><table><thead><tr><th>When</th><th>Bet</th><th class="num">Paid</th><th class="num">5 min</th><th class="num">1 hour</th><th class="num">Copy</th></tr></thead><tbody>
+      ${(s.sample || []).slice(0, 30).map((b) => `<tr><td class="muted">${ago(b.at)}</td><td>${esc(b.title || b.market)}<br><span class="muted">${esc(b.outcome || "")} · ${esc(b.category)}</span></td>
+        <td class="num">${cents(b.price)}</td><td class="num">${signedCents(b.moved["300"])}</td><td class="num">${signedCents(b.moved["3600"])}</td><td class="num">${signedCents(b.copy)}</td></tr>`).join("")}
+      </tbody></table></div></section>`;
+  worthFollowCard(s);
+  loadNow(s);
+}
+
+async function loadNow(s) {
+  const box = $("#wnow");
+  const recent = s.recent || [];
+  let positions = "";
+  try {
+    const d = await api(`/api/trader/polymarket/${s.wallet}`);
+    positions = `<h4 style="margin:14px 0 6px;font-size:14px">Open bets</h4><div class="scroll">${positionsTable(d.positions.slice(0, 15), false)}</div>`;
+  } catch (e) { positions = `<p class="note">${esc(e.message)}</p>`; }
+  if (!box.isConnected) return;
+  box.innerHTML = `<h4 style="margin:0 0 6px;font-size:14px">Latest buys</h4>` + (recent.length ? `<div class="scroll"><table><tbody>
+    ${recent.map((b) => `<tr><td class="muted">${ago(b.at)}</td><td>${esc(b.title || b.market)}<br><span class="muted">Bought ${esc(b.outcome || "")} · ${esc(b.category)}${s.strong_categories.includes(b.category) ? " · their strong category" : ""}</span></td><td class="num">${cents(b.price)}</td><td class="num">${money(b.usd)}</td></tr>`).join("")}
+    </tbody></table></div>` : `<p class="empty">No buys in the last 30 days.</p>`) + positions;
+}
+
+function worthFollowCard(s) {
+  const box = $("#wfollow");
+  if (!box) return;
+  if (s.action === "signal") { box.innerHTML = `<p style="margin:0">Signal only. Their edge is gone by the time a copier gets in, so copying isn't offered: watch their trades instead (see below).</p>`; return; }
+  if (s.action === "avoid" || s.action === "skip") { box.innerHTML = `<p class="muted" style="margin:0">Not offered: ${esc(s.reason.charAt(0).toLowerCase() + s.reason.slice(1))}</p>`; return; }
+  const mine = follow?.following && follow.following.id === s.wallet;
+  if (mine) {
+    box.innerHTML = `<div class="bar" style="margin:0 0 10px">Following ${esc(s.name)} · ${follow.size} contracts a trade on ${VENUE[follow.copy_to]}${follow.categories?.length ? ` · only ${esc(follow.categories.join(", "))}` : ""}
+      <span class="spacer"></span><button class="ghost" id="stop">Stop</button></div><div id="log"></div>`;
+    $("#stop").onclick = stopFollow; renderLog(); return;
+  }
+  const cats = s.categories.map((c) => c.category);
+  box.innerHTML = `
+    <p style="margin:0 0 10px">Each new trade they make becomes your own paper order on the same bet on the venue you pick: real prices, fake money.${s.action === "watch" ? " They're still a maybe: too few bets to be sure." : ""}</p>
+    ${cats.length > 1 ? `<p class="cats" style="margin:0 0 10px;font-size:14px">Copy only: ${cats.map((c) => `<label><input type="checkbox" value="${esc(c)}" ${!s.strong_categories.length || s.strong_categories.includes(c) ? "checked" : ""}> ${esc(c)}${s.strong_categories.includes(c) ? " ✓" : ""}</label>`).join("")}</p>` : ""}
+    <div class="bar" style="margin:0">
+      <label>Contracts a trade <input type="number" id="size" value="5" min="1" max="100"></label>
+      <label>Copy to <select id="to"><option value="polymarket_us">Polymarket US</option><option value="kalshi">Kalshi</option></select></label>
+      <button class="primary" id="go">Follow with paper money</button>
+    </div>
+    ${follow?.following ? `<p class="muted" style="margin:8px 0 0;font-size:13px">This stops following ${esc(follow.following.name)}.</p>` : ""}`;
+  $("#go").onclick = async () => {
+    $("#go").disabled = true;
+    const picked = [...box.querySelectorAll(".cats input:checked")].map((i) => i.value);
+    const categories = cats.length > 1 && picked.length < cats.length ? picked : [];
+    try {
+      follow = await api("/api/follow", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ venue: "polymarket", id: s.wallet, name: s.name, size: Number($("#size").value) || 5, copy_to: $("#to").value, categories }) });
+      worthFollowCard(s); renderBar();
+    } catch (e) { $("#go").disabled = false; alertNote(box, e.message); }
+  };
+}
+
 // ---- routing ----
 function route() {
   const m = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
+  const w = location.hash.match(/^#\/worth\/(0x[0-9a-fA-F]{40})$/);
+  const worth = location.hash.startsWith("#/worth");
+  $("#nav-worth").className = worth ? "on" : ""; $("#nav-home").className = worth ? "" : "on";
   window.scrollTo(0, 0);
-  if (m) traderPage(m[1], decodeURIComponent(m[2])); else home();
+  if (w) worthTraderPage(w[1].toLowerCase());
+  else if (worth) worthPage();
+  else if (m) traderPage(m[1], decodeURIComponent(m[2])); else home();
 }
 window.addEventListener("hashchange", route);
 poll().then(route);
