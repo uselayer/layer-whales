@@ -94,6 +94,8 @@
   .row { padding: 11px 0; border-top: 1px solid var(--line); cursor: pointer; }
   .row:hover { background: var(--soft); }
   .row .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .row b, .who h2 { overflow-wrap: anywhere; }
+  .more { font: inherit; font-size: 14px; color: var(--accent); background: none; border: 0; padding: 8px 0; cursor: pointer; }
   .row .ev { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .chip { font-size: 11px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
   .chip.strong { border-color: var(--up); color: var(--up); }
@@ -297,8 +299,10 @@ function rulesLine() {
 }
 
 // The card on a trader's page: add them to your copy list, or take them off it.
+let pendingCard = null; // a card drawn before the copy rules loaded, redrawn once they do
 function copyCard(box, t, opts = {}) {
   if (!box) return;
+  if (!copy) { pendingCard = [box, t, opts]; box.innerHTML = `<p class="muted spin" style="margin:0">Loading your copy rules</p>`; return; }
   const on = copy?.rules.traders.find((x) => x.venue === t.venue && x.id === t.id);
   if (on) {
     const errs = on.error ? `<p class="note">${esc(on.error)}</p>` : "";
@@ -351,6 +355,7 @@ async function renderBar() {
 }
 async function poll() {
   try { copy = await api("/api/copy"); } catch { return; }
+  if (pendingCard) { const [b, t, o] = pendingCard; pendingCard = null; if (b.isConnected) copyCard(b, t, o); }
   try { copiedTotal = (await api("/api/copied")).total; } catch {}
   renderBar();
 }
@@ -431,7 +436,7 @@ const worthHref = (w) => `#/worth/${w}`;
 function evidenceLine(s) {
   const bits = [];
   if (s.edge) bits.push(`price ${ct(s.edge.mean)} their way within 5 min`);
-  if (s.copy && s.action !== "skip") bits.push(`copying late ${ct(s.copy.mean)} after fees`);
+  if (s.copy && s.action !== "skip") bits.push(`copying late ${ct(s.copy.mean)} ± ${ct(s.copy.margin, false)} after fees`);
   bits.push(`${s.bets} bets`);
   bits.push(CONF[s.confidence]);
   if (s.segment === "lucky" && s.pnl != null) bits.unshift(`profit ${money(s.pnl).replace(/<[^>]+>/g, "")}`);
@@ -443,6 +448,7 @@ function chips(s) {
 }
 
 let worthTimer = null;
+const SHOW = 5; // rows shown per segment before "Show more"
 async function worthPage() {
   const app = $("#app");
   app.innerHTML = `
@@ -485,12 +491,12 @@ async function loadWorth() {
     const rows = by[k] || [];
     return `<section class="seg"><h3>${title} <span class="muted" style="font-weight:400">${rows.length}</span> <span class="act ${act}">${ACT[act]}</span></h3>
       <p class="what">${what}</p>
-      ${rows.length ? rows.map((s) => `
-        <div class="row" data-href="${worthHref(s.wallet)}">
+      ${rows.length ? rows.map((s, i) => `
+        <div class="row${i >= SHOW ? " extra" : ""}" data-href="${worthHref(s.wallet)}" ${i >= SHOW ? 'hidden' : ""}>
           <div class="top"><b>${esc(s.name)}</b> ${chips(s)}</div>
           <div>${esc(s.reason)}</div>
           <div class="ev">${esc(evidenceLine(s))}</div>
-        </div>`).join("") : `<p class="empty" style="padding:6px 0">None right now.</p>`}
+        </div>`).join("") + (rows.length > SHOW ? `<button class="more">Show ${rows.length - SHOW} more</button>` : "") : `<p class="empty" style="padding:6px 0">None right now.</p>`}
     </section>`;
   }).join("");
   const nv = by.no_view || [], ne = by.no_edge || [];
@@ -501,13 +507,16 @@ async function loadWorth() {
     </details></section>
     <p class="muted" style="font-size:13px">Price history found for ${(res.coverage.priced_5m ?? res.coverage.priced_1h).toLocaleString()} of ${res.coverage.bets.toLocaleString()} bets checked${res.coverage.combos ? `; ${res.coverage.combos.toLocaleString()} combo bets (parlays) can't be checked and are left out` : ""}.</p>`;
   $("#wlist").innerHTML = html;
+  $("#wlist").querySelectorAll(".more").forEach((b) => (b.onclick = () => {
+    b.parentElement.querySelectorAll(".row.extra").forEach((r) => (r.hidden = false)); b.remove();
+  }));
   $("#wlist").querySelectorAll("[data-href]").forEach((el) => (el.onclick = () => (location.hash = el.dataset.href)));
 }
 
 async function worthTraderPage(wallet) {
   const app = $("#app");
   const back = `<a class="back" href="#/worth">← Worth following</a>`;
-  app.innerHTML = `${back}<p class="empty spin">Checking this trader's bets (up to 30 seconds)</p>`;
+  app.innerHTML = `${back}<p class="empty spin">Checking this trader's bets (up to a minute)</p>`;
   let s;
   try { s = await api(`/api/worth/${wallet}`); } catch (e) { app.innerHTML = `${back}<p class="note">${esc(e.message)}</p>`; return; }
   const seg = SEG[s.segment];
@@ -583,7 +592,8 @@ function route() {
   else if (m) traderPage(m[1], decodeURIComponent(m[2])); else home();
 }
 window.addEventListener("hashchange", route);
-poll().then(route);
+route();
+poll();
 </script>
 </body>
 </html>

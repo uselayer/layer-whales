@@ -304,11 +304,13 @@ def _copy_loop() -> None:
     while not _loop_stop.is_set():
         for key, cp in list(_copiers.items()):
             st = _status.setdefault(key, {})
+            if _copiers.get(key) is not cp:
+                continue  # the rules changed since this pass began
             try:
+                # Not under _lock: a poll can take seconds (Layer matching is paced), and the paper store
+                # locks itself. Only this thread polls, so copiers never run at once.
+                events = cp.poll()
                 with _lock:
-                    if _copiers.get(key) is not cp:
-                        continue  # rules changed under us
-                    events = cp.poll()
                     _record(cp, events)
                 st.update(checked_at=time.time(), error=None)
             except VenueError as e:
@@ -370,8 +372,8 @@ def copied() -> dict[str, Any]:
                 continue
     ids = [r["order_id"] for r in rows if r.get("order_id")]
     try:
-        with _lock:
-            results = paper().whales.copy_results(ids) if ids else {}
+        # No engine lock: the paper store locks itself, and the copy loop can hold _lock for seconds.
+        results = paper().whales.copy_results(ids) if ids else {}
     except VenueError as e:
         raise venue_error(e) from e
     out = []
@@ -400,8 +402,7 @@ def copied() -> dict[str, Any]:
 
 @app.get("/api/paper")
 def paper_account() -> dict[str, Any]:
-    with _lock:
-        p = paper().pnl()
+    p = paper().pnl()
     return {
         "net": p.net,
         "realized": p.realized,

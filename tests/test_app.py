@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from uselayer import Trader, TraderDetail, WhaleTrade, Whales
+from uselayer import Trader, TraderDetail, Whales, WhaleTrade
 
 from whales_demo import app as engine
 
