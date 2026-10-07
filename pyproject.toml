@@ -1,0 +1,30 @@
+[project]
+name = "layer-whales"
+version = "0.1.0"
+description = "Whale tracking and copy trading across Kalshi and Polymarket, on the uselayer SDK. Runs on your machine."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  # client.whales lands in the SDK with uselayer-sdk PR #1; until it's released, install from that branch.
+  "uselayer",
+]
+
+[project.scripts]
+whales-demo = "whales_demo.app:main"
+
+[tool.uv.sources]
+uselayer = { git = "https://github.com/uselayer/uselayer-sdk", branch = "whales-copy-trading", subdirectory = "python" }
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["whales_demo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

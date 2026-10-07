@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layer Whales</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f1f1f; --muted: #6b6b6b; --line: #ececec; --soft: #f7f7f5;
+    --accent: #2f6feb; --up: #1a7f37; --down: #c62828; --warn-bg: #fff8e5; --warn-fg: #7a5a00;
+    --kalshi: #0b7a5c; --poly: #2f5bd8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #191919; --fg: #ececec; --muted: #9b9b9b; --line: #2c2c2c; --soft: #222222;
+      --accent: #6aa0ff; --up: #4cc26b; --down: #ff6b6b; --warn-bg: #2d2610; --warn-fg: #e9c46a;
+      --kalshi: #3fc39a; --poly: #7c9bff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 28px 16px 80px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  h1 a { color: inherit; text-decoration: none; }
+  .credit { color: var(--muted); font-size: 13px; }
+  .credit a { color: var(--muted); }
+  .sub { color: var(--muted); margin: 6px 0 22px; }
+  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs { display: inline-flex; background: var(--soft); border-radius: 8px; padding: 3px; }
+  .tabs button { border: 0; background: none; color: var(--muted); padding: 5px 12px; border-radius: 6px;
+    font: inherit; font-size: 14px; cursor: pointer; }
+  .tabs button.on { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  select, input { font: inherit; font-size: 14px; color: var(--fg); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+  input[type=number] { width: 80px; }
+  .spacer { flex: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; text-transform: uppercase;
+    letter-spacing: .04em; padding: 8px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: var(--soft); }
+  .venue { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 10px; border: 1px solid; white-space: nowrap; }
+  .venue.kalshi { color: var(--kalshi); }
+  .venue.polymarket, .venue.polymarket_us { color: var(--poly); }
+  .muted { color: var(--muted); }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .back { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 4px; }
+  .who h2 { margin: 0; font-size: 24px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0 24px; }
+  .stat { background: var(--soft); border-radius: 8px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat > span { color: var(--muted); font-size: 12px; }
+  .stat b .muted { font-size: 13px; font-weight: 400; }
+  section { margin: 28px 0; }
+  section h3 { font-size: 15px; margin: 0 0 10px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .note { background: var(--warn-bg); color: var(--warn-fg); border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 10px 0; }
+  .link-row { padding: 10px 0; border-top: 1px solid var(--line); }
+  .link-row:first-child { border-top: 0; padding-top: 0; }
+  .tier { font-size: 12px; padding: 1px 7px; border-radius: 10px; background: var(--soft); }
+  .tier.likely { background: #e7f3ff; color: #0b4fa8; }
+  ul.ev { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+  button.primary { font: inherit; font-size: 14px; border: 0; border-radius: 6px; padding: 6px 14px;
+    background: var(--fg); color: var(--bg); cursor: pointer; }
+  button.ghost { font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px;
+    background: none; color: var(--fg); cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .following { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line);
+    padding: 8px 0; margin-bottom: 8px; display: none; font-size: 14px; }
+  .following.on { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .log td { font-size: 13px; }
+  .empty { color: var(--muted); padding: 18px 0; }
+  .spin::after { content: "…"; animation: dots 1.2s steps(4) infinite; display: inline-block; width: 1em; overflow: hidden; vertical-align: bottom; }
+  @keyframes dots { from { width: 0; } to { width: 1em; } }
+  .scroll { overflow-x: auto; }
+  @media (max-width: 640px) { .hide-sm { display: none; } .who h2 { font-size: 20px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><a href="#/">Layer Whales</a></h1>
+    <span class="credit">Built on <a href="https://uselayer.sh" target="_blank" rel="noopener">uselayer</a> · paper money</span>
+  </header>
+  <div id="following" class="following"></div>
+  <main id="app"></main>
+</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const VENUE = { kalshi: "Kalshi", polymarket: "Polymarket", polymarket_us: "Polymarket US" };
+const venueTag = (v) => `<span class="venue ${v}">${VENUE[v] || v}</span>`;
+
+function money(x, signed = false) {
+  if (x == null) return '<span class="muted">—</span>';
+  const a = Math.abs(x);
+  const s = a >= 1e9 ? `$${(a / 1e9).toFixed(2)}B` : a >= 1e6 ? `$${(a / 1e6).toFixed(a >= 1e7 ? 1 : 2)}M` : a >= 1e3 ? `$${(a / 1e3).toFixed(a >= 1e4 ? 0 : 1)}K` : `$${a.toFixed(2)}`;
+  const sign = x < 0 ? "−" : signed && x > 0 ? "+" : "";
+  const cls = signed ? (x > 0 ? "up" : x < 0 ? "down" : "") : "";
+  return `<span class="${cls}">${sign}${s}</span>`;
+}
+function volume(t) {
+  if (t.volume == null) return '<span class="muted">—</span>';
+  if (t.volume_unit === "contracts") {
+    const v = t.volume;
+    return (v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v.toFixed(0)) + ' <span class="muted">contracts</span>';
+  }
+  return money(t.volume);
+}
+function ago(iso) {
+  const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return `${Math.round(s)}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+const cents = (p) => (p == null ? "—" : `${Math.round(p * 100)}¢`);
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body?.detail?.message || body?.detail || `Request failed (${r.status})`);
+  return body;
+}
+const traderHref = (venue, id) => `#/t/${venue}/${encodeURIComponent(id)}`;
+
+// ---- home: top traders / trading now ----
+const state = { tab: "top", venue: "all", by: "pnl" };
+
+async function home() {
+  const app = $("#app");
+  app.innerHTML = `
+    <p class="sub">The biggest traders on Kalshi and Polymarket. Click one to see their bets, check whether they trade on the other venue too, and copy them with paper money.</p>
+    <div class="bar">
+      <div class="tabs">
+        <button data-tab="top" class="${state.tab === "top" ? "on" : ""}">Top traders</button>
+        <button data-tab="now" class="${state.tab === "now" ? "on" : ""}">Trading now</button>
+      </div>
+      <span class="spacer"></span>
+      ${state.tab === "top" ? `
+      <select id="venue">
+        <option value="all">Both venues</option><option value="kalshi">Kalshi</option><option value="polymarket">Polymarket</option>
+      </select>
+      <select id="by"><option value="pnl">By profit</option><option value="volume">By volume</option></select>` : ""}
+    </div>
+    <div id="list" class="scroll"><p class="empty spin">Loading</p></div>`;
+  app.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; home(); }));
+  if (state.tab === "top") {
+    $("#venue").value = state.venue; $("#by").value = state.by;
+    $("#venue").onchange = (e) => { state.venue = e.target.value; home(); };
+    $("#by").onchange = (e) => { state.by = e.target.value; home(); };
+    if (state.venue === "all" && state.by === "volume") state.by = "pnl", $("#by").value = "pnl";
+    try {
+      const rows = await api(`/api/top?venue=${state.venue}&by=${state.by}&limit=25`);
+      $("#list").innerHTML = rows.length ? `
+        <table><thead><tr><th>#</th><th>Trader</th><th>Venue</th><th class="num">Profit</th><th class="num hide-sm">Volume</th></tr></thead>
+        <tbody>${rows.map((t, i) => `
+          <tr class="click" data-href="${traderHref(t.venue, t.id)}">
+            <td class="muted">${i + 1}</td>
+            <td><b>${esc(t.name)}</b>${t.x_handle ? ` <span class="muted">@${esc(t.x_handle)}</span>` : ""}</td>
+            <td>${venueTag(t.venue)}</td>
+            <td class="num">${money(t.pnl, true)}</td>
+            <td class="num hide-sm">${volume(t)}</td>
+          </tr>`).join("")}</tbody></table>
+        ${state.venue === "all" && state.by === "volume" ? "" : ""}` : `<p class="empty">No traders.</p>`;
+      if (state.venue === "all") $("#by").disabled = true, $("#by").title = "Volume isn't comparable across venues (Kalshi counts contracts, Polymarket dollars). Pick one venue to sort by volume.";
+    } catch (e) { $("#list").innerHTML = `<p class="note">${esc(e.message)}</p>`; }
+  } else {
+    try {
+      const rows = await api(`/api/trading-now?min_usd=250`);
+      $("#list").innerHTML = rows.length ? `
+        <table><thead><tr><th>When</th><th>Trader</th><th>Bet</th><th class="num">Size</th></tr></thead>
+        <tbody>${rows.map((t) => `
+          <tr class="${t.trader ? "click" : ""}" ${t.trader ? `data-href="${traderHref(t.venue, t.trader)}"` : ""}>
+            <td class="muted">${ago(t.at)}</td>
+            <td>${t.trader ? `<b>${esc(t.name)}</b>` : '<span class="muted">anonymous</span>'} ${venueTag(t.venue)}</td>
+            <td>${esc(t.title || t.market)}<br><span class="muted">${t.action} ${esc(t.outcome || t.side.toUpperCase())} at ${cents(t.price)}</span></td>
+            <td class="num">${money(t.usd)}</td>
+          </tr>`).join("")}</tbody></table>
+        <p class="muted" style="font-size:13px">Trades of $250 or more in the last few seconds on Kalshi and the last few minutes on Polymarket. Kalshi only names traders who turned on its social profile.</p>` : `<p class="empty">No big trades right now.</p>`;
+    } catch (e) { $("#list").innerHTML = `<p class="note">${esc(e.message)}</p>`; }
+  }
+  app.querySelectorAll("tr[data-href]").forEach((tr) => (tr.onclick = () => (location.hash = tr.dataset.href)));
+}
+
+// ---- trader page ----
+async function traderPage(venue, id) {
+  const app = $("#app");
+  app.innerHTML = `<a class="back" href="#/">← All traders</a><p class="empty spin">Loading</p>`;
+  let d;
+  try { d = await api(`/api/trader/${venue}/${encodeURIComponent(id)}`); }
+  catch (e) { app.innerHTML = `<a class="back" href="#/">← All traders</a><p class="note">${esc(e.message)}</p>`; return; }
+  const t = d.trader, s = d.stats, hidden = d.visibility === "hidden";
+  const statCards = venue === "kalshi"
+    ? [["Profit, all time", money(s.pnl, true)], ["Volume", volume(t)], ["Markets traded", s.markets_traded?.toLocaleString() ?? "—"], ["Followers", s.followers?.toLocaleString() ?? "—"]]
+    : [["Profit, all time", money(s.pnl, true)], ["Volume", money(s.volume_usd)], ["Biggest win", money(s.biggest_win)], ["Fees paid", money(s.fees_paid != null ? Math.abs(s.fees_paid) : null)]];
+  app.innerHTML = `
+    <a class="back" href="#/">← All traders</a>
+    <div class="who"><h2>${esc(t.name)}</h2>${venueTag(venue)}
+      ${t.x_handle ? `<span class="muted">@${esc(t.x_handle)}</span>` : ""}
+      ${t.url ? `<a class="muted" href="${esc(t.url)}" target="_blank" rel="noopener">profile ↗</a>` : ""}</div>
+    ${d.bio ? `<p class="muted" style="margin:4px 0">${esc(d.bio)}</p>` : ""}
+    <div class="stats">${statCards.map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join("")}</div>
+    ${hidden ? `<p class="note">${esc(t.name)} hides their trades and positions on Kalshi, so they can't be copied directly. If they trade on Polymarket too, you can follow that account instead (see below).</p>` : ""}
+
+    <section><h3>Copy their trades</h3><div class="card" id="followcard"></div></section>
+    <section><h3>Same person on ${venue === "kalshi" ? "Polymarket" : "Kalshi"}?</h3><div class="card" id="links"><p class="muted spin" style="margin:0">Checking both venues (takes up to 30 seconds)</p></div></section>
+    <section><h3>Open positions</h3><div class="scroll">${positionsTable(d.positions, hidden)}</div></section>
+    <section><h3>Recent trades</h3><div class="scroll">${tradesTable(d.trades, hidden)}</div></section>`;
+  renderFollowCard(t, hidden);
+  loadLinks(venue, id);
+}
+
+function positionsTable(rows, hidden) {
+  if (hidden) return `<p class="empty">Hidden by the trader.</p>`;
+  if (!rows.length) return `<p class="empty">No open positions.</p>`;
+  return `<table><thead><tr><th>Market</th><th class="num">Contracts</th><th class="num">Avg</th><th class="num">Now</th><th class="num">P&amp;L</th></tr></thead><tbody>
+    ${rows.map((p) => `<tr><td>${esc(p.title || p.market)}<br><span class="muted">${esc(p.outcome || "")}</span></td>
+      <td class="num">${Math.round(p.size).toLocaleString()}</td><td class="num">${cents(p.avg_price)}</td>
+      <td class="num">${cents(p.current_price)}</td><td class="num">${money(p.pnl, true)}</td></tr>`).join("")}</tbody></table>`;
+}
+function tradesTable(rows, hidden) {
+  if (hidden) return `<p class="empty">Hidden by the trader.</p>`;
+  if (!rows.length) return `<p class="empty">No recent trades.</p>`;
+  return `<table><thead><tr><th>When</th><th>Bet</th><th class="num">Price</th><th class="num">Size</th></tr></thead><tbody>
+    ${rows.map((t) => `<tr><td class="muted">${ago(t.at)}</td>
+      <td>${esc(t.title || t.market)}<br><span class="muted">${t.action} ${esc(t.outcome && t.venue === "polymarket" ? t.outcome : (t.outcome ? `${t.side.toUpperCase()} · ${t.outcome}` : t.side.toUpperCase()))}${t.role === "maker" ? " · resting order" : ""}</span></td>
+      <td class="num">${cents(t.price)}</td><td class="num">${money(t.usd)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+async function loadLinks(venue, id) {
+  const box = $("#links");
+  try {
+    const r = await api(`/api/links/${venue}/${encodeURIComponent(id)}`);
+    if (!box.isConnected) return;
+    if (!r.links.length) {
+      box.innerHTML = `<p style="margin:0">No account looks like the same person.</p>
+        <p class="muted" style="margin:6px 0 0;font-size:14px">Checked: the same name or X handle on an account that trades, and bets on the same markets, the same way, within 5 minutes of theirs.${r.needs_layer_key ? " Add a Layer API key to compare bets across venues." : ""}</p>`;
+      return;
+    }
+    box.innerHTML = r.links.map((l) => `
+      <div class="link-row">
+        <a href="${traderHref(l.trader.venue, l.trader.id)}"><b>${esc(l.trader.name)}</b></a> ${venueTag(l.trader.venue)}
+        <span class="tier ${l.tier}">${l.tier === "likely" ? "Likely the same person" : "Possibly the same person"}</span>
+        <span class="muted" style="font-size:13px">score ${l.score.toFixed(2)}</span>
+        <ul class="ev">${l.evidence.map((e) => `<li>${esc(e.detail)}</li>`).join("")}</ul>
+      </div>`).join("") + `<p class="muted" style="margin:10px 0 0;font-size:13px">An inference from public trading, not a confirmed identity.</p>`;
+  } catch (e) { if (box.isConnected) box.innerHTML = `<p class="note" style="margin:0">${esc(e.message)}</p>`; }
+}
+
+// ---- following ----
+let follow = null;
+
+function renderFollowCard(t, hidden) {
+  const box = $("#followcard");
+  if (!box) return;
+  const mine = follow?.following && follow.following.id === t.id;
+  if (hidden) { box.innerHTML = `<p class="muted" style="margin:0">Not available: their trades are hidden.</p>`; return; }
+  if (mine) {
+    box.innerHTML = `<div class="bar" style="margin:0 0 10px">Following ${esc(t.name)} · ${follow.size} contracts a trade on ${VENUE[follow.copy_to]}
+      <span class="spacer"></span><button class="ghost" id="stop">Stop</button></div>
+      <div id="log"></div>`;
+    $("#stop").onclick = stopFollow;
+    renderLog();
+    return;
+  }
+  box.innerHTML = `
+    <p style="margin:0 0 10px">Every new trade they make is copied as your own paper order: real prices, fake money.
+    ${t.venue === "polymarket" ? "Polymarket bets are placed on the same market on" : "Placed on"} the venue you pick.</p>
+    <div class="bar" style="margin:0">
+      <label>Contracts a trade <input type="number" id="size" value="5" min="1" max="100"></label>
+      <label>Copy to <select id="to"><option value="polymarket_us">Polymarket US</option><option value="kalshi">Kalshi</option></select></label>
+      <button class="primary" id="go">Follow with paper money</button>
+    </div>
+    ${follow?.following ? `<p class="muted" style="margin:8px 0 0;font-size:13px">This stops following ${esc(follow.following.name)}.</p>` : ""}`;
+  $("#go").onclick = async () => {
+    $("#go").disabled = true;
+    try {
+      follow = await api("/api/follow", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ venue: t.venue, id: t.id, name: t.name, size: Number($("#size").value) || 5, copy_to: $("#to").value }) });
+      renderFollowCard(t, false); renderBar();
+    } catch (e) { $("#go").disabled = false; alertNote(box, e.message); }
+  };
+}
+function alertNote(box, msg) { box.insertAdjacentHTML("beforeend", `<p class="note">${esc(msg)}</p>`); }
+
+function renderLog() {
+  const log = $("#log");
+  if (!log || !follow) return;
+  const ev = follow.events || [];
+  log.innerHTML = (follow.error ? `<p class="note">${esc(follow.error)}</p>` : "") + (ev.length ? `
+    <table class="log"><thead><tr><th>When</th><th>They</th><th>You</th></tr></thead><tbody>
+    ${ev.map((e) => `<tr><td class="muted">${ago(e.at)}</td>
+      <td>${esc(e.source.title || e.source.market)}<br><span class="muted">${e.source.action} ${esc(e.source.outcome || e.source.side.toUpperCase())} at ${cents(e.source.price)} · ${money(e.source.usd)}</span></td>
+      <td>${e.status === "copied"
+        ? `<span class="up">Copied</span> ${venueTag(e.venue)}<br><span class="muted">${e.action} ${e.filled} ${e.side?.toUpperCase()} at ${cents(e.avg_price)} + ${money(e.fees || 0)} fee</span>`
+        : `<span class="muted">Skipped</span><br><span class="muted">${esc(e.reason)}</span>`}</td></tr>`).join("")}
+    </tbody></table>` : `<p class="muted spin" style="margin:0">Watching for their next trade</p>`);
+}
+
+async function renderBar() {
+  const bar = $("#following");
+  let acct = null;
+  try { acct = await api("/api/paper"); } catch {}
+  if (!follow?.following) { bar.className = "following"; return; }
+  const f = follow.following, ev = follow.events || [];
+  const copied = ev.filter((e) => e.status === "copied").length;
+  bar.className = "following on";
+  bar.innerHTML = `Following <a href="${traderHref(f.venue, f.id)}"><b>${esc(f.name)}</b></a> ${venueTag(f.venue)}
+    <span class="muted">${copied} copied · ${ev.length - copied} skipped</span>
+    ${acct ? `<span class="muted">· paper P&amp;L ${money(acct.net, true)}</span>` : ""}
+    <span class="spacer"></span><button class="ghost" id="barstop">Stop</button>`;
+  $("#barstop").onclick = stopFollow;
+}
+async function stopFollow() {
+  follow = await api("/api/follow", { method: "DELETE" });
+  renderBar(); route();
+}
+async function poll() {
+  try { follow = await api("/api/follow"); } catch { return; }
+  renderBar(); renderLog();
+}
+setInterval(poll, 4000);
+
+// ---- routing ----
+function route() {
+  const m = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
+  window.scrollTo(0, 0);
+  if (m) traderPage(m[1], decodeURIComponent(m[2])); else home();
+}
+window.addEventListener("hashchange", route);
+poll().then(route);
+</script>
+</body>
+</html>
