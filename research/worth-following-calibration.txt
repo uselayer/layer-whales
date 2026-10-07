@@ -1,0 +1,8 @@
+wallets 126 (no_view left out: 34)
+edge   60s  wallets  88  corr(early, late) +0.59  late bets of early-passers: +0.99¢ (z +6.5) n=282  others: +0.15¢ (z +1.2) n=1433
+edge  300s  wallets  88  corr(early, late) +0.36  late bets of early-passers: +0.80¢ (z +4.4) n=257  others: +0.35¢ (z +2.2) n=1457
+edge  900s  wallets  88  corr(early, late) +0.13  late bets of early-passers: +0.36¢ (z +0.9) n=278  others: +0.55¢ (z +2.1) n=1431
+edge 3600s  wallets  88  corr(early, late) +0.30  late bets of early-passers: +2.26¢ (z +2.0) n=175  others: +0.56¢ (z +1.3) n=1526
+copy  300s  wallets  88  corr(early, late) -0.05  late bets of early-passers: n/a n=0  others: -0.49¢ (z -5.2) n=1700
+copy  900s  wallets  88  corr(early, late) -0.04  late bets of early-passers: +0.85¢ (z +0.9) n=14  others: -0.39¢ (z -1.9) n=1687
+copy 3600s  wallets  88  corr(early, late) +0.23  late bets of early-passers: +3.05¢ (z +0.8) n=25  others: -0.22¢ (z -0.5) n=1676

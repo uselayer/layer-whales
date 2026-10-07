@@ -318,7 +318,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "uselayer", git = "https://github.com/uselayer/uselayer-sdk?subdirectory=python&branch=whales-copy-trading" },
+    { name = "uselayer", git = "https://github.com/uselayer/uselayer-sdk?subdirectory=python&branch=whales-score" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
 
@@ -546,7 +546,7 @@ wheels = [
 [[package]]
 name = "uselayer"
 version = "0.4.3"
-source = { git = "https://github.com/uselayer/uselayer-sdk?subdirectory=python&branch=whales-copy-trading#36499c5e44f5e6aea60c3493f96da034d6e2aea8" }
+source = { git = "https://github.com/uselayer/uselayer-sdk?subdirectory=python&branch=whales-score#dc879b54ccf3c6b348eb7743a35ce89ba5611d39" }
 dependencies = [
     { name = "cryptography" },
     { name = "httpx" },
