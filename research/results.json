@@ -1,0 +1,54 @@
+[
+  {
+    "group": "proven",
+    "wallets": 22,
+    "decisions": 2583,
+    "trader_return": "+3.1% \u00b1 5.1% (n=2583)",
+    "copy_1m": "+1.2% \u00b1 17.4% (n=157)",
+    "copy_5m": "+2.3% \u00b1 20.0% (n=157)",
+    "copy_1m_plus_1c": "-1.0% \u00b1 16.9% (n=157)",
+    "copy_5m_plus_1c": "-0.2% \u00b1 18.9% (n=157)",
+    "price_moved_by_1m_cents": "+1.2\u00a2 \u00b1 0.7\u00a2 (n=157)",
+    "price_moved_by_5m_cents": "+2.1\u00a2 \u00b1 1.0\u00a2 (n=157)",
+    "copy_1m_win_rate": "52%"
+  },
+  {
+    "group": "in_profit_rest",
+    "wallets": 46,
+    "decisions": 5082,
+    "trader_return": "-0.9% \u00b1 4.0% (n=5082)",
+    "copy_1m": "-13.3% \u00b1 12.1% (n=251)",
+    "copy_5m": "-14.1% \u00b1 12.0% (n=251)",
+    "copy_1m_plus_1c": "-14.9% \u00b1 11.5% (n=251)",
+    "copy_5m_plus_1c": "-15.7% \u00b1 11.5% (n=251)",
+    "price_moved_by_1m_cents": "-0.3\u00a2 \u00b1 0.8\u00a2 (n=251)",
+    "price_moved_by_5m_cents": "-0.1\u00a2 \u00b1 1.0\u00a2 (n=251)",
+    "copy_1m_win_rate": "58%"
+  },
+  {
+    "group": "not_proven",
+    "wallets": 28,
+    "decisions": 2765,
+    "trader_return": "-6.8% \u00b1 4.9% (n=2765)",
+    "copy_1m": "-1.6% \u00b1 9.7% (n=468)",
+    "copy_5m": "-2.2% \u00b1 10.7% (n=462)",
+    "copy_1m_plus_1c": "-3.6% \u00b1 9.4% (n=468)",
+    "copy_5m_plus_1c": "-4.4% \u00b1 10.3% (n=462)",
+    "price_moved_by_1m_cents": "-0.5\u00a2 \u00b1 0.8\u00a2 (n=468)",
+    "price_moved_by_5m_cents": "-0.6\u00a2 \u00b1 1.3\u00a2 (n=462)",
+    "copy_1m_win_rate": "50%"
+  },
+  {
+    "group": "all",
+    "wallets": 96,
+    "decisions": 10430,
+    "trader_return": "-1.4% \u00b1 2.6% (n=10430)",
+    "copy_1m": "-4.4% \u00b1 7.0% (n=876)",
+    "copy_5m": "-4.8% \u00b1 7.6% (n=870)",
+    "copy_1m_plus_1c": "-6.4% \u00b1 6.7% (n=876)",
+    "copy_5m_plus_1c": "-6.9% \u00b1 7.2% (n=870)",
+    "price_moved_by_1m_cents": "-0.2\u00a2 \u00b1 0.5\u00a2 (n=876)",
+    "price_moved_by_5m_cents": "+0.0\u00a2 \u00b1 0.8\u00a2 (n=870)",
+    "copy_1m_win_rate": "53%"
+  }
+]
