@@ -40,9 +40,9 @@ Then open http://127.0.0.1:8790.
   the price moved after their buys, their strong categories, what they're buying now, and the bets checked.
   Wallets come from the leaderboards and from busy markets' trades. The first check takes 20–30 minutes and
   is kept for a day in the store dir; scoring is `client.whales.discover()` / `score()` in the SDK.
-- **My copied trades**: your copy rules (which traders, contracts a trade, how far above their price to pay,
-  Polymarket US or Kalshi), saved on your machine. Every new buy by the traders you copy becomes a paper
-  order on the same bet, held until the market settles. One row per copied trade: who, the bet, your price,
+- **My copied trades**: the traders you copy, saved on your machine. Every new buy they make becomes a paper
+  order on the same bet on Polymarket US (5 contracts, at most 3¢ above their price), held until the market
+  settles. One row per copied trade: who, the bet, your price,
   open / won / lost, and profit after fees, with the total at the top. Polymarket bets with no matching market,
   or that can't fill near their price, are skipped with the reason.
 
