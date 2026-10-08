@@ -32,6 +32,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
     monkeypatch.setattr(engine, "_paper", None)
     engine._copiers.clear()
     engine._recent.clear()
+    engine._copied_cache.update(at=0.0, data=None)
     return TestClient(engine.app)
 
 

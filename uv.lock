@@ -546,7 +546,7 @@ wheels = [
 [[package]]
 name = "uselayer"
 version = "0.4.3"
-source = { git = "https://github.com/uselayer/uselayer-sdk?subdirectory=python&branch=whales-score#dc879b54ccf3c6b348eb7743a35ce89ba5611d39" }
+source = { git = "https://github.com/uselayer/uselayer-sdk?subdirectory=python&branch=whales-score#03366aa45cbdbb85cc118b5159a5f3b7c62c41b9" }
 dependencies = [
     { name = "cryptography" },
     { name = "httpx" },

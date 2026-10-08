@@ -297,6 +297,7 @@ def _record(cp: Copier, events: list[Any]) -> None:
         if e.status == "copied":
             with copied_file().open("a") as f:
                 f.write(json.dumps(d) + "\n")
+            _copied_cache["at"] = 0.0  # a new row: work it out again on the next read
     del _recent[:-200]
 
 
@@ -360,9 +361,45 @@ def remove_trader(venue: str, trader_id: str) -> dict[str, Any]:
     return copy_state()
 
 
+COPIED_TTL_S = 30
+_copied_cache: dict[str, Any] = {"at": 0.0, "data": None}
+_copied_lock = threading.Lock()  # one valuation at a time
+
+
 @app.get("/api/copied")
 def copied() -> dict[str, Any]:
-    """One row per copied trade with its status (open / won / lost) and profit after fees, newest first."""
+    """One row per copied trade with its status (open / won / lost) and profit after fees, newest first.
+
+    Valuing open bets reads each market's book, and Polymarket US can ask us to wait 10 s, so the answer
+    is kept for 30 s and, while a new one is worked out, the last one is served.
+    """
+    hit = _copied_cache["data"]
+    if hit is None:  # the first answer is worth waiting for
+        with _copied_lock:
+            return _copied_cache["data"] or _copied_refresh()
+    if time.time() - _copied_cache["at"] >= COPIED_TTL_S:
+        threading.Thread(target=_copied_background, daemon=True).start()
+    return hit
+
+
+def _copied_refresh() -> dict[str, Any]:
+    data = _copied_now()
+    _copied_cache.update(at=time.time(), data=data)
+    return data
+
+
+def _copied_background() -> None:
+    if not _copied_lock.acquire(blocking=False):
+        return  # already being worked out
+    try:
+        _copied_refresh()
+    except Exception:  # keep serving the last answer; the next read tries again
+        pass
+    finally:
+        _copied_lock.release()
+
+
+def _copied_now() -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     if copied_file().exists():
         for line in copied_file().read_text().splitlines():
@@ -436,6 +473,7 @@ def paper_reset() -> dict[str, Any]:
         (STORE_DIR / "paper.db").unlink(missing_ok=True)
         copied_file().unlink(missing_ok=True)
         _recent.clear()
+        _copied_cache.update(at=0.0, data=None)
     apply_rules()
     return paper_account()
 
