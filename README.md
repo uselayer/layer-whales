@@ -8,7 +8,11 @@ is hosted, and copies are paper trades (real prices, fake money).
 
 ## Run it
 
+You need [uv](https://docs.astral.sh/uv/); it fetches Python 3.11+ if you don't have it.
+
 ```sh
+git clone https://github.com/uselayer/layer-whales
+cd layer-whales
 uv sync
 LAYER_API_KEY=lyr_... uv run whales-demo
 ```
@@ -53,3 +57,7 @@ Then open http://127.0.0.1:8790.
 - Kalshi traders choose whether to show their trades. Most leaderboard whales hide them: their page says
   so, and they can't be copied directly. Traders on the **Trading now** tab usually show theirs.
 - Polymarket's data comes from its public data API; every wallet is public.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
