@@ -6,7 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn>=0.30",
-  # client.whales lands in the SDK with uselayer-sdk PR #1; until it's released, install from that branch.
+  # client.whales (with score, discover and copy results from uselayer-sdk #2) lands in the SDK with uselayer-sdk
+  # PR #1; until it's released, install from that branch.
   "uselayer",
 ]
 

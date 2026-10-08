@@ -20,7 +20,8 @@ Then open http://127.0.0.1:8790.
 - **Kalshi key** (optional): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy onto Kalshi. Copying
   onto Polymarket US needs no key.
 - `WHALES_PORT` (default 8790) and `WHALES_STORE_DIR` (default `~/.uselayer/whales-demo`) change the port and
-  where the paper account lives.
+  where the paper account, copy rules and Worth following results live. `WHALES_WORTH_WALLETS` (default 200)
+  is how many wallets Worth following checks.
 
 ## What's on the page
 
@@ -32,9 +33,18 @@ Then open http://127.0.0.1:8790.
     same name or X handle on an account that really trades, and bets on the same market, the same way,
     within 5 minutes. Busy bots and market makers that trade everything are filtered out. It's an inference,
     never a confirmed identity.
-  - **Copy their trades**: every new trade they make becomes your own paper order. A Polymarket bet is placed
-    on the same market on Polymarket US or Kalshi. Trades with no matching market, or that can't fill near
-    their price, are skipped with the reason.
+  - **Copy their buys**: adds them to your copy list (see **My copied trades**).
+- **Worth following**: Polymarket traders sorted into proven sharps, quiet sharps (small accounts no
+  leaderboard lists), rising, sharp but too fast to copy, and lucky big bettors, each with a one-line reason
+  and the evidence. Market makers and arbitrage are left out. A trader's page shows each rule's check, how
+  the price moved after their buys, their strong categories, what they're buying now, and the bets checked.
+  Wallets come from the leaderboards and from busy markets' trades. The first check takes 20–30 minutes and
+  is kept for a day in the store dir; scoring is `client.whales.discover()` / `score()` in the SDK.
+- **My copied trades**: your copy rules (which traders, contracts a trade, how far above their price to pay,
+  Polymarket US or Kalshi), saved on your machine. Every new buy by the traders you copy becomes a paper
+  order on the same bet, held until the market settles. One row per copied trade: who, the bet, your price,
+  open / won / lost, and profit after fees, with the total at the top. Polymarket bets with no matching market,
+  or that can't fill near their price, are skipped with the reason.
 
 ## Good to know
 

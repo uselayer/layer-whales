@@ -8,10 +8,12 @@ fake money) in their own store, ~/.uselayer/whales-demo/paper.db unless WHALES_S
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +26,14 @@ from uselayer import Client, Copier, Trader, VenueError
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("WHALES_STORE_DIR", Path.home() / ".uselayer" / "whales-demo"))
 
-app = FastAPI(title="Layer Whales")
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    apply_rules()  # resume copying with the saved rules
+    yield
+    _loop_stop.set()
+
+
+app = FastAPI(title="Layer Whales", lifespan=lifespan)
 reads = Client(store=":memory:")  # leaderboards, traders, links: reads only
 _paper: Client | None = None
 _lock = threading.Lock()  # one copier and the paper store at a time
@@ -100,96 +109,337 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
     return {"needs_layer_key": not os.environ.get("LAYER_API_KEY"), "links": [x.to_dict() for x in found]}
 
 
-# ---- following (paper) ----
+# ---- worth following (Polymarket) ----
+# Finding and scoring ~200 wallets takes several minutes, so it runs in the background and the result
+# is kept in the store dir. A wallet that isn't in it is scored when its page is opened.
+
+WORTH_WALLETS = int(os.environ.get("WHALES_WORTH_WALLETS", "200"))
+WORTH_MAX_AGE_S = 24 * 3600
+_worth: dict[str, Any] = {"running": False, "done": 0, "total": 0, "error": None}
+_worth_data: dict[str, Any] | None = None
+_worth_one: dict[str, dict[str, Any]] = {}
 
 
-class FollowRequest(BaseModel):
+def worth_file() -> Path:
+    return STORE_DIR / "worth-following.json"
+
+
+def _worth_load() -> dict[str, Any] | None:
+    global _worth_data
+    if _worth_data is None and worth_file().exists():
+        try:
+            _worth_data = json.loads(worth_file().read_text())
+        except ValueError:
+            _worth_data = None
+    return _worth_data
+
+
+def _worth_run() -> None:
+    global _worth_data
+    try:
+        reads.whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
+
+        def progress(done: int, total: int, _s: Any) -> None:
+            _worth.update(done=done, total=total)
+
+        d = reads.whales.discover(wallets=WORTH_WALLETS, on_progress=progress)
+        data = d.to_dict(sample=True)
+        for s in data["scores"]:
+            s["sample"] = s["sample"][:30]
+        STORE_DIR.mkdir(parents=True, exist_ok=True)
+        worth_file().write_text(json.dumps(data))
+        _worth_data = data
+        _worth_one.clear()
+        _worth["error"] = None
+    except Exception as e:  # show it on the page; the last good result stays
+        _worth["error"] = str(e)
+    finally:
+        _worth["running"] = False
+
+
+def worth_refresh() -> None:
+    if _worth["running"]:
+        return
+    _worth.update(running=True, done=0, total=0, error=None)
+    threading.Thread(target=_worth_run, daemon=True).start()
+
+
+@app.get("/api/worth")
+def worth() -> dict[str, Any]:
+    """Every scored wallet without its bets, plus whether a refresh is running."""
+    data = _worth_load()
+    stale = data is None or time.time() - _iso_ts(data["finished"]) > WORTH_MAX_AGE_S
+    if stale and not _worth["running"] and _worth["error"] is None:
+        worth_refresh()
+    out: dict[str, Any] = {"status": dict(_worth), "result": None}
+    if data is not None:
+        out["result"] = {k: v for k, v in data.items() if k != "scores"} | {
+            "scores": [{k: v for k, v in s.items() if k != "sample"} for s in data["scores"]]
+        }
+    return out
+
+
+@app.post("/api/worth/refresh")
+def worth_refresh_route() -> dict[str, Any]:
+    worth_refresh()
+    return {"status": dict(_worth)}
+
+
+@app.get("/api/worth/{wallet}")
+def worth_wallet(wallet: str) -> dict[str, Any]:
+    """One wallet's score with its checked bets: from the last refresh, or scored now (5–30 s)."""
+    w = wallet.lower()
+    data = _worth_load()
+    for s in (data or {}).get("scores", []):
+        if s["wallet"] == w:
+            return s
+    if w not in _worth_one:
+        try:
+            _worth_one[w] = reads.whales.score(w).to_dict()
+        except VenueError as e:
+            raise venue_error(e) from e
+    return _worth_one[w]
+
+
+def _iso_ts(s: str) -> float:
+    from datetime import datetime
+
+    return datetime.fromisoformat(s).timestamp()
+
+
+# ---- copying (paper) ----
+# Copy rules are set once and saved in the store dir: which traders, contracts a trade, how far above their
+# price to pay, and where to copy to. One background loop polls a copier per trader and copies each new buy
+# with paper money; every copied trade is appended to copied.jsonl, so "My copied trades" survives restarts.
+
+
+class CopyRules(BaseModel):
+    size: float = 5
+    max_above: float = 0.03  # dollars a contract above their price
+    copy_to: str = "polymarket_us"
+
+
+class CopyTrader(BaseModel):
     venue: str
     id: str
     name: str | None = None
-    size: float = 5
-    copy_to: str = "polymarket_us"
-    max_slippage: float = 0.03
+    categories: list[str] = []
 
 
-_copier: Copier | None = None
-_stop = threading.Event()
-_thread: threading.Thread | None = None
-_error: str | None = None
+def rules_file() -> Path:
+    return STORE_DIR / "copy-rules.json"
 
 
-_checked_at: float | None = None
+def copied_file() -> Path:
+    return STORE_DIR / "copied.jsonl"
 
 
-def _loop(cp: Copier) -> None:
-    global _error, _checked_at
-    while not _stop.is_set():
+_copiers: dict[str, Copier] = {}
+_status: dict[str, dict[str, Any]] = {}  # per trader: checked_at, error
+_recent: list[dict[str, Any]] = []  # the last copied and skipped events, newest last
+_loop_thread: threading.Thread | None = None
+_loop_stop = threading.Event()
+
+
+def load_rules() -> dict[str, Any]:
+    if rules_file().exists():
         try:
-            with _lock:
-                cp.poll()
-            _error = None
-            _checked_at = time.time()
-        except VenueError as e:
-            _error = e.message
-        except Exception as e:  # keep following through a bad read; show it on the page
-            _error = str(e)
-        _stop.wait(5)
+            return json.loads(rules_file().read_text())
+        except ValueError:
+            pass
+    return CopyRules().model_dump() | {"traders": []}
 
 
-@app.post("/api/follow")
-def follow(req: FollowRequest) -> dict[str, Any]:
-    global _copier, _thread
-    unfollow()
-    t = Trader(
-        venue=req.venue,  # type: ignore[arg-type]
-        id=req.id,
-        name=req.name or req.id,
-        volume_unit="contracts" if req.venue == "kalshi" else "usd",
+def save_rules(rules: dict[str, Any]) -> None:
+    STORE_DIR.mkdir(parents=True, exist_ok=True)
+    rules_file().write_text(json.dumps(rules, indent=2))
+
+
+def _key(venue: str, id: str) -> str:
+    return f"{venue}:{id}"
+
+
+def _make_copier(rules: dict[str, Any], t: dict[str, Any]) -> Copier:
+    trader = Trader(
+        venue=t["venue"],
+        id=t["id"],
+        name=t.get("name") or t["id"],
+        volume_unit="contracts" if t["venue"] == "kalshi" else "usd",
     )
+    return paper().whales.follow(
+        trader,
+        size=float(rules["size"]),
+        venue=rules["copy_to"],
+        max_slippage=float(rules["max_above"]),
+        categories=tuple(t.get("categories") or ()),
+        copy_sells=False,  # buys only, held until the market settles
+    )
+
+
+def apply_rules() -> None:
+    """Make the running copiers match the saved rules, and start the loop if anyone is copied."""
+    global _loop_thread
+    rules = load_rules()
     with _lock:
-        _copier = paper().whales.follow(
-            t,
-            size=req.size,
-            venue=req.copy_to,  # type: ignore[arg-type]
-            max_slippage=req.max_slippage,
+        _copiers.clear()
+        for t in rules["traders"]:
+            _copiers[_key(t["venue"], t["id"])] = _make_copier(rules, t)
+    if _copiers and (_loop_thread is None or not _loop_thread.is_alive()):
+        _loop_stop.clear()
+        _loop_thread = threading.Thread(target=_copy_loop, daemon=True)
+        _loop_thread.start()
+
+
+def _record(cp: Copier, events: list[Any]) -> None:
+    for e in events:
+        d = e.to_dict() | {"trader": cp.trader.to_dict()}
+        _recent.append(d)
+        if e.status == "copied":
+            with copied_file().open("a") as f:
+                f.write(json.dumps(d) + "\n")
+            _copied_cache["at"] = 0.0  # a new row: work it out again on the next read
+    del _recent[:-200]
+
+
+def _copy_loop() -> None:
+    while not _loop_stop.is_set():
+        for key, cp in list(_copiers.items()):
+            st = _status.setdefault(key, {})
+            if _copiers.get(key) is not cp:
+                continue  # the rules changed since this pass began
+            try:
+                # Not under _lock: a poll can take seconds (Layer matching is paced), and the paper store
+                # locks itself. Only this thread polls, so copiers never run at once.
+                events = cp.poll()
+                with _lock:
+                    _record(cp, events)
+                st.update(checked_at=time.time(), error=None)
+            except VenueError as e:
+                st["error"] = e.message
+            except Exception as e:  # keep copying through a bad read; show it on the page
+                st["error"] = str(e)
+        _loop_stop.wait(5)
+
+
+@app.get("/api/copy")
+def copy_state() -> dict[str, Any]:
+    rules = load_rules()
+    now = time.time()
+    for t in rules["traders"]:
+        st = _status.get(_key(t["venue"], t["id"]), {})
+        t["checked_s_ago"] = None if st.get("checked_at") is None else round(now - st["checked_at"], 1)
+        t["error"] = st.get("error")
+    return {"rules": rules, "recent": list(reversed(_recent[-50:]))}
+
+
+@app.put("/api/copy/rules")
+def set_rules(req: CopyRules) -> dict[str, Any]:
+    if req.copy_to not in ("polymarket_us", "kalshi"):
+        raise HTTPException(400, detail="copy_to must be polymarket_us or kalshi")
+    rules = load_rules() | req.model_dump()
+    save_rules(rules)
+    apply_rules()
+    return copy_state()
+
+
+@app.post("/api/copy/traders")
+def add_trader(req: CopyTrader) -> dict[str, Any]:
+    rules = load_rules()
+    rules["traders"] = [t for t in rules["traders"] if _key(t["venue"], t["id"]) != _key(req.venue, req.id)]
+    rules["traders"].append(req.model_dump())
+    save_rules(rules)
+    apply_rules()
+    return copy_state()
+
+
+@app.delete("/api/copy/traders/{venue}/{trader_id}")
+def remove_trader(venue: str, trader_id: str) -> dict[str, Any]:
+    rules = load_rules()
+    rules["traders"] = [t for t in rules["traders"] if _key(t["venue"], t["id"]) != _key(venue, trader_id)]
+    save_rules(rules)
+    apply_rules()
+    return copy_state()
+
+
+COPIED_TTL_S = 30
+_copied_cache: dict[str, Any] = {"at": 0.0, "data": None}
+_copied_lock = threading.Lock()  # one valuation at a time
+
+
+@app.get("/api/copied")
+def copied() -> dict[str, Any]:
+    """One row per copied trade with its status (open / won / lost) and profit after fees, newest first.
+
+    Valuing open bets reads each market's book, and Polymarket US can ask us to wait 10 s, so the answer
+    is kept for 30 s and, while a new one is worked out, the last one is served.
+    """
+    hit = _copied_cache["data"]
+    if hit is None:  # the first answer is worth waiting for
+        with _copied_lock:
+            return _copied_cache["data"] or _copied_refresh()
+    if time.time() - _copied_cache["at"] >= COPIED_TTL_S:
+        threading.Thread(target=_copied_background, daemon=True).start()
+    return hit
+
+
+def _copied_refresh() -> dict[str, Any]:
+    data = _copied_now()
+    _copied_cache.update(at=time.time(), data=data)
+    return data
+
+
+def _copied_background() -> None:
+    if not _copied_lock.acquire(blocking=False):
+        return  # already being worked out
+    try:
+        _copied_refresh()
+    except Exception:  # keep serving the last answer; the next read tries again
+        pass
+    finally:
+        _copied_lock.release()
+
+
+def _copied_now() -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    if copied_file().exists():
+        for line in copied_file().read_text().splitlines():
+            try:
+                rows.append(json.loads(line))
+            except ValueError:
+                continue
+    ids = [r["order_id"] for r in rows if r.get("order_id")]
+    try:
+        # No engine lock: the paper store locks itself, and the copy loop can hold _lock for seconds.
+        results = paper().whales.copy_results(ids) if ids else {}
+    except VenueError as e:
+        raise venue_error(e) from e
+    out = []
+    for r in reversed(rows):
+        res = results.get(r.get("order_id") or "")
+        out.append(
+            {
+                "at": r["at"],
+                "trader": r["trader"],
+                "source": r["source"],
+                "venue": r["venue"],
+                "market": r["market"],
+                "side": r["side"],
+                "result": res.to_dict() if res else None,
+            }
         )
-    _stop.clear()
-    _thread = threading.Thread(target=_loop, args=(_copier,), daemon=True)
-    _thread.start()
-    return following()
-
-
-@app.delete("/api/follow")
-def unfollow() -> dict[str, Any]:
-    global _copier, _thread
-    _stop.set()
-    if _thread is not None:
-        _thread.join(timeout=10)
-    _thread = None
-    _copier = None
-    return {"following": None}
-
-
-@app.get("/api/follow")
-def following() -> dict[str, Any]:
-    cp = _copier
-    if cp is None:
-        return {"following": None, "events": []}
+    done = [o for o in out if o["result"] and o["result"]["status"] != "unfilled"]
+    net = sum(o["result"]["pnl"] or 0 for o in done)
+    count = {k: sum(1 for o in done if o["result"]["status"] == k) for k in ("open", "won", "lost", "void")}
     return {
-        "following": cp.trader.to_dict(),
-        "copy_to": cp.venue,
-        "size": cp.size,
-        "started": cp._started,
-        "checked_s_ago": None if _checked_at is None else round(time.time() - _checked_at, 1),
-        "error": _error,
-        "events": [e.to_dict() for e in reversed(cp.events[-50:])],
+        "rows": out,
+        "total": {"net": round(net, 2), "trades": len(done), **count},
+        "unvalued": sum(1 for o in done if o["result"]["pnl"] is None),
     }
 
 
 @app.get("/api/paper")
 def paper_account() -> dict[str, Any]:
-    with _lock:
-        p = paper().pnl()
+    p = paper().pnl()
     return {
         "net": p.net,
         "realized": p.realized,
@@ -213,13 +463,18 @@ def paper_account() -> dict[str, Any]:
 
 @app.post("/api/paper/reset")
 def paper_reset() -> dict[str, Any]:
+    """Start the paper account over: no positions and no copied trades. The copy rules stay."""
     global _paper
-    unfollow()
     with _lock:
+        _copiers.clear()
         if _paper is not None:
             _paper.close()
             _paper = None
         (STORE_DIR / "paper.db").unlink(missing_ok=True)
+        copied_file().unlink(missing_ok=True)
+        _recent.clear()
+        _copied_cache.update(at=0.0, data=None)
+    apply_rules()
     return paper_account()
 
 

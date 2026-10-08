@@ -11,6 +11,10 @@
     --kalshi: #0b7a5c; --poly: #2f5bd8;
   }
   @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .act.follow { background: #12301c; color: #4cc26b; }
+    :root:not([data-theme="light"]) .act.watch { background: #10243d; color: #6aa0ff; }
+    :root:not([data-theme="light"]) .act.avoid { background: #3a1616; color: #ff8a80; }
+    :root:not([data-theme="light"]) .tier.likely { background: #10243d; color: #6aa0ff; }
     :root:not([data-theme="light"]) {
       --bg: #191919; --fg: #ececec; --muted: #9b9b9b; --line: #2c2c2c; --soft: #222222;
       --accent: #6aa0ff; --up: #4cc26b; --down: #ff6b6b; --warn-bg: #2d2610; --warn-fg: #e9c46a;
@@ -20,6 +24,7 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
     font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  a { color: var(--accent); }
   .wrap { max-width: 960px; margin: 0 auto; padding: 28px 16px 80px; }
   header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
@@ -78,6 +83,33 @@
   .spin::after { content: "…"; animation: dots 1.2s steps(4) infinite; display: inline-block; width: 1em; overflow: hidden; vertical-align: bottom; }
   @keyframes dots { from { width: 0; } to { width: 1em; } }
   .scroll { overflow-x: auto; }
+  nav.top { display: flex; gap: 14px; font-size: 14px; }
+  nav.top a { color: var(--muted); text-decoration: none; }
+  nav.top a.on { color: var(--fg); font-weight: 500; }
+  .seg { margin: 30px 0 8px; }
+  .seg h3 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 16px; }
+  .seg .what { color: var(--muted); font-size: 14px; margin: 2px 0 8px; }
+  .act { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--soft); color: var(--muted); font-weight: 500; }
+  .act.follow { background: #e6f4ea; color: #1a7f37; } .act.watch { background: #e7f3ff; color: #0b4fa8; }
+  .act.signal { background: var(--warn-bg); color: var(--warn-fg); } .act.avoid { background: #fdecea; color: #b42318; }
+  .row { padding: 11px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .row:hover { background: var(--soft); }
+  .row .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .row b, .who h2 { overflow-wrap: anywhere; }
+  .more { font: inherit; font-size: 14px; color: var(--accent); background: none; border: 0; padding: 8px 0; cursor: pointer; }
+  .row .ev { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .chip { font-size: 11px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .chip.strong { border-color: var(--up); color: var(--up); }
+  details.how { background: var(--soft); border-radius: 8px; padding: 10px 14px; font-size: 14px; margin: 0 0 14px; }
+  details.how summary { cursor: pointer; font-weight: 500; }
+  details.how ol { margin: 8px 0 4px; padding-left: 20px; } details.how li { margin: 4px 0; }
+  .checks { list-style: none; margin: 0; padding: 0; }
+  .checks li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .checks li:first-child { border-top: 0; padding-top: 0; }
+  .mark { font-weight: 700; } .mark.yes { color: var(--up); } .mark.no { color: var(--down); } .mark.unk { color: var(--muted); }
+  .reason { font-size: 17px; margin: 8px 0 4px; }
+  .cats label { margin-right: 12px; white-space: nowrap; }
+  .status { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
   @media (max-width: 640px) { .hide-sm { display: none; } .who h2 { font-size: 20px; } }
 </style>
 </head>
@@ -85,6 +117,8 @@
 <div class="wrap">
   <header>
     <h1><a href="#/">Layer Whales</a></h1>
+    <nav class="top"><a href="#/" id="nav-home">Traders</a><a href="#/worth" id="nav-worth">Worth following</a><a href="#/copied" id="nav-copied">My copied trades</a></nav>
+    <span class="spacer"></span>
     <span class="credit">Built on <a href="https://uselayer.sh" target="_blank" rel="noopener">uselayer</a> · paper money</span>
   </header>
   <div id="following" class="following"></div>
@@ -203,7 +237,8 @@ async function traderPage(venue, id) {
     <a class="back" href="#/">← All traders</a>
     <div class="who"><h2>${esc(t.name)}</h2>${venueTag(venue)}
       ${t.x_handle ? `<span class="muted">@${esc(t.x_handle)}</span>` : ""}
-      ${t.url ? `<a class="muted" href="${esc(t.url)}" target="_blank" rel="noopener">profile ↗</a>` : ""}</div>
+      ${t.url ? `<a class="muted" href="${esc(t.url)}" target="_blank" rel="noopener">profile ↗</a>` : ""}
+      ${venue === "polymarket" ? `<a class="muted" href="${worthHref(t.id)}">worth following? →</a>` : ""}</div>
     ${d.bio ? `<p class="muted" style="margin:4px 0">${esc(d.bio)}</p>` : ""}
     <div class="stats">${statCards.map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join("")}</div>
     ${hidden ? `<p class="note">${esc(t.name)} hides their trades and positions on Kalshi, so they can't be copied directly. If they trade on Polymarket too, you can follow that account instead (see below).</p>` : ""}
@@ -253,88 +288,313 @@ async function loadLinks(venue, id) {
   } catch (e) { if (box.isConnected) box.innerHTML = `<p class="note" style="margin:0">${esc(e.message)}</p>`; }
 }
 
-// ---- following ----
-let follow = null;
+// ---- copying (paper) ----
+let copy = null; // { rules: {size, max_above, copy_to, traders: [...]}, recent: [...] }
+let copiedTotal = null;
 
+const isCopied = (venue, id) => !!copy?.rules.traders.find((t) => t.venue === venue && t.id === id);
+function rulesLine() {
+  const r = copy?.rules;
+  if (!r) return "";
+  return `${r.size} contracts a trade, up to ${Math.round(r.max_above * 100)}¢ above their price, on ${VENUE[r.copy_to]}`;
+}
+
+// The card on a trader's page: add them to your copy list, or take them off it.
+let pendingCard = null; // a card drawn before the copy rules loaded, redrawn once they do
+function copyCard(box, t, opts = {}) {
+  if (!box) return;
+  if (!copy) { pendingCard = [box, t, opts]; box.innerHTML = `<p class="muted spin" style="margin:0">Loading your copy rules</p>`; return; }
+  const on = copy?.rules.traders.find((x) => x.venue === t.venue && x.id === t.id);
+  if (on) {
+    const errs = on.error ? `<p class="note">${esc(on.error)}</p>` : "";
+    box.innerHTML = `<div class="bar" style="margin:0">Copying ${esc(t.name)}'s buys${on.categories?.length ? ` in ${esc(on.categories.join(", "))}` : ""}: ${rulesLine()}.
+      <span class="spacer"></span><button class="ghost" id="uncopy">Stop copying</button></div>
+      <p class="muted" style="margin:8px 0 0;font-size:13px">${on.checked_s_ago != null ? `Checked ${Math.round(on.checked_s_ago)}s ago. ` : ""}See every copy on <a href="#/copied">My copied trades</a>.</p>${errs}`;
+    $("#uncopy").onclick = async () => { copy = await api(`/api/copy/traders/${t.venue}/${encodeURIComponent(t.id)}`, { method: "DELETE" }); copyCard(box, t, opts); renderBar(); };
+    return;
+  }
+  const cats = opts.categories || [];
+  const strong = opts.strong || [];
+  box.innerHTML = `
+    <p style="margin:0 0 10px">Each new buy they make is copied as your own paper order${t.venue === "polymarket" ? " on the same bet on Polymarket US or Kalshi" : ""}, and held until the market settles: real prices and fees, fake money.${opts.note ? " " + esc(opts.note) : ""}</p>
+    ${cats.length > 1 ? `<p class="cats" style="margin:0 0 10px;font-size:14px">Copy only: ${cats.map((c) => `<label><input type="checkbox" value="${esc(c)}" ${!strong.length || strong.includes(c) ? "checked" : ""}> ${esc(c)}${strong.includes(c) ? " ✓" : ""}</label>`).join("")}</p>` : ""}
+    <div class="bar" style="margin:0"><button class="primary" id="docopy">Copy their buys</button>
+      <span class="muted" style="font-size:13px">${rulesLine()} · <a href="#/copied">change</a></span></div>`;
+  $("#docopy").onclick = async () => {
+    $("#docopy").disabled = true;
+    const picked = [...box.querySelectorAll(".cats input:checked")].map((i) => i.value);
+    const categories = cats.length > 1 && picked.length < cats.length ? picked : [];
+    try {
+      copy = await api("/api/copy/traders", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ venue: t.venue, id: t.id, name: t.name, categories }) });
+      copyCard(box, t, opts); renderBar();
+    } catch (e) { $("#docopy").disabled = false; alertNote(box, e.message); }
+  };
+}
 function renderFollowCard(t, hidden) {
   const box = $("#followcard");
   if (!box) return;
-  const mine = follow?.following && follow.following.id === t.id;
   if (hidden) { box.innerHTML = `<p class="muted" style="margin:0">Not available: their trades are hidden.</p>`; return; }
-  if (mine) {
-    box.innerHTML = `<div class="bar" style="margin:0 0 10px">Following ${esc(t.name)} · ${follow.size} contracts a trade on ${VENUE[follow.copy_to]}
-      <span class="spacer"></span><button class="ghost" id="stop">Stop</button></div>
-      <div id="log"></div>`;
-    $("#stop").onclick = stopFollow;
-    renderLog();
-    return;
-  }
-  box.innerHTML = `
-    <p style="margin:0 0 10px">Every new trade they make is copied as your own paper order: real prices, fake money.
-    ${t.venue === "polymarket" ? "Polymarket bets are placed on the same market on" : "Placed on"} the venue you pick.</p>
-    <div class="bar" style="margin:0">
-      <label>Contracts a trade <input type="number" id="size" value="5" min="1" max="100"></label>
-      <label>Copy to <select id="to"><option value="polymarket_us">Polymarket US</option><option value="kalshi">Kalshi</option></select></label>
-      <button class="primary" id="go">Follow with paper money</button>
-    </div>
-    ${follow?.following ? `<p class="muted" style="margin:8px 0 0;font-size:13px">This stops following ${esc(follow.following.name)}.</p>` : ""}`;
-  $("#go").onclick = async () => {
-    $("#go").disabled = true;
-    try {
-      follow = await api("/api/follow", { method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ venue: t.venue, id: t.id, name: t.name, size: Number($("#size").value) || 5, copy_to: $("#to").value }) });
-      renderFollowCard(t, false); renderBar();
-    } catch (e) { $("#go").disabled = false; alertNote(box, e.message); }
-  };
+  copyCard(box, t);
 }
 function alertNote(box, msg) { box.insertAdjacentHTML("beforeend", `<p class="note">${esc(msg)}</p>`); }
 
-function renderLog() {
-  const log = $("#log");
-  if (!log || !follow) return;
-  const ev = follow.events || [];
-  log.innerHTML = (follow.error ? `<p class="note">${esc(follow.error)}</p>` : "") + (ev.length ? `
-    <table class="log"><thead><tr><th>When</th><th>They</th><th>You</th></tr></thead><tbody>
-    ${ev.map((e) => `<tr><td class="muted">${ago(e.at)}</td>
-      <td>${esc(e.source.title || e.source.market)}<br><span class="muted">${e.source.action} ${esc(e.source.outcome || e.source.side.toUpperCase())} at ${cents(e.source.price)} · ${money(e.source.usd)}</span></td>
-      <td>${e.status === "copied"
-        ? `<span class="up">Copied</span> ${venueTag(e.venue)}<br><span class="muted">${e.action} ${e.filled} ${e.side?.toUpperCase()} at ${cents(e.avg_price)} + ${money(e.fees || 0)} fee</span>`
-        : `<span class="muted">Skipped</span><br><span class="muted">${esc(e.reason)}</span>`}</td></tr>`).join("")}
-    </tbody></table>` : `<p class="muted spin" style="margin:0">Watching for their next trade</p>`);
+function upDown(net, n) {
+  const word = net > 0 ? "Up" : net < 0 ? "Down" : "Even";
+  return `${word} ${net ? money(Math.abs(net)).replace(/<[^>]+>/g, "") : ""} on ${n} copied trade${n === 1 ? "" : "s"}`.replace("  ", " ");
 }
 
 async function renderBar() {
   const bar = $("#following");
-  let acct = null;
-  try { acct = await api("/api/paper"); } catch {}
-  if (!follow?.following) { bar.className = "following"; return; }
-  const f = follow.following, ev = follow.events || [];
-  const copied = ev.filter((e) => e.status === "copied").length;
+  const n = copy?.rules.traders.length || 0;
+  if (!n) { bar.className = "following"; return; }
   bar.className = "following on";
-  bar.innerHTML = `Following <a href="${traderHref(f.venue, f.id)}"><b>${esc(f.name)}</b></a> ${venueTag(f.venue)}
-    <span class="muted">${copied} copied · ${ev.length - copied} skipped</span>
-    ${acct ? `<span class="muted">· paper P&amp;L ${money(acct.net, true)}</span>` : ""}
-    <span class="spacer"></span><button class="ghost" id="barstop">Stop</button>`;
-  $("#barstop").onclick = stopFollow;
-}
-async function stopFollow() {
-  follow = await api("/api/follow", { method: "DELETE" });
-  renderBar(); route();
+  const tot = copiedTotal;
+  bar.innerHTML = `Copying <b>${n} trader${n === 1 ? "" : "s"}</b> with paper money
+    ${tot ? `<span class="muted">· <span class="${tot.net > 0 ? "up" : tot.net < 0 ? "down" : ""}">${upDown(tot.net, tot.trades)}</span></span>` : ""}
+    <span class="spacer"></span><a href="#/copied">My copied trades →</a>`;
 }
 async function poll() {
-  try { follow = await api("/api/follow"); } catch { return; }
-  renderBar(); renderLog();
+  try { copy = await api("/api/copy"); } catch { return; }
+  if (pendingCard) { const [b, t, o] = pendingCard; pendingCard = null; if (b.isConnected) copyCard(b, t, o); }
+  try { copiedTotal = (await api("/api/copied")).total; } catch {}
+  renderBar();
 }
-setInterval(poll, 4000);
+setInterval(poll, 15000);
+
+// ---- my copied trades ----
+const STATUS = { open: "Open", won: "Won", lost: "Lost", void: "Refunded", unfilled: "Not filled" };
+async function copiedPage() {
+  const app = $("#app");
+  app.innerHTML = `<p class="empty spin">Loading</p>`;
+  let d;
+  try { [d, copy] = await Promise.all([api("/api/copied"), api("/api/copy")]); }
+  catch (e) { app.innerHTML = `<p class="note">${esc(e.message)}</p>`; return; }
+  copiedTotal = d.total; renderBar();
+  const t = d.total, r = copy.rules;
+  app.innerHTML = `
+    <div class="who"><h2 class="${t.net > 0 ? "up" : t.net < 0 ? "down" : ""}">${t.trades ? upDown(t.net, t.trades) : "No copied trades yet"}</h2></div>
+    <p class="muted" style="margin:2px 0 0">Paper money: real prices and fees, fake money. Each copy is held until its market settles. ${t.trades ? `${t.open} open · ${t.won} won · ${t.lost} lost${t.void ? ` · ${t.void} refunded` : ""}. Open bets count at what they'd sell for now.` : ""}</p>
+    ${d.unvalued ? `<p class="note">${d.unvalued} open bet${d.unvalued === 1 ? " has" : "s have"} no buyer right now, so ${d.unvalued === 1 ? "it isn't" : "they aren't"} counted in the total.</p>` : ""}
+
+    <section><h3>Copy rules</h3><div class="card">
+      ${r.traders.length ? `<table><tbody>${r.traders.map((x) => `<tr>
+        <td><a href="${x.venue === "polymarket" ? worthHref(x.id) : traderHref(x.venue, x.id)}"><b>${esc(x.name || x.id)}</b></a> ${venueTag(x.venue)}
+          ${x.categories?.length ? `<span class="muted"> · only ${esc(x.categories.join(", "))}</span>` : ""}
+          ${x.error ? `<br><span class="down" style="font-size:13px">${esc(x.error)}</span>` : ""}</td>
+        <td class="num"><button class="ghost" data-rm="${esc(x.venue)}/${esc(x.id)}">Stop</button></td></tr>`).join("")}</tbody></table>`
+        : `<p class="muted" style="margin:0 0 6px">You're not copying anyone yet. Pick traders on <a href="#/worth">Worth following</a> or <a href="#/">Traders</a>.</p>`}
+      <div class="bar" style="margin:12px 0 0">
+        <label>Contracts a trade <input type="number" id="rsize" value="${r.size}" min="1" max="100"></label>
+        <label>Pay up to <input type="number" id="rabove" value="${Math.round(r.max_above * 100)}" min="0" max="20">¢ above their price</label>
+        <label>Copy to <select id="rto"><option value="polymarket_us">Polymarket US</option><option value="kalshi">Kalshi</option></select></label>
+        <button class="primary" id="rsave">Save</button><span class="muted" id="rsaved" style="font-size:13px"></span>
+      </div>
+      <p class="muted" style="margin:8px 0 0;font-size:13px">Only their buys are copied. A Polymarket bet is placed on the same bet on the venue you pick; one with no match there is skipped.</p>
+    </div></section>
+
+    <section><h3>Copied trades</h3>${d.rows.length ? `<div class="scroll"><table><thead><tr><th>When</th><th>Copied</th><th>Bet</th><th class="num">My price</th><th>Status</th><th class="num">Profit after fees</th></tr></thead><tbody>
+      ${d.rows.map((x) => { const res = x.result || {}; return `<tr>
+        <td class="muted">${ago(x.at)}</td>
+        <td>${esc(x.trader.name)}<br>${venueTag(x.trader.venue)}</td>
+        <td>${esc(x.source.title || x.market)}<br><span class="muted">${esc((x.side || "").toUpperCase())} · ${esc(x.source.outcome || "")} on ${VENUE[x.venue] || x.venue}</span></td>
+        <td class="num">${cents(res.avg_price)}<br><span class="muted">${res.contracts ?? "—"} contracts</span></td>
+        <td>${STATUS[res.status] || "—"}${res.status === "open" && res.mark != null ? `<br><span class="muted">bid ${cents(res.mark)}</span>` : ""}</td>
+        <td class="num">${res.status === "open" ? `<span class="muted">${money(res.pnl, true)}</span>` : money(res.pnl, true)}</td></tr>`; }).join("")}
+      </tbody></table></div>` : `<p class="empty">Nothing copied yet. New buys show up here within a few seconds of the trader making them.</p>`}</section>
+
+    ${copy.recent.filter((e) => e.status === "skipped").length ? `<section><details><summary class="muted" style="cursor:pointer;font-size:14px">Not copied (${copy.recent.filter((e) => e.status === "skipped").length} recent)</summary>
+      <table class="log"><tbody>${copy.recent.filter((e) => e.status === "skipped").map((e) => `<tr><td class="muted">${ago(e.at)}</td><td>${esc(e.trader.name)}: ${esc(e.source.title || e.source.market)}<br><span class="muted">${esc(e.reason)}</span></td></tr>`).join("")}</tbody></table></details></section>` : ""}
+
+    <p style="margin-top:28px"><button class="ghost" id="reset">Start the paper account over</button> <span class="muted" style="font-size:13px">Clears positions and copied trades; your copy rules stay.</span></p>`;
+  $("#rto").value = r.copy_to;
+  $("#rsave").onclick = async () => {
+    copy = await api("/api/copy/rules", { method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ size: Number($("#rsize").value) || 5, max_above: (Number($("#rabove").value) || 0) / 100, copy_to: $("#rto").value }) });
+    $("#rsaved").textContent = "Saved"; renderBar();
+  };
+  app.querySelectorAll("[data-rm]").forEach((b) => (b.onclick = async () => {
+    const [v, id] = b.dataset.rm.split("/");
+    copy = await api(`/api/copy/traders/${v}/${encodeURIComponent(id)}`, { method: "DELETE" }); copiedPage();
+  }));
+  $("#reset").onclick = async () => { $("#reset").disabled = true; await api("/api/paper/reset", { method: "POST" }); copiedPage(); };
+}
+
+// ---- worth following (Polymarket) ----
+const SEG = {
+  proven: ["Proven sharps", "follow", "A long record that beats the price, holds up without their best bets, and still pays when you copy a few minutes late."],
+  quiet: ["Quiet sharps", "follow", "Smaller accounts that no leaderboard lists, with a steady edge you can copy. The hidden gems."],
+  rising: ["Rising", "watch", "Good early signs, but too few bets to be sure yet. Worth watching."],
+  too_fast: ["Sharp but too fast", "signal", "Their edge is real, but the price has already moved by the time a copier gets in. Use their trades as a signal; copying isn't offered."],
+  lucky: ["Lucky big bettors", "avoid", "Big profit, but the price doesn't move their way after they buy, or one win carries the record. Don't follow."],
+};
+const ACT = { follow: "Follow", watch: "Watch", signal: "Signal only", avoid: "Don't follow", skip: "Left out" };
+const ct = (x, signed = true) => x == null ? "—" : `${signed ? (x >= 0 ? "+" : "−") : ""}${Math.abs(x * 100).toFixed(1)}¢`;
+const signedCents = (x) => x == null ? '<span class="muted">—</span>' : `<span class="${x > 0 ? "up" : x < 0 ? "down" : ""}">${ct(x)}</span>`;
+const CONF = { high: "high confidence", medium: "medium confidence", low: "low confidence" };
+const worthHref = (w) => `#/worth/${w}`;
+
+function evidenceLine(s) {
+  const bits = [];
+  if (s.edge) bits.push(`price ${ct(s.edge.mean)} their way within 5 min`);
+  if (s.copy && s.action !== "skip") bits.push(`copying late ${ct(s.copy.mean)} ± ${ct(s.copy.margin, false)} after fees`);
+  bits.push(`${s.bets} bets`);
+  bits.push(CONF[s.confidence]);
+  if (s.segment === "lucky" && s.pnl != null) bits.unshift(`profit ${money(s.pnl).replace(/<[^>]+>/g, "")}`);
+  return bits.join(" · ");
+}
+function chips(s) {
+  return s.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join(" ")
+    + " " + s.strong_categories.map((c) => `<span class="chip strong" title="Clear edge in ${esc(c)}">${esc(c)}</span>`).join(" ");
+}
+
+let worthTimer = null;
+const SHOW = 5; // rows shown per segment before "Show more"
+async function worthPage() {
+  const app = $("#app");
+  app.innerHTML = `
+    <p class="sub">Polymarket traders whose bets beat the price, found on the leaderboards and beyond them, and checked on their last 30 days of public trades. Copying is paper money only.</p>
+    <details class="how"><summary>How we judge a trader</summary>
+      <p style="margin:8px 0 0">A contract pays $1 if its outcome wins, so its price is in cents. We check up to 60 of each trader's bets against Polymarket's own price history, which comes in 5-minute steps.</p>
+      <ol>
+        <li><b>Beats the price.</b> After they buy, does the price move their way? We look 1, 5, 15 and 60 minutes later; the test is the 5-minute move, the one that held up from a trader's earlier bets to their later ones. This is the main test of skill.</li>
+        <li><b>Enough bets to trust it.</b> One bet per market, and bets on the same event (a game's winner and its total) count once. Confidence is high, medium or low.</li>
+        <li><b>Steady.</b> The edge holds with their two best bets removed, and their profit holds without their biggest win.</li>
+        <li><b>Copyable.</b> Buying the same thing 1 to 6 minutes later (about when a copier sees their trade) and paying Polymarket's taker fee still gains by the hour mark.</li>
+        <li><b>Takes a side.</b> Market makers (trading both ways in the same market) and arbitrage (buying both outcomes for under $1) have no view to follow, so they're left out. Bots are fine: "bot" is only a tag.</li>
+        <li><b>Where their edge is.</b> The same test per category (sports, crypto…), so you can follow someone only there.</li>
+      </ol>
+      <p class="muted" style="margin:4px 0 0">A reading of the past, not a promise.</p>
+    </details>
+    <p class="status" id="wstatus"></p>
+    <div id="wlist"><p class="empty spin">Loading</p></div>`;
+  await loadWorth();
+}
+
+async function loadWorth() {
+  clearTimeout(worthTimer);
+  let r;
+  try { r = await api("/api/worth"); } catch (e) { $("#wlist").innerHTML = `<p class="note">${esc(e.message)}</p>`; return; }
+  if (!$("#wlist")) return;
+  const st = r.status, res = r.result;
+  let status = "";
+  if (st.running) status = `<span class="spin">Checking traders${st.total ? ` (${st.done} of ${st.total})` : ""}</span> · ${res ? "the list below is from the last check" : "the first check takes 20–30 minutes"}`;
+  else if (res) status = `Checked ${res.scores.length} traders (${res.sources.beyond_leaderboards} found beyond the leaderboards) · ${ago(res.finished)} · <a href="#" id="wrefresh">Check again</a>`;
+  if (st.error) status += ` <span class="down">Last check failed: ${esc(st.error)}</span>`;
+  $("#wstatus").innerHTML = status;
+  const btn = $("#wrefresh");
+  if (btn) btn.onclick = async (e) => { e.preventDefault(); await api("/api/worth/refresh", { method: "POST" }); loadWorth(); };
+  if (st.running) worthTimer = setTimeout(() => { if (location.hash === "#/worth") loadWorth(); }, 3000);
+  if (!res) { if (!st.running) $("#wlist").innerHTML = `<p class="empty">No traders checked yet.</p>`; else $("#wlist").innerHTML = `<p class="empty">The first check reads about 200 traders' last 30 days of bets and the prices after each, so it takes 20–30 minutes. This page fills in when it's done; after that it's kept for a day.</p>`; return; }
+  const by = {};
+  res.scores.forEach((s) => (by[s.segment] ||= []).push(s));
+  let html = Object.entries(SEG).map(([k, [title, act, what]]) => {
+    const rows = by[k] || [];
+    return `<section class="seg"><h3>${title} <span class="muted" style="font-weight:400">${rows.length}</span> <span class="act ${act}">${ACT[act]}</span></h3>
+      <p class="what">${what}</p>
+      ${rows.length ? rows.map((s, i) => `
+        <div class="row${i >= SHOW ? " extra" : ""}" data-href="${worthHref(s.wallet)}" ${i >= SHOW ? 'hidden' : ""}>
+          <div class="top"><b>${esc(s.name)}</b> ${chips(s)}</div>
+          <div>${esc(s.reason)}</div>
+          <div class="ev">${esc(evidenceLine(s))}</div>
+        </div>`).join("") + (rows.length > SHOW ? `<button class="more">Show ${rows.length - SHOW} more</button>` : "") : `<p class="empty" style="padding:6px 0">None right now.</p>`}
+    </section>`;
+  }).join("");
+  const nv = by.no_view || [], ne = by.no_edge || [];
+  html += `<section class="seg"><h3>Left out <span class="act">${ACT.skip}</span></h3>
+    <p class="what">${nv.length} market makers and arbitrage traders (no view to follow), and ${ne.length} traders whose bets don't clearly beat the price.</p>
+    <details><summary class="muted" style="cursor:pointer;font-size:14px">Show them</summary>
+      ${[...nv, ...ne].map((s) => `<div class="row" data-href="${worthHref(s.wallet)}"><div class="top"><b>${esc(s.name)}</b> ${chips(s)}</div><div class="ev">${esc(s.reason)}</div></div>`).join("")}
+    </details></section>
+    <p class="muted" style="font-size:13px">Price history found for ${(res.coverage.priced_5m ?? res.coverage.priced_1h).toLocaleString()} of ${res.coverage.bets.toLocaleString()} bets checked${res.coverage.combos ? `; ${res.coverage.combos.toLocaleString()} combo bets (parlays) can't be checked and are left out` : ""}.</p>`;
+  $("#wlist").innerHTML = html;
+  $("#wlist").querySelectorAll(".more").forEach((b) => (b.onclick = () => {
+    b.parentElement.querySelectorAll(".row.extra").forEach((r) => (r.hidden = false)); b.remove();
+  }));
+  $("#wlist").querySelectorAll("[data-href]").forEach((el) => (el.onclick = () => (location.hash = el.dataset.href)));
+}
+
+async function worthTraderPage(wallet) {
+  const app = $("#app");
+  const back = `<a class="back" href="#/worth">← Worth following</a>`;
+  app.innerHTML = `${back}<p class="empty spin">Checking this trader's bets (up to a minute)</p>`;
+  let s;
+  try { s = await api(`/api/worth/${wallet}`); } catch (e) { app.innerHTML = `${back}<p class="note">${esc(e.message)}</p>`; return; }
+  const seg = SEG[s.segment];
+  const mark = (p) => p === true ? '<span class="mark yes">✓</span>' : p === false ? '<span class="mark no">✗</span>' : '<span class="mark unk">?</span>';
+  const delays = [["60", "1 min"], ["300", "5 min"], ["900", "15 min"], ["3600", "1 hour"]];
+  app.innerHTML = `${back}
+    <div class="who"><h2>${esc(s.name)}</h2>${venueTag("polymarket")} <span class="act ${s.action}">${seg ? seg[0] : s.label} · ${ACT[s.action]}</span> ${chips(s)}
+      <a class="muted" href="https://polymarket.com/profile/${esc(s.wallet)}" target="_blank" rel="noopener">profile ↗</a></div>
+    <p class="reason">${esc(s.reason)}</p>
+    <p class="muted" style="margin:0;font-size:13px">${esc(s.source)} · last ${Math.round((new Date(s.window[1]) - new Date(s.window[0])) / 864e5)} days · ${CONF[s.confidence]}</p>
+    <div class="stats">
+      <div class="stat"><span>Price move their way, 5 min</span><b>${signedCents(s.edge?.mean)} <span class="muted">± ${ct(s.edge?.margin, false)}</span></b></div>
+      <div class="stat"><span>Copying late, after fees</span><b>${signedCents(s.copy?.mean)} <span class="muted">± ${ct(s.copy?.margin, false)}</span></b></div>
+      <div class="stat"><span>Separate bets checked</span><b>${s.bets}</b></div>
+      <div class="stat"><span>Profit, all time</span><b>${money(s.pnl, true)}</b></div>
+      <div class="stat"><span>Profit, last 30 days</span><b>${money(s.pnl_window, true)}</b></div>
+    </div>
+    <section><h3>The checks</h3><div class="card"><ul class="checks">${s.checks.map((c) => `<li>${mark(c.passed)}<div><b>${esc(c.title)}.</b> ${esc(c.detail)}</div></li>`).join("")}</ul></div></section>
+    <section><h3>Copy their trades</h3><div class="card" id="wfollow"></div></section>
+    <section><h3>How the price moved after they bought</h3><p class="muted" style="margin:-4px 0 8px;font-size:14px">Average over their bets, in cents a contract, with the 95% margin. Positive means the price moved their way. Each is the first 5-minute price at least that long after the buy.</p>
+      <div class="scroll"><table><thead><tr><th>After</th><th class="num">Their way</th><th class="num">± margin</th><th class="num">Bets</th></tr></thead><tbody>
+      ${delays.map(([k, l]) => { const d = s.edge_by_delay[k]; return `<tr><td>${l}</td><td class="num">${signedCents(d?.mean)}</td><td class="num muted">${d ? ct(d.margin, false) : "—"}</td><td class="num">${d?.n ?? "—"}</td></tr>`; }).join("")}
+      </tbody></table></div></section>
+    <section><h3>By category</h3>${s.categories.length ? `<div class="scroll"><table><thead><tr><th>Category</th><th class="num">Bets</th><th class="num">Their way, 5 min</th><th class="num">Copying, after fees</th><th></th></tr></thead><tbody>
+      ${s.categories.map((c) => `<tr><td>${esc(c.category)}</td><td class="num">${c.bets}</td><td class="num">${signedCents(c.edge?.mean)}</td><td class="num">${signedCents(c.copy?.mean)}</td><td>${c.strong ? '<span class="chip strong">clear edge</span>' : ""}</td></tr>`).join("")}
+      </tbody></table></div>` : `<p class="empty">No bets checked.</p>`}</section>
+    <section><h3>What they're doing now</h3><div id="wnow"><p class="muted spin">Loading their open bets</p></div></section>
+    <section><h3>Bets we checked</h3><p class="muted" style="margin:-4px 0 8px;font-size:14px">Their most recent checked bets. "Copy" is what buying 1 to 6 minutes later made by the hour mark, after the fee.</p>
+      <div class="scroll"><table><thead><tr><th>When</th><th>Bet</th><th class="num">Paid</th><th class="num">5 min</th><th class="num">1 hour</th><th class="num">Copy</th></tr></thead><tbody>
+      ${(s.sample || []).slice(0, 30).map((b) => `<tr><td class="muted">${ago(b.at)}</td><td>${esc(b.title || b.market)}<br><span class="muted">${esc(b.outcome || "")} · ${esc(b.category)}</span></td>
+        <td class="num">${cents(b.price)}</td><td class="num">${signedCents(b.moved["300"])}</td><td class="num">${signedCents(b.moved["3600"])}</td><td class="num">${signedCents(b.copy)}</td></tr>`).join("")}
+      </tbody></table></div></section>`;
+  worthFollowCard(s);
+  loadNow(s);
+}
+
+async function loadNow(s) {
+  const box = $("#wnow");
+  const recent = s.recent || [];
+  let positions = "";
+  try {
+    const d = await api(`/api/trader/polymarket/${s.wallet}`);
+    positions = `<h4 style="margin:14px 0 6px;font-size:14px">Open bets</h4><div class="scroll">${positionsTable(d.positions.slice(0, 15), false)}</div>`;
+  } catch (e) { positions = `<p class="note">${esc(e.message)}</p>`; }
+  if (!box.isConnected) return;
+  box.innerHTML = `<h4 style="margin:0 0 6px;font-size:14px">Latest buys</h4>` + (recent.length ? `<div class="scroll"><table><tbody>
+    ${recent.map((b) => `<tr><td class="muted">${ago(b.at)}</td><td>${esc(b.title || b.market)}<br><span class="muted">Bought ${esc(b.outcome || "")} · ${esc(b.category)}${s.strong_categories.includes(b.category) ? " · their strong category" : ""}</span></td><td class="num">${cents(b.price)}</td><td class="num">${money(b.usd)}</td></tr>`).join("")}
+    </tbody></table></div>` : `<p class="empty">No buys in the last 30 days.</p>`) + positions;
+}
+
+function worthFollowCard(s) {
+  const box = $("#wfollow");
+  if (!box) return;
+  if (s.action === "signal") { box.innerHTML = `<p style="margin:0">Signal only. Their edge is gone by the time a copier gets in, so copying isn't offered: watch their trades instead (see below).</p>`; return; }
+  if (s.action === "avoid" || s.action === "skip") { box.innerHTML = `<p class="muted" style="margin:0">Not offered: ${esc(s.reason.charAt(0).toLowerCase() + s.reason.slice(1))}</p>`; return; }
+  copyCard(box, { venue: "polymarket", id: s.wallet, name: s.name }, {
+    categories: s.categories.map((c) => c.category), strong: s.strong_categories,
+    note: s.action === "watch" ? "They're still a maybe: too few bets to be sure." : "",
+  });
+}
 
 // ---- routing ----
 function route() {
   const m = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
+  const w = location.hash.match(/^#\/worth\/(0x[0-9a-fA-F]{40})$/);
+  const worth = location.hash.startsWith("#/worth"), mine = location.hash === "#/copied";
+  $("#nav-worth").className = worth ? "on" : ""; $("#nav-copied").className = mine ? "on" : "";
+  $("#nav-home").className = worth || mine ? "" : "on";
   window.scrollTo(0, 0);
-  if (m) traderPage(m[1], decodeURIComponent(m[2])); else home();
+  if (mine) copiedPage();
+  else if (w) worthTraderPage(w[1].toLowerCase());
+  else if (worth) worthPage();
+  else if (m) traderPage(m[1], decodeURIComponent(m[2])); else home();
 }
 window.addEventListener("hashchange", route);
-poll().then(route);
+route();
+poll();
 </script>
 </body>
 </html>
