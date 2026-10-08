@@ -296,7 +296,7 @@ const isCopied = (venue, id) => !!copy?.rules.traders.find((t) => t.venue === ve
 function rulesLine() {
   const r = copy?.rules;
   if (!r) return "";
-  return `${r.size} contracts a trade, up to ${Math.round(r.max_above * 100)}¢ above their price, on ${VENUE[r.copy_to]}`;
+  return `${r.size} contracts a trade, paper money`;
 }
 
 // The card on a trader's page: add them to your copy list, or take them off it.
@@ -319,7 +319,7 @@ function copyCard(box, t, opts = {}) {
     <p style="margin:0 0 10px">Each new buy they make is copied as your own paper order${t.venue === "polymarket" ? " on the same bet on Polymarket US or Kalshi" : ""}, and held until the market settles: real prices and fees, fake money.${opts.note ? " " + esc(opts.note) : ""}</p>
     ${cats.length > 1 ? `<p class="cats" style="margin:0 0 10px;font-size:14px">Copy only: ${cats.map((c) => `<label><input type="checkbox" value="${esc(c)}" ${!strong.length || strong.includes(c) ? "checked" : ""}> ${esc(c)}${strong.includes(c) ? " ✓" : ""}</label>`).join("")}</p>` : ""}
     <div class="bar" style="margin:0"><button class="primary" id="docopy">Copy their buys</button>
-      <span class="muted" style="font-size:13px">${rulesLine()} · <a href="#/copied">change</a></span></div>`;
+      <span class="muted" style="font-size:13px">${rulesLine()}</span></div>`;
   $("#docopy").onclick = async () => {
     $("#docopy").disabled = true;
     const picked = [...box.querySelectorAll(".cats input:checked")].map((i) => i.value);
@@ -377,20 +377,13 @@ async function copiedPage() {
     <p class="muted" style="margin:2px 0 0">Paper money: real prices and fees, fake money. Each copy is held until its market settles. ${t.trades ? `${t.open} open · ${t.won} won · ${t.lost} lost${t.void ? ` · ${t.void} refunded` : ""}. Open bets count at what they'd sell for now.` : ""}</p>
     ${d.unvalued ? `<p class="note">${d.unvalued} open bet${d.unvalued === 1 ? " has" : "s have"} no buyer right now, so ${d.unvalued === 1 ? "it isn't" : "they aren't"} counted in the total.</p>` : ""}
 
-    <section><h3>Copy rules</h3><div class="card">
+    <section><h3>Who you're copying</h3><div class="card">
       ${r.traders.length ? `<table><tbody>${r.traders.map((x) => `<tr>
         <td><a href="${x.venue === "polymarket" ? worthHref(x.id) : traderHref(x.venue, x.id)}"><b>${esc(x.name || x.id)}</b></a> ${venueTag(x.venue)}
           ${x.categories?.length ? `<span class="muted"> · only ${esc(x.categories.join(", "))}</span>` : ""}
           ${x.error ? `<br><span class="down" style="font-size:13px">${esc(x.error)}</span>` : ""}</td>
         <td class="num"><button class="ghost" data-rm="${esc(x.venue)}/${esc(x.id)}">Stop</button></td></tr>`).join("")}</tbody></table>`
         : `<p class="muted" style="margin:0 0 6px">You're not copying anyone yet. Pick traders on <a href="#/worth">Worth following</a> or <a href="#/">Traders</a>.</p>`}
-      <div class="bar" style="margin:12px 0 0">
-        <label>Contracts a trade <input type="number" id="rsize" value="${r.size}" min="1" max="100"></label>
-        <label>Pay up to <input type="number" id="rabove" value="${Math.round(r.max_above * 100)}" min="0" max="20">¢ above their price</label>
-        <label>Copy to <select id="rto"><option value="polymarket_us">Polymarket US</option><option value="kalshi">Kalshi</option></select></label>
-        <button class="primary" id="rsave">Save</button><span class="muted" id="rsaved" style="font-size:13px"></span>
-      </div>
-      <p class="muted" style="margin:8px 0 0;font-size:13px">Only their buys are copied. A Polymarket bet is placed on the same bet on the venue you pick; one with no match there is skipped.</p>
     </div></section>
 
     <section><h3>Copied trades</h3>${d.rows.length ? `<div class="scroll"><table><thead><tr><th>When</th><th>Copied</th><th>Bet</th><th class="num">My price</th><th>Status</th><th class="num">Profit after fees</th></tr></thead><tbody>
@@ -406,13 +399,7 @@ async function copiedPage() {
     ${copy.recent.filter((e) => e.status === "skipped").length ? `<section><details><summary class="muted" style="cursor:pointer;font-size:14px">Not copied (${copy.recent.filter((e) => e.status === "skipped").length} recent)</summary>
       <table class="log"><tbody>${copy.recent.filter((e) => e.status === "skipped").map((e) => `<tr><td class="muted">${ago(e.at)}</td><td>${esc(e.trader.name)}: ${esc(e.source.title || e.source.market)}<br><span class="muted">${esc(e.reason)}</span></td></tr>`).join("")}</tbody></table></details></section>` : ""}
 
-    <p style="margin-top:28px"><button class="ghost" id="reset">Start the paper account over</button> <span class="muted" style="font-size:13px">Clears positions and copied trades; your copy rules stay.</span></p>`;
-  $("#rto").value = r.copy_to;
-  $("#rsave").onclick = async () => {
-    copy = await api("/api/copy/rules", { method: "PUT", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ size: Number($("#rsize").value) || 5, max_above: (Number($("#rabove").value) || 0) / 100, copy_to: $("#rto").value }) });
-    $("#rsaved").textContent = "Saved"; renderBar();
-  };
+    <p style="margin-top:28px"><button class="ghost" id="reset">Start the paper account over</button> <span class="muted" style="font-size:13px">Clears positions and copied trades; the traders you copy stay.</span></p>`;
   app.querySelectorAll("[data-rm]").forEach((b) => (b.onclick = async () => {
     const [v, id] = b.dataset.rm.split("/");
     copy = await api(`/api/copy/traders/${v}/${encodeURIComponent(id)}`, { method: "DELETE" }); copiedPage();
