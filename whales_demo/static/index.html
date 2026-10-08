@@ -254,7 +254,7 @@ async function traderPage(venue, id) {
 function positionsTable(rows, hidden) {
   if (hidden) return `<p class="empty">Hidden by the trader.</p>`;
   if (!rows.length) return `<p class="empty">No open positions.</p>`;
-  return `<table><thead><tr><th>Market</th><th class="num">Contracts</th><th class="num">Avg</th><th class="num">Now</th><th class="num">P&amp;L</th></tr></thead><tbody>
+  return `<table><thead><tr><th>Market</th><th class="num">Contracts</th><th class="num">Avg price paid</th><th class="num">Price now</th><th class="num">P&amp;L</th></tr></thead><tbody>
     ${rows.map((p) => `<tr><td>${esc(p.title || p.market)}<br><span class="muted">${esc(p.outcome || "")}</span></td>
       <td class="num">${Math.round(p.size).toLocaleString()}</td><td class="num">${cents(p.avg_price)}</td>
       <td class="num">${cents(p.current_price)}</td><td class="num">${money(p.pnl, true)}</td></tr>`).join("")}</tbody></table>`;
@@ -546,7 +546,7 @@ async function worthTraderPage(wallet) {
       </tbody></table></div>` : `<p class="empty">No bets checked.</p>`}</section>
     <section><h3>What they're doing now</h3><div id="wnow"><p class="muted spin">Loading their open bets</p></div></section>
     <section><h3>Bets we checked</h3><p class="muted" style="margin:-4px 0 8px;font-size:14px">Their most recent checked bets. "Copy" is what buying 1 to 6 minutes later made by the hour mark, after the fee.</p>
-      <div class="scroll"><table><thead><tr><th>When</th><th>Bet</th><th class="num">Paid</th><th class="num">5 min</th><th class="num">1 hour</th><th class="num">Copy</th></tr></thead><tbody>
+      <div class="scroll"><table><thead><tr><th>When</th><th>Bet</th><th class="num">Price paid</th><th class="num">5 min</th><th class="num">1 hour</th><th class="num">Copy</th></tr></thead><tbody>
       ${(s.sample || []).slice(0, 30).map((b) => `<tr><td class="muted">${ago(b.at)}</td><td>${esc(b.title || b.market)}<br><span class="muted">${esc(b.outcome || "")} · ${esc(b.category)}</span></td>
         <td class="num">${cents(b.price)}</td><td class="num">${signedCents(b.moved["300"])}</td><td class="num">${signedCents(b.moved["3600"])}</td><td class="num">${signedCents(b.copy)}</td></tr>`).join("")}
       </tbody></table></div></section>`;
@@ -563,7 +563,8 @@ async function loadNow(s) {
     positions = `<h4 style="margin:14px 0 6px;font-size:14px">Open bets</h4><div class="scroll">${positionsTable(d.positions.slice(0, 15), false)}</div>`;
   } catch (e) { positions = `<p class="note">${esc(e.message)}</p>`; }
   if (!box.isConnected) return;
-  box.innerHTML = `<h4 style="margin:0 0 6px;font-size:14px">Latest buys</h4>` + (recent.length ? `<div class="scroll"><table><tbody>
+  box.innerHTML = `<h4 style="margin:0 0 2px;font-size:14px">Latest buys</h4>
+    <p class="muted" style="margin:0 0 6px;font-size:13px">A contract pays $1 if its outcome wins. The price is what one cost them; the amount is the real money they put in.</p>` + (recent.length ? `<div class="scroll"><table><thead><tr><th>When</th><th>Bet</th><th class="num">Price per contract</th><th class="num">Amount bet</th></tr></thead><tbody>
     ${recent.map((b) => `<tr><td class="muted">${ago(b.at)}</td><td>${esc(b.title || b.market)}<br><span class="muted">Bought ${esc(b.outcome || "")} · ${esc(b.category)}${s.strong_categories.includes(b.category) ? " · their strong category" : ""}</span></td><td class="num">${cents(b.price)}</td><td class="num">${money(b.usd)}</td></tr>`).join("")}
     </tbody></table></div>` : `<p class="empty">No buys in the last 30 days.</p>`) + positions;
 }
