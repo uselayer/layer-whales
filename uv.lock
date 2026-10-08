@@ -318,7 +318,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "uselayer", git = "https://github.com/uselayer/uselayer-sdk?subdirectory=python&branch=whales-copy-trading" },
+    { name = "uselayer", specifier = ">=0.5.0" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
 
@@ -545,13 +545,17 @@ wheels = [
 
 [[package]]
 name = "uselayer"
-version = "0.4.3"
-source = { git = "https://github.com/uselayer/uselayer-sdk?subdirectory=python&branch=whales-copy-trading#da4c4e43aa7679d250d2bea11c0399cf03740351" }
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/8c/63cfb381c5c93509845c9066bb1a233c61bfe81c43c1101f29503029034f/uselayer-0.5.0.tar.gz", hash = "sha256:a516b6bb113695269e74cec85d3c9f3af982d40fbc71f355b8870eeb1d40e2a7", size = 315715, upload-time = "2026-10-08T05:15:18.763Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/5c/3030a6818a60cf099a7f173c061a8e4878d4c6248c6e85f013a4c2acdc0d/uselayer-0.5.0-py3-none-any.whl", hash = "sha256:d50ae8927bb921c6173415ff446a026cfaa7dff75d3f47d015fadd025b669cf8", size = 223992, upload-time = "2026-10-08T05:15:16.954Z" },
 ]
 
 [[package]]
