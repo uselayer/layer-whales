@@ -119,8 +119,9 @@
   .cats label { margin-right: 12px; white-space: nowrap; }
   .status { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
   .show-sm { display: none; }
-  td.wrap { white-space: normal; }
-  @media (max-width: 640px) { .hide-sm { display: none; } .show-sm { display: inline; } .who h2 { font-size: 20px; } }
+  a.ext { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+  a.ext:hover { text-decoration-color: currentColor; }
+  @media (max-width: 640px) { .hide-sm { display: none; } .show-sm { display: inline; } div.show-sm { display: block; } .who h2 { font-size: 20px; } }
 </style>
 </head>
 <body>
@@ -616,20 +617,23 @@ async function loadLive() {
   if (!r.traders.length) { $("#llist").innerHTML = `<p class="empty">No traders to watch yet: <a href="#/worth">Worth following</a> hasn't found anyone to follow or watch.</p>`; return; }
   if (!r.bets.length) { $("#llist").innerHTML = `<p class="empty">None of them has bet in the last ${r.hours} hours.</p>`; return; }
   $("#llist").innerHTML = `<div class="scroll"><table class="board"><thead><tr><th class="hide-sm">When</th><th>Trader</th><th>Bet</th>
+      <th class="num"><span class="tip" tabindex="0" data-tip="How much money they put into this bet in the last day, and how many contracts that bought (each pays $1 if it wins).">They put in</span></th>
       <th class="num hide-sm"><span class="tip" tabindex="0" data-tip="Their average price for this bet: what one contract cost them. On Polymarket the price is the market's chance it wins (48¢ = 48%).">They paid</span></th>
       <th class="num hide-sm"><span class="tip" tabindex="0" data-tip="The market's current price for the same bet. Buying right now may cost a little more than this.">Price now</span></th>
-      <th class="num"><span class="tip" tabindex="0" data-tip="Yes if the price now is at most 3¢ above what they paid (the same limit copying uses). Above that, most of their edge is already in the price."><span class="hide-sm">Can you still get in?</span><span class="show-sm">Get in?</span></span></th></tr></thead><tbody>
+      <th class="num hide-sm"><span class="tip" tabindex="0" data-tip="Yes if the price now is at most 3¢ above what they paid (the same limit copying uses). Above that, most of their edge is already in the price.">Can you still get in?</span></th></tr></thead><tbody>
     ${r.bets.map((b) => {
       const act = SEG[b.segment]?.[1] || "";
       return `<tr class="click" data-href="${worthHref(b.wallet)}">
         <td class="muted hide-sm" style="white-space:nowrap">${ago(b.at)}</td>
         <td><b>${esc(b.name.length > 18 ? b.name.slice(0, 16) + "…" : b.name)}</b><div><span class="act ${act}">${esc(b.label)}</span></div></td>
-        <td>${esc(b.title || "")}<div class="small muted">${esc(b.outcome || "")} · ${money(b.usd).replace(/<[^>]+>/g, "")}<span class="show-sm"> · ${ago(b.at)}</span></div></td>
+        <td>${b.url ? `<a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener" title="Open on Polymarket">${esc(b.title || "")} ↗</a>` : esc(b.title || "")}<div class="small muted">${esc(b.outcome || "")}<span class="show-sm"> · ${ago(b.at)}</span></div><div class="small show-sm">${stillWorth(b)}</div></td>
+        <td class="num">${money(b.usd)}<div class="small muted">${Math.round(b.size).toLocaleString()} contracts</div></td>
         <td class="num hide-sm">${cents1(b.price)}</td>
         <td class="num hide-sm">${b.price_now == null ? '<span class="muted">—</span>' : cents1(b.price_now)}</td>
-        <td class="num wrap">${stillWorth(b)}</td></tr>`;
+        <td class="num hide-sm">${stillWorth(b)}</td></tr>`;
     }).join("")}</tbody></table></div>`;
   $("#llist").querySelectorAll("[data-href]").forEach((el) => (el.onclick = () => (location.hash = el.dataset.href)));
+  $("#llist").querySelectorAll("a.ext").forEach((a) => (a.onclick = (e) => e.stopPropagation())); // the venue, not the trader page
 }
 
 function route() {

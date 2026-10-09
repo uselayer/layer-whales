@@ -260,7 +260,7 @@ def live() -> dict[str, Any]:
             b = one.setdefault(
                 t.market,
                 {"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
-                 "title": t.title, "outcome": t.outcome, "at": t.at, "usd": 0.0, "size": 0.0,
+                 "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at, "usd": 0.0, "size": 0.0,
                  "price_now": now.get(t.market)},
             )  # fmt: skip
             b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
