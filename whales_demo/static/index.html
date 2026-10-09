@@ -178,6 +178,15 @@
   .copybox { margin-top: 20px; }
   .copybox p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
   .copybox .head { font-weight: 600; margin-bottom: 4px; font-size: 15px; }
+  .amount { display: flex; align-items: center; gap: 6px; margin: 0 0 14px; }
+  .amount .box { display: flex; align-items: center; gap: 2px; padding: 0 12px; height: 42px; border-radius: 12px;
+    box-shadow: inset 0 0 0 1px var(--line); background: var(--card); flex: 1 1 0; min-width: 64px; max-width: 200px; }
+  .amount .box:focus-within { box-shadow: inset 0 0 0 1.5px var(--fg); }
+  .amount input { border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 17px;
+    font-weight: 600; width: 100%; font-variant-numeric: tabular-nums; }
+  .amount button { height: 36px; padding: 0 12px; flex: none; border-radius: 999px; border: 0; background: var(--soft); color: var(--fg);
+    font: inherit; font-weight: 500; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .amount button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
   .copybox .on-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .catpick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
   .catpick button { border: 0; border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--soft); color: var(--muted); }
@@ -480,31 +489,54 @@ function tradeSheet(b) {
 // "Copy this trade": buy the trade on the card now, in the sandbox, after a look at what it pays.
 const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at });
 const ifWins = (o) => !o ? "If it wins" : /^(yes|no)$/i.test(o) ? `If it ends ${esc(o)}` : `If ${esc(o)} wins`;
-async function copyNowBox(box, b) {
-  let p;
-  try { p = await post("/api/trade/preview", oneTrade(b)); }
-  catch (e) { box.innerHTML = `<div class="head">Copy this trade</div><p class="inline-err">${esc(e.message)}</p>`; return; }
-  if (!box.isConnected) return;
-  if (!p.ok) { box.innerHTML = `<div class="head">Copy this trade</div><p>${esc(sdkText(p.reason))}</p>`; return; }
+const PICKS = [10, 50, 100];
+// Money you put in or get back, to the cent: "$49.91", "+$42.09".
+const money = (x, signed = false) => x == null ? "—" : `${x < 0 ? "−" : signed && x > 0 ? "+" : ""}$${Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+async function copyNowBox(box, b, amount = 10) {
   box.innerHTML = `<div class="head">Copy this trade</div>
-    <p>Buy ${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} at ${cents(p.price)} on Polymarket, in the sandbox. Real prices and fees, no real money.</p>
-    <div class="kv" style="margin:0 0 14px">
-      <div><span>You pay</span><b>${usd(p.total)}</b></div><div><span>Fee, included</span><b>${p.fee < 1 ? cents(p.fee) : usd(p.fee)}</b></div>
-      <div><span>${ifWins(b.outcome)}</span><b>You get ${usd(p.payout)}</b></div><div><span>If not</span><b>You lose ${usd(p.total)}</b></div>
-    </div>
-    <p style="margin-top:-6px">That's ${usd(p.profit_if_win, true)} if it wins. Each contract pays $1 if it wins and nothing if it loses.</p>
-    <button class="btn wide" id="docopynow">Copy this trade</button>`;
-  $("#docopynow", box).onclick = async () => {
-    const btn = $("#docopynow", box);
+    <p>How much do you want to put in? Fee included. Real prices, sandbox money.</p>
+    <div class="amount"><label class="box"><span class="muted">$</span><input id="amt" inputmode="decimal" autocomplete="off" aria-label="Amount in dollars" value="${amount}"></label>
+      ${PICKS.map((v) => `<button type="button" data-amt="${v}" aria-pressed="${v === amount}">$${v}</button>`).join("")}</div>
+    <div id="pv"><div class="skel" style="width:70%;height:14px"></div></div>
+    <button class="btn wide" id="docopynow" disabled>Copy this trade</button>`;
+  const input = $("#amt", box), pv = $("#pv", box), btn = $("#docopynow", box);
+  let seq = 0, timer = null, ready = null; // ready: the amount the preview on screen is for, if it can be copied
+  const spendNow = () => { const v = parseFloat(String(input.value).replace(/[$,\s]/g, "")); return Number.isFinite(v) ? Math.round(v * 100) / 100 : null; };
+  const show = async () => {
+    const spend = spendNow(), my = ++seq;
+    ready = null; btn.disabled = true;
+    $$("[data-amt]", box).forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.amt === spend)));
+    if (!spend || spend <= 0) { pv.innerHTML = `<p>Enter an amount above $0.</p>`; return; }
+    let p;
+    try { p = await post("/api/trade/preview", { ...oneTrade(b), spend }); }
+    catch (e) { if (my === seq) pv.innerHTML = `<p class="inline-err">${esc(e.message)}</p>`; return; }
+    if (my !== seq || !box.isConnected) return; // a newer amount is on its way
+    if (!p.ok) { pv.innerHTML = `<p>${esc(sdkText(p.reason))}</p>`; return; }
+    pv.innerHTML = `<p>${money(p.total)} buys ${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} at ${cents(p.price)} on Polymarket.</p>
+      <div class="kv" style="margin:0 0 14px">
+        <div><span>You pay</span><b>${money(p.total)}</b></div><div><span>Fee, included</span><b>${p.fee < 1 ? cents(p.fee) : money(p.fee)}</b></div>
+        <div><span>${ifWins(b.outcome)}</span><b>You get ${money(p.payout)}</b></div><div><span>If not</span><b>You lose ${money(p.total)}</b></div>
+      </div>
+      <p style="margin-top:-6px">That's ${money(p.profit_if_win, true)} if it wins. Each contract pays $1 if it wins and nothing if it loses.${p.total >= 100 ? " Polymarket doesn't show how many contracts are for sale at this price, so a real order this size might fill higher." : ""}</p>`;
+    ready = spend; btn.disabled = false;
+  };
+  const later = () => { clearTimeout(timer); btn.disabled = true; timer = setTimeout(show, 350); };
+  input.oninput = later;
+  $$("[data-amt]", box).forEach((x) => (x.onclick = () => { input.value = x.dataset.amt; clearTimeout(timer); show(); }));
+  btn.onclick = async () => {
+    const spend = ready;
+    if (spend == null) return;
     btn.disabled = true;
     try {
-      const e = await post("/api/trade/copy", oneTrade(b));
-      if (e.status !== "copied") { btn.disabled = false; box.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(sdkText(e.reason))}</p>`); return; }
+      const e = await post("/api/trade/copy", { ...oneTrade(b), spend });
+      if (e.status !== "copied") { btn.disabled = false; pv.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(sdkText(e.reason))}</p>`); return; }
       btn.outerHTML = `<button class="btn done wide" data-goto="#/mine">Copied ✓ See My trades</button>`;
+      input.disabled = true; $$("[data-amt]", box).forEach((x) => (x.disabled = true));
       bindActions(box);
-      toast(`Copied: ${plural(e.filled, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} at ${cents(e.avg_price)} in the sandbox.<a href="#/mine">My trades</a>`);
-    } catch (err) { btn.disabled = false; box.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(err.message)}</p>`); }
+      toast(`Copied: ${plural(e.filled, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} at ${cents(e.avg_price)} for ${money(e.filled * e.avg_price + (e.fees || 0))} in the sandbox.<a href="#/mine">My trades</a>`);
+    } catch (err) { btn.disabled = false; pv.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(err.message)}</p>`); }
   };
+  show();
 }
 
 // one handler for the clickable things inside a container

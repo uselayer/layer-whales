@@ -474,6 +474,13 @@ class OneTrade(BaseModel):
     outcome: str | None = None
     url: str | None = None
     at: str | None = None
+    spend: float | None = None  # dollars to put in, fee included; None: the copy rules' contracts
+
+
+def _sized(req: OneTrade, rules: dict[str, Any]) -> dict[str, Any]:
+    """How much to copy: ``spend`` dollars when the page sends an amount, else the copy rules' contracts."""
+    size: dict[str, Any] = {"spend": req.spend} if req.spend else {"size": float(rules["size"])}
+    return size | {"max_slippage": float(rules["max_above"])}
 
 
 def _their_trade(req: OneTrade) -> WhaleTrade:
@@ -488,11 +495,11 @@ def _their_trade(req: OneTrade) -> WhaleTrade:
 @app.post("/api/trade/preview")
 def trade_preview(req: OneTrade) -> dict[str, Any]:
     """What copying this trade now would cost and pay, on the same Polymarket market. Sends nothing."""
+    if req.spend is not None and req.spend <= 0:
+        raise HTTPException(400, detail="Enter an amount above $0.")
     rules = load_rules()
     try:
-        p = paper().whales.preview_copy(
-            _their_trade(req), size=float(rules["size"]), max_slippage=float(rules["max_above"])
-        )
+        p = paper().whales.preview_copy(_their_trade(req), **_sized(req, rules))
     except VenueError as e:
         raise venue_error(e) from e
     return p.to_dict()
@@ -501,11 +508,11 @@ def trade_preview(req: OneTrade) -> dict[str, Any]:
 @app.post("/api/trade/copy")
 def trade_copy(req: OneTrade) -> dict[str, Any]:
     """Buy this trade now in the sandbox, if the price is still at most 3¢ above theirs."""
+    if req.spend is not None and req.spend <= 0:
+        raise HTTPException(400, detail="Enter an amount above $0.")
     rules = load_rules()
     try:
-        e = paper().whales.copy_trade(
-            _their_trade(req), size=float(rules["size"]), max_slippage=float(rules["max_above"])
-        )
+        e = paper().whales.copy_trade(_their_trade(req), **_sized(req, rules))
     except VenueError as err:
         raise venue_error(err) from err
     with _lock:
