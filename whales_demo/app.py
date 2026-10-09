@@ -309,15 +309,16 @@ def _iso_ts(s: str) -> float:
 
 
 # ---- copying (paper) ----
-# Copy rules are set once and saved in the store dir: which traders, contracts a trade, how far above their
-# price to pay, and where to copy to. One background loop polls a copier per trader and copies each new buy
-# with paper money; every copied trade is appended to copied.jsonl, so "My copied trades" survives restarts.
+# Copy rules are set once and saved in the store dir: which traders, contracts a trade and how far above their
+# price to pay. Each trader is copied where they bet: a Polymarket trader on the same Polymarket market, a
+# Kalshi trader on the same Kalshi market (needs a Kalshi key). One background loop polls a copier per trader
+# and copies each new buy with paper money; every copied trade is appended to copied.jsonl, so "My trades"
+# survives restarts.
 
 
 class CopyRules(BaseModel):
     size: float = 5
     max_above: float = 0.03  # dollars a contract above their price
-    copy_to: str = "polymarket_us"
 
 
 class CopyTrader(BaseModel):
@@ -345,7 +346,9 @@ _loop_stop = threading.Event()
 def load_rules() -> dict[str, Any]:
     if rules_file().exists():
         try:
-            return json.loads(rules_file().read_text())
+            rules: dict[str, Any] = json.loads(rules_file().read_text())
+            rules.pop("copy_to", None)  # retired: each trader is copied on their own venue
+            return rules
         except ValueError:
             pass
     return CopyRules().model_dump() | {"traders": []}
@@ -370,7 +373,7 @@ def _make_copier(rules: dict[str, Any], t: dict[str, Any]) -> Copier:
     return paper().whales.follow(
         trader,
         size=float(rules["size"]),
-        venue=rules["copy_to"],
+        venue="kalshi" if t["venue"] == "kalshi" else "polymarket",  # where they bet: same market, same price
         max_slippage=float(rules["max_above"]),
         categories=tuple(t.get("categories") or ()),
         copy_sells=False,  # buys only, held until the market settles
@@ -435,8 +438,6 @@ def copy_state() -> dict[str, Any]:
 
 @app.put("/api/copy/rules")
 def set_rules(req: CopyRules) -> dict[str, Any]:
-    if req.copy_to not in ("polymarket_us", "kalshi"):
-        raise HTTPException(400, detail="copy_to must be polymarket_us or kalshi")
     rules = load_rules() | req.model_dump()
     save_rules(rules)
     apply_rules()

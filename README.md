@@ -19,10 +19,10 @@ LAYER_API_KEY=lyr_... uv run whales-demo
 
 Then open http://127.0.0.1:8790.
 
-- **Layer API key** (optional but recommended): used to find the same bet on the other venue, both to compare
-  two traders' bets and to copy a Polymarket trade onto Polymarket US or Kalshi. Get one at uselayer.sh.
-- **Kalshi key** (optional): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy onto Kalshi. Copying
-  onto Polymarket US needs no key.
+- **Layer API key** (optional but recommended): used to find the same bet on the other venue, to compare two
+  traders' bets. Get one at uselayer.sh.
+- **Kalshi key** (optional): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy Kalshi traders. Copying
+  Polymarket traders needs no key.
 - `WHALES_PORT` (default 8790) and `WHALES_STORE_DIR` (default `~/.uselayer/whales-demo`) change the port and
   where the paper account, copy rules and Worth following results live. `WHALES_WORTH_WALLETS` (default 200)
   is how many wallets Worth following checks.
@@ -56,10 +56,11 @@ Three tabs. It answers one question: what are the best traders betting on right 
     and bets on the same market, the same way, within 5 minutes). It's an inference, never a confirmed
     identity.
 - **My trades**: the traders you copy, saved on your machine. Every new buy they make becomes a paper order on
-  the same bet on Polymarket US (5 contracts, at most 3¢ above their price), held until the market settles.
-  One row per copied trade with its status (open / won / lost) and profit after fees, with the total at the
-  top. Polymarket bets with no matching market, or that can't fill near their price, are skipped with the
-  reason.
+  the same bet where they made it: a Polymarket trader's on the same Polymarket market, a Kalshi trader's on the
+  same Kalshi market (5 contracts, at most 3¢ above their price), held until the market settles. A Polymarket
+  copy fills at Polymarket's best price, with its taker fee, from its public market data. One row per copied
+  trade with its status (open / won / lost) and profit after fees, with the total at the top. Bets that can't
+  fill near their price are skipped with the reason.
 
 Traders without a name show as "Trader 0x91…76" with a generated avatar: the page never shows wallet addresses.
 

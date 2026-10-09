@@ -50,14 +50,15 @@ def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
 ) -> None:
     monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
     monkeypatch.setattr(engine, "_copy_loop", lambda: None)
-    r = api.put("/api/copy/rules", json={"size": 3, "max_above": 0.02, "copy_to": "kalshi"}).json()
+    r = api.put("/api/copy/rules", json={"size": 3, "max_above": 0.02}).json()
     assert r["rules"]["size"] == 3 and r["rules"]["traders"] == []
     r = api.post("/api/copy/traders", json={"venue": "polymarket", "id": "0xabc", "name": "sharpie", "categories": ["Sports"]}).json()
     r = api.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"}).json()
     assert [t["id"] for t in r["rules"]["traders"]] == ["0xabc", "amy"]
-    cp = engine._copiers["polymarket:0xabc"]
-    assert (cp.size, cp.venue, cp.max_slippage, cp.categories, cp.copy_sells) == (3, "kalshi", 0.02, ("Sports",), False)
-    assert engine.load_rules()["copy_to"] == "kalshi"  # saved to disk
+    cp = engine._copiers["polymarket:0xabc"]  # copied where they bet: Polymarket
+    assert (cp.size, cp.venue, cp.max_slippage, cp.categories, cp.copy_sells) == (3, "polymarket", 0.02, ("Sports",), False)
+    assert engine._copiers["kalshi:amy"].venue == "kalshi"
+    assert engine.load_rules()["size"] == 3  # saved to disk
     assert [t["id"] for t in api.delete("/api/copy/traders/kalshi/amy").json()["rules"]["traders"]] == ["0xabc"]
 
     event = {"at": "2026-10-07T00:00:00+00:00", "status": "copied", "order_id": "o1", "venue": "kalshi",

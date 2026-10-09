@@ -420,7 +420,7 @@ const emptyState = (title, body = "", action = "") => `<div class="state"><b>${t
 const errorState = (msg) => `<div class="state err"><b>Couldn't load this</b><p>${esc(msg)}</p><button class="btn ghost" data-retry>Try again</button></div>`;
 
 // ---- copying (paper) ----
-let copy = null; // { rules: {size, max_above, copy_to, traders: [...]}, recent: [...] }
+let copy = null; // { rules: {size, max_above, traders: [...]}, recent: [...] }
 const isCopied = (venue, id) => !!copy?.rules.traders.find((t) => t.venue === venue && t.id === id);
 async function loadCopy() { try { copy = await api("/api/copy"); } catch {} return copy; }
 setInterval(loadCopy, 15000);
@@ -764,19 +764,19 @@ function worthCopyBox(s) {
 async function copyBox(box, t, opts = {}) {
   if (!copy) { box.innerHTML = `<div class="skel" style="width:60%;height:14px"></div>`; await loadCopy(); }
   if (!box.isConnected) return;
-  const r = copy?.rules || { size: 5, copy_to: "polymarket_us" };
+  const r = copy?.rules || { size: 5 };
   const on = copy?.rules.traders.find((x) => x.venue === t.venue && x.id === t.id);
   const name = esc(displayName(t.name, t.id));
   if (on) {
     box.innerHTML = `<div class="on-row"><div><div class="head">Copying <span class="name">${name}</span> ✓</div>
-      <p style="margin:4px 0 0">Their new buys${on.categories?.length ? ` in ${esc(on.categories.join(", "))}` : ""} become paper orders on ${VENUE[r.copy_to] || r.copy_to}.${on.checked_s_ago != null ? ` Checked ${Math.round(on.checked_s_ago)}s ago.` : ""}</p>
+      <p style="margin:4px 0 0">Their new buys${on.categories?.length ? ` in ${esc(on.categories.join(", "))}` : ""} become paper orders on the same bet on ${VENUE[t.venue]}.${on.checked_s_ago != null ? ` Checked ${Math.round(on.checked_s_ago)}s ago.` : ""}</p>
       ${on.error ? `<p class="inline-err">${esc(on.error)}</p>` : ""}</div><button class="btn ghost small" id="stop">Stop</button></div>`;
     $("#stop", box).onclick = async () => { await stopCopy(t.venue, t.id); copyBox(box, t, opts); };
     return;
   }
   const cats = opts.categories || [], strong = opts.strong || [];
   box.innerHTML = `<div class="head">Copy their buys</div>
-    <p>Each new buy becomes your own paper order on the same bet on ${VENUE[r.copy_to] || r.copy_to}: ${r.size} contracts, at most 3¢ above their price, held until it settles. Real prices, fake money.${opts.note ? " " + esc(opts.note) : ""}</p>
+    <p>Each new buy becomes your own paper order on the same bet on ${VENUE[t.venue]}: ${r.size} contracts, at most 3¢ above their price, held until it settles. Real prices, fake money.${opts.note ? " " + esc(opts.note) : ""}</p>
     ${cats.length > 1 ? `<div class="catpick">${cats.map((c) => `<button aria-pressed="${!strong.length || strong.includes(c)}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>` : ""}
     <button class="btn wide" id="docopy">Copy with paper money</button>`;
   $$(".catpick button", box).forEach((b) => (b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true")));
