@@ -490,7 +490,7 @@ async function loadWorth() {
     .sort((a, b) => order.indexOf(a.segment) - order.indexOf(b.segment) || (b.edge?.z ?? -99) - (a.edge?.z ?? -99));
   let html = ranked.length ? `<div class="scroll"><table class="board"><thead><tr><th>#</th><th>Trader</th><th><span class="tip" tabindex="0" data-tip="Our call on whether to follow them. Hover a verdict for what it means.">Verdict</span></th>
       <th class="num hide-sm"><span class="tip" tabindex="0" data-tip="How much more often their bets won than the market expected when they bought (the price is the odds: 47¢ = a 47% chance). +12% means they won 59% of bets the odds gave 47%. Around 0 is no edge. Counts settled markets only. The verdict also checks whether the price moves their way and whether one big win carries them, so the two can disagree.">Beats the odds</span></th>
-      <th class="num hide-sm"><span class="tip" tabindex="0" data-tip="Their all-time profit on Polymarket.">Their profit</span></th>
+      <th class="num hide-sm"><span class="tip" tabindex="0" data-tip="Their profit on Polymarket over the last 30 days, the same period their bets were checked on. Their all-time profit is under it: someone can be up this month and still down overall.">Their profit, 30 days</span></th>
       <th class="num hide-sm"><span class="tip" tabindex="0" data-tip="Timing is everything in copying. This is what you'd have made a contract, on average, buying the same thing 1–6 minutes after them (about when a copier sees the trade), held 1 hour, after fees. Red means the price had already moved by the time you got in.">Your profit, copying 1–6 min late</span></th></tr></thead><tbody>
     ${ranked.map((s, i) => {
       const [title, act, what] = SEG[s.segment];
@@ -499,7 +499,7 @@ async function loadWorth() {
         <td><b title="${esc(s.name)}">${esc(s.name.length > 18 ? s.name.slice(0, 16) + "…" : s.name)}</b> ${chips(s)}</td>
         <td><span class="act ${act}" title="${esc(what)}">${title}</span></td>
         <td class="num hide-sm">${beatsOdds(s)}</td>
-        <td class="num hide-sm">${s.pnl == null ? '<span class="muted">—</span>' : money(s.pnl, true)}</td>
+        <td class="num hide-sm">${money(s.pnl_window, true)}${s.pnl != null ? `<div class="small muted">all-time ${money(s.pnl, true).replace(/<[^>]+>/g, "")}</div>` : ""}</td>
         <td class="num hide-sm">${signedCents(s.copy?.mean)}${s.copy ? '<div class="small muted">per contract, after 1 hr</div>' : ""}</td></tr>`;
     }).join("")}</tbody></table></div>
     ${ranked.length > RANKED ? `<button class="more">Show ${ranked.length - RANKED} more</button>` : ""}
