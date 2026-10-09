@@ -488,7 +488,10 @@ function tradeSheet(b) {
 
 // "Copy this trade": buy the trade on the card now, in the sandbox, after a look at what it pays.
 const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at });
-const ifWins = (o) => !o ? "If it wins" : /^(yes|no)$/i.test(o) ? `If it ends ${esc(o)}` : `If ${esc(o)} wins`;
+// The two ways it can end, in the outcome's own words: "If it ends No" / "If it ends Yes", or "If Jets wins" / "If not".
+const yesNo = (o) => /^(yes|no)$/i.test(o || "");
+const ifWins = (o) => !o ? "If it wins" : yesNo(o) ? `If it ends ${esc(o)}` : `If ${esc(o)} wins`;
+const ifLoses = (o) => yesNo(o) ? `If it ends ${/^yes$/i.test(o) ? "No" : "Yes"}` : "If not";
 const PICKS = [10, 50, 100];
 // Money you put in or get back, to the cent: "$49.91", "+$42.09".
 const money = (x, signed = false) => x == null ? "—" : `${x < 0 ? "−" : signed && x > 0 ? "+" : ""}$${Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -514,8 +517,8 @@ async function copyNowBox(box, b, amount = 10) {
     if (!p.ok) { pv.innerHTML = `<p>${esc(sdkText(p.reason))}</p>`; return; }
     pv.innerHTML = `<p>${money(p.total)} buys ${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} at ${cents(p.price)} on Polymarket.</p>
       <div class="kv" style="margin:0 0 14px">
-        <div><span>You pay</span><b>${money(p.total)}</b></div><div><span>Fee, included</span><b>${p.fee < 1 ? cents(p.fee) : money(p.fee)}</b></div>
-        <div><span>${ifWins(b.outcome)}</span><b>You get ${money(p.payout)}</b></div><div><span>If not</span><b>You lose ${money(p.total)}</b></div>
+        <div><span>You pay</span><b>${money(p.total)}</b></div><div><span>Fee, included</span><b>${p.fee > 0 ? (p.fee < 1 ? cents(p.fee) : money(p.fee)) : "No fee"}</b></div>
+        <div><span>${ifWins(b.outcome)}</span><b>You get ${money(p.payout)}</b></div><div><span>${ifLoses(b.outcome)}</span><b>You lose ${money(p.total)}</b></div>
       </div>
       <p style="margin-top:-6px">That's ${money(p.profit_if_win, true)} if it wins. Each contract pays $1 if it wins and nothing if it loses.${p.total >= 100 ? " Polymarket doesn't show how many contracts are for sale at this price, so a real order this size might fill higher." : ""}</p>`;
     ready = spend; btn.disabled = false;
