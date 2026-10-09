@@ -89,7 +89,8 @@
   .seg { margin: 30px 0 8px; }
   .seg h3 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 16px; }
   .seg .what { color: var(--muted); font-size: 14px; margin: 2px 0 8px; }
-  .act { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--soft); color: var(--muted); font-weight: 500; }
+  .act { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--soft); color: var(--muted); font-weight: 500; white-space: nowrap; }
+  @media (max-width: 640px) { .board .chip { display: none; } }
   .act.follow { background: #e6f4ea; color: #1a7f37; } .act.watch { background: #e7f3ff; color: #0b4fa8; }
   .act.signal { background: var(--warn-bg); color: var(--warn-fg); } .act.avoid { background: #fdecea; color: #b42318; }
   .row { padding: 11px 0; border-top: 1px solid var(--line); cursor: pointer; }
@@ -421,22 +422,13 @@ const signedCents = (x) => x == null ? '<span class="muted">—</span>' : `<span
 const CONF = { high: "high confidence", medium: "medium confidence", low: "low confidence" };
 const worthHref = (w) => `#/worth/${w}`;
 
-function evidenceLine(s) {
-  const bits = [];
-  if (s.edge) bits.push(`price ${ct(s.edge.mean)} their way within 5 min`);
-  if (s.copy && s.action !== "skip") bits.push(`copying late ${ct(s.copy.mean)} ± ${ct(s.copy.margin, false)} after fees`);
-  bits.push(`${s.bets} bets`);
-  bits.push(CONF[s.confidence]);
-  if (s.segment === "lucky" && s.pnl != null) bits.unshift(`profit ${money(s.pnl).replace(/<[^>]+>/g, "")}`);
-  return bits.join(" · ");
-}
 function chips(s) {
   return s.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join(" ")
     + " " + s.strong_categories.map((c) => `<span class="chip strong" title="Clear edge in ${esc(c)}">${esc(c)}</span>`).join(" ");
 }
 
 let worthTimer = null;
-const SHOW = 5; // rows shown per segment before "Show more"
+const RANKED = 25; // leaderboard rows shown before "Show more"
 async function worthPage() {
   const app = $("#app");
   app.innerHTML = `
@@ -475,18 +467,26 @@ async function loadWorth() {
   if (!res) { if (!st.running) $("#wlist").innerHTML = `<p class="empty">No traders checked yet.</p>`; else $("#wlist").innerHTML = `<p class="empty">The first check reads about 200 traders' last 30 days of bets and the prices after each, so it takes 20–30 minutes. This page fills in when it's done; after that it's kept for a day.</p>`; return; }
   const by = {};
   res.scores.forEach((s) => (by[s.segment] ||= []).push(s));
-  let html = Object.entries(SEG).map(([k, [title, act, what]]) => {
-    const rows = by[k] || [];
-    return `<section class="seg"><h3>${title} <span class="muted" style="font-weight:400">${rows.length}</span> <span class="act ${act}">${ACT[act]}</span></h3>
-      <p class="what">${what}</p>
-      ${rows.length ? rows.map((s, i) => `
-        <div class="row${i >= SHOW ? " extra" : ""}" data-href="${worthHref(s.wallet)}" ${i >= SHOW ? 'hidden' : ""}>
-          <div class="top"><b>${esc(s.name)}</b> ${chips(s)}</div>
-          <div>${esc(s.reason)}</div>
-          <div class="ev">${esc(evidenceLine(s))}</div>
-        </div>`).join("") + (rows.length > SHOW ? `<button class="more">Show ${rows.length - SHOW} more</button>` : "") : `<p class="empty" style="padding:6px 0">None right now.</p>`}
-    </section>`;
-  }).join("");
+  // One ranked list: the verdict groups in order, then within a group by how sure the price-beating is.
+  const order = Object.keys(SEG);
+  const ranked = res.scores.filter((s) => SEG[s.segment])
+    .sort((a, b) => order.indexOf(a.segment) - order.indexOf(b.segment) || (b.edge?.z ?? -99) - (a.edge?.z ?? -99));
+  let html = ranked.length ? `<div class="scroll"><table class="board"><thead><tr><th>#</th><th>Trader</th><th>Verdict</th>
+      <th class="num hide-sm">Price, 5 min after</th><th class="num hide-sm">Copying late</th><th class="num hide-sm">Bets</th><th class="num hide-sm">Profit</th></tr></thead><tbody>
+    ${ranked.map((s, i) => {
+      const [title, act, what] = SEG[s.segment];
+      return `<tr class="click${i >= RANKED ? " extra" : ""}" data-href="${worthHref(s.wallet)}" ${i >= RANKED ? "hidden" : ""}>
+        <td class="muted">${i + 1}</td>
+        <td><b title="${esc(s.name)}">${esc(s.name.length > 18 ? s.name.slice(0, 16) + "…" : s.name)}</b> ${chips(s)}</td>
+        <td><span class="act ${act}" title="${esc(what)}">${title}</span></td>
+        <td class="num hide-sm">${signedCents(s.edge?.mean)}</td>
+        <td class="num hide-sm">${signedCents(s.copy?.mean)}</td>
+        <td class="num hide-sm">${s.bets}</td>
+        <td class="num hide-sm">${s.pnl == null ? '<span class="muted">—</span>' : money(s.pnl, true)}</td></tr>`;
+    }).join("")}</tbody></table></div>
+    ${ranked.length > RANKED ? `<button class="more">Show ${ranked.length - RANKED} more</button>` : ""}
+    <p class="muted" style="font-size:13px">Ranked by verdict first, then by how sure it is that the price moves their way. "Price, 5 min after" is the average move their way after they buy; "Copying late" is what buying 1–6 minutes later made a contract by the hour mark, after fees. Hover a verdict for what it means.</p>`
+    : `<p class="empty">No trader passed the checks this time.</p>`;
   const nv = by.no_view || [], ne = by.no_edge || [];
   html += `<section class="seg"><h3>Left out <span class="act">${ACT.skip}</span></h3>
     <p class="what">${nv.length} market makers and arbitrage traders (no view to follow), and ${ne.length} traders whose bets don't clearly beat the price.</p>
@@ -496,7 +496,7 @@ async function loadWorth() {
     <p class="muted" style="font-size:13px">Price history found for ${(res.coverage.priced_5m ?? res.coverage.priced_1h).toLocaleString()} of ${res.coverage.bets.toLocaleString()} bets checked${res.coverage.combos ? `; ${res.coverage.combos.toLocaleString()} combo bets (parlays) can't be checked and are left out` : ""}.</p>`;
   $("#wlist").innerHTML = html;
   $("#wlist").querySelectorAll(".more").forEach((b) => (b.onclick = () => {
-    b.parentElement.querySelectorAll(".row.extra").forEach((r) => (r.hidden = false)); b.remove();
+    $("#wlist").querySelectorAll(".board tr.extra").forEach((r) => (r.hidden = false)); b.remove();
   }));
   $("#wlist").querySelectorAll("[data-href]").forEach((el) => (el.onclick = () => (location.hash = el.dataset.href)));
 }
