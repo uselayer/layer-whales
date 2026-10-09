@@ -445,7 +445,8 @@ function tradeCard(b, i, { who = true } = {}) {
   const name = displayName(b.name, b.wallet);
   const top = who ? `<div class="trade-top">${avatar(b.wallet, 28)}<span class="who"><span class="name">${esc(name)}</span>${tier(b.segment)}</span>
       <span class="when">${[b.category, b.at ? ago(b.at) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>` : "";
-  const act = who && !SETTLED.has(b.status) && b.wallet ? copyButton({ venue: "polymarket", id: b.wallet, name: b.name }, "small") : "";
+  const act = who && b.status === "in" && b.wallet && b.market ? `<button class="btn small" data-open-trade="${i}">Copy trade</button>`
+    : who && !SETTLED.has(b.status) && b.wallet ? copyButton({ venue: "polymarket", id: b.wallet, name: b.name }, "small") : "";
   return `<article class="card trade${who ? "" : " compact"}" data-trade="${i}" tabindex="0">
     ${top}
     <h3 class="trade-title">${esc(b.title || "Untitled market")}</h3>
@@ -467,10 +468,43 @@ function tradeSheet(b) {
       ${b.at || b.category ? `<div><span>When</span><b>${b.at ? ago(b.at) : "—"}</b></div><div><span>Category</span><b>${esc(b.category || "—")}</b></div>` : ""}
     </div>
     ${b.wallet ? `<a class="sheet-who" href="#/worth/${esc(b.wallet)}">${avatar(b.wallet, 36)}<span class="grow"><span class="name">${esc(name)}</span><span class="muted" style="font-size:13px">See their record</span></span>${tier(b.segment)}</a>` : ""}
-    ${b.wallet && !SETTLED.has(b.status) ? `<div style="margin-top:16px">${copyButton({ venue: "polymarket", id: b.wallet, name: b.name }, "wide")}</div>
-      <p class="fine">Copies this trader's next trades in the sandbox, from now on. Trades they already made aren't copied.</p>` : ""}
+    ${b.wallet && b.status === "in" && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>` : ""}
+    ${b.wallet && !SETTLED.has(b.status) ? `<div style="margin-top:16px">${copyButton({ venue: "polymarket", id: b.wallet, name: b.name }, b.status === "in" ? "wide ghost" : "wide")}</div>
+      <p class="fine">Copy trader copies their next trades in the sandbox, from now on.</p>` : ""}
     ${b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">Open on Polymarket ↗</a></p>` : ""}`);
   bindActions(panel);
+  const box = $("#copynow", panel);
+  if (box) copyNowBox(box, b);
+}
+
+// "Copy this trade": buy the trade on the card now, in the sandbox, after a look at what it pays.
+const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at });
+const ifWins = (o) => !o ? "If it wins" : /^(yes|no)$/i.test(o) ? `If it ends ${esc(o)}` : `If ${esc(o)} wins`;
+async function copyNowBox(box, b) {
+  let p;
+  try { p = await post("/api/trade/preview", oneTrade(b)); }
+  catch (e) { box.innerHTML = `<div class="head">Copy this trade</div><p class="inline-err">${esc(e.message)}</p>`; return; }
+  if (!box.isConnected) return;
+  if (!p.ok) { box.innerHTML = `<div class="head">Copy this trade</div><p>${esc(sdkText(p.reason))}</p>`; return; }
+  box.innerHTML = `<div class="head">Copy this trade</div>
+    <p>Buy ${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} at ${cents(p.price)} on Polymarket, in the sandbox. Real prices and fees, no real money.</p>
+    <div class="kv" style="margin:0 0 14px">
+      <div><span>You pay</span><b>${usd(p.total)}</b></div><div><span>Fee, included</span><b>${p.fee < 1 ? cents(p.fee) : usd(p.fee)}</b></div>
+      <div><span>${ifWins(b.outcome)}</span><b>You get ${usd(p.payout)}</b></div><div><span>If not</span><b>You lose ${usd(p.total)}</b></div>
+    </div>
+    <p style="margin-top:-6px">That's ${usd(p.profit_if_win, true)} if it wins. Each contract pays $1 if it wins and nothing if it loses.</p>
+    <button class="btn wide" id="docopynow">Copy this trade</button>`;
+  $("#docopynow", box).onclick = async () => {
+    const btn = $("#docopynow", box);
+    btn.disabled = true;
+    try {
+      const e = await post("/api/trade/copy", oneTrade(b));
+      if (e.status !== "copied") { btn.disabled = false; box.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(sdkText(e.reason))}</p>`); return; }
+      btn.outerHTML = `<button class="btn done wide" data-goto="#/mine">Copied ✓ See My trades</button>`;
+      bindActions(box);
+      toast(`Copied: ${plural(e.filled, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} at ${cents(e.avg_price)} in the sandbox.<a href="#/mine">My trades</a>`);
+    } catch (err) { btn.disabled = false; box.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(err.message)}</p>`); }
+  };
 }
 
 // one handler for the clickable things inside a container
@@ -484,6 +518,7 @@ function bindActions(root) {
     try { await startCopy(JSON.parse(btn.dataset.copy)); } catch (err) { btn.disabled = false; toast(esc(err.message)); return; }
     refreshCopyButtons();
   }));
+  $$("[data-open-trade]", root).forEach((btn) => (btn.onclick = (e) => { e.stopPropagation(); tradeSheet(shown[+btn.dataset.openTrade]); }));
   $$("[data-goto]", root).forEach((btn) => (btn.onclick = (e) => { e.stopPropagation(); closeSheet(); location.hash = btn.dataset.goto; }));
   $$("[data-retry]", root).forEach((btn) => (btn.onclick = () => route()));
   $$("[data-href]", root).forEach((el) => (el.onclick = () => (location.hash = el.dataset.href)));

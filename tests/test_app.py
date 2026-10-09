@@ -143,3 +143,36 @@ def test_live_bets_carry_status_and_category(api: TestClient, monkeypatch: pytes
     assert r["traders"][0]["segment"] == "proven"
     assert api.get("/api/trader/polymarket/0xabc").json()["positions"][1]["status"] == "lost"
     assert api.get("/static/fonts/HostGrotesk-latin-var.woff2").status_code == 200
+
+
+def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
+    seen: list[Any] = []
+
+    class Preview:
+        def to_dict(self) -> dict[str, Any]:
+            return {"ok": True, "price": 0.53, "total": 2.71, "payout": 5.0, "profit_if_win": 2.29}
+
+    class Event:
+        status = "copied"
+
+        def to_dict(self) -> dict[str, Any]:
+            return {"status": "copied", "order_id": "pm-1", "venue": "polymarket", "market": "0xcid:1",
+                    "side": "yes", "at": "2026-10-09T00:00:00+00:00", "source": {"title": "Ducks vs. Jets"}}  # fmt: skip
+
+    def preview(self: Any, trade: Any, **kw: Any) -> Preview:
+        seen.append((trade, kw))
+        return Preview()
+
+    monkeypatch.setattr(Whales, "preview_copy", preview)
+    monkeypatch.setattr(Whales, "copy_trade", lambda self, trade, **kw: Event())
+    body = {"wallet": "0xabc", "name": "ThorinCSGO", "market": "0xcid:1", "price": 0.52, "title": "Ducks vs. Jets",
+            "outcome": "Jets", "at": "2026-10-09T20:00:00+00:00"}  # fmt: skip
+    assert api.post("/api/trade/preview", json=body).json()["total"] == 2.71
+    trade, kw = seen[0]
+    assert (trade.venue, trade.market, trade.side, trade.action, trade.price) == ("polymarket", "0xcid:1", "yes", "buy", 0.52)
+    assert kw == {"size": 5.0, "max_slippage": 0.03}  # the copy rules
+    out = api.post("/api/trade/copy", json=body).json()
+    assert out["order_id"] == "pm-1" and out["trader"]["name"] == "ThorinCSGO"
+    assert json.loads(engine.copied_file().read_text().splitlines()[-1])["order_id"] == "pm-1"  # in My trades
+    api.post("/api/paper/reset")

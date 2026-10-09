@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from uselayer import Client, Copier, Trader, VenueError
+from uselayer import Client, Copier, Trader, VenueError, WhaleTrade
 from uselayer.whale_scores import category_of
 
 HERE = Path(__file__).parent
@@ -396,13 +396,19 @@ def apply_rules() -> None:
 
 def _record(cp: Copier, events: list[Any]) -> None:
     for e in events:
-        d = e.to_dict() | {"trader": cp.trader.to_dict()}
-        _recent.append(d)
-        if e.status == "copied":
-            with copied_file().open("a") as f:
-                f.write(json.dumps(d) + "\n")
-            _copied_cache["at"] = 0.0  # a new row: work it out again on the next read
+        _record_one(e, cp.trader.to_dict())
+
+
+def _record_one(e: Any, trader: dict[str, Any]) -> dict[str, Any]:
+    """Keep a copy event for the page, and every copied trade in copied.jsonl for My trades."""
+    d: dict[str, Any] = e.to_dict() | {"trader": trader}
+    _recent.append(d)
+    if e.status == "copied":
+        with copied_file().open("a") as f:
+            f.write(json.dumps(d) + "\n")
+        _copied_cache["at"] = 0.0  # a new row: work it out again on the next read
     del _recent[:-200]
+    return d
 
 
 def _copy_loop() -> None:
@@ -452,6 +458,58 @@ def add_trader(req: CopyTrader) -> dict[str, Any]:
     save_rules(rules)
     apply_rules()
     return copy_state()
+
+
+# ---- copy one trade now (a Feed trade the trader already made), with a payout preview ----
+
+
+class OneTrade(BaseModel):
+    """A Feed trade: their buys of one outcome, merged (``price`` is what they paid on average)."""
+
+    wallet: str
+    name: str | None = None
+    market: str  # <conditionId>:<outcome>
+    price: float
+    title: str | None = None
+    outcome: str | None = None
+    url: str | None = None
+    at: str | None = None
+
+
+def _their_trade(req: OneTrade) -> WhaleTrade:
+    at = datetime.fromisoformat(req.at) if req.at else datetime.now(UTC)
+    return WhaleTrade(
+        venue="polymarket", trader=req.wallet, name=req.name, market=req.market, side="yes", action="buy",
+        price=req.price, size=0.0, usd=0.0, at=at, trade_id=f"feed:{req.wallet}:{req.market}:{req.at}",
+        title=req.title, outcome=req.outcome, url=req.url,
+    )  # fmt: skip
+
+
+@app.post("/api/trade/preview")
+def trade_preview(req: OneTrade) -> dict[str, Any]:
+    """What copying this trade now would cost and pay, on the same Polymarket market. Sends nothing."""
+    rules = load_rules()
+    try:
+        p = paper().whales.preview_copy(
+            _their_trade(req), size=float(rules["size"]), max_slippage=float(rules["max_above"])
+        )
+    except VenueError as e:
+        raise venue_error(e) from e
+    return p.to_dict()
+
+
+@app.post("/api/trade/copy")
+def trade_copy(req: OneTrade) -> dict[str, Any]:
+    """Buy this trade now in the sandbox, if the price is still at most 3¢ above theirs."""
+    rules = load_rules()
+    try:
+        e = paper().whales.copy_trade(
+            _their_trade(req), size=float(rules["size"]), max_slippage=float(rules["max_above"])
+        )
+    except VenueError as err:
+        raise venue_error(err) from err
+    with _lock:
+        return _record_one(e, {"venue": "polymarket", "id": req.wallet, "name": req.name or req.wallet})
 
 
 @app.delete("/api/copy/traders/{venue}/{trader_id}")
