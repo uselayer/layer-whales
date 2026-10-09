@@ -14,6 +14,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +30,10 @@ STORE_DIR = Path(os.environ.get("WHALES_STORE_DIR", Path.home() / ".uselayer" / 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     apply_rules()  # resume copying with the saved rules
+    threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
     yield
     _loop_stop.set()
+    _worth_stop.set()
 
 
 app = FastAPI(title="Layer Whales", lifespan=lifespan)
@@ -110,11 +113,15 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 
 
 # ---- worth following (Polymarket) ----
-# Finding and scoring ~200 wallets takes several minutes, so it runs in the background and the result
-# is kept in the store dir. A wallet that isn't in it is scored when its page is opened.
+# Finding and scoring ~200 wallets takes 20-30 minutes, so it runs in the background: on launch when the
+# kept result is older than WORTH_MAX_AGE_S, then again each time it gets that old. The page shows the last
+# result meanwhile. A wallet that isn't in it is scored when its page is opened.
 
 WORTH_WALLETS = int(os.environ.get("WHALES_WORTH_WALLETS", "200"))
-WORTH_MAX_AGE_S = 24 * 3600
+WORTH_MAX_AGE_S = 6 * 3600
+WORTH_RETRY_S = 30 * 60  # after a failed check
+WORTH_FORMAT = 3  # bump when the kept result gains fields; an older one is re-checked on launch (3: won/settled/odds)
+_worth_stop = threading.Event()
 _worth: dict[str, Any] = {"running": False, "done": 0, "total": 0, "error": None}
 _worth_data: dict[str, Any] | None = None
 _worth_one: dict[str, dict[str, Any]] = {}
@@ -143,8 +150,12 @@ def _worth_run() -> None:
             _worth.update(done=done, total=total)
 
         d = reads.whales.discover(wallets=WORTH_WALLETS, on_progress=progress)
-        data = d.to_dict(sample=True)
+        data = d.to_dict(sample=True) | {"format": WORTH_FORMAT}
         for s in data["scores"]:
+            settled = [b for b in s["sample"] if b.get("payout") is not None]  # before the sample is cut
+            s["won"], s["settled"] = sum(1 for b in settled if b["payout"] == 1), len(settled)
+            # the price paid is the market's chance they'd win, so this is the win rate the odds expected
+            s["odds"] = sum(b["price"] for b in settled) / len(settled) if settled else None
             s["sample"] = s["sample"][:30]
         STORE_DIR.mkdir(parents=True, exist_ok=True)
         worth_file().write_text(json.dumps(data))
@@ -164,13 +175,30 @@ def worth_refresh() -> None:
     threading.Thread(target=_worth_run, daemon=True).start()
 
 
+def _worth_age_s() -> float:
+    data = _worth_load()
+    if data is None or data.get("format") != WORTH_FORMAT:
+        return float("inf")
+    return time.time() - _iso_ts(data["finished"])
+
+
+def _worth_loop() -> None:
+    """Keeps the result at most WORTH_MAX_AGE_S old while the app runs."""
+    while not _worth_stop.is_set():
+        if not _worth["running"]:
+            if _worth["error"] is not None:
+                _worth_stop.wait(WORTH_RETRY_S)
+                _worth["error"] = None
+                continue
+            if _worth_age_s() >= WORTH_MAX_AGE_S:
+                worth_refresh()
+        _worth_stop.wait(60)
+
+
 @app.get("/api/worth")
 def worth() -> dict[str, Any]:
     """Every scored wallet without its bets, plus whether a refresh is running."""
     data = _worth_load()
-    stale = data is None or time.time() - _iso_ts(data["finished"]) > WORTH_MAX_AGE_S
-    if stale and not _worth["running"] and _worth["error"] is None:
-        worth_refresh()
     out: dict[str, Any] = {"status": dict(_worth), "result": None}
     if data is not None:
         out["result"] = {k: v for k, v in data.items() if k != "scores"} | {
@@ -201,9 +229,48 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
     return _worth_one[w]
 
 
-def _iso_ts(s: str) -> float:
-    from datetime import datetime
+# ---- live bets from traders worth following ----
+# Their buys over the last day, one row per bet (fills on the same outcome merged), with the price now:
+# the current price of their open position. Polymarket's public trade feed runs a few minutes behind.
 
+FEED_SEGMENTS = ("proven", "quiet", "rising")  # the Follow and Watch verdicts
+FEED_HOURS = 24
+
+
+@app.get("/api/live")
+def live() -> dict[str, Any]:
+    data = _worth_load()
+    follow = [s for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
+    since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
+    bets: list[dict[str, Any]] = []
+    failed = 0
+    for s in follow:
+        try:
+            d = cached(
+                f"live:{s['wallet']}", 25, lambda w=s["wallet"]: reads.whales.trader("polymarket", w, trades=100)
+            )
+        except VenueError:
+            failed += 1
+            continue
+        now = {p.market: p.current_price for p in d.positions}
+        one: dict[str, dict[str, Any]] = {}
+        for t in d.trades:
+            if t.action != "buy" or t.at < since or not t.size:
+                continue
+            b = one.setdefault(
+                t.market,
+                {"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
+                 "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at, "usd": 0.0, "size": 0.0,
+                 "price_now": now.get(t.market)},
+            )  # fmt: skip
+            b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
+        bets += [b | {"price": b["usd"] / b["size"], "at": b["at"].isoformat()} for b in one.values()]
+    bets.sort(key=lambda b: b["at"], reverse=True)
+    return {"traders": [{"wallet": s["wallet"], "name": s["name"], "label": s["label"]} for s in follow],
+            "failed": failed, "hours": FEED_HOURS, "bets": bets}  # fmt: skip
+
+
+def _iso_ts(s: str) -> float:
     return datetime.fromisoformat(s).timestamp()
 
 
