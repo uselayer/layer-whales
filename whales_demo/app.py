@@ -150,6 +150,8 @@ def _worth_run() -> None:
         d = reads.whales.discover(wallets=WORTH_WALLETS, on_progress=progress)
         data = d.to_dict(sample=True)
         for s in data["scores"]:
+            settled = [b["payout"] for b in s["sample"] if b.get("payout") is not None]
+            s["won"], s["settled"] = sum(1 for p in settled if p == 1), len(settled)  # before the sample is cut
             s["sample"] = s["sample"][:30]
         STORE_DIR.mkdir(parents=True, exist_ok=True)
         worth_file().write_text(json.dumps(data))
