@@ -14,6 +14,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -228,9 +229,48 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
     return _worth_one[w]
 
 
-def _iso_ts(s: str) -> float:
-    from datetime import datetime
+# ---- live bets from traders worth following ----
+# Their buys over the last day, one row per bet (fills on the same outcome merged), with the price now:
+# the current price of their open position. Polymarket's public trade feed runs a few minutes behind.
 
+FEED_SEGMENTS = ("proven", "quiet", "rising")  # the Follow and Watch verdicts
+FEED_HOURS = 24
+
+
+@app.get("/api/live")
+def live() -> dict[str, Any]:
+    data = _worth_load()
+    follow = [s for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
+    since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
+    bets: list[dict[str, Any]] = []
+    failed = 0
+    for s in follow:
+        try:
+            d = cached(
+                f"live:{s['wallet']}", 25, lambda w=s["wallet"]: reads.whales.trader("polymarket", w, trades=100)
+            )
+        except VenueError:
+            failed += 1
+            continue
+        now = {p.market: p.current_price for p in d.positions}
+        one: dict[str, dict[str, Any]] = {}
+        for t in d.trades:
+            if t.action != "buy" or t.at < since or not t.size:
+                continue
+            b = one.setdefault(
+                t.market,
+                {"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
+                 "title": t.title, "outcome": t.outcome, "at": t.at, "usd": 0.0, "size": 0.0,
+                 "price_now": now.get(t.market)},
+            )  # fmt: skip
+            b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
+        bets += [b | {"price": b["usd"] / b["size"], "at": b["at"].isoformat()} for b in one.values()]
+    bets.sort(key=lambda b: b["at"], reverse=True)
+    return {"traders": [{"wallet": s["wallet"], "name": s["name"], "label": s["label"]} for s in follow],
+            "failed": failed, "hours": FEED_HOURS, "bets": bets}  # fmt: skip
+
+
+def _iso_ts(s: str) -> float:
     return datetime.fromisoformat(s).timestamp()
 
 

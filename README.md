@@ -46,6 +46,9 @@ Then open http://127.0.0.1:8790.
   is kept in the store dir, so later launches show the last result at once while a new check runs in the
   background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
   `client.whales.discover()` / `score()` in the SDK.
+- **Live bets**: new bets from the traders Worth following marks Follow or Watch, over the last 24 hours,
+  with what they paid, the price now and whether you can still get in (at most 3¢ above their price, the
+  same limit copying uses). It updates every 30 seconds; Polymarket shows trades a few minutes late.
 - **My copied trades**: the traders you copy, saved on your machine. Every new buy they make becomes a paper
   order on the same bet on Polymarket US (5 contracts, at most 3¢ above their price), held until the market
   settles. One row per copied trade: who, the bet, your price,
