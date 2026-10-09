@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from uselayer import Trader, TraderDetail, Whales, WhaleTrade
+from uselayer import Trader, TraderDetail, Whales, WhalePosition, WhaleTrade
 
 from whales_demo import app as engine
 
@@ -99,3 +99,46 @@ def test_worth_lists_the_last_check_without_bets_and_scores_new_wallets_on_deman
     assert api.get("/api/worth/0xABC").json()["sample"] == [{"market": "m"}]
     monkeypatch.setattr(engine.reads.whales, "score", lambda w: _Score())
     assert api.get("/api/worth/0xnew").json()["wallet"] == "0xnew"
+
+
+def test_bet_status_marks_settled_bets_instead_of_calling_them_bargains() -> None:
+    s = engine.bet_status
+    assert s(0.52, 0.525) == "in"  # half a cent above
+    assert s(0.52, 0.55) == "in"  # exactly the 3¢ copying allows
+    assert s(0.52, 0.30) == "in"  # cheaper, still open
+    assert s(0.43, 0.48) == "moved"
+    assert s(0.518, 0.001) == "lost"  # was "Yes, 51.8¢ cheaper now"
+    assert s(0.435, 1.0) == "won"  # was "Price moved 56.5¢ up"
+    assert s(0.5, 0.02) == "lost" and s(0.5, 0.98) == "won"
+    assert s(0.735, None) == "closed"  # sold, or settled and paid out
+    assert s(None, 0.5) is None
+
+
+def test_live_bets_carry_status_and_category(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    at = datetime.now(UTC)
+
+    def buy(m: str, p: float) -> WhaleTrade:
+        return WhaleTrade("polymarket", "0xabc", "sharpie", m, "yes", "buy", p, 100, p * 100, at, m)
+
+    def pos(m: str, now: float) -> WhalePosition:
+        return WhalePosition(m, None, "Yes", 100, 0.5, now, None, None)
+
+    monkeypatch.setattr(engine, "_worth_data", {"scores": [SCORE | {"segment": "proven", "label": "Proven sharps"}]})
+    detail = TraderDetail(AMY, "visible", {}, [pos("c1:0", 0.51), pos("c2:0", 0.001)], [buy("c1:0", 0.5), buy("c2:0", 0.5)])
+    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: detail)
+
+    class Book:
+        def get(self, ids: Any) -> dict[str, Any]:
+            return {c: {"tags": [{"label": "Sports"}]} for c in ids if c == "c1"}
+
+    class Scorer:
+        markets = Book()
+
+    monkeypatch.setattr(engine.reads.whales, "scorer", lambda *a, **k: Scorer())
+    r = api.get("/api/live").json()
+    by = {b["market"]: b for b in r["bets"]}
+    assert (by["c1:0"]["status"], by["c1:0"]["category"]) == ("in", "Sports")
+    assert (by["c2:0"]["status"], by["c2:0"]["category"]) == ("lost", None)
+    assert r["traders"][0]["segment"] == "proven"
+    assert api.get("/api/trader/polymarket/0xabc").json()["positions"][1]["status"] == "lost"
+    assert api.get("/static/fonts/HostGrotesk-latin-var.woff2").status_code == 200

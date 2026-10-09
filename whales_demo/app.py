@@ -21,8 +21,10 @@ from typing import Any
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from uselayer import Client, Copier, Trader, VenueError
+from uselayer.whale_scores import category_of
 
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("WHALES_STORE_DIR", Path.home() / ".uselayer" / "whales-demo"))
@@ -98,7 +100,9 @@ def trader(venue: str, trader_id: str) -> dict[str, Any]:
         d = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40))  # type: ignore[arg-type]
     except VenueError as e:
         raise venue_error(e) from e
-    return d.to_dict()
+    out = d.to_dict()
+    out["positions"] = [p | {"status": bet_status(p["avg_price"], p["current_price"])} for p in out["positions"]]
+    return out
 
 
 @app.get("/api/links/{venue}/{trader_id}")
@@ -235,6 +239,32 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
 
 FEED_SEGMENTS = ("proven", "quiet", "rising")  # the Follow and Watch verdicts
 FEED_HOURS = 24
+GET_IN = 0.03  # at most this far above their price you can still get in: the same limit copying uses
+SETTLED_LOW, SETTLED_HIGH = 0.02, 0.98  # at or past these the market has settled, or as good as
+
+
+def bet_status(paid: float | None, now: float | None) -> str | None:
+    """Can you still get in near what they paid?
+
+    ``in`` (at most 3¢ above), ``moved`` (more), ``won`` / ``lost`` (the price is at 98¢+ or 2¢-, so the
+    market has settled or as good as: not a bargain), ``closed`` (their position is gone: sold, or settled
+    and paid out), or None when their price isn't known.
+    """
+    if now is None:
+        return "closed"
+    if now <= SETTLED_LOW:
+        return "lost"
+    if now >= SETTLED_HIGH:
+        return "won"
+    if paid is None:
+        return None
+    return "in" if now - paid <= GET_IN + 1e-9 else "moved"
+
+
+def _categories(markets: list[str]) -> dict[str, str]:
+    """Each Polymarket market's category (Sports, Politics…), read in one batch and kept by the SDK."""
+    book = reads.whales.scorer().markets.get(m.partition(":")[0] for m in markets)
+    return {m: category_of(book[c]) for m in markets if (c := m.partition(":")[0]) in book}
 
 
 @app.get("/api/live")
@@ -260,13 +290,17 @@ def live() -> dict[str, Any]:
             b = one.setdefault(
                 t.market,
                 {"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
-                 "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at, "usd": 0.0, "size": 0.0,
-                 "price_now": now.get(t.market)},
+                 "market": t.market, "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at,
+                 "usd": 0.0, "size": 0.0, "price_now": now.get(t.market)},
             )  # fmt: skip
             b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
         bets += [b | {"price": b["usd"] / b["size"], "at": b["at"].isoformat()} for b in one.values()]
     bets.sort(key=lambda b: b["at"], reverse=True)
-    return {"traders": [{"wallet": s["wallet"], "name": s["name"], "label": s["label"]} for s in follow],
+    cats = _categories([b["market"] for b in bets]) if bets else {}
+    for b in bets:
+        b["status"], b["category"] = bet_status(b["price"], b["price_now"]), cats.get(b["market"])
+    return {"traders": [{"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"]}
+                        for s in follow],
             "failed": failed, "hours": FEED_HOURS, "bets": bets}  # fmt: skip
 
 
@@ -548,6 +582,9 @@ def paper_reset() -> dict[str, Any]:
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(HERE / "static" / "index.html")
+
+
+app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")  # the font
 
 
 def main() -> None:

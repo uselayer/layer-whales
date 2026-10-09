@@ -29,38 +29,46 @@ Then open http://127.0.0.1:8790.
 
 ## What's on the page
 
-- **Top traders**: both venues' leaderboards in one list, by profit. Pick one venue to sort by volume
-  (Kalshi counts contracts, Polymarket dollars, so the two aren't comparable).
-- **Trading now**: trades of $250 or more right now, with the trader's name when the venue shows it.
-- **A trader's page**: profit, volume, open positions and recent trades.
-  - **Same person on the other venue?** Accounts that may be the same person, each with the evidence: the
-    same name or X handle on an account that really trades, and bets on the same market, the same way,
-    within 5 minutes. Busy bots and market makers that trade everything are filtered out. It's an inference,
-    never a confirmed identity.
-  - **Copy their buys**: adds them to your copy list (see **My copied trades**).
-- **Worth following**: Polymarket traders sorted into proven sharps, quiet sharps (small accounts no
-  leaderboard lists), rising, sharp but too fast to copy, and lucky big bettors, each with a one-line reason
-  and the evidence. Market makers and arbitrage are left out. A trader's page shows each rule's check, how
-  the price moved after their buys, their strong categories, what they're buying now, and the bets checked.
-  Wallets come from the leaderboards and from busy markets' trades. The first check takes 20–30 minutes and
-  is kept in the store dir, so later launches show the last result at once while a new check runs in the
-  background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
-  `client.whales.discover()` / `score()` in the SDK.
-- **Live bets**: new bets from the traders Worth following marks Follow or Watch, over the last 24 hours,
-  with how much they put in, what they paid, the price now and whether you can still get in (at most 3¢
-  above their price, the same limit copying uses). Each bet links to its market on Polymarket. It updates every 30 seconds; Polymarket shows trades a few minutes late.
-- **My copied trades**: the traders you copy, saved on your machine. Every new buy they make becomes a paper
-  order on the same bet on Polymarket US (5 contracts, at most 3¢ above their price), held until the market
-  settles. One row per copied trade: who, the bet, your price,
-  open / won / lost, and profit after fees, with the total at the top. Polymarket bets with no matching market,
-  or that can't fill near their price, are skipped with the reason.
+Three tabs. It answers one question: what are the best traders betting on right now, and can you still get in?
+
+- **Feed**: new bets over the last 24 hours from the traders we rate Proven sharp, Quiet sharp or Rising, one
+  card per bet: the market, their pick, what they paid, the price now, how much they put in, and one status
+  line. **You can still get in** means the price is at most 3¢ above what they paid (the same limit copying
+  uses); **Price moved away** means more. A bet at 2¢ or less, 98¢ or more, or one they no longer hold is
+  **Won**, **Lost** or **Closed**, and drops out of the default feed. Filter by category, or turn off "Only
+  bets I can still get into" to see them all. Tap a card for the details, the trader and a link to Polymarket.
+  It updates every 30 seconds; Polymarket shows trades a few minutes late.
+- **Traders**:
+  - **Worth following**: Polymarket traders ranked by tier (Proven sharp, Quiet sharp, Rising, Too fast to
+    copy, Lucky), with their profit over 30 days, whether they beat the odds, and what you'd have made a
+    contract copying them. "How we pick traders" explains the checks in plain words. Market makers and
+    arbitrage are left out. Wallets come from the leaderboards and from busy markets' trades. The first check
+    takes 20–30 minutes and is kept in the store dir, so later launches show the last result at once while a
+    new check runs in the background (on launch if it's over 6 hours old, then every 6 hours while the app is
+    open). Scoring is `client.whales.discover()` / `score()` in the SDK.
+  - **Top profit**: both venues' leaderboards in one list, by profit. Pick one venue to sort by volume
+    (Kalshi counts contracts, Polymarket dollars, so the two aren't comparable).
+  - **Big bets**: bets of $250 or more right now, with the trader's name when the venue shows it.
+  - **A trader's page**: their profit, their open bets as cards, recent results, and a copy button. The
+    evidence (each check, how the price moved after their buys, their categories, the bets checked) is under
+    **Details**. A leaderboard trader's page also asks **Same person on the other venue?**: accounts that may
+    be the same person, each with the evidence (the same name or X handle on an account that really trades,
+    and bets on the same market, the same way, within 5 minutes). It's an inference, never a confirmed
+    identity.
+- **My trades**: the traders you copy, saved on your machine. Every new buy they make becomes a paper order on
+  the same bet on Polymarket US (5 contracts, at most 3¢ above their price), held until the market settles.
+  One row per copied trade with its status (open / won / lost) and profit after fees, with the total at the
+  top. Polymarket bets with no matching market, or that can't fill near their price, are skipped with the
+  reason.
+
+Traders without a name show as "Trader 0x91…76" with a generated avatar: the page never shows wallet addresses.
 
 ## Good to know
 
 - Kalshi's trader data comes from the public endpoints behind kalshi.com's Leaderboard and profile pages.
   Kalshi doesn't document them, so they can change.
 - Kalshi traders choose whether to show their trades. Most leaderboard whales hide them: their page says
-  so, and they can't be copied directly. Traders on the **Trading now** tab usually show theirs.
+  so, and they can't be copied directly. Traders under **Traders → Big bets** usually show theirs.
 - Polymarket's data comes from its public data API; every wallet is public.
 
 ## License
