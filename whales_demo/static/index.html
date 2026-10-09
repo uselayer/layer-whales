@@ -141,6 +141,17 @@
   .tnum small { color: var(--muted); font-size: 12.5px; }
   .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 13px 18px; border-top: 1px solid var(--line); }
   .row:first-child { border-top: 0; }
+  details.crow { border-top: 1px solid var(--line); }
+  details.crow:first-child { border-top: 0; }
+  details.crow > summary { list-style: none; cursor: pointer; border-top: 0; }
+  details.crow > summary::-webkit-details-marker { display: none; }
+  details.crow[open] > summary { padding-bottom: 6px; }
+  .vs { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px 14px; margin: 0 18px 14px; padding: 12px 14px; border-radius: 12px;
+    background: var(--soft); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .vs .h { color: var(--muted); font-size: 12.5px; }
+  .vs .k { color: var(--muted); }
+  .vs b { font-weight: 600; overflow-wrap: anywhere; }
+  .vs-note { margin: -4px 18px 14px; color: var(--muted); font-size: 13px; }
   .row .t { font-weight: 500; overflow-wrap: anywhere; }
   .row .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .row .r { text-align: right; white-space: nowrap; font-size: 14px; }
@@ -487,7 +498,7 @@ function tradeSheet(b) {
 }
 
 // "Copy this trade": buy the trade on the card now, in the sandbox, after a look at what it pays.
-const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at });
+const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at, size: b.size, usd: b.usd });
 const ifWins = (o) => !o ? "If it wins" : /^(yes|no)$/i.test(o) ? `If it ends ${esc(o)}` : `If ${esc(o)} wins`;
 const PICKS = [10, 50, 100];
 // Money you put in or get back, to the cent: "$49.91", "+$42.09".
@@ -909,6 +920,32 @@ async function loadLinks(venue, id) {
 }
 
 // ---- my trades ----
+const pct = (x) => x == null ? "—" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(Math.round(x * 100))}%`;
+// Your copies against the traders' own trades, on the same trades and the same contracts.
+function vsLine(v) {
+  const gap = v.at_their_price - v.you;
+  return `On the same ${plural(v.trades, "trade")}, buying at the traders' own prices would have made ${money(v.at_their_price, true)}; you made ${money(v.you, true)} after fees.`
+    + (Math.abs(gap) >= 0.005 ? ` Copying ${gap > 0 ? "cost" : "saved"} you ${money(Math.abs(gap))}: ${gap > 0 ? "a higher price and fees" : "a better price"}.` : "");
+}
+function copiedRow(g) {
+  const y = g.you, th = g.theirs, who = esc(displayName(g.trader.name, g.trader.id));
+  const n = g.copies.length, settled = ["won", "lost", "void"].includes(y.status);
+  const each = y.contracts ? y.avg_price + y.fees / y.contracts : null; // what one of your contracts cost, fee included
+  const gap = each != null && th.price != null ? each - th.price : null;
+  return `<details class="crow"><summary class="row"><div><div class="t">${esc(g.source.title || g.market)}</div>
+      <div class="s">${esc(g.source.outcome || (g.side || "").toUpperCase())} · copied from <span class="name" style="font-weight:500">${who}</span> · ${ago(g.at)}${n > 1 ? ` · ${n} copies` : ""}</div>
+      <div class="s">${y.contracts || "—"} contracts at ${cents(y.avg_price)} on ${VENUE[g.venue] || g.venue}${y.status === "open" && y.value != null ? ` · now ${cents(y.value)}` : ""}</div>
+      ${th.return != null && y.return != null ? `<div class="s">You ${pct(y.return)} · ${who} ${pct(th.return)}</div>` : ""}</div>
+    <div class="r"><b>${money(y.pnl, true)}</b><div class="s">${RESULT[y.status] || "—"}</div></div></summary>
+    <div class="vs"><span></span><span class="h">You</span><span class="h">${who}</span>
+      <span class="k">Paid</span><b>${cents(y.avg_price)}${y.fees > 0 ? ` + ${cents(y.fees / y.contracts)} fee` : ""}</b><b>${cents(th.price)}</b>
+      <span class="k">Put in</span><b>${money(y.put_in)}</b><b>${th.put_in != null ? money(th.put_in) : "—"}</b>
+      <span class="k">${settled ? "Made" : "Now"}</span><b>${money(y.pnl, true)}</b><b>${th.pnl != null ? money(th.pnl, true) : "—"}</b>
+      <span class="k">Return</span><b>${pct(y.return)}</b><b>${pct(th.return)}</b></div>
+    <p class="vs-note">${settled ? `Settled: each contract paid ${money(y.value)}.` : y.value != null ? `Open: both valued at ${cents(y.value)}, what a contract sells for now.` : "Open: no buyer right now, so neither is valued yet."}
+      Theirs is what their buys made if held to the end, before their fees (Polymarket doesn't show those).${gap != null ? ` Each of your contracts cost ${cents(Math.abs(gap))} ${gap >= 0 ? "more" : "less"} than theirs.` : ""}</p>
+  </details>`;
+}
 const RESULT = { open: "Open", won: "Won", lost: "Lost", void: "Refunded", unfilled: "Not filled" };
 async function minePage() {
   const app = $("#app");
@@ -920,8 +957,9 @@ async function minePage() {
   const skipped = copy.recent.filter((e) => e.status === "skipped");
   app.innerHTML = `
     <div class="hero" style="margin-top:4px"><div class="big">${t.trades ? usd(t.net, true) : "$0"}</div>
-      <div class="cap">${t.trades ? `Sandbox profit after fees on ${plural(t.trades, "copied trade")}<span class="sep">·</span>${t.open} open · ${t.won} won · ${t.lost} lost${t.void ? ` · ${t.void} refunded` : ""}` : "Sandbox profit · no copied trades yet"}</div></div>
+      <div class="cap">${t.trades ? `Sandbox profit after fees on ${plural(d.by_trade.trades, "copied trade")}${d.by_trade.copies > d.by_trade.trades ? ` (${d.by_trade.copies} copies)` : ""}<span class="sep">·</span>${d.by_trade.open} open · ${d.by_trade.won} won · ${d.by_trade.lost} lost${d.by_trade.void ? ` · ${d.by_trade.void} refunded` : ""}` : "Sandbox profit · no copied trades yet"}</div></div>
     <p class="explain">Sandbox: real prices and fees, no real money. Each copy is held until its market settles; open ones count at what they'd sell for now.</p>
+    ${d.vs.trades ? `<p class="explain">${vsLine(d.vs)}</p>` : ""}
     ${d.unvalued ? `<p class="explain">${plural(d.unvalued, "open trade")} ${d.unvalued === 1 ? "has" : "have"} no buyer right now, so ${d.unvalued === 1 ? "it isn't" : "they aren't"} in the total.</p>` : ""}
 
     <h2 class="h2">Who you're copying</h2>
@@ -934,11 +972,7 @@ async function minePage() {
       : `<div class="card">${emptyState("You're not copying anyone yet", "Find someone on the Feed or in Traders, then tap Copy trader.", `<a class="btn" href="#/traders">Find traders</a>`)}</div>`}
 
     <h2 class="h2">Copied trades</h2>
-    ${d.rows.length ? `<div class="list">${d.rows.map((x) => { const res = x.result || {};
-      return `<div class="row"><div><div class="t">${esc(x.source.title || x.market)}</div>
-        <div class="s">${esc(x.source.outcome || (x.side || "").toUpperCase())} · copied from <span class="name" style="font-weight:500">${esc(displayName(x.trader.name, x.trader.id))}</span> · ${ago(x.at)}</div>
-        <div class="s">${res.contracts ?? "—"} contracts at ${cents(res.avg_price)} on ${VENUE[x.venue] || x.venue}${res.status === "open" && res.mark != null ? ` · now ${cents(res.mark)}` : ""}</div></div>
-        <div class="r"><b>${usd(res.pnl, true)}</b><div class="s">${RESULT[res.status] || "—"}</div></div></div>`; }).join("")}</div>`
+    ${d.groups.length ? `<div class="list">${d.groups.map(copiedRow).join("")}</div><p class="foot-note">Tap a trade to compare it with theirs.</p>`
       : `<div class="card">${emptyState("Nothing copied yet", "New buys from the traders you copy show up here within seconds of them making one.")}</div>`}
 
     ${skipped.length ? `<details class="fold"><summary>Not copied (${skipped.length} recent)</summary><div class="list">${skipped.map((e) => `<div class="row"><div><div class="t">${esc(e.source.title || e.source.market)}</div>
