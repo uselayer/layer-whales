@@ -29,8 +29,10 @@ STORE_DIR = Path(os.environ.get("WHALES_STORE_DIR", Path.home() / ".uselayer" / 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     apply_rules()  # resume copying with the saved rules
+    threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
     yield
     _loop_stop.set()
+    _worth_stop.set()
 
 
 app = FastAPI(title="Layer Whales", lifespan=lifespan)
@@ -110,11 +112,14 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 
 
 # ---- worth following (Polymarket) ----
-# Finding and scoring ~200 wallets takes several minutes, so it runs in the background and the result
-# is kept in the store dir. A wallet that isn't in it is scored when its page is opened.
+# Finding and scoring ~200 wallets takes 20-30 minutes, so it runs in the background: on launch when the
+# kept result is older than WORTH_MAX_AGE_S, then again each time it gets that old. The page shows the last
+# result meanwhile. A wallet that isn't in it is scored when its page is opened.
 
 WORTH_WALLETS = int(os.environ.get("WHALES_WORTH_WALLETS", "200"))
-WORTH_MAX_AGE_S = 24 * 3600
+WORTH_MAX_AGE_S = 6 * 3600
+WORTH_RETRY_S = 30 * 60  # after a failed check
+_worth_stop = threading.Event()
 _worth: dict[str, Any] = {"running": False, "done": 0, "total": 0, "error": None}
 _worth_data: dict[str, Any] | None = None
 _worth_one: dict[str, dict[str, Any]] = {}
@@ -164,13 +169,28 @@ def worth_refresh() -> None:
     threading.Thread(target=_worth_run, daemon=True).start()
 
 
+def _worth_age_s() -> float:
+    data = _worth_load()
+    return float("inf") if data is None else time.time() - _iso_ts(data["finished"])
+
+
+def _worth_loop() -> None:
+    """Keeps the result at most WORTH_MAX_AGE_S old while the app runs."""
+    while not _worth_stop.is_set():
+        if not _worth["running"]:
+            if _worth["error"] is not None:
+                _worth_stop.wait(WORTH_RETRY_S)
+                _worth["error"] = None
+                continue
+            if _worth_age_s() >= WORTH_MAX_AGE_S:
+                worth_refresh()
+        _worth_stop.wait(60)
+
+
 @app.get("/api/worth")
 def worth() -> dict[str, Any]:
     """Every scored wallet without its bets, plus whether a refresh is running."""
     data = _worth_load()
-    stale = data is None or time.time() - _iso_ts(data["finished"]) > WORTH_MAX_AGE_S
-    if stale and not _worth["running"] and _worth["error"] is None:
-        worth_refresh()
     out: dict[str, Any] = {"status": dict(_worth), "result": None}
     if data is not None:
         out["result"] = {k: v for k, v in data.items() if k != "scores"} | {

@@ -43,7 +43,9 @@ Then open http://127.0.0.1:8790.
   and the evidence. Market makers and arbitrage are left out. A trader's page shows each rule's check, how
   the price moved after their buys, their strong categories, what they're buying now, and the bets checked.
   Wallets come from the leaderboards and from busy markets' trades. The first check takes 20–30 minutes and
-  is kept for a day in the store dir; scoring is `client.whales.discover()` / `score()` in the SDK.
+  is kept in the store dir, so later launches show the last result at once while a new check runs in the
+  background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
+  `client.whales.discover()` / `score()` in the SDK.
 - **My copied trades**: the traders you copy, saved on your machine. Every new buy they make becomes a paper
   order on the same bet on Polymarket US (5 contracts, at most 3¢ above their price), held until the market
   settles. One row per copied trade: who, the bet, your price,

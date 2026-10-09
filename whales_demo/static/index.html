@@ -464,7 +464,7 @@ async function loadWorth() {
   const btn = $("#wrefresh");
   if (btn) btn.onclick = async (e) => { e.preventDefault(); await api("/api/worth/refresh", { method: "POST" }); loadWorth(); };
   if (st.running) worthTimer = setTimeout(() => { if (location.hash === "#/worth") loadWorth(); }, 3000);
-  if (!res) { if (!st.running) $("#wlist").innerHTML = `<p class="empty">No traders checked yet.</p>`; else $("#wlist").innerHTML = `<p class="empty">The first check reads about 200 traders' last 30 days of bets and the prices after each, so it takes 20–30 minutes. This page fills in when it's done; after that it's kept for a day.</p>`; return; }
+  if (!res) { if (!st.running) $("#wlist").innerHTML = `<p class="empty">No traders checked yet.</p>`; else $("#wlist").innerHTML = `<p class="empty">The first check reads about 200 traders' last 30 days of bets and the prices after each, so it takes 20–30 minutes. This page fills in when it's done; after that the last result shows at once and a new check runs in the background every 6 hours while the app is open.</p>`; return; }
   const by = {};
   res.scores.forEach((s) => (by[s.segment] ||= []).push(s));
   // One ranked list: the verdict groups in order, then within a group by how sure the price-beating is.
