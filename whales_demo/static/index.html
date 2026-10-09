@@ -91,6 +91,7 @@
   .seg .what { color: var(--muted); font-size: 14px; margin: 2px 0 8px; }
   .act { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--soft); color: var(--muted); font-weight: 500; white-space: nowrap; }
   @media (max-width: 640px) { .board .chip { display: none; } }
+  .tip { cursor: help; border-bottom: 1px dotted currentColor; }
   .act.follow { background: #e6f4ea; color: #1a7f37; } .act.watch { background: #e7f3ff; color: #0b4fa8; }
   .act.signal { background: var(--warn-bg); color: var(--warn-fg); } .act.avoid { background: #fdecea; color: #b42318; }
   .row { padding: 11px 0; border-top: 1px solid var(--line); cursor: pointer; }
@@ -471,20 +472,22 @@ async function loadWorth() {
   const order = Object.keys(SEG);
   const ranked = res.scores.filter((s) => SEG[s.segment])
     .sort((a, b) => order.indexOf(a.segment) - order.indexOf(b.segment) || (b.edge?.z ?? -99) - (a.edge?.z ?? -99));
-  let html = ranked.length ? `<div class="scroll"><table class="board"><thead><tr><th>#</th><th>Trader</th><th>Verdict</th>
-      <th class="num hide-sm">Won</th><th class="num hide-sm">If you copied</th><th class="num hide-sm">Profit</th></tr></thead><tbody>
+  let html = ranked.length ? `<div class="scroll"><table class="board"><thead><tr><th>#</th><th>Trader</th><th><span class="tip" title="Our call on whether to follow them. Hover a verdict for what it means.">Verdict</span></th>
+      <th class="num hide-sm"><span class="tip" title="How often their bets won, counting only markets that have settled. Under it, the odds when they bought: a contract bought at 54¢ had a 54% chance of winning by the market's own price. Winning more often than the odds said is the sign they know something.">Win rate</span></th>
+      <th class="num hide-sm"><span class="tip" title="What you'd have made a contract, on average, buying the same thing a few minutes after them (about when a copier sees the trade) and paying fees. Green means following them paid; red means the price had already moved.">If you copied</span></th>
+      <th class="num hide-sm"><span class="tip" title="Their all-time profit on Polymarket.">Profit</span></th></tr></thead><tbody>
     ${ranked.map((s, i) => {
       const [title, act, what] = SEG[s.segment];
       return `<tr class="click${i >= RANKED ? " extra" : ""}" data-href="${worthHref(s.wallet)}" ${i >= RANKED ? "hidden" : ""}>
         <td class="muted">${i + 1}</td>
         <td><b title="${esc(s.name)}">${esc(s.name.length > 18 ? s.name.slice(0, 16) + "…" : s.name)}</b> ${chips(s)}</td>
         <td><span class="act ${act}" title="${esc(what)}">${title}</span></td>
-        <td class="num hide-sm">${s.settled ? `${s.won} of ${s.settled}` : '<span class="muted">—</span>'}</td>
+        <td class="num hide-sm">${s.settled ? `${Math.round(100 * s.won / s.settled)}%${s.odds != null ? `<div class="muted" style="font-size:12px">odds ${Math.round(100 * s.odds)}%${s.settled < 10 ? ` · ${s.settled} bet${s.settled === 1 ? "" : "s"}` : ""}</div>` : ""}` : '<span class="muted">—</span>'}</td>
         <td class="num hide-sm">${signedCents(s.copy?.mean)}</td>
         <td class="num hide-sm">${s.pnl == null ? '<span class="muted">—</span>' : money(s.pnl, true)}</td></tr>`;
     }).join("")}</tbody></table></div>
     ${ranked.length > RANKED ? `<button class="more">Show ${ranked.length - RANKED} more</button>` : ""}
-    <p class="muted" style="font-size:13px">Ranked by verdict first, then by how sure we are of their edge (see How we judge a trader). Won: their checked bets that won, out of those already settled. If you copied: what buying the same thing a few minutes after them made a contract, after fees. Hover a verdict for what it means.</p>`
+    <p class="muted" style="font-size:13px">Ranked by verdict first, then by how sure we are of their edge (see How we judge a trader). Hover a column name for what it means.</p>`
     : `<p class="empty">No trader passed the checks this time.</p>`;
   const nv = by.no_view || [], ne = by.no_edge || [];
   html += `<section class="seg"><h3>Left out <span class="act">${ACT.skip}</span></h3>
