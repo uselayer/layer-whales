@@ -474,6 +474,8 @@ class OneTrade(BaseModel):
     outcome: str | None = None
     url: str | None = None
     at: str | None = None
+    size: float | None = None  # their contracts and dollars on this outcome (the Feed card's numbers)
+    usd: float | None = None
     spend: float | None = None  # dollars to put in, fee included; None: the copy rules' contracts
 
 
@@ -487,7 +489,7 @@ def _their_trade(req: OneTrade) -> WhaleTrade:
     at = datetime.fromisoformat(req.at) if req.at else datetime.now(UTC)
     return WhaleTrade(
         venue="polymarket", trader=req.wallet, name=req.name, market=req.market, side="yes", action="buy",
-        price=req.price, size=0.0, usd=0.0, at=at, trade_id=f"feed:{req.wallet}:{req.market}:{req.at}",
+        price=req.price, size=req.size or 0.0, usd=req.usd or 0.0, at=at, trade_id=f"feed:{req.wallet}:{req.market}:{req.at}",
         title=req.title, outcome=req.outcome, url=req.url,
     )  # fmt: skip
 
@@ -597,11 +599,74 @@ def _copied_now() -> dict[str, Any]:
     done = [o for o in out if o["result"] and o["result"]["status"] != "unfilled"]
     net = sum(o["result"]["pnl"] or 0 for o in done)
     count = {k: sum(1 for o in done if o["result"]["status"] == k) for k in ("open", "won", "lost", "void")}
+    groups = _compare(out)
+    same = [g for g in groups if g["theirs"]["at_their_price"] is not None and g["you"]["pnl"] is not None]
     return {
         "rows": out,
+        "groups": groups,
         "total": {"net": round(net, 2), "trades": len(done), **count},
+        "by_trade": {  # the same, one per row of the page: repeat copies of one trade count once
+            "trades": sum(1 for g in groups if g["you"]["contracts"]),
+            "copies": len(done),
+            **{k: sum(1 for g in groups if g["you"]["contracts"] and g["you"]["status"] == k)
+               for k in ("open", "won", "lost", "void")},
+        },
+        "vs": {  # the same trades, valued the same way, at the prices the traders paid (before their fees)
+            "you": round(sum(g["you"]["pnl"] for g in same), 2),
+            "at_their_price": round(sum(g["theirs"]["at_their_price"] for g in same), 2),
+            "put_in": round(sum(g["you"]["put_in"] for g in same), 2),
+            "trades": len(same),
+        },
         "unvalued": sum(1 for o in done if o["result"]["pnl"] is None),
     }
+
+
+def _compare(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One group per trader and outcome (copies of their repeat buys together), newest first: your result
+    next to theirs. Both are valued the same way: at the payout once the market settled, else at the price
+    you could sell at now. Theirs is what their buys made held to the end, before their fees (Polymarket
+    doesn't show their fees or when they sold); ``at_their_price`` is your contracts at their price."""
+    groups: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for o in rows:  # newest first
+        k = (o["trader"].get("id"), o["venue"], o["market"], o["side"])
+        g = groups.setdefault(k, {"at": o["at"], "trader": o["trader"], "source": o["source"], "venue": o["venue"],
+                                  "market": o["market"], "side": o["side"], "copies": []})  # fmt: skip
+        g["copies"].append(o)
+    out = []
+    for g in groups.values():
+        res = [c["result"] for c in g["copies"] if c["result"] and c["result"]["status"] != "unfilled"]
+        n = sum(r.get("contracts") or 0 for r in res)
+        cost = sum(r.get("cost") or 0 for r in res)
+        fees = sum(r.get("fees") or 0 for r in res)
+        pnls = [r.get("pnl") for r in res]
+        first = res[0] if res else {}
+        status = first.get("status") or "unfilled"
+        value = first.get("payout") if status in ("won", "lost", "void") else first.get("mark")  # one contract
+        you_pnl = None if not res or any(x is None for x in pnls) else round(sum(pnls), 4)
+        put_in = round(cost + fees, 4)
+        src = [c["source"] for c in g["copies"]]
+        sized = [x for x in src if (x.get("size") or 0) > 0]
+        their_n = sum(x["size"] for x in sized)
+        their_usd = sum(x.get("usd") or 0 for x in sized)
+        if their_n:
+            their_price: float | None = their_usd / their_n
+        else:  # a trade copied from the Feed before sizes were kept: their average price only
+            prices = [x["price"] for x in src if x.get("price")]
+            their_price = sum(prices) / len(prices) if prices else None
+        theirs = {"price": their_price, "contracts": their_n or None, "put_in": round(their_usd, 2) or None,
+                  "pnl": None, "return": None, "at_their_price": None}  # fmt: skip
+        if their_price and value is not None:
+            theirs["return"] = round(value / their_price - 1, 4)
+            theirs["at_their_price"] = round((value - their_price) * n, 4) if n else None
+            if their_n:
+                theirs["pnl"] = round(value * their_n - their_usd, 2)
+        out.append(g | {
+            "you": {"contracts": n, "avg_price": cost / n if n else None, "fees": round(fees, 4), "put_in": put_in,
+                    "pnl": you_pnl, "return": round(you_pnl / put_in, 4) if you_pnl is not None and put_in else None,
+                    "status": status, "value": value},
+            "theirs": theirs,
+        })  # fmt: skip
+    return out
 
 
 @app.get("/api/paper")

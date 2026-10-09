@@ -179,3 +179,27 @@ def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeyp
     assert out["order_id"] == "pm-1" and out["trader"]["name"] == "ThorinCSGO"
     assert json.loads(engine.copied_file().read_text().splitlines()[-1])["order_id"] == "pm-1"  # in My trades
     api.post("/api/paper/reset")
+
+
+def test_my_trades_groups_repeat_copies_and_compares_with_theirs() -> None:
+    def copy(at: str, size: float, usd: float, pnl: float | None, status: str = "won") -> dict[str, Any]:
+        return {"at": at, "trader": {"id": "0xabc", "name": "ThorinCSGO"}, "venue": "polymarket", "market": "0xcid:1",
+                "side": "yes", "source": {"title": "Ducks vs. Jets", "outcome": "Jets", "price": usd / size, "size": size, "usd": usd},
+                "result": {"status": status, "contracts": 5.0, "avg_price": 0.53, "cost": 2.65, "fees": 0.06,
+                           "payout": 1.0 if status == "won" else None, "mark": None, "pnl": pnl}}  # fmt: skip
+
+    rows = [copy("2026-10-09T02:00:00+00:00", 800, 416, 2.29), copy("2026-10-09T01:00:00+00:00", 500, 260, 2.29)]
+    (g,) = engine._compare(rows)  # two copies of the same outcome from the same trader: one group
+    assert len(g["copies"]) == 2 and g["at"] == "2026-10-09T02:00:00+00:00"
+    assert g["you"] == {"contracts": 10.0, "avg_price": 0.53, "fees": 0.12, "put_in": 5.42, "pnl": 4.58,
+                        "return": pytest.approx(4.58 / 5.42, abs=1e-4), "status": "won", "value": 1.0}  # fmt: skip
+    th = g["theirs"]
+    assert th["price"] == pytest.approx(0.52) and th["contracts"] == 1300 and th["put_in"] == 676
+    assert th["pnl"] == 624 and th["return"] == pytest.approx(1 / 0.52 - 1, abs=1e-4)
+    assert th["at_their_price"] == pytest.approx(4.8)  # your 10 contracts at their 52¢
+
+    feed_copy = copy("2026-10-09T03:00:00+00:00", 1, 0.25, None, status="open")  # sizes unknown, no bid yet
+    feed_copy["source"] |= {"size": 0.0, "usd": 0.0, "price": 0.25}
+    feed_copy["market"] = "0xother:0"
+    g2 = engine._compare([feed_copy])[0]
+    assert g2["theirs"]["price"] == 0.25 and g2["theirs"]["put_in"] is None and g2["theirs"]["return"] is None
