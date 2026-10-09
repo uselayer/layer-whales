@@ -119,6 +119,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 WORTH_WALLETS = int(os.environ.get("WHALES_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
+WORTH_FORMAT = 2  # bump when the kept result gains fields; an older one is re-checked on launch (2: won/settled)
 _worth_stop = threading.Event()
 _worth: dict[str, Any] = {"running": False, "done": 0, "total": 0, "error": None}
 _worth_data: dict[str, Any] | None = None
@@ -148,7 +149,7 @@ def _worth_run() -> None:
             _worth.update(done=done, total=total)
 
         d = reads.whales.discover(wallets=WORTH_WALLETS, on_progress=progress)
-        data = d.to_dict(sample=True)
+        data = d.to_dict(sample=True) | {"format": WORTH_FORMAT}
         for s in data["scores"]:
             settled = [b["payout"] for b in s["sample"] if b.get("payout") is not None]
             s["won"], s["settled"] = sum(1 for p in settled if p == 1), len(settled)  # before the sample is cut
@@ -173,7 +174,9 @@ def worth_refresh() -> None:
 
 def _worth_age_s() -> float:
     data = _worth_load()
-    return float("inf") if data is None else time.time() - _iso_ts(data["finished"])
+    if data is None or data.get("format") != WORTH_FORMAT:
+        return float("inf")
+    return time.time() - _iso_ts(data["finished"])
 
 
 def _worth_loop() -> None:
