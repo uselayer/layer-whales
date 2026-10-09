@@ -49,6 +49,7 @@
   .pill { margin-left: auto; font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px;
     border: 1px solid var(--line); background: var(--card); color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
   .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  @media (max-width: 359px) { .pill-more { display: none; } }
   .tabbar { display: none; }
   main.wrap { padding-top: 28px; padding-bottom: 40px; min-height: 70vh; }
   footer.foot { color: var(--faint); font-size: 12.5px; padding-top: 8px; padding-bottom: 36px; text-align: center; }
@@ -274,7 +275,7 @@
     <nav class="tabs" aria-label="Main">
       <a href="#/" data-tab="feed">Feed</a><a href="#/traders" data-tab="traders">Traders</a><a href="#/mine" data-tab="mine">My trades</a>
     </nav>
-    <span class="pill" title="Copies run in the sandbox: real prices and fees, no real money. No real orders are ever placed.">Sandbox</span>
+    <span class="pill" title="Copies run in the sandbox: real prices and fees, no real money. No real orders are ever placed."><span>Sandbox<span class="pill-more"> · no real money</span></span></span>
   </div>
 </header>
 <main class="wrap" id="app"></main>
