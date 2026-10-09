@@ -19,10 +19,10 @@ LAYER_API_KEY=lyr_... uv run whales-demo
 
 Then open http://127.0.0.1:8790.
 
-- **Layer API key** (optional but recommended): used to find the same market on the other venue, both to compare
-  two traders' trades and to copy a Polymarket trade onto Polymarket US or Kalshi. Get one at uselayer.sh.
-- **Kalshi key** (optional): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy onto Kalshi. Copying
-  onto Polymarket US needs no key.
+- **Layer API key** (optional but recommended): used to find the same market on the other venue, to compare two
+  traders' trades. Get one at uselayer.sh.
+- **Kalshi key** (optional): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy Kalshi traders. Copying
+  Polymarket traders needs no key.
 - `WHALES_PORT` (default 8790) and `WHALES_STORE_DIR` (default `~/.uselayer/whales-demo`) change the port and
   where the sandbox account, copy rules and Worth following results live. `WHALES_WORTH_WALLETS` (default 200)
   is how many wallets Worth following checks.
@@ -56,11 +56,12 @@ Three tabs. It answers one question: what are the best traders trading right now
     be the same person, each with the evidence (the same name or X handle on an account that really trades,
     and trades in the same market, the same way, within 5 minutes). It's an inference, never a confirmed
     identity.
-- **My trades**: the traders you copy, saved on your machine. Every new buy they make becomes a sandbox order on
-  the same market on Polymarket US (5 contracts, at most 3¢ above their price), held until the market settles.
-  One row per copied trade with its status (open / won / lost) and profit after fees, with the total at the
-  top. Polymarket trades with no matching market, or that can't fill near their price, are skipped with the
-  reason.
+- **My trades**: the traders you copy, saved on your machine. Every new buy they make becomes a sandbox order in
+  the same market where they made it: a Polymarket trader's on Polymarket, a Kalshi trader's on Kalshi (5
+  contracts, at most 3¢ above their price), held until the market settles. A Polymarket copy fills at
+  Polymarket's best price, with its taker fee, from its public market data. One row per copied trade with its
+  status (open / won / lost) and profit after fees, with the total at the top. Trades that can't fill near
+  their price are skipped with the reason.
 
 Traders without a name show as "Trader 0x91…76" with a generated avatar: the page never shows wallet addresses.
 
