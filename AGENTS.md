@@ -8,5 +8,16 @@ paper copy trading. It runs only on the user's machine; nothing is hosted or dep
 - Keys come from the environment, are never logged, returned by the engine or written to disk.
 - Paper mode only. Never run live mode or place a real-money order.
 - Never say a link *is* someone: show the tier ("likely" / "possible") and the evidence.
-- Keep the page minimal, in the plain style of Layer's docs.
+- The page is a consumer app, not an analyst's spreadsheet. It answers one question: "What are the best traders
+  betting on right now, and can I still get in?" Three tabs (Feed, Traders, My trades) and a "Paper money" pill.
+  - One idea per card. The market title is the biggest text; status is one line with a dot.
+  - Color means something: green = you can still get in, grey = moved away, neutral = settled. Nothing else is
+    colored.
+  - Plain words, sentence case, one font (Host Grotesk, as on Layer's site), tabular numbers, whole cents (tenths
+    only under 1¢ or when two prices would look equal). No UPPERCASE headers, no tooltip-on-header help.
+  - Methodology (tests, z-scores, margins) stays out of the main view: in "How we pick traders" or a Details fold.
+  - No wallet addresses on screen: unnamed traders get "Trader 0x91…76" and an identicon.
+  - Must look good at 390px as well as desktop; feed width about 680px. Keep loading, empty and error states.
+  - A bet at 2¢ or less, 98¢ or more, or no longer held is settled (Won / Lost / Closed), never a bargain
+    (`bet_status` in `app.py`).
 - Pull requests: sessions never merge. Only the owner merges, when they say "merge #N".
