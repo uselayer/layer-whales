@@ -172,6 +172,9 @@ def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeyp
     trade, kw = seen[0]
     assert (trade.venue, trade.market, trade.side, trade.action, trade.price) == ("polymarket", "0xcid:1", "yes", "buy", 0.52)
     assert kw == {"size": 5.0, "max_slippage": 0.03}  # the copy rules
+    api.post("/api/trade/preview", json=body | {"spend": 50})
+    assert seen[1][1] == {"spend": 50.0, "max_slippage": 0.03}  # an amount from the page, fee included
+    assert api.post("/api/trade/preview", json=body | {"spend": 0}).status_code == 400
     out = api.post("/api/trade/copy", json=body).json()
     assert out["order_id"] == "pm-1" and out["trader"]["name"] == "ThorinCSGO"
     assert json.loads(engine.copied_file().read_text().splitlines()[-1])["order_id"] == "pm-1"  # in My trades
