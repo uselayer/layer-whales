@@ -22,5 +22,6 @@ sandbox copy trading. It runs only on the user's machine; nothing is hosted or d
   - No wallet addresses on screen: unnamed traders get "Trader 0x91…76" and an identicon.
   - Must look good at 390px as well as desktop; feed width about 680px. Keep loading, empty and error states.
   - A trade at 2¢ or less, 98¢ or more, or no longer held is settled (Won / Lost / Closed), never a bargain
-    (`bet_status` in `app.py`).
+    (`bet_status` in `app.py`). "You can still get in" only from 5¢ below to 3¢ above what they paid; further
+    either way is "Price moved away" (a big drop means the market turned against them, not a bargain).
 - Pull requests: sessions never merge. Only the owner merges, when they say "merge #N".

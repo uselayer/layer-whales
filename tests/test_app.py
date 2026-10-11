@@ -106,7 +106,10 @@ def test_bet_status_marks_settled_bets_instead_of_calling_them_bargains() -> Non
     s = engine.bet_status
     assert s(0.52, 0.525) == "in"  # half a cent above
     assert s(0.52, 0.55) == "in"  # exactly the 3¢ copying allows
-    assert s(0.52, 0.30) == "in"  # cheaper, still open
+    assert s(0.52, 0.49) == "in"  # a little cheaper: still their trade, at a better price
+    assert s(0.52, 0.47) == "in"  # exactly 5¢ below
+    assert s(0.52, 0.30) == "moved"  # fell 22¢: the market turned against them, a different trade
+    assert s(0.44, 0.07) == "moved"  # the 44¢ → 7¢ trade that showed "You can still get in"
     assert s(0.43, 0.48) == "moved"
     assert s(0.518, 0.001) == "lost"  # was "Yes, 51.8¢ cheaper now"
     assert s(0.435, 1.0) == "won"  # was "Price moved 56.5¢ up"
