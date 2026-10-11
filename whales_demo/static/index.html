@@ -198,6 +198,7 @@
   .amount button { height: 36px; padding: 0 12px; flex: none; border-radius: 999px; border: 0; background: var(--soft); color: var(--fg);
     font: inherit; font-weight: 500; cursor: pointer; font-variant-numeric: tabular-nums; }
   .amount button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .copybox.compact { padding: 12px 16px; }
   .copybox .on-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .catpick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
   .catpick button { border: 0; border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--soft); color: var(--muted); }
@@ -388,7 +389,9 @@ const TIER = {
   proven: ["Proven sharp", "t1"], quiet: ["Quiet sharp", "t1"], rising: ["Rising", "t2"],
   too_fast: ["Too fast to copy", "t3"], lucky: ["Lucky", "t3"], no_edge: ["No clear edge", "t3"], no_view: ["No view", "t3"],
 };
-const tier = (seg) => TIER[seg] ? `<span class="tier ${TIER[seg][1]}">${TIER[seg][0]}</span>` : "";
+// A trader's page: the scored page for a Polymarket wallet, else the venue leaderboard page.
+const traderHref = (venue, id) => venue === "polymarket" ? `#/worth/${esc(id)}` : `#/t/${venue}/${encodeURIComponent(id)}`;
+const tier = (seg) => TIER[seg] ?`<span class="tier ${TIER[seg][1]}">${TIER[seg][0]}</span>` : "";
 const CHECK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
 function oddsEdge(s) { // how much more often their trades won than the price said they would, in points
   if (!s.settled || s.odds == null) return null;
@@ -776,12 +779,15 @@ async function worthTraderPage(wallet) {
   const odds = oddsEdge(s);
   const pct = (x) => `${Math.round(100 * x)}%`;
   const hero = s.pnl_window != null ? [usd(s.pnl_window, true), "Profit, last 30 days"] : [usd(s.pnl, true), "Profit, all time"];
+  // 30 days ahead of all time reads like a bug; it means they lost money before the window.
+  const before = s.pnl_window != null && s.pnl != null ? s.pnl - s.pnl_window : null;
   const strong = s.strong_categories.map((c) => `<span class="chip" style="font-size:12px;padding:2px 8px">Strong in ${esc(c)}</span>`).join("");
   const results = (s.sample || []).filter((b) => b.payout != null).slice(0, 8);
   app.innerHTML = `${back}
     <div class="th">${avatar(s.wallet, 64)}<div style="min-width:0"><h1 class="name">${esc(name)}</h1>
       <div class="badges">${tier(s.segment)}${beatsBadge(s)}${strong}</div></div></div>
-    <div class="hero"><div class="big">${hero[0]}</div><div class="cap">${hero[1]}${s.pnl_window != null && s.pnl != null ? `<span class="sep">·</span>All time ${usd(s.pnl, true)}` : ""}</div></div>
+    <div class="hero"><div class="big">${hero[0]}</div><div class="cap">${hero[1]}${s.pnl_window != null && s.pnl != null ? `<span class="sep">·</span>All time ${usd(s.pnl, true)}` : ""}</div>
+      ${before != null && before < 0 ? `<div class="cap">More than all time: before these 30 days they were down ${usd(-before)}.</div>` : ""}</div>
     <p class="reason">${esc(sdkText(s.reason))}</p>
     <div class="tiles">
       <div class="tile"><span>Your profit if you'd copied them</span><b>${s.copy ? centsSigned(s.copy.mean) : "—"}</b><small>a contract, after fees</small></div>
@@ -789,6 +795,11 @@ async function worthTraderPage(wallet) {
     </div>
     <div class="card copybox" id="copybox"></div>
     <h2 class="h2">Open trades</h2><div id="open">${skelCards(2)}</div>
+    <h2 class="h2">Latest buys</h2>
+    ${(s.recent || []).length ? `<div class="list">${s.recent.map((b) => `<div class="row"><div><div class="t">${esc(b.title || b.market)}</div>
+      <div class="s">${b.outcome ? `<span class="chip" style="font-size:12px;padding:1px 7px">${esc(b.outcome)} ${cents(b.price)}</span>` : `Bought at ${cents(b.price)}`}${b.category ? ` · ${esc(b.category)}` : ""}</div></div>
+      <div class="r"><b>${usd(b.usd)}</b><div class="s">${ago(b.at)}</div></div></div>`).join("")}</div>`
+      : `<div class="card">${emptyState("No buys in the last 30 days")}</div>`}
     <h2 class="h2">Recent results <small>settled trades we checked</small></h2>
     ${results.length ? `<div class="list">${results.map((b) => `<div class="row"><div><div class="t">${esc(b.title || b.market)}</div><div class="s">${esc(b.outcome || "")} · bought at ${cents(b.price)} · ${ago(b.at)}</div></div>
       <div class="r">${statusLine(b.payout === 1 ? "won" : "lost")}</div></div>`).join("")}</div>` : `<div class="card">${emptyState("No settled trades yet", "Results show up once their markets settle.")}</div>`}
@@ -812,9 +823,6 @@ function worthDetails(s) {
     <h3>By category</h3>${s.categories.length ? `<div class="scroll"><table class="tbl"><thead><tr><th>Category</th><th class="n">Trades</th><th class="n">Their way, 5 min</th><th class="n">Copying, after fees</th></tr></thead><tbody>
       ${s.categories.map((c) => `<tr><td>${esc(c.category)}${c.strong ? " ✓" : ""}</td><td class="n">${c.bets}</td><td class="n">${centsSigned(c.edge?.mean)}</td><td class="n">${centsSigned(c.copy?.mean)}</td></tr>`).join("")}
     </tbody></table></div>` : `<p class="note">No trades checked.</p>`}
-    <h3>Latest buys</h3>${(s.recent || []).length ? `<div class="scroll"><table class="tbl"><thead><tr><th>Trade</th><th class="n">Price</th><th class="n">Amount</th></tr></thead><tbody>
-      ${s.recent.map((b) => `<tr><td>${esc(b.title || b.market)}<div class="s">${esc(b.outcome || "")} · ${esc(b.category)} · ${ago(b.at)}</div></td><td class="n">${cents(b.price)}</td><td class="n">${usd(b.usd)}</td></tr>`).join("")}
-    </tbody></table></div>` : `<p class="note">No buys in the last 30 days.</p>`}
     <h3>Trades we checked</h3><p class="note">"Copy" is what buying 1 to 6 minutes later made by the hour mark, after the fee.</p>
     <div class="scroll"><table class="tbl"><thead><tr><th>Trade</th><th class="n">Paid</th><th class="n">5 min</th><th class="n">1 hour</th><th class="n">Copy</th></tr></thead><tbody>
       ${(s.sample || []).slice(0, 30).map((b) => `<tr><td>${esc(b.title || b.market)}<div class="s">${esc(b.outcome || "")} · ${esc(b.category)} · ${ago(b.at)}</div></td>
@@ -837,12 +845,35 @@ async function loadOpenTrades(s, venue = "polymarket", id = s.wallet) {
   bindActions(box);
 }
 
-function worthCopyBox(s) {
-  const box = $("#copybox");
-  if (s.action === "signal") { box.innerHTML = `<div class="head">Copying isn't offered</div><p style="margin:0">Their edge is gone by the time a copier gets in. Watch their trades instead.</p>`; return; }
-  if (s.action === "avoid" || s.action === "skip") { box.innerHTML = `<div class="head">Not worth copying</div><p style="margin:0">${esc(sdkText(s.reason))}</p>`; return; }
-  copyBox(box, { venue: "polymarket", id: s.wallet, name: s.name }, { categories: s.categories.map((c) => c.category), strong: s.strong_categories,
-    note: s.action === "watch" ? "They're still a maybe: too few trades to be sure." : "" });
+async function worthCopyBox(s) {
+  const box = $("#copybox"), t = { venue: "polymarket", id: s.wallet, name: s.name };
+  if (!copy) await loadCopy();
+  if (!box.isConnected) return;
+  const no = isCopied(t.venue, t.id) ? null // already copying: show that, and Stop, whatever the rating
+    : s.action === "signal" ? ["Copying isn't offered", "Their edge is gone by the time a copier gets in. Watch their trades instead."]
+    : s.action === "avoid" || s.action === "skip" ? ["Not worth copying", esc(sdkText(s.reason))] : null;
+  if (no) {
+    box.classList.remove("compact");
+    box.innerHTML = `<div class="head">${no[0]}</div><p style="margin:0">${no[1]}</p><p id="made" style="margin:8px 0 0" hidden></p>`;
+    fillYouMade($("#made", box), t);
+    return;
+  }
+  copyBox(box, t, { categories: s.categories.map((c) => c.category), strong: s.strong_categories,
+    note: s.action === "watch" ? "They're still a maybe: too few trades to be sure." : "", redraw: () => worthCopyBox(s) });
+}
+
+// What your sandbox copies of one trader have made so far: the same numbers as My trades, open ones at what
+// they'd sell for now. Fills `el` in when there's anything to say; leaves it as it is otherwise.
+async function fillYouMade(el, t, lead = "") {
+  let d;
+  try { d = await api("/api/copied"); } catch { return; }
+  if (!el.isConnected) return; // the card was redrawn while we waited
+  const same = (g) => String(g.trader.id).toLowerCase() === String(t.id).toLowerCase() && (g.trader.venue || "polymarket") === t.venue;
+  const mine = d.groups.filter((g) => same(g) && g.you.contracts);
+  if (!mine.length) return;
+  const valued = mine.filter((g) => g.you.pnl != null), open = mine.filter((g) => g.you.status === "open").length;
+  el.innerHTML = `${lead}You made <b style="color:var(--fg)">${valued.length ? money(valued.reduce((a, g) => a + g.you.pnl, 0), true) : "—"}</b> copying them on ${plural(mine.length, "trade")}${open ? ` (${open} still open)` : ""}. <a class="link" href="#/mine">My trades</a>`;
+  el.hidden = false;
 }
 
 // The copy card on a trader's page: start copying (optionally only some categories), or stop.
@@ -851,19 +882,22 @@ async function copyBox(box, t, opts = {}) {
   if (!box.isConnected) return;
   const r = copy?.rules || { size: 5 };
   const on = copy?.rules.traders.find((x) => x.venue === t.venue && x.id === t.id);
-  const name = esc(displayName(t.name, t.id));
-  if (on) {
-    box.innerHTML = `<div class="on-row"><div><div class="head">Copying <span class="name">${name}</span> ✓</div>
-      <p style="margin:4px 0 0">Their new buys${on.categories?.length ? ` in ${esc(on.categories.join(", "))}` : ""} become sandbox orders in the same market on ${VENUE[t.venue]}.${on.checked_s_ago != null ? ` Checked ${Math.round(on.checked_s_ago)}s ago.` : ""}</p>
+  box.classList.toggle("compact", !!on);
+  if (on) { // one line: you're copying, what it has made so far, Stop
+    box.innerHTML = `<div class="on-row"><div style="min-width:0"><div class="head">Copying trader ✓</div>
+      <p style="margin:2px 0 0" id="made">${on.categories?.length ? `Only ${esc(on.categories.join(", "))}. ` : ""}Their new buys become sandbox orders on ${VENUE[t.venue]}.</p>
       ${on.error ? `<p class="inline-err">${esc(on.error)}</p>` : ""}</div><button class="btn ghost small" id="stop">Stop</button></div>`;
-    $("#stop", box).onclick = async () => { await stopCopy(t.venue, t.id); copyBox(box, t, opts); };
+    $("#stop", box).onclick = async () => { await stopCopy(t.venue, t.id); opts.redraw ? opts.redraw() : copyBox(box, t, opts); };
+    fillYouMade($("#made", box), t, on.categories?.length ? `Only ${esc(on.categories.join(", "))}. ` : "");
     return;
   }
   const cats = opts.categories || [], strong = opts.strong || [];
   box.innerHTML = `<div class="head">Copy their buys</div>
     <p>Each new buy they make becomes your own sandbox order in the same market on ${VENUE[t.venue]}: ${r.size} contracts, at most 3¢ above their price, held until it settles. Real prices and fees, no real money.${opts.note ? " " + esc(opts.note) : ""}</p>
+    <p id="made" hidden></p>
     ${cats.length > 1 ? `<div class="catpick">${cats.map((c) => `<button aria-pressed="${!strong.length || strong.includes(c)}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>` : ""}
     <button class="btn wide" id="docopy">Copy trader</button>`;
+  fillYouMade($("#made", box), t);
   $$(".catpick button", box).forEach((b) => (b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true")));
   $("#docopy", box).onclick = async () => {
     $("#docopy", box).disabled = true;
@@ -936,7 +970,7 @@ function copiedRow(g) {
   const each = y.contracts ? y.avg_price + y.fees / y.contracts : null; // what one of your contracts cost, fee included
   const gap = each != null && th.price != null ? each - th.price : null;
   return `<details class="crow"><summary class="row"><div><div class="t">${esc(g.source.title || g.market)}</div>
-      <div class="s">${esc(g.source.outcome || (g.side || "").toUpperCase())} · copied from <span class="name" style="font-weight:500">${who}</span> · ${ago(g.at)}${n > 1 ? ` · ${n} copies` : ""}</div>
+      <div class="s">${esc(g.source.outcome || (g.side || "").toUpperCase())} · copied from <a class="link" href="${traderHref(g.trader.venue || "polymarket", g.trader.id)}">${who}</a> · ${ago(g.at)}${n > 1 ? ` · ${n} copies` : ""}</div>
       <div class="s">${y.contracts || "—"} contracts at ${cents(y.avg_price)} on ${VENUE[g.venue] || g.venue}${y.status === "open" && y.value != null ? ` · now ${cents(y.value)}` : ""}</div>
       ${th.return != null && y.return != null ? `<div class="s">You ${pct(y.return)} · ${who} ${pct(th.return)}</div>` : ""}</div>
     <div class="r"><b>${money(y.pnl, true)}</b><div class="s">${RESULT[y.status] || "—"}</div></div></summary>
@@ -946,7 +980,8 @@ function copiedRow(g) {
       <span class="k">${settled ? "Made" : "Now"}</span><b>${money(y.pnl, true)}</b><b>${th.pnl != null ? money(th.pnl, true) : "—"}</b>
       <span class="k">Return</span><b>${pct(y.return)}</b><b>${pct(th.return)}</b></div>
     <p class="vs-note">${settled ? `Settled: each contract paid ${money(y.value)}.` : y.value != null ? `Open: both valued at ${cents(y.value)}, what a contract sells for now.` : "Open: no buyer right now, so neither is valued yet."}
-      Theirs is what their buys made if held to the end, before their fees (Polymarket doesn't show those).${gap != null ? ` Each of your contracts cost ${cents(Math.abs(gap))} ${gap >= 0 ? "more" : "less"} than theirs.` : ""}</p>
+      Theirs is what their buys made if held to the end, before their fees (Polymarket doesn't show those).${gap != null ? ` Each of your contracts cost ${cents(Math.abs(gap))} ${gap >= 0 ? "more" : "less"} than theirs.` : ""}
+      <a class="link" href="${traderHref(g.trader.venue || "polymarket", g.trader.id)}">See ${who}'s page →</a></p>
   </details>`;
 }
 const RESULT = { open: "Open", won: "Won", lost: "Lost", void: "Refunded", unfilled: "Not filled" };
@@ -968,7 +1003,7 @@ async function minePage() {
     <h2 class="h2">Who you're copying</h2>
     ${r.traders.length ? `<div class="list">${r.traders.map((x) => `<div class="trow norank" style="cursor:default">
         ${avatar(x.venue === "polymarket" ? x.id : `${x.venue}:${x.id}`, 36)}
-        <a class="tmain" href="${x.venue === "polymarket" ? `#/worth/${esc(x.id)}` : `#/t/${x.venue}/${encodeURIComponent(x.id)}`}"><span class="name">${esc(displayName(x.name, x.id))}</span>
+        <a class="tmain" href="${traderHref(x.venue, x.id)}"><span class="name">${esc(displayName(x.name, x.id))}</span>
           <span class="sub">${VENUE[x.venue]}${x.categories?.length ? ` · only ${esc(x.categories.join(", "))}` : ""}${x.checked_s_ago != null ? ` · checked ${Math.round(x.checked_s_ago)}s ago` : ""}</span>
           ${x.error ? `<span class="inline-err" style="margin:0">${esc(x.error)}</span>` : ""}</a>
         <button class="btn ghost small" data-rm="${esc(x.venue)}/${esc(x.id)}">Stop</button></div>`).join("")}</div>`
