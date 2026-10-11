@@ -403,14 +403,15 @@ const STATUS = {
 };
 const statusLine = (st) => STATUS[st] ? `<span class="status ${STATUS[st][1]}"><i></i>${STATUS[st][0]}</span>` : `<span class="status"><i></i>Price unknown</span>`;
 const SETTLED = new Set(["won", "lost", "closed"]);
-const GET_IN = 0.03; // the same limit copying uses
+const GET_IN = 0.03; // the same limit copying uses; and at most 5¢ below (FELL_BY in app.py)
 function statusExplain(b) {
   const d = b.price_now != null && b.price != null ? b.price_now - b.price : null;
   const gap = (x) => Math.abs(x) < 0.01 ? "less than 1¢" : `${Math.round(Math.abs(x) * 100)}¢`; // rounded like the prices shown
   switch (b.status) {
     case "in": return d > 0.0005 ? `The price is ${gap(d)} above what they paid. Copies buy at most 3¢ above their price, so you can still get in.`
       : d < -0.0005 ? `The price is ${gap(d)} below what they paid, so you can still get in.` : "The price is about what they paid, so you can still get in.";
-    case "moved": return `The price is ${gap(d)} above what they paid, more than the 3¢ copying allows. Most of their edge is already in the price.`;
+    case "moved": return d < 0 ? `The price is ${gap(d)} below what they paid: the market has turned against them since. Buying now would be a different trade from theirs.`
+      : `The price is ${gap(d)} above what they paid, more than the 3¢ copying allows. Most of their edge is already in the price.`;
     case "won": return "The price is 98¢ or more: the market has settled their way, or as good as.";
     case "lost": return "The price is 2¢ or less: the market has settled against them, or as good as. Not a bargain.";
     case "closed": return "They no longer hold it: they sold, or the market settled and paid out.";

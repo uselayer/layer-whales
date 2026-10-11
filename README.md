@@ -33,8 +33,9 @@ Three tabs. It answers one question: what are the best traders trading right now
 
 - **Feed**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp or Rising, one
   card per trade: the market, their pick, what they paid, the price now, how much they put in, and one status
-  line. **You can still get in** means the price is at most 3¢ above what they paid (the same limit copying
-  uses); **Price moved away** means more. A trade at 2¢ or less, 98¢ or more, or one they no longer hold is
+  line. **You can still get in** means the price is between 5¢ below and 3¢ above what they paid (3¢ is the
+  same limit copying uses); **Price moved away** means further either way. A bigger drop means the market has
+  turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or less, 98¢ or more, or one they no longer hold is
   **Won**, **Lost** or **Closed**, and drops out of the default feed. Filter by category, or turn off "Only
   trades I can still get into" to see them all. Tap a card for the details, the trader and a link to Polymarket.
   **Copy trader** copies that trader's next trades in the sandbox; a trade they already made isn't copied.

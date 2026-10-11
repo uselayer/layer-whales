@@ -240,15 +240,16 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
 FEED_SEGMENTS = ("proven", "quiet", "rising")  # the Follow and Watch verdicts
 FEED_HOURS = 24
 GET_IN = 0.03  # at most this far above their price you can still get in: the same limit copying uses
+FELL_BY = 0.05  # at most this far below: a bigger drop means the market turned against them, a different trade
 SETTLED_LOW, SETTLED_HIGH = 0.02, 0.98  # at or past these the market has settled, or as good as
 
 
 def bet_status(paid: float | None, now: float | None) -> str | None:
     """Can you still get in near what they paid?
 
-    ``in`` (at most 3¢ above), ``moved`` (more), ``won`` / ``lost`` (the price is at 98¢+ or 2¢-, so the
-    market has settled or as good as: not a bargain), ``closed`` (their position is gone: sold, or settled
-    and paid out), or None when their price isn't known.
+    ``in`` (from 5¢ below to 3¢ above), ``moved`` (further either way), ``won`` / ``lost`` (the price is at
+    98¢+ or 2¢-, so the market has settled or as good as: not a bargain), ``closed`` (their position is gone:
+    sold, or settled and paid out), or None when their price isn't known.
     """
     if now is None:
         return "closed"
@@ -258,7 +259,7 @@ def bet_status(paid: float | None, now: float | None) -> str | None:
         return "won"
     if paid is None:
         return None
-    return "in" if now - paid <= GET_IN + 1e-9 else "moved"
+    return "in" if -FELL_BY - 1e-9 <= now - paid <= GET_IN + 1e-9 else "moved"
 
 
 def _categories(markets: list[str]) -> dict[str, str]:
