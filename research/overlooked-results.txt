@@ -1,0 +1,39 @@
+scored in both windows: 310  (errors: 0)
+
+=== overlooked: 250 wallets, small accounts 171
+  segments A: {'no_edge': 190, 'too_fast': 16, 'quiet': 1, 'no_view': 23, 'rising': 10, 'lucky': 10}
+  segments B: {'no_edge': 200, 'rising': 15, 'no_view': 18, 'lucky': 9, 'quiet': 1, 'too_fast': 7}
+  baseline B copy (all):      -0.63¢ ± 0.27¢ (z -4.6, 11217 events)
+  baseline B hold-to-settle:  +0.31¢ ± 0.95¢ (z +0.6, 6882 events)
+  R1 SDK followable (proven/quiet/rising)    picks  11 | B copy -0.40¢ ± 2.01¢ (z -0.4, 434 events) | B settle -2.01¢ ± 4.86¢ (z -0.8, 293 events) | B edge -0.38¢ ± 1.22¢ (z -0.6, 436 events)
+     … small accounts only                   picks   5 | B copy -0.35¢ ± 3.60¢ (z -0.2, 232 events) | B settle +0.82¢ ± 6.05¢ (z +0.3, 190 events)
+  R2 beats the price (edge z>=2)             picks  22 | B copy -1.47¢ ± 0.97¢ (z -3.0, 817 events) | B settle -1.33¢ ± 3.25¢ (z -0.8, 683 events) | B edge +0.82¢ ± 1.25¢ (z +1.3, 825 events)
+     … small accounts only                   picks  12 | B copy -2.43¢ ± 1.25¢ (z -3.8, 393 events) | B settle -3.53¢ ± 4.56¢ (z -1.5, 346 events)
+  R3 copy-positive (copy z>=1)               picks  15 | B copy -0.03¢ ± 1.24¢ (z -0.0, 660 events) | B settle +0.94¢ ± 4.00¢ (z +0.5, 379 events) | B edge -0.80¢ ± 1.02¢ (z -1.5, 661 events)
+     … small accounts only                   picks  11 | B copy -0.35¢ ± 1.32¢ (z -0.5, 498 events) | B settle +2.52¢ ± 4.76¢ (z +1.0, 247 events)
+
+=== leaderboard: 60 wallets, small accounts 13
+  segments A: {'no_edge': 41, 'no_view': 5, 'lucky': 7, 'too_fast': 5, 'rising': 1, 'proven': 1}
+  segments B: {'no_edge': 33, 'no_view': 3, 'lucky': 10, 'rising': 6, 'too_fast': 8}
+  baseline B copy (all):      -0.06¢ ± 1.20¢ (z -0.1, 1223 events)
+  baseline B hold-to-settle:  +1.52¢ ± 2.47¢ (z +1.2, 956 events)
+  R1 SDK followable (proven/quiet/rising)    picks   2 | B copy +0.71¢ ± 2.28¢ (z +0.6, 70 events) | B settle +8.63¢ ± 9.24¢ (z +1.8, 54 events) | B edge +2.37¢ ± 1.59¢ (z +2.9, 70 events)
+  R2 beats the price (edge z>=2)             picks   8 | B copy -0.49¢ ± 1.86¢ (z -0.5, 327 events) | B settle +1.01¢ ± 4.62¢ (z +0.4, 264 events) | B edge +2.19¢ ± 1.21¢ (z +3.5, 329 events)
+  R3 copy-positive (copy z>=1)               picks   7 | B copy +0.08¢ ± 1.50¢ (z +0.1, 222 events) | B settle +3.25¢ ± 4.87¢ (z +1.3, 192 events) | B edge +2.12¢ ± 0.98¢ (z +4.2, 222 events)
+
+A→B correlation of edge across wallets (>=15 bets both windows): +0.06  n=197
+
+A→B correlation of copy across wallets (>=15 bets both windows): +0.06  n=197
+
+Every overlooked wallet picked by R1, window A then B:
+  yagudim              Sports   $      2/trade  A quiet    n=54 edge +23.98¢ z+6.1 copy +3.95¢ z+1.3  →  B no_edge  n=19 edge -21.10¢ z-2.3 copy -8.60¢ z-2.2  small=True
+  highercreed          Sports   $      2/trade  A rising   n=60 edge +3.63¢ z+1.6 copy +2.37¢ z+0.6  →  B no_edge  n=59 edge +0.95¢ z+0.4 copy -0.41¢ z-0.1  small=True
+  Po1yBot-6NEazyE4Ef   Politics $      8/trade  A rising   n=32 edge +2.34¢ z+1.5 copy +0.32¢ z+0.4  →  B no_edge  n=37 edge +1.46¢ z+1.7 copy -1.26¢ z-1.0  small=True
+  0x9013…e7e0          Sports   $     21/trade  A rising   n=52 edge +3.21¢ z+1.6 copy +2.08¢ z+0.5  →  B no_edge  n=60 edge -2.79¢ z-1.7 copy +2.56¢ z+0.6  small=True
+  DancewithRisk        Economy  $     92/trade  A rising   n=22 edge +0.66¢ z+1.3 copy +0.30¢ z+0.5  →  B no_edge  n=23 edge +0.77¢ z+1.1 copy -0.21¢ z-0.4  small=False
+  Gluckyklucky         Politics $     69/trade  A rising   n=18 edge +0.99¢ z+3.5 copy +0.30¢ z+0.3  →  B rising   n=23 edge +1.20¢ z+2.2 copy +0.29¢ z+0.4  small=False
+  TheManInTheSky       Politics $     15/trade  A rising   n=11 edge +0.24¢ z+1.6 copy +0.18¢ z+1.0  →  B no_edge  n=11 edge -0.94¢ z-1.6 copy +0.04¢ z+0.0  small=False
+  lll918dd             Crypto   $     24/trade  A rising   n=55 edge +7.40¢ z+1.3 copy +0.07¢ z+0.0  →  B no_view  n=59 edge +0.08¢ z+0.1 copy -0.03¢ z-0.0  small=True
+  Umaroth              Politics $    228/trade  A rising   n=16 edge +0.50¢ z+1.2 copy +2.50¢ z+0.7  →  B too_fast n=46 edge +1.32¢ z+2.8 copy -1.05¢ z-3.0  small=False
+  Forecastication2     Sports   $      9/trade  A rising   n=58 edge +0.83¢ z+1.2 copy +2.21¢ z+1.2  →  B no_edge  n=57 edge +0.52¢ z+0.9 copy -0.54¢ z-0.3  small=False
+  chaosj88             Tech     $     29/trade  A rising   n=51 edge +1.92¢ z+1.5 copy +2.31¢ z+2.0  →  B too_fast n=42 edge +3.91¢ z+2.6 copy -0.27¢ z-0.2  small=False
