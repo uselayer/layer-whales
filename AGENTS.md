@@ -30,3 +30,15 @@ engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting")
     (`bet_status` in `app.py`). "You can still get in" only from 5¢ below to 3¢ above what they paid; further
     either way is "Price moved away" (a big drop means the market turned against them, not a bargain).
 - Pull requests: sessions never merge. Only the owner merges, when they say "merge #N".
+
+## Deploying (only when the owner asks)
+
+- **Engine** (Railway project and service `signals`): `railway up --service signals` from the repo root. It
+  builds the `Dockerfile`; the store is on the service's volume at `/data`. A deploy restarts the server, and a
+  Worth following check that hasn't finished starts over (20–30 min).
+- **Forwarding layer** (Vercel project `signals`, holds usesignals.app): `vercel deploy --prod` inside `web/`.
+  Only needed when `web/vercel.json` changes.
+- A new checkout or folder isn't linked yet: run `railway link` (project and service `signals`) in the repo root
+  and `vercel link --project signals` in `web/` first.
+- Keys are set by the owner in Railway's service variables, never by a session.
+- `railway.json` works until 2026-12-01; after that Railway needs `railway config migrate`.
