@@ -75,6 +75,8 @@ def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
     assert out["rows"][0]["trader"]["name"] == "sharpie" and out["rows"][0]["result"]["status"] == "won"
     api.post("/api/paper/reset")
     assert api.get("/api/copied").json()["rows"] == []
+    assert engine.load_rules()["traders"] == [] and engine._copiers == {}  # nobody copied any more
+    assert engine.load_rules()["size"] == 3  # the size and price limits stay
 
 
 SCORE = {"wallet": "0xabc", "name": "sharpie", "segment": "quiet", "action": "follow", "sample": [{"market": "m"}]}

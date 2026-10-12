@@ -696,10 +696,11 @@ def paper_account() -> dict[str, Any]:
 
 @app.post("/api/paper/reset")
 def paper_reset() -> dict[str, Any]:
-    """Start the paper account over: no positions and no copied trades. The copy rules stay."""
+    """Start the sandbox over: no positions, no copied trades and nobody copied. The size and price limits stay."""
     global _paper
     with _lock:
         _copiers.clear()
+        save_rules(load_rules() | {"traders": []})
         if _paper is not None:
             _paper.close()
             _paper = None
