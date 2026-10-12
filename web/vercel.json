@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/(.*)", "destination": "https://RAILWAY_HOST/$1" }
+    { "source": "/(.*)", "destination": "https://signals-production-1eb7.up.railway.app/$1" }
   ],
   "headers": [
     {
