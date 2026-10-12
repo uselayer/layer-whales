@@ -11,10 +11,10 @@ is hosted, and copies run in a sandbox (real prices and fees, no real money).
 You need [uv](https://docs.astral.sh/uv/); it fetches Python 3.11+ if you don't have it.
 
 ```sh
-git clone https://github.com/uselayer/layer-whales
-cd layer-whales
+git clone https://github.com/uselayer/signals
+cd signals
 uv sync
-LAYER_API_KEY=lyr_... uv run whales-demo
+LAYER_API_KEY=lyr_... uv run signals
 ```
 
 Then open http://127.0.0.1:8790.
@@ -23,8 +23,8 @@ Then open http://127.0.0.1:8790.
   traders' trades. Get one at uselayer.sh.
 - **Kalshi key** (optional): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy Kalshi traders. Copying
   Polymarket traders needs no key.
-- `WHALES_PORT` (default 8790) and `WHALES_STORE_DIR` (default `~/.uselayer/whales-demo`) change the port and
-  where the sandbox account, copy rules and Worth following results live. `WHALES_WORTH_WALLETS` (default 200)
+- `SIGNALS_PORT` (default 8790) and `SIGNALS_STORE_DIR` (default `~/.uselayer/signals`) change the port and
+  where the sandbox account, copy rules and Worth following results live. `SIGNALS_WORTH_WALLETS` (default 200)
   is how many wallets Worth following checks.
 
 ## What's on the page

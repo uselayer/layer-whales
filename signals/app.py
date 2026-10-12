@@ -1,9 +1,9 @@
 """The demo's local engine: a small HTTP service on your machine that runs the uselayer SDK.
 
 Everything runs here, with your own keys. Nothing is hosted. Copies are paper trades (real books,
-fake money) in their own store, ~/.uselayer/whales-demo/paper.db unless WHALES_STORE_DIR says otherwise.
+fake money) in their own store, ~/.uselayer/signals/paper.db unless SIGNALS_STORE_DIR says otherwise.
 
-    LAYER_API_KEY=lyr_... uv run whales-demo        # then open http://127.0.0.1:8790
+    LAYER_API_KEY=lyr_... uv run signals            # then open http://127.0.0.1:8790
 """
 
 from __future__ import annotations
@@ -27,7 +27,8 @@ from uselayer import Client, Copier, Trader, VenueError, WhaleTrade
 from uselayer.whale_scores import category_of
 
 HERE = Path(__file__).parent
-STORE_DIR = Path(os.environ.get("WHALES_STORE_DIR", Path.home() / ".uselayer" / "whales-demo"))
+STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
+_OLD_STORE_DIR = Path.home() / ".uselayer" / "whales-demo"  # before the rename to Signals: main() moves it once
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -121,7 +122,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 # kept result is older than WORTH_MAX_AGE_S, then again each time it gets that old. The page shows the last
 # result meanwhile. A wallet that isn't in it is scored when its page is opened.
 
-WORTH_WALLETS = int(os.environ.get("WHALES_WORTH_WALLETS", "200"))
+WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
 WORTH_FORMAT = 3  # bump when the kept result gains fields; an older one is re-checked on launch (3: won/settled/odds)
@@ -722,7 +723,9 @@ app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")  # t
 
 
 def main() -> None:
-    port = int(os.environ.get("WHALES_PORT", "8790"))
+    if "SIGNALS_STORE_DIR" not in os.environ and not STORE_DIR.exists() and _OLD_STORE_DIR.exists():
+        _OLD_STORE_DIR.rename(STORE_DIR)
+    port = int(os.environ.get("SIGNALS_PORT", "8790"))
     print(f"Signals on http://127.0.0.1:{port}  (paper store: {STORE_DIR})")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 

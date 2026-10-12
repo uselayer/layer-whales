@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from uselayer import Trader, TraderDetail, Whales, WhalePosition, WhaleTrade
 
-from whales_demo import app as engine
+from signals import app as engine
 
 AMY = Trader(venue="kalshi", id="amy", name="amy", rank=1, pnl=1000.0, volume=5000.0, volume_unit="contracts")
 TRADE = WhaleTrade(
