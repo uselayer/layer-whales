@@ -41,6 +41,10 @@ def local() -> engine.Sandbox:
 
 def test_pages_and_reads(api: TestClient) -> None:
     assert "Signals" in api.get("/").text
+    assert 'href="/static/icon.svg"' in api.get("/").text  # the in-app logo as the browser icon
+    for path in ("/static/icon.svg", "/favicon.ico"):
+        r = api.get(path)
+        assert r.status_code == 200 and r.headers["content-type"].startswith("image/svg+xml")
     assert api.get("/api/top").json()[0]["name"] == "amy"
     assert api.get("/api/trading-now").json()[0]["trader"] == "amy"
     d = api.get("/api/trader/kalshi/amy").json()
