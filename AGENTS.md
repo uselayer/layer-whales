@@ -1,12 +1,17 @@
 # This repo
 
-A demo on the uselayer SDK: top traders on Kalshi and Polymarket, a page per trader, cross-venue links and
-sandbox copy trading. It runs only on the user's machine; nothing is hosted or deployed.
+Signals, on the uselayer SDK: top traders on Kalshi and Polymarket, a page per trader, cross-venue links and
+sandbox copy trading. It runs on the user's machine (`uv run signals`) and is hosted at usesignals.app: the same
+engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting").
 
 - All venue reads, links and copies go through `client.whales` in the SDK. Don't add venue calls or matching
   logic here; put it in the SDK.
-- Keys come from the environment, are never logged, returned by the engine or written to disk.
-- Paper mode only. Never run live mode or place a real-money order.
+- Keys come from the environment (hosted: Railway's service variables), are never logged, returned by the
+  engine or written to disk.
+- Paper mode only, hosted or not. Never run live mode or place a real-money order.
+- Hosted, there is no signup: each browser has its own sandbox, found by an anonymous cookie. Never let one
+  browser see or change another's sandbox, and never let a response that sets the cookie be cached.
+- Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.
 - Never say a link *is* someone: show the tier ("likely" / "possible") and the evidence.
 - The page is a consumer app, not an analyst's spreadsheet. It answers one question: "What are the best traders
   trading right now, and can I still get in?" Three tabs (Feed, Traders, My trades) and a "Sandbox" pill.

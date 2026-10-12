@@ -1,15 +1,20 @@
-"""The demo's local engine: a small HTTP service on your machine that runs the uselayer SDK.
+"""The engine: a small HTTP service that runs the uselayer SDK, on your machine or hosted.
 
-Everything runs here, with your own keys. Nothing is hosted. Copies are paper trades (real books,
-fake money) in their own store, ~/.uselayer/signals/paper.db unless SIGNALS_STORE_DIR says otherwise.
+Locally, everything runs on your machine with your own keys, and there is one sandbox (real books, fake
+money) in ~/.uselayer/signals unless SIGNALS_STORE_DIR says otherwise.
 
     LAYER_API_KEY=lyr_... uv run signals            # then open http://127.0.0.1:8790
+
+Hosted (SIGNALS_HOSTED=1, see the Dockerfile), each browser gets its own sandbox, found by an anonymous
+cookie: no signup. Keys stay on the server. Sandbox only: nothing here trades with real money.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
+import secrets
 import threading
 import time
 from collections.abc import AsyncIterator, Callable
@@ -19,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -29,10 +34,12 @@ from uselayer.whale_scores import category_of
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
 _OLD_STORE_DIR = Path.home() / ".uselayer" / "whales-demo"  # before the rename to Signals: main() moves it once
+HOSTED = os.environ.get("SIGNALS_HOSTED") == "1"
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    apply_rules()  # resume copying with the saved rules
+    resume_copying()  # with the saved rules
     threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
     yield
     _loop_stop.set()
@@ -41,16 +48,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Signals", lifespan=lifespan)
 reads = Client(store=":memory:")  # leaderboards, traders, links: reads only
-_paper: Client | None = None
-_lock = threading.Lock()  # one copier and the paper store at a time
-
-
-def paper() -> Client:
-    global _paper
-    if _paper is None:
-        STORE_DIR.mkdir(parents=True, exist_ok=True)
-        _paper = Client(store=str(STORE_DIR / "paper.db"))
-    return _paper
+_lock = threading.Lock()  # one copier pass and one sandbox change at a time
 
 
 # ---- a small cache, so clicking around doesn't re-read the venues ----
@@ -126,6 +124,8 @@ WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
 WORTH_FORMAT = 3  # bump when the kept result gains fields; an older one is re-checked on launch (3: won/settled/odds)
+WORTH_MIN_AGE_HOSTED_S = 3600  # hosted: "Check again" only starts a new check once the last is this old
+WORTH_ONE_KEEP = 500  # wallets scored on demand, kept until the next check
 _worth_stop = threading.Event()
 _worth: dict[str, Any] = {"running": False, "done": 0, "total": 0, "error": None}
 _worth_data: dict[str, Any] | None = None
@@ -214,7 +214,8 @@ def worth() -> dict[str, Any]:
 
 @app.post("/api/worth/refresh")
 def worth_refresh_route() -> dict[str, Any]:
-    worth_refresh()
+    if not HOSTED or _worth_age_s() >= WORTH_MIN_AGE_HOSTED_S:  # hosted, anyone can press it: not too often
+        worth_refresh()
     return {"status": dict(_worth)}
 
 
@@ -231,6 +232,8 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
             _worth_one[w] = reads.whales.score(w).to_dict()
         except VenueError as e:
             raise venue_error(e) from e
+        if len(_worth_one) > WORTH_ONE_KEEP:
+            del _worth_one[next(iter(_worth_one))]  # the oldest
     return _worth_one[w]
 
 
@@ -310,12 +313,19 @@ def _iso_ts(s: str) -> float:
     return datetime.fromisoformat(s).timestamp()
 
 
-# ---- copying (paper) ----
-# Copy rules are set once and saved in the store dir: which traders, contracts a trade and how far above their
-# price to pay. Each trader is copied where they bet: a Polymarket trader on the same Polymarket market, a
-# Kalshi trader on the same Kalshi market (needs a Kalshi key). One background loop polls a copier per trader
-# and copies each new buy with paper money; every copied trade is appended to copied.jsonl, so "My trades"
-# survives restarts.
+# ---- sandboxes ----
+# Locally there is one sandbox, in STORE_DIR. Hosted, each browser gets its own, found by an anonymous cookie
+# (no signup) and kept in STORE_DIR/visitors/<id>: its paper account, copy rules and copied trades. The folder
+# is made on the first copy or preview, not on a visit.
+
+LOCAL = "local"
+SID_COOKIE = "signals_sid"
+SID_MAX_AGE_S = 365 * 86400  # from the last visit
+_SID = re.compile(r"[0-9a-f]{32}")
+MAX_TRADERS = int(os.environ.get("SIGNALS_MAX_TRADERS", "5"))  # hosted: traders one browser copies at once
+MAX_COPYING = int(os.environ.get("SIGNALS_MAX_COPYING", "300"))  # hosted: browsers copying at once
+IDLE_S = 14 * 86400  # hosted: a browser away this long stops being copied for, until it's back (its rules stay)
+FORGET_S = 3600  # hosted: an open sandbox nobody is copying for is closed after this long without a visit
 
 
 class CopyRules(BaseModel):
@@ -330,136 +340,263 @@ class CopyTrader(BaseModel):
     categories: list[str] = []
 
 
-def rules_file() -> Path:
-    return STORE_DIR / "copy-rules.json"
-
-
-def copied_file() -> Path:
-    return STORE_DIR / "copied.jsonl"
-
-
-_copiers: dict[str, Copier] = {}
-_status: dict[str, dict[str, Any]] = {}  # per trader: checked_at, error
-_recent: list[dict[str, Any]] = []  # the last copied and skipped events, newest last
-_loop_thread: threading.Thread | None = None
-_loop_stop = threading.Event()
-
-
-def load_rules() -> dict[str, Any]:
-    if rules_file().exists():
-        try:
-            rules: dict[str, Any] = json.loads(rules_file().read_text())
-            rules.pop("copy_to", None)  # retired: each trader is copied on their own venue
-            return rules
-        except ValueError:
-            pass
-    return CopyRules().model_dump() | {"traders": []}
-
-
-def save_rules(rules: dict[str, Any]) -> None:
-    STORE_DIR.mkdir(parents=True, exist_ok=True)
-    rules_file().write_text(json.dumps(rules, indent=2))
-
-
 def _key(venue: str, id: str) -> str:
     return f"{venue}:{id}"
 
 
-def _make_copier(rules: dict[str, Any], t: dict[str, Any]) -> Copier:
-    trader = Trader(
-        venue=t["venue"],
-        id=t["id"],
-        name=t.get("name") or t["id"],
-        volume_unit="contracts" if t["venue"] == "kalshi" else "usd",
-    )
-    return paper().whales.follow(
-        trader,
-        size=float(rules["size"]),
-        venue="kalshi" if t["venue"] == "kalshi" else "polymarket",  # where they bet: same market, same price
-        max_slippage=float(rules["max_above"]),
-        categories=tuple(t.get("categories") or ()),
-        copy_sells=False,  # buys only, held until the market settles
-    )
+def _shared_trades(venue: Any, id: str, *, limit: int = 50) -> list[WhaleTrade]:
+    """A trader's recent trades, read once for every sandbox copying them: each copier asks every 5 s."""
+    rows: list[WhaleTrade] = cached(f"trades:{venue}:{id}:{limit}", 4, lambda: reads.whales.trades(venue, id, limit=limit))
+    return rows
 
 
-def apply_rules() -> None:
-    """Make the running copiers match the saved rules, and start the loop if anyone is copied."""
+class Sandbox:
+    """One sandbox: a paper account, copy rules, a copier per copied trader, and the copied trades."""
+
+    def __init__(self, sid: str) -> None:
+        self.sid = sid
+        self.dir = STORE_DIR if sid == LOCAL else STORE_DIR / "visitors" / sid
+        self.client: Client | None = None
+        self.copiers: dict[str, Copier] = {}
+        self.status: dict[str, dict[str, Any]] = {}  # per trader: checked_at, error
+        self.recent: list[dict[str, Any]] = []  # the last copied and skipped events, newest last
+        self.copied_cache: dict[str, Any] = {"at": 0.0, "data": None}
+        self.copied_lock = threading.Lock()  # one valuation at a time
+        self.seen = time.time()
+        self.touched = 0.0
+
+    def paper(self) -> Client:
+        if self.client is None:
+            self.dir.mkdir(parents=True, exist_ok=True)
+            self.client = Client(store=str(self.dir / "paper.db"))
+            self.client.whales.trades = _shared_trades  # type: ignore[method-assign]
+        return self.client
+
+    def has_account(self) -> bool:
+        return self.client is not None or (self.dir / "paper.db").exists()
+
+    def rules_file(self) -> Path:
+        return self.dir / "copy-rules.json"
+
+    def copied_file(self) -> Path:
+        """Every copied trade, one per line, so My trades survives restarts."""
+        return self.dir / "copied.jsonl"
+
+    def load_rules(self) -> dict[str, Any]:
+        if self.rules_file().exists():
+            try:
+                rules: dict[str, Any] = json.loads(self.rules_file().read_text())
+                rules.pop("copy_to", None)  # retired: each trader is copied on their own venue
+                return rules
+            except ValueError:
+                pass
+        return CopyRules().model_dump() | {"traders": []}
+
+    def save_rules(self, rules: dict[str, Any]) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.rules_file().write_text(json.dumps(rules, indent=2))
+
+    def visit(self) -> None:
+        """Note a visit. Hosted, the rules file's time says when they were last here, for after a restart."""
+        self.seen = time.time()
+        if HOSTED and self.seen - self.touched > 3600 and self.rules_file().exists():
+            self.rules_file().touch()
+            self.touched = self.seen
+
+    def apply_rules(self) -> None:
+        """Make the running copiers match the saved rules, and start the loop if anyone is copied."""
+        rules = self.load_rules()
+        with _lock:
+            self.copiers.clear()
+            for t in rules["traders"]:
+                self.copiers[_key(t["venue"], t["id"])] = self._make_copier(rules, t)
+        if self.copiers:
+            _start_loop()
+
+    def _make_copier(self, rules: dict[str, Any], t: dict[str, Any]) -> Copier:
+        trader = Trader(
+            venue=t["venue"],
+            id=t["id"],
+            name=t.get("name") or t["id"],
+            volume_unit="contracts" if t["venue"] == "kalshi" else "usd",
+        )
+        return self.paper().whales.follow(
+            trader,
+            size=float(rules["size"]),
+            venue="kalshi" if t["venue"] == "kalshi" else "polymarket",  # where they bet: same market, same price
+            max_slippage=float(rules["max_above"]),
+            categories=tuple(t.get("categories") or ()),
+            copy_sells=False,  # buys only, held until the market settles
+        )
+
+    def record(self, e: Any, trader: dict[str, Any]) -> dict[str, Any]:
+        """Keep a copy event for the page, and every copied trade in copied.jsonl for My trades."""
+        d: dict[str, Any] = e.to_dict() | {"trader": trader}
+        self.recent.append(d)
+        if e.status == "copied":
+            self.dir.mkdir(parents=True, exist_ok=True)
+            with self.copied_file().open("a") as f:
+                f.write(json.dumps(d) + "\n")
+            self.copied_cache["at"] = 0.0  # a new row: work it out again on the next read
+        del self.recent[:-200]
+        return d
+
+    def close(self) -> None:
+        if self.client is not None:
+            self.client.close()
+            self.client = None
+
+    def reset(self) -> None:
+        """Start over: no positions, no copied trades and nobody copied. The size and price limits stay."""
+        with _lock:
+            self.copiers.clear()
+            self.save_rules(self.load_rules() | {"traders": []})
+            self.close()
+            for name in ("paper.db", "paper.db-wal", "paper.db-shm"):
+                (self.dir / name).unlink(missing_ok=True)
+            self.copied_file().unlink(missing_ok=True)
+            self.recent.clear()
+            self.copied_cache.update(at=0.0, data=None)
+
+
+_boxes: dict[str, Sandbox] = {}
+_boxes_lock = threading.Lock()
+
+
+def sandbox(sid: str) -> Sandbox:
+    """The sandbox for ``sid``, opened on first use; copying resumes if its saved rules copy anyone."""
+    with _boxes_lock:
+        box = _boxes.get(sid)
+        new = box is None
+        if box is None:
+            box = _boxes[sid] = Sandbox(sid)
+    box.visit()
+    if new and box.load_rules()["traders"]:
+        box.apply_rules()
+    return box
+
+
+def _set_sid(response: Response, sid: str) -> None:
+    response.set_cookie(SID_COOKIE, sid, max_age=SID_MAX_AGE_S, httponly=True, samesite="lax", secure=True)
+
+
+def me(request: Request, response: Response) -> Sandbox:
+    """The visitor's sandbox: the one local sandbox, or (hosted) their browser's, made on their first visit."""
+    if not HOSTED:
+        return sandbox(LOCAL)
+    sid = request.cookies.get(SID_COOKIE, "")
+    if not _SID.fullmatch(sid):
+        sid = secrets.token_hex(16)
+        _set_sid(response, sid)
+    return sandbox(sid)
+
+
+def resume_copying() -> None:
+    """On start: the local sandbox, or every browser that was copying and was here in the last two weeks."""
+    if not HOSTED:
+        sandbox(LOCAL)
+        return
+    now = time.time()
+    for f in (STORE_DIR / "visitors").glob("*/copy-rules.json"):
+        sid, last = f.parent.name, f.stat().st_mtime
+        if _SID.fullmatch(sid) and now - last < IDLE_S:
+            sandbox(sid).seen = last
+
+
+def _tidy(now: float) -> None:
+    """Hosted: close sandboxes nobody is using, and stop copying for browsers away two weeks."""
+    if not HOSTED:
+        return
+    with _boxes_lock:
+        gone = [b for b in _boxes.values() if now - b.seen > (IDLE_S if b.copiers else FORGET_S)]
+        for b in gone:
+            del _boxes[b.sid]
+    for b in gone:
+        with _lock:
+            b.copiers.clear()
+            b.close()
+
+
+# ---- copying ----
+# Copy rules are set once per sandbox: which traders, contracts a trade and how far above their price to pay.
+# Each trader is copied where they bet: a Polymarket trader on the same Polymarket market, a Kalshi trader on
+# the same Kalshi market (needs a Kalshi key). One background loop polls every sandbox's copiers and copies
+# each new buy with fake money.
+
+_loop_thread: threading.Thread | None = None
+_loop_stop = threading.Event()
+
+
+def _start_loop() -> None:
     global _loop_thread
-    rules = load_rules()
-    with _lock:
-        _copiers.clear()
-        for t in rules["traders"]:
-            _copiers[_key(t["venue"], t["id"])] = _make_copier(rules, t)
-    if _copiers and (_loop_thread is None or not _loop_thread.is_alive()):
+    if _loop_thread is None or not _loop_thread.is_alive():
         _loop_stop.clear()
         _loop_thread = threading.Thread(target=_copy_loop, daemon=True)
         _loop_thread.start()
 
 
-def _record(cp: Copier, events: list[Any]) -> None:
-    for e in events:
-        _record_one(e, cp.trader.to_dict())
-
-
-def _record_one(e: Any, trader: dict[str, Any]) -> dict[str, Any]:
-    """Keep a copy event for the page, and every copied trade in copied.jsonl for My trades."""
-    d: dict[str, Any] = e.to_dict() | {"trader": trader}
-    _recent.append(d)
-    if e.status == "copied":
-        with copied_file().open("a") as f:
-            f.write(json.dumps(d) + "\n")
-        _copied_cache["at"] = 0.0  # a new row: work it out again on the next read
-    del _recent[:-200]
-    return d
-
-
 def _copy_loop() -> None:
     while not _loop_stop.is_set():
-        for key, cp in list(_copiers.items()):
-            st = _status.setdefault(key, {})
-            if _copiers.get(key) is not cp:
-                continue  # the rules changed since this pass began
-            try:
-                # Not under _lock: a poll can take seconds (Layer matching is paced), and the paper store
-                # locks itself. Only this thread polls, so copiers never run at once.
-                events = cp.poll()
-                with _lock:
-                    _record(cp, events)
-                st.update(checked_at=time.time(), error=None)
-            except VenueError as e:
-                st["error"] = e.message
-            except Exception as e:  # keep copying through a bad read; show it on the page
-                st["error"] = str(e)
+        for box in list(_boxes.values()):
+            for key, cp in list(box.copiers.items()):
+                st = box.status.setdefault(key, {})
+                if box.copiers.get(key) is not cp:
+                    continue  # the rules changed since this pass began
+                try:
+                    # Not under _lock: a poll can take seconds (Layer matching is paced), and the paper store
+                    # locks itself. Only this thread polls, so copiers never run at once.
+                    events = cp.poll()
+                    with _lock:
+                        for e in events:
+                            box.record(e, cp.trader.to_dict())
+                    st.update(checked_at=time.time(), error=None)
+                except VenueError as e:
+                    st["error"] = e.message
+                except Exception as e:  # keep copying through a bad read; show it on the page
+                    st["error"] = str(e)
+        _tidy(time.time())
         _loop_stop.wait(5)
 
 
 @app.get("/api/copy")
-def copy_state() -> dict[str, Any]:
-    rules = load_rules()
+def copy_state(box: Sandbox = Depends(me)) -> dict[str, Any]:
+    rules = box.load_rules()
     now = time.time()
     for t in rules["traders"]:
-        st = _status.get(_key(t["venue"], t["id"]), {})
+        st = box.status.get(_key(t["venue"], t["id"]), {})
         t["checked_s_ago"] = None if st.get("checked_at") is None else round(now - st["checked_at"], 1)
         t["error"] = st.get("error")
-    return {"rules": rules, "recent": list(reversed(_recent[-50:]))}
+    return {"rules": rules, "recent": list(reversed(box.recent[-50:]))}
 
 
 @app.put("/api/copy/rules")
-def set_rules(req: CopyRules) -> dict[str, Any]:
-    rules = load_rules() | req.model_dump()
-    save_rules(rules)
-    apply_rules()
-    return copy_state()
+def set_rules(req: CopyRules, box: Sandbox = Depends(me)) -> dict[str, Any]:
+    box.save_rules(box.load_rules() | req.model_dump())
+    box.apply_rules()
+    return copy_state(box)
 
 
 @app.post("/api/copy/traders")
-def add_trader(req: CopyTrader) -> dict[str, Any]:
-    rules = load_rules()
-    rules["traders"] = [t for t in rules["traders"] if _key(t["venue"], t["id"]) != _key(req.venue, req.id)]
-    rules["traders"].append(req.model_dump())
-    save_rules(rules)
-    apply_rules()
-    return copy_state()
+def add_trader(req: CopyTrader, box: Sandbox = Depends(me)) -> dict[str, Any]:
+    rules = box.load_rules()
+    others = [t for t in rules["traders"] if _key(t["venue"], t["id"]) != _key(req.venue, req.id)]
+    if HOSTED and len(others) >= MAX_TRADERS:
+        raise HTTPException(400, detail=f"You can copy up to {MAX_TRADERS} traders at a time. Stop one to add another.")
+    if HOSTED and not box.copiers and sum(1 for b in list(_boxes.values()) if b.copiers) >= MAX_COPYING:
+        raise HTTPException(503, detail="Copying is full right now. Try again later.")
+    rules["traders"] = [*others, req.model_dump()]
+    box.save_rules(rules)
+    box.apply_rules()
+    return copy_state(box)
+
+
+@app.delete("/api/copy/traders/{venue}/{trader_id}")
+def remove_trader(venue: str, trader_id: str, box: Sandbox = Depends(me)) -> dict[str, Any]:
+    rules = box.load_rules()
+    rules["traders"] = [t for t in rules["traders"] if _key(t["venue"], t["id"]) != _key(venue, trader_id)]
+    box.save_rules(rules)
+    box.apply_rules()
+    return copy_state(box)
 
 
 # ---- copy one trade now (a Feed trade the trader already made), with a payout preview ----
@@ -498,83 +635,72 @@ def _their_trade(req: OneTrade) -> WhaleTrade:
 
 
 @app.post("/api/trade/preview")
-def trade_preview(req: OneTrade) -> dict[str, Any]:
+def trade_preview(req: OneTrade, box: Sandbox = Depends(me)) -> dict[str, Any]:
     """What copying this trade now would cost and pay, on the same Polymarket market. Sends nothing."""
     if req.spend is not None and req.spend <= 0:
         raise HTTPException(400, detail="Enter an amount above $0.")
-    rules = load_rules()
+    rules = box.load_rules()
     try:
-        p = paper().whales.preview_copy(_their_trade(req), **_sized(req, rules))
+        p = box.paper().whales.preview_copy(_their_trade(req), **_sized(req, rules))
     except VenueError as e:
         raise venue_error(e) from e
     return p.to_dict()
 
 
 @app.post("/api/trade/copy")
-def trade_copy(req: OneTrade) -> dict[str, Any]:
+def trade_copy(req: OneTrade, box: Sandbox = Depends(me)) -> dict[str, Any]:
     """Buy this trade now in the sandbox, if the price is still at most 3¢ above theirs."""
     if req.spend is not None and req.spend <= 0:
         raise HTTPException(400, detail="Enter an amount above $0.")
-    rules = load_rules()
+    rules = box.load_rules()
     try:
-        e = paper().whales.copy_trade(_their_trade(req), **_sized(req, rules))
+        e = box.paper().whales.copy_trade(_their_trade(req), **_sized(req, rules))
     except VenueError as err:
         raise venue_error(err) from err
     with _lock:
-        return _record_one(e, {"venue": "polymarket", "id": req.wallet, "name": req.name or req.wallet})
-
-
-@app.delete("/api/copy/traders/{venue}/{trader_id}")
-def remove_trader(venue: str, trader_id: str) -> dict[str, Any]:
-    rules = load_rules()
-    rules["traders"] = [t for t in rules["traders"] if _key(t["venue"], t["id"]) != _key(venue, trader_id)]
-    save_rules(rules)
-    apply_rules()
-    return copy_state()
+        return box.record(e, {"venue": "polymarket", "id": req.wallet, "name": req.name or req.wallet})
 
 
 COPIED_TTL_S = 30
-_copied_cache: dict[str, Any] = {"at": 0.0, "data": None}
-_copied_lock = threading.Lock()  # one valuation at a time
 
 
 @app.get("/api/copied")
-def copied() -> dict[str, Any]:
+def copied(box: Sandbox = Depends(me)) -> dict[str, Any]:
     """One row per copied trade with its status (open / won / lost) and profit after fees, newest first.
 
     Valuing open bets reads each market's book, and Polymarket US can ask us to wait 10 s, so the answer
     is kept for 30 s and, while a new one is worked out, the last one is served.
     """
-    hit = _copied_cache["data"]
+    hit = box.copied_cache["data"]
     if hit is None:  # the first answer is worth waiting for
-        with _copied_lock:
-            return _copied_cache["data"] or _copied_refresh()
-    if time.time() - _copied_cache["at"] >= COPIED_TTL_S:
-        threading.Thread(target=_copied_background, daemon=True).start()
-    return hit
+        with box.copied_lock:
+            return box.copied_cache["data"] or _copied_refresh(box)
+    if time.time() - box.copied_cache["at"] >= COPIED_TTL_S:
+        threading.Thread(target=_copied_background, args=(box,), daemon=True).start()
+    return hit  # type: ignore[no-any-return]
 
 
-def _copied_refresh() -> dict[str, Any]:
-    data = _copied_now()
-    _copied_cache.update(at=time.time(), data=data)
+def _copied_refresh(box: Sandbox) -> dict[str, Any]:
+    data = _copied_now(box)
+    box.copied_cache.update(at=time.time(), data=data)
     return data
 
 
-def _copied_background() -> None:
-    if not _copied_lock.acquire(blocking=False):
+def _copied_background(box: Sandbox) -> None:
+    if not box.copied_lock.acquire(blocking=False):
         return  # already being worked out
     try:
-        _copied_refresh()
+        _copied_refresh(box)
     except Exception:  # keep serving the last answer; the next read tries again
         pass
     finally:
-        _copied_lock.release()
+        box.copied_lock.release()
 
 
-def _copied_now() -> dict[str, Any]:
+def _copied_now(box: Sandbox) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
-    if copied_file().exists():
-        for line in copied_file().read_text().splitlines():
+    if box.copied_file().exists():
+        for line in box.copied_file().read_text().splitlines():
             try:
                 rows.append(json.loads(line))
             except ValueError:
@@ -582,7 +708,7 @@ def _copied_now() -> dict[str, Any]:
     ids = [r["order_id"] for r in rows if r.get("order_id")]
     try:
         # No engine lock: the paper store locks itself, and the copy loop can hold _lock for seconds.
-        results = paper().whales.copy_results(ids) if ids else {}
+        results = box.paper().whales.copy_results(ids) if ids else {}
     except VenueError as e:
         raise venue_error(e) from e
     out = []
@@ -673,8 +799,10 @@ def _compare(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 @app.get("/api/paper")
-def paper_account() -> dict[str, Any]:
-    p = paper().pnl()
+def paper_account(box: Sandbox = Depends(me)) -> dict[str, Any]:
+    if not box.has_account():  # nothing copied yet: don't make a sandbox just to say it's empty
+        return {"net": 0.0, "realized": 0.0, "unrealized": 0.0, "fees": 0.0, "rows": []}
+    p = box.paper().pnl()
     return {
         "net": p.net,
         "realized": p.realized,
@@ -697,26 +825,21 @@ def paper_account() -> dict[str, Any]:
 
 
 @app.post("/api/paper/reset")
-def paper_reset() -> dict[str, Any]:
+def paper_reset(box: Sandbox = Depends(me)) -> dict[str, Any]:
     """Start the sandbox over: no positions, no copied trades and nobody copied. The size and price limits stay."""
-    global _paper
-    with _lock:
-        _copiers.clear()
-        save_rules(load_rules() | {"traders": []})
-        if _paper is not None:
-            _paper.close()
-            _paper = None
-        (STORE_DIR / "paper.db").unlink(missing_ok=True)
-        copied_file().unlink(missing_ok=True)
-        _recent.clear()
-        _copied_cache.update(at=0.0, data=None)
-    apply_rules()
-    return paper_account()
+    box.reset()
+    box.apply_rules()
+    return paper_account(box)
 
 
 @app.get("/")
-def index() -> FileResponse:
-    return FileResponse(HERE / "static" / "index.html")
+def index(request: Request) -> FileResponse:
+    page = FileResponse(HERE / "static" / "index.html")
+    if HOSTED:  # the page's API calls then all carry the same browser id
+        sid = request.cookies.get(SID_COOKIE, "")
+        _set_sid(page, sid if _SID.fullmatch(sid) else secrets.token_hex(16))
+        page.headers["Cache-Control"] = "private, no-store"  # never cached in front of us: the cookie is theirs
+    return page
 
 
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")  # the font

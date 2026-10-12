@@ -3,8 +3,9 @@
 See the biggest traders on Kalshi and Polymarket, open one to see their trades, check whether they trade on the
 other venue too, and copy their next trades in a sandbox.
 
-Built on the [uselayer](https://uselayer.sh) Python SDK (`client.whales`). It runs on your machine: nothing
-is hosted, and copies run in a sandbox (real prices and fees, no real money).
+Built on the [uselayer](https://uselayer.sh) Python SDK (`client.whales`). Run it on your machine, or use the
+hosted version at [usesignals.app](https://usesignals.app). Either way copies run in a sandbox (real prices and
+fees, no real money).
 
 ## Run it
 
@@ -57,7 +58,7 @@ Three tabs. It answers one question: what are the best traders trading right now
     be the same person, each with the evidence (the same name or X handle on an account that really trades,
     and trades in the same market, the same way, within 5 minutes). It's an inference, never a confirmed
     identity.
-- **My trades**: the traders you copy, saved on your machine. Every new buy they make becomes a sandbox order in
+- **My trades**: the traders you copy, saved on your machine (hosted: in your browser's own sandbox). Every new buy they make becomes a sandbox order in
   the same market where they made it: a Polymarket trader's on Polymarket, a Kalshi trader's on Kalshi (5
   contracts, at most 3¢ above their price), held until the market settles. A Polymarket copy fills at
   Polymarket's best price, with its taker fee, from its public market data. One row per copied trade with its
@@ -65,6 +66,21 @@ Three tabs. It answers one question: what are the best traders trading right now
   their price are skipped with the reason.
 
 Traders without a name show as "Trader 0x91…76" with a generated avatar: the page never shows wallet addresses.
+
+## Hosting
+
+usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
+
+- **Railway** runs the engine from the `Dockerfile` (one process, `railway.json`), with a volume at `/data` for
+  the store. Set `LAYER_API_KEY` in the service's variables; keys never reach the browser.
+- **Vercel** holds the domain and forwards every request to Railway (`web/vercel.json`, deployed from `web/`).
+  Caching is off there, so each browser keeps its own cookie.
+- **No signup**: each browser gets its own sandbox, found by an anonymous cookie and kept in
+  `/data/visitors/<id>`. Clearing cookies or switching browsers starts a new one.
+- **Limits**: a browser copies up to 5 traders at once (`SIGNALS_MAX_TRADERS`), up to 300 browsers copy at once
+  (`SIGNALS_MAX_COPYING`), and copying pauses for a browser away two weeks until it's back. Trades of a trader
+  copied by many browsers are read once per round. "Check again" on Worth following only starts a new check
+  when the last one is over an hour old.
 
 ## Good to know
 
