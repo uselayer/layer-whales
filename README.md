@@ -30,7 +30,13 @@ Then open http://127.0.0.1:8790.
 
 ## What's on the page
 
-Three tabs. It answers one question: what are the best traders trading right now, and can you still get in?
+Signals helps you find traders worth following and understand why: who they are, how they trade, and what the
+evidence does and doesn't show. Copying a trader in the sandbox is optional, a way to test them; it isn't a
+promise of profit.
+
+The first visit asks one question, which markets interest you (Politics, Sports, Crypto, Esports, or Skip for all
+markets), then opens Traders → Worth following. The choice is kept in your browser; **Change** on that page picks
+again. Then three tabs:
 
 - **Feed**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp or Rising, one
   card per trade: the market, their pick, what they paid, the price now, how much they put in, and one status
@@ -42,10 +48,16 @@ Three tabs. It answers one question: what are the best traders trading right now
   **Copy trader** copies that trader's next trades in the sandbox; a trade they already made isn't copied.
   It updates every 30 seconds; Polymarket shows trades a few minutes late.
 - **Traders**:
-  - **Worth following**: Polymarket traders ranked by tier (Proven sharp, Quiet sharp, Rising, Too fast to
-    copy, Lucky), with their profit over 30 days, whether they beat the odds, and what you'd have made a
-    contract copying them. "How we pick traders" explains the checks in plain words. Market makers and
-    arbitrage are left out. Wallets come from the leaderboards and from busy markets' trades. The first check
+  - **Worth following**: Polymarket traders in the markets you picked, in two groups. **Worth exploring**
+    (Proven sharp, Quiet sharp, Rising): the price tends to move their way after they buy; Rising means early
+    signs, too few trades to be sure. **Too fast to copy**: the price moves within minutes of their buys, so a
+    copy usually comes too late; worth watching, and copying isn't offered. Each row shows their profit over 30
+    days, whether they beat the odds, and what you'd have made a contract copying them. A trader matches your
+    markets when it's the category they trade most or one they're strong in. Lucky traders (big profit without
+    skill), market makers, arbitrage and traders with no clear edge are left out; the footer counts them and how
+    many traders match your markets. An empty group says so and offers **Show all markets**; the checks are
+    never loosened to fill it. "How we pick traders" explains the checks in plain words. Wallets come from the
+    leaderboards and from busy markets' trades. The first check
     takes 20–30 minutes and is kept in the store dir, so later launches show the last result at once while a
     new check runs in the background (on launch if it's over 6 hours old, then every 6 hours while the app is
     open). Scoring is `client.whales.discover()` / `score()` in the SDK.

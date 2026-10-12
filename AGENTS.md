@@ -13,8 +13,17 @@ engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting")
   browser see or change another's sandbox, and never let a response that sets the cookie be cached.
 - Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.
 - Never say a link *is* someone: show the tier ("likely" / "possible") and the evidence.
-- The page is a consumer app, not an analyst's spreadsheet. It answers one question: "What are the best traders
-  trading right now, and can I still get in?" Three tabs (Feed, Traders, My trades) and a "Sandbox" pill.
+- The page is a consumer app, not an analyst's spreadsheet. It helps people find traders worth following and
+  understand why: who they are, how they trade, and what the evidence does and doesn't show. Sandbox copying is
+  optional, a way to test a trader; nothing on the page may imply that copying makes money. Three tabs (Feed,
+  Traders, My trades) and a "Sandbox" pill.
+  - Onboarding (first visit, once per browser) asks one question: which markets interest you (Politics, Sports,
+    Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
+    localStorage, every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
+    ever stuck on that screen.
+  - Worth following has two groups, in this order: "Worth exploring" (Proven sharp, Quiet sharp, Rising) and "Too
+    fast to copy". Recommendations never include Lucky, No clear edge or No view traders, and the checks are never
+    loosened to fill a group: an empty group says so and names the interests that had no one.
   - Words: say "trade", never "bet"; say "sandbox", never "paper money" or "paper" (real prices and fees, no real
     money). The copy button says "Copy trader" / "Copying trader ✓": copying copies a trader's next trades.
     Copying a trade they already placed is not built, so no label may imply it.
