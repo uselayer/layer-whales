@@ -1017,9 +1017,13 @@ async function minePage() {
     ${skipped.length ? `<details class="fold"><summary>Not copied (${skipped.length} recent)</summary><div class="list">${skipped.map((e) => `<div class="row"><div><div class="t">${esc(e.source.title || e.source.market)}</div>
       <div class="s"><span class="name" style="font-weight:500">${esc(displayName(e.trader.name, e.trader.id))}</span> · ${esc(sdkText(e.reason))}</div></div><div class="r s">${ago(e.at)}</div></div>`).join("")}</div></details>` : ""}
 
-    <p class="foot-note" style="margin-top:32px;text-align:center"><button class="link" id="reset" style="font-weight:400">Reset the sandbox</button><br>Clears positions and copied trades. The traders you copy stay.</p>`;
+    <p class="foot-note" style="margin-top:32px;text-align:center"><button class="btn ghost small" id="reset">Reset the sandbox</button><br>Stops copying everyone and clears your copied trades, so you can start fresh.</p>`;
   $$("[data-rm]").forEach((b) => (b.onclick = async () => { const [v, id] = b.dataset.rm.split("/"); await stopCopy(v, id); minePage(); }));
-  $("#reset").onclick = async () => { $("#reset").disabled = true; await api("/api/paper/reset", { method: "POST" }); minePage(); };
+  $("#reset").onclick = async () => {
+    const who = r.traders.length ? `stop copying ${plural(r.traders.length, "trader")} and ` : "";
+    if (!confirm(`Start over? This will ${who}clear all your copied trades. You can't undo it.`)) return;
+    $("#reset").disabled = true; await api("/api/paper/reset", { method: "POST" }); minePage();
+  };
 }
 
 // ---- routing ----
