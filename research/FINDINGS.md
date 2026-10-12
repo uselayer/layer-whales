@@ -51,3 +51,40 @@ What it says:
 
 Segments in that run (before the "lucky needs evidence" fix): 1 proven, 1 quiet, 3 rising, 16 too fast,
 62 lucky, 34 no view, 43 no clear edge.
+
+# Overlooked traders: can we find them, and does following them pay? (2026-10-12)
+
+`overlooked_candidates.py` found wallets on no leaderboard we can read (monthly/weekly/all-time profit and volume,
+8 category boards: 3,034 wallets excluded), seen trading in 3+ of 300 open markets sampled evenly across the
+volume range, median trade $5–$2,000. `overlooked_score.py` scored 250 of them plus 60 random leaderboard
+wallets with the unchanged scorer twice: window A (13 Aug–12 Sep) to select, window B (12 Sep–12 Oct) to see
+what following the picks would have done. Rules and the success bar were written down before any window-B
+result was seen: `overlooked-preregistered.md`. Output: `overlooked-results.txt`; raw scores
+`overlooked-scores.jsonl.gz` (both windows, every checked bet); run log `overlooked-run.log`.
+
+| Picked on window A by | Overlooked picks | Copy in window B, after fees | Holding to settlement |
+|---|---|---|---|
+| Everyone (baseline) | 250 | −0.63¢ ± 0.27¢ (11,217 events) | +0.31¢ ± 0.95¢ |
+| R1 SDK tiers: proven / quiet / rising | 11 | −0.40¢ ± 2.01¢ (434) | −2.01¢ ± 4.86¢ |
+| R2 beats the price (5-min edge, z ≥ 2) | 22 | **−1.47¢ ± 0.97¢** (817) | −1.33¢ ± 3.25¢ |
+| R3 copying paid (copy z ≥ 1) | 15 | −0.03¢ ± 1.24¢ (660) | +0.94¢ ± 4.00¢ |
+
+What it says:
+1. Finding them works: 11 of 250 overlooked wallets (4%) get a following tier, about the leaderboard rate
+   (2 of 60). 171 of the 250 are small accounts (volume < $1M, profit < $100k), which the 12 Oct Worth
+   following run almost never reached (13 of 200).
+2. Following them doesn't pay: no rule met the pre-registered bar (window-B copy > 0 with z ≥ 2). Picking on
+   "beats the price" was worse than picking no one, and worst on small accounts (−2.43¢ ± 1.25¢, 12 wallets).
+3. Nothing carries over month to month for these wallets: window A predicts window B at +0.06 for the 5-min
+   edge and +0.06 for copy (197 wallets with 15+ bets in both). Leaderboard picks did keep their 5-min edge
+   (R2: +2.19¢ ± 1.21¢ in B), but not a copier's gain (−0.49¢ ± 1.86¢).
+4. Tiny trades in thin markets can pass as skill: the one overlooked Quiet sharp (about $2 a trade, Sports)
+   showed +24¢ within 5 minutes in A and −21¢ in B (copy −8.6¢). Price history in thin markets is a poor
+   stand-in for what a copier could buy.
+
+Limits:
+- Not proof it can't work: R1's margin can't rule out a real copy edge up to ~1.6¢ a contract. One two-month
+  test, 30-day windows, 60 checked bets per wallet per window.
+- Pool is wallets active in currently open markets, so it requires activity in window B (not success).
+- Copy is valued at the hour mark with Polymarket's taker fee; holding to settlement is on the bets in the
+  sample that settled.
