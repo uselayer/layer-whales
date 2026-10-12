@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn>=0.30",
-  "uselayer>=0.5.4",  # client.whales: top traders, scores, copy trading (0.5.4: copy a trade by dollars)
+  "uselayer>=0.5.5",  # client.whales: top traders, scores, copy trading (0.5.5: copies priced from the order book, side matched by token)
 ]
 
 [project.scripts]

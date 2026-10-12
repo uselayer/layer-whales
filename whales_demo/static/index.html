@@ -319,7 +319,8 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // Sentences the SDK writes (reasons, checks, evidence) say "bet"; the page says "trade".
-const sdkText = (t) => String(t ?? "").replace(/\b([Bb])et(s?)\b/g, (_, b, s) => (b === "B" ? "Trade" : "trade") + s);
+const sdkText = (t) => String(t ?? "").replace(/\b([Bb])et(s?)\b/g, (_, b, s) => (b === "B" ? "Trade" : "trade") + s)
+  .replace(/\bat (0\.\d+) or better\b/g, (_, x) => `at ${Math.round(parseFloat(x) * 1000) / 10}¢ or better`);
 const VENUE = { kalshi: "Kalshi", polymarket: "Polymarket", polymarket_us: "Polymarket US" };
 const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
 
@@ -490,7 +491,7 @@ function tradeSheet(b) {
   const panel = sheet(`
     <h2>${esc(b.title || "Untitled market")}</h2>
     ${b.outcome ? `<div style="margin-top:10px"><span class="chip">${esc(b.outcome)}</span></div>` : ""}
-    <div style="margin-top:18px">${statusLine(b.status)}<p class="explain">${statusExplain(b)}</p></div>
+    <div style="margin-top:18px" id="sheetstatus">${statusLine(b.status)}<p class="explain">${statusExplain(b)}</p></div>
     <div class="kv">
       <div><span>Bought at</span><b>${paid}</b></div><div><span>Price now</span><b>${now}</b></div>
       <div><span>They put in</span><b>${usd(b.usd)}</b></div><div><span>Contracts</span><b>${b.size != null ? Math.round(b.size).toLocaleString() : "—"}</b></div>
@@ -507,12 +508,19 @@ function tradeSheet(b) {
 }
 
 // "Copy this trade": buy the trade on the card now, in the sandbox, after a look at what it pays.
-const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at, size: b.size, usd: b.usd });
+const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at, size: b.size, usd: b.usd, token: b.token });
 // The two ways it can end, in the outcome's own words: "If it ends No" / "If it ends Yes", or "If Jets wins" / "If not".
 const yesNo = (o) => /^(yes|no)$/i.test(o || "");
 const ifWins = (o) => !o ? "If it wins" : yesNo(o) ? `If it ends ${esc(o)}` : `If ${esc(o)} wins`;
 const ifLoses = (o) => yesNo(o) ? `If it ends ${/^yes$/i.test(o) ? "No" : "Yes"}` : "If not";
 const PICKS = [10, 50, 100];
+// "Your $50 fills at 34.2¢ on average, 0.5¢ above what they paid. With the fee, 35.3¢ a contract against their 33.7¢."
+function fillExplain(p, b, spend) {
+  const c = (x) => `${Math.round(x * 1000) / 10}¢`;
+  const d = p.price - b.price, gap = Math.abs(d) < 0.0005 ? "about what they paid" : `${c(Math.abs(d))} ${d > 0 ? "above" : "below"} what they paid`;
+  const allIn = p.total / p.contracts;
+  return `Your ${money(spend)} fills at ${c(p.price)}${p.worst_price > p.price + 0.0005 ? " on average" : ""}, ${gap}. With the fee, ${c(allIn)} a contract against their ${c(b.price)}.`;
+}
 // Money you put in or get back, to the cent: "$49.91", "+$42.09".
 const money = (x, signed = false) => x == null ? "—" : `${x < 0 ? "−" : signed && x > 0 ? "+" : ""}$${Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 async function copyNowBox(box, b, amount = 10) {
@@ -523,6 +531,9 @@ async function copyNowBox(box, b, amount = 10) {
     <div id="pv"><div class="skel" style="width:70%;height:14px"></div></div>
     <button class="btn wide" id="docopynow" disabled>Copy this trade</button>`;
   const input = $("#amt", box), pv = $("#pv", box), btn = $("#docopynow", box);
+  const top = document.getElementById("sheetstatus"), before = top ? top.innerHTML : "";
+  const setTop = (st, why) => { if (top) top.innerHTML = `${STATUS[st] ? statusLine(st) : `<span class="status moved"><i></i>${esc(st)}</span>`}<p class="explain">${esc(why)}</p>`; };
+  const resetTop = () => { if (top) top.innerHTML = before; };
   let seq = 0, timer = null, ready = null; // ready: the amount the preview on screen is for, if it can be copied
   const spendNow = () => { const v = parseFloat(String(input.value).replace(/[$,\s]/g, "")); return Number.isFinite(v) ? Math.round(v * 100) / 100 : null; };
   const show = async () => {
@@ -534,17 +545,29 @@ async function copyNowBox(box, b, amount = 10) {
     try { p = await post("/api/trade/preview", { ...oneTrade(b), spend }); }
     catch (e) { if (my === seq) pv.innerHTML = `<p class="inline-err">${esc(e.message)}</p>`; return; }
     if (my !== seq || !box.isConnected) return; // a newer amount is on its way
-    if (!p.ok) { pv.innerHTML = `<p>${esc(sdkText(p.reason))}</p>`; return; }
-    pv.innerHTML = `<p>${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} on Polymarket, at the cheapest price for sale now.</p>
+    if (!p.ok) {
+      const room = p.depth_checked && p.max_spend > 0 ? Math.floor(p.max_spend * 100) / 100 : 0;
+      if (p.depth_checked) setTop(room ? "Not enough for sale for this amount" : "Price moved away", sdkText(p.reason));
+      pv.innerHTML = p.depth_checked
+        ? (room >= 1 ? `<p><button type="button" class="btn ghost small" id="useroom">Use ${money(room)} instead</button></p>` : `<p>Nothing is for sale close to their price right now.</p>`)
+        : `<p>${esc(sdkText(p.reason))}</p>`;
+      const use = $("#useroom", pv);
+      if (use) use.onclick = () => { input.value = room.toFixed(2); clearTimeout(timer); show(); };
+      return;
+    }
+    if (p.depth_checked) setTop("in", fillExplain(p, b, spend));
+    else resetTop();
+    const avg = Math.round(p.price * 1000) / 10, worst = p.worst_price != null ? Math.round(p.worst_price * 1000) / 10 : avg;
+    pv.innerHTML = `<p>${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} on Polymarket, ${p.depth_checked ? "priced from what's for sale right now" : "at the cheapest price for sale now"}.</p>
       <div class="receipt">
-        <div><span>${plural(p.contracts, "contract")} × ${Math.round(p.price * 1000) / 10}¢</span><b>${money(p.cost)}</b></div>
+        <div><span>${plural(p.contracts, "contract")} × ${worst > avg ? `${avg}¢ average` : `${avg}¢`}</span><b>${money(p.cost)}</b></div>
         <div><span>Polymarket fee</span><b>${p.fee > 0 ? money(p.fee) : "No fee"}</b></div>
         <div class="total"><span>Total</span><b>${money(p.total)}</b></div>
       </div>
       <div class="kv" style="margin:0 0 14px">
         <div><span>${ifWins(b.outcome)}</span><b>You get ${money(p.payout)}</b></div><div><span>${ifLoses(b.outcome)}</span><b>You lose ${money(p.total)}</b></div>
       </div>
-      <p style="margin-top:-6px">That's ${money(p.profit_if_win, true)} if it wins. Each contract pays $1 if it wins and nothing if it loses.${p.total >= 100 ? " Polymarket doesn't show how many contracts are for sale at this price, so a real order this size might fill higher." : ""}</p>`;
+      <p style="margin-top:-6px">That's ${money(p.profit_if_win, true)} if it wins. Each contract pays $1 if it wins and nothing if it loses.${!p.depth_checked && p.total >= 100 ? " Polymarket's order book couldn't be read just now, so a real order this size might fill higher." : ""}</p>`;
     ready = spend; btn.disabled = false;
   };
   const later = () => { clearTimeout(timer); btn.disabled = true; timer = setTimeout(show, 350); };
