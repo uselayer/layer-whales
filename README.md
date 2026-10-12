@@ -1,4 +1,4 @@
-# Layer Whales
+# Signals
 
 See the biggest traders on Kalshi and Polymarket, open one to see their trades, check whether they trade on the
 other venue too, and copy their next trades in a sandbox.

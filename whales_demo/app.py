@@ -38,7 +38,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _worth_stop.set()
 
 
-app = FastAPI(title="Layer Whales", lifespan=lifespan)
+app = FastAPI(title="Signals", lifespan=lifespan)
 reads = Client(store=":memory:")  # leaderboards, traders, links: reads only
 _paper: Client | None = None
 _lock = threading.Lock()  # one copier and the paper store at a time
@@ -723,7 +723,7 @@ app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")  # t
 
 def main() -> None:
     port = int(os.environ.get("WHALES_PORT", "8790"))
-    print(f"Layer Whales on http://127.0.0.1:{port}  (paper store: {STORE_DIR})")
+    print(f"Signals on http://127.0.0.1:{port}  (paper store: {STORE_DIR})")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 

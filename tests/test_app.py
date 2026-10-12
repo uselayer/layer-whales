@@ -37,7 +37,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
 
 
 def test_pages_and_reads(api: TestClient) -> None:
-    assert "Layer Whales" in api.get("/").text
+    assert "Signals" in api.get("/").text
     assert api.get("/api/top").json()[0]["name"] == "amy"
     assert api.get("/api/trading-now").json()[0]["trader"] == "amy"
     d = api.get("/api/trader/kalshi/amy").json()
