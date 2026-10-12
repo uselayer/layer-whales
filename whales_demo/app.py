@@ -292,7 +292,7 @@ def live() -> dict[str, Any]:
                 t.market,
                 {"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
                  "market": t.market, "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at,
-                 "usd": 0.0, "size": 0.0, "price_now": now.get(t.market)},
+                 "usd": 0.0, "size": 0.0, "price_now": now.get(t.market), "token": t.token},
             )  # fmt: skip
             b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
         bets += [b | {"price": b["usd"] / b["size"], "at": b["at"].isoformat()} for b in one.values()]
@@ -477,6 +477,7 @@ class OneTrade(BaseModel):
     at: str | None = None
     size: float | None = None  # their contracts and dollars on this outcome (the Feed card's numbers)
     usd: float | None = None
+    token: str | None = None  # the exact outcome token they bought: the copy matches it first
     spend: float | None = None  # dollars to put in, fee included; None: the copy rules' contracts
 
 
@@ -491,7 +492,7 @@ def _their_trade(req: OneTrade) -> WhaleTrade:
     return WhaleTrade(
         venue="polymarket", trader=req.wallet, name=req.name, market=req.market, side="yes", action="buy",
         price=req.price, size=req.size or 0.0, usd=req.usd or 0.0, at=at, trade_id=f"feed:{req.wallet}:{req.market}:{req.at}",
-        title=req.title, outcome=req.outcome, url=req.url,
+        title=req.title, outcome=req.outcome, url=req.url, token=req.token,
     )  # fmt: skip
 
 

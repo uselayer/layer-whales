@@ -508,7 +508,7 @@ function tradeSheet(b) {
 }
 
 // "Copy this trade": buy the trade on the card now, in the sandbox, after a look at what it pays.
-const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at, size: b.size, usd: b.usd });
+const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at, size: b.size, usd: b.usd, token: b.token });
 // The two ways it can end, in the outcome's own words: "If it ends No" / "If it ends Yes", or "If Jets wins" / "If not".
 const yesNo = (o) => /^(yes|no)$/i.test(o || "");
 const ifWins = (o) => !o ? "If it wins" : yesNo(o) ? `If it ends ${esc(o)}` : `If ${esc(o)} wins`;

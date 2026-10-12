@@ -172,11 +172,12 @@ def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeyp
     monkeypatch.setattr(Whales, "preview_copy", preview)
     monkeypatch.setattr(Whales, "copy_trade", lambda self, trade, **kw: Event())
     body = {"wallet": "0xabc", "name": "ThorinCSGO", "market": "0xcid:1", "price": 0.52, "title": "Ducks vs. Jets",
-            "outcome": "Jets", "at": "2026-10-09T20:00:00+00:00"}  # fmt: skip
+            "outcome": "Jets", "at": "2026-10-09T20:00:00+00:00", "token": "tok-jets"}  # fmt: skip
     assert api.post("/api/trade/preview", json=body).json()["total"] == 2.71
     trade, kw = seen[0]
     assert (trade.venue, trade.market, trade.side, trade.action, trade.price) == ("polymarket", "0xcid:1", "yes", "buy", 0.52)
     assert kw == {"size": 5.0, "max_slippage": 0.03}  # the copy rules
+    assert trade.token == "tok-jets"  # the exact outcome token reaches the SDK
     api.post("/api/trade/preview", json=body | {"spend": 50})
     assert seen[1][1] == {"spend": 50.0, "max_slippage": 0.03}  # an amount from the page, fee included
     assert api.post("/api/trade/preview", json=body | {"spend": 0}).status_code == 400
