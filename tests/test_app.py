@@ -190,6 +190,37 @@ def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeyp
     api.post("/api/paper/reset")
 
 
+def test_my_trades_has_a_copy_right_after_it_is_made(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    class Event:
+        status = "copied"
+
+        def __init__(self, order_id: str) -> None:
+            self.order_id = order_id
+
+        def to_dict(self) -> dict[str, Any]:
+            return {"status": "copied", "order_id": self.order_id}
+
+    def rows(box: engine.Sandbox) -> dict[str, Any]:
+        lines = box.copied_file().read_text().splitlines() if box.copied_file().exists() else []
+        return {"rows": [json.loads(x)["order_id"] for x in lines]}
+
+    monkeypatch.setattr(engine, "_copied_now", rows)
+    who = {"venue": "polymarket", "id": "0xabc", "name": "sharpie"}
+    assert api.get("/api/copied").json()["rows"] == []  # kept for 30 s from here
+    local().record(Event("o1"), who)
+    assert api.get("/api/copied").json()["rows"] == ["o1"]  # not the answer from before the copy
+
+    def copy_while_reading(box: engine.Sandbox) -> dict[str, Any]:
+        out = rows(box)
+        box.record(Event("o2"), who)  # lands after this answer read the file
+        return out
+
+    monkeypatch.setattr(engine, "_copied_now", copy_while_reading)
+    engine._copied_refresh(local())  # e.g. the background refresh, racing a copy
+    monkeypatch.setattr(engine, "_copied_now", rows)
+    assert api.get("/api/copied").json()["rows"] == ["o1", "o2"]
+
+
 def test_my_trades_groups_repeat_copies_and_compares_with_theirs() -> None:
     def copy(at: str, size: float, usd: float, pnl: float | None, status: str = "won") -> dict[str, Any]:
         return {"at": at, "trader": {"id": "0xabc", "name": "ThorinCSGO"}, "venue": "polymarket", "market": "0xcid:1",
