@@ -123,6 +123,7 @@
   .trade-nums { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 14px; font-size: 15px; color: var(--muted); flex-wrap: wrap; }
   .trade-nums b { color: var(--fg); font-weight: 600; }
   .trade-nums .amt { color: var(--fg); font-weight: 500; white-space: nowrap; }
+  .also { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
   .trade-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); min-height: 50px; }
   .trade.compact .trade-title { font-size: 17px; margin-top: 0; }
 
@@ -508,8 +509,16 @@ function tradeCard(b, i, { who = true } = {}) {
     <h3 class="trade-title">${esc(b.title || "Untitled market")}</h3>
     ${b.outcome ? `<span class="chip">${esc(b.outcome)}</span>` : ""}
     <div class="trade-nums"><span>Bought at <b>${paid}</b><span class="sep">·</span>Now <b>${now}</b></span><span class="amt">${usd(b.usd)} in</span></div>
+    ${alsoBought(b)}
     <div class="trade-foot">${statusLine(b.status)}${act}</div>
   </article>`;
+}
+// Other traders we follow who bought the same thing (one card per trade): names only, never "the same person".
+function alsoBought(b) {
+  const names = (b.also || []).map((x) => esc(displayName(x.name, x.wallet)));
+  if (!names.length) return "";
+  const list = names.length <= 2 ? names.join(" and ") : `${names.slice(0, 2).join(", ")} and ${plural(names.length - 2, "other")}`;
+  return `<p class="also">Also bought by ${list}</p>`;
 }
 function tradeSheet(b) {
   const [paid, now] = centsPair(b.price, b.price_now);
@@ -518,6 +527,7 @@ function tradeSheet(b) {
     <h2>${esc(b.title || "Untitled market")}</h2>
     ${b.outcome ? `<div style="margin-top:10px"><span class="chip">${esc(b.outcome)}</span></div>` : ""}
     <div style="margin-top:18px" id="sheetstatus">${statusLine(b.status)}<p class="explain">${statusExplain(b)}</p></div>
+    ${alsoBought(b)}
     <div class="kv">
       <div><span>Bought at</span><b>${paid}</b></div><div><span>Price now</span><b>${now}</b></div>
       <div><span>They put in</span><b>${usd(b.usd)}</b></div><div><span>Contracts</span><b>${b.size != null ? Math.round(b.size).toLocaleString() : "—"}</b></div>
@@ -671,7 +681,7 @@ function renderFeed() {
   }
   const n = r.traders.length;
   const counts = {};
-  const pool = r.bets.filter((b) => !feed.onlyIn || b.status === "in");
+  const pool = oneCardPerTrade(r.bets).filter((b) => !feed.onlyIn || b.status === "in");
   pool.forEach((b) => { if (b.category) counts[b.category] = (counts[b.category] || 0) + 1; });
   const cats = [...BASE_CATS, ...Object.keys(counts).filter((c) => !BASE_CATS.includes(c)).sort()];
   if (!cats.includes(feed.cat)) feed.cat = "All";
@@ -704,6 +714,24 @@ function renderFeed() {
   bindActions($("#flist"));
 }
 setInterval(() => { const u = $("#updated"); if (u && feed.at) u.innerHTML = updatedAgo(feed.at); }, 5000);
+
+// Traders we follow often buy the same thing, minutes apart: one card per outcome they bought. It shows the
+// buy you can best still follow (you can still get in, then whoever bought first) and lists the others;
+// it sorts by the newest buy of the lot.
+const LEAD = { in: 0, moved: 1 };
+function oneCardPerTrade(bets) {
+  const by = new Map();
+  for (const b of bets) {
+    const k = b.token || b.market; // the exact outcome token; the outcome index is sometimes junk
+    if (!by.has(k)) by.set(k, []);
+    by.get(k).push(b);
+  }
+  return [...by.values()].map((g) => {
+    g.sort((a, b) => (LEAD[a.status] ?? 2) - (LEAD[b.status] ?? 2) || a.at.localeCompare(b.at));
+    const latest = g.reduce((m, x) => (x.at > m ? x.at : m), g[0].at);
+    return { ...g[0], also: g.slice(1).map((x) => ({ wallet: x.wallet, name: x.name })), latest };
+  }).sort((a, b) => b.latest.localeCompare(a.latest));
+}
 
 function followingSheet(traders) {
   const panel = sheet(`<h2>Following ${plural(traders.length, "trader")}</h2>
