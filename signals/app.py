@@ -842,7 +842,13 @@ def index(request: Request) -> FileResponse:
     return page
 
 
-app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")  # the font
+@app.get("/favicon.ico")
+def favicon() -> FileResponse:
+    """The in-app logo, for browsers that ask for /favicon.ico instead of reading the page's icon link."""
+    return FileResponse(HERE / "static" / "icon.svg", media_type="image/svg+xml")
+
+
+app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")  # the font and the icon
 
 
 def main() -> None:
