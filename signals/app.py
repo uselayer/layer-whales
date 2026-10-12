@@ -360,7 +360,8 @@ class Sandbox:
         self.copiers: dict[str, Copier] = {}
         self.status: dict[str, dict[str, Any]] = {}  # per trader: checked_at, error
         self.recent: list[dict[str, Any]] = []  # the last copied and skipped events, newest last
-        self.copied_cache: dict[str, Any] = {"at": 0.0, "data": None}
+        self.copied_cache: dict[str, Any] = {"at": 0.0, "data": None, "copies": 0}  # copies: as of this answer
+        self.copies = 0  # copied trades recorded since it opened: a newer one makes the cached answer stale
         self.copied_lock = threading.Lock()  # one valuation at a time
         self.seen = time.time()
         self.touched = 0.0
@@ -437,7 +438,7 @@ class Sandbox:
             self.dir.mkdir(parents=True, exist_ok=True)
             with self.copied_file().open("a") as f:
                 f.write(json.dumps(d) + "\n")
-            self.copied_cache["at"] = 0.0  # a new row: work it out again on the next read
+            self.copies += 1  # a new row: the next read waits for an answer that has it
         del self.recent[:-200]
         return d
 
@@ -669,20 +670,24 @@ def copied(box: Sandbox = Depends(me)) -> dict[str, Any]:
     """One row per copied trade with its status (open / won / lost) and profit after fees, newest first.
 
     Valuing open bets reads each market's book, and Polymarket US can ask us to wait 10 s, so the answer
-    is kept for 30 s and, while a new one is worked out, the last one is served.
+    is kept for 30 s and, while a new one is worked out, the last one is served. Not after a new copy: then
+    the last answer doesn't have it, so this waits for one that does.
     """
     hit = box.copied_cache["data"]
-    if hit is None:  # the first answer is worth waiting for
+    if hit is None or box.copied_cache["copies"] != box.copies:  # the first answer, or one after a copy
         with box.copied_lock:
-            return box.copied_cache["data"] or _copied_refresh(box)
+            if box.copied_cache["data"] is not None and box.copied_cache["copies"] == box.copies:
+                return box.copied_cache["data"]  # type: ignore[no-any-return]  # worked out while we waited
+            return _copied_refresh(box)
     if time.time() - box.copied_cache["at"] >= COPIED_TTL_S:
         threading.Thread(target=_copied_background, args=(box,), daemon=True).start()
     return hit  # type: ignore[no-any-return]
 
 
 def _copied_refresh(box: Sandbox) -> dict[str, Any]:
+    copies = box.copies  # before reading: a copy recorded meanwhile leaves this answer stale
     data = _copied_now(box)
-    box.copied_cache.update(at=time.time(), data=data)
+    box.copied_cache.update(at=time.time(), data=data, copies=copies)
     return data
 
 
