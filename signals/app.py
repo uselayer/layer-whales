@@ -11,19 +11,25 @@ Signals places no orders: it shows what copying a trade would cost, and you buy 
 
 from __future__ import annotations
 
+import base64
+import html
 import json
 import os
 import re
+import secrets
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import jwt
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -50,8 +56,12 @@ def venue_on(venue: str) -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
+    if TG_TOKEN:  # alerts: the bot's messages (connecting a chat, /list, /stop), and new buys of followed traders
+        threading.Thread(target=_bot_loop, daemon=True).start()
+        threading.Thread(target=_alert_loop, daemon=True).start()
     yield
     _worth_stop.set()
+    _follow_stop.set()
 
 
 app = FastAPI(title="Signals", lifespan=lifespan)
@@ -81,8 +91,9 @@ def venue_error(e: VenueError) -> HTTPException:
 
 @app.get("/api/config")
 def config() -> dict[str, Any]:
-    """What the page needs to know before it draws: which venues Signals reads (see VENUES)."""
-    return {"venues": list(VENUES)}
+    """What the page needs to know before it draws: which venues Signals reads (see VENUES), and Clerk's
+    publishable key when signing in (to follow traders) is switched on. The key is public by design."""
+    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN)}
 
 
 @app.get("/api/top")
@@ -623,6 +634,388 @@ def trade_preview(req: OneTrade) -> dict[str, Any]:
     if p.ok and (why := why_not_copy(req.price, p.price)):
         raise HTTPException(400, detail=why)
     return p.to_dict()  # type: ignore[no-any-return]
+
+
+# ---- following traders: sign in with Clerk (Google or Telegram), alerts on Telegram ----
+# Browsing needs no account. Following a trader is the one thing that asks you to sign in, through Clerk:
+# Google, or Telegram as a custom OpenID Connect provider, both set up in Clerk's dashboard. The page sends
+# Clerk's short-lived session token as a Bearer header and the engine checks it against Clerk's public keys,
+# so no Clerk secret lives here. Alerts go to Telegram: "Connect Telegram" gives a one-time link to our bot,
+# Start there connects that chat, and it gets a message when someone you follow buys something you can still
+# get into (bet_status "in"). Sign-in is off unless CLERK_PUBLISHABLE_KEY is set, alerts unless
+# TELEGRAM_BOT_TOKEN is. Nothing here places an order.
+
+CLERK_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+SITE = os.environ.get("SIGNALS_SITE", "https://usesignals.app")
+MAX_FOLLOWS = 20
+CODE_TTL_S = 15 * 60  # a "Connect Telegram" link works this long, once
+ALERT_EVERY_S = 30
+ALERT_MAX_AGE_S = 30 * 60  # a buy first seen later than this isn't alerted (Polymarket shows trades minutes late)
+ALERT_AGAIN_S = 6 * 3600  # one alert per trader and market in this long, however many fills
+ALERT_SPEND = 10.0  # an alert prices this many dollars, for a trader copying is offered for
+_follow_lock = threading.Lock()  # one change to follows.json at a time
+_follow_stop = threading.Event()
+_codes: dict[str, tuple[str, float]] = {}  # one-time "Connect Telegram" codes: code -> (Clerk user id, made at)
+_tg: dict[str, Any] = {"bot": None, "offset": 0, "error": None}
+_seen: dict[str, set[str]] = {}  # per followed trader: trade ids already looked at
+_alerted: dict[tuple[str, str], float] = {}  # (trader, market) -> when it was last alerted
+
+
+def clerk_frontend_api(key: str) -> str | None:
+    """The Frontend API host a publishable key names: pk_live_ + base64 of "clerk.example.com$"."""
+    m = re.fullmatch(r"pk_(?:test|live)_([A-Za-z0-9+/=_-]+)", key)
+    if not m:
+        return None
+    raw = m.group(1)
+    try:
+        host = base64.b64decode(raw + "=" * (-len(raw) % 4)).decode()
+    except ValueError:
+        return None
+    return host[:-1] if host.endswith("$") and len(host) > 1 else None
+
+
+_jwks: jwt.PyJWKClient | None = None
+
+
+def _signing_key(token: str) -> Any:
+    """Clerk's public key for this token, from the Frontend API's JWKS (fetched once, then cached)."""
+    global _jwks
+    if _jwks is None:
+        _jwks = jwt.PyJWKClient(f"https://{clerk_frontend_api(CLERK_KEY)}/.well-known/jwks.json", cache_keys=True)
+    return _jwks.get_signing_key_from_jwt(token).key
+
+
+def _origins() -> set[str]:
+    """Where a session token may come from (its ``azp``): the site, and this machine when running locally."""
+    port = os.environ.get("SIGNALS_PORT", "8790")
+    return {SITE} | (set() if HOSTED else {f"http://127.0.0.1:{port}", f"http://localhost:{port}"})
+
+
+def signed_in(request: Request) -> str:
+    """The signed-in user's Clerk id, from the page's ``Authorization: Bearer`` session token, or 401 with a
+    plain sentence. Checked here: the signature (Clerk's public keys, RS256), expiry, issuer, origin."""
+    fapi = clerk_frontend_api(CLERK_KEY)
+    if not fapi:
+        raise HTTPException(404, detail="Signing in isn't switched on here.")
+    auth = request.headers.get("authorization", "")
+    token = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
+    if not token:
+        raise HTTPException(401, detail="Sign in to follow traders.")
+    try:
+        claims = jwt.decode(token, _signing_key(token), algorithms=["RS256"], issuer=f"https://{fapi}",
+                            options={"require": ["exp", "iat", "sub"]}, leeway=5)  # fmt: skip
+    except jwt.PyJWKClientConnectionError as e:
+        raise HTTPException(503, detail="Couldn't check your sign-in just now. Try again in a minute.") from e
+    except jwt.PyJWTError as e:
+        raise HTTPException(401, detail="Your sign-in has expired. Sign in again.") from e
+    if claims.get("azp") and claims["azp"] not in _origins():
+        raise HTTPException(401, detail="Sign in on this site to follow traders.")
+    return str(claims["sub"])
+
+
+def follows_file() -> Path:
+    """Who follows whom: {"users": {Clerk user id: {"follows": [wallet, ...], "chat": Telegram chat id}}}."""
+    return STORE_DIR / "follows.json"
+
+
+def _load_follows() -> dict[str, Any]:
+    try:
+        d = json.loads(follows_file().read_text())
+    except (OSError, ValueError):
+        d = {}
+    return {"users": d.get("users") or {}}
+
+
+def _save_follows(d: dict[str, Any]) -> None:
+    STORE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = follows_file().with_suffix(".tmp")
+    tmp.write_text(json.dumps(d))
+    tmp.replace(follows_file())  # whole or not at all
+
+
+def _user(d: dict[str, Any], uid: str) -> dict[str, Any]:
+    u: dict[str, Any] = d["users"].setdefault(uid, {"follows": [], "chat": None})
+    return u
+
+
+def _private(response: Response) -> None:
+    """An answer about one signed-in person: never cached in front of us."""
+    response.headers["Cache-Control"] = "private, no-store"
+
+
+def _me_view(u: dict[str, Any]) -> dict[str, Any]:
+    return {"follows": list(u.get("follows") or []), "telegram": u.get("chat") is not None, "alerts": bool(TG_TOKEN)}
+
+
+class Follow(BaseModel):
+    wallet: str
+
+
+@app.get("/api/me")
+def me(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
+    """Who you follow, and whether Telegram alerts are connected."""
+    _private(response)
+    return _me_view(_load_follows()["users"].get(uid) or {})
+
+
+@app.post("/api/me/follows")
+def follow(req: Follow, response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
+    _private(response)
+    w = req.wallet.lower()
+    if not _WALLET.fullmatch(w):
+        raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
+    with _follow_lock:
+        d = _load_follows()
+        u = _user(d, uid)
+        if w not in u["follows"]:
+            if len(u["follows"]) >= MAX_FOLLOWS:
+                raise HTTPException(400, detail=f"You can follow up to {MAX_FOLLOWS} traders. Unfollow one to add another.")
+            u["follows"].append(w)
+            _save_follows(d)
+    return _me_view(u)
+
+
+@app.delete("/api/me/follows/{wallet}")
+def unfollow(wallet: str, response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
+    _private(response)
+    with _follow_lock:
+        d = _load_follows()
+        u = _user(d, uid)
+        if wallet.lower() in u["follows"]:
+            u["follows"].remove(wallet.lower())
+            _save_follows(d)
+    return _me_view(u)
+
+
+@app.post("/api/me/telegram")
+def connect_telegram(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
+    """A one-time link to our Telegram bot: Start there connects that chat to your alerts (CODE_TTL_S)."""
+    _private(response)
+    if not TG_TOKEN:
+        raise HTTPException(404, detail="Alerts aren't switched on here yet.")
+    bot = _bot_name()
+    if not bot:
+        raise HTTPException(503, detail="Telegram isn't answering right now. Try again in a minute.")
+    now = time.time()
+    for c in [c for c, (_, at) in _codes.items() if now - at > CODE_TTL_S]:
+        _codes.pop(c, None)
+    code = secrets.token_urlsafe(12)  # 16 characters, all allowed in a Telegram start link
+    _codes[code] = (uid, now)
+    return {"link": f"https://t.me/{bot}?start={code}"}
+
+
+def tg(method: str, **params: Any) -> Any:
+    """One Telegram Bot API call. A failure raises RuntimeError with Telegram's own words, never the token."""
+    req = urllib.request.Request(f"https://api.telegram.org/bot{TG_TOKEN}/{method}", data=json.dumps(params).encode(),
+                                 headers={"content-type": "application/json"})  # fmt: skip
+    try:
+        with urllib.request.urlopen(req, timeout=float(params.get("timeout", 0)) + 15) as r:
+            body = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read())
+        except ValueError:
+            body = {"description": f"HTTP {e.code}"}
+    except OSError as e:  # no answer: URLError, a timeout, a dropped connection
+        raise RuntimeError(f"Telegram didn't answer ({type(e).__name__})") from None
+    if not body.get("ok"):
+        raise RuntimeError(f"Telegram: {body.get('description') or 'refused'}")
+    return body.get("result")
+
+
+def _bot_name() -> str | None:
+    if _tg["bot"] is None:
+        try:
+            _tg["bot"] = tg("getMe")["username"]
+        except (RuntimeError, KeyError, TypeError):
+            return None
+    return _tg["bot"]  # type: ignore[no-any-return]
+
+
+def _say(chat: str, text: str, **kw: Any) -> None:
+    tg("sendMessage", chat_id=chat, text=text, parse_mode="HTML", disable_web_page_preview=True, **kw)
+
+
+def _who(wallet: str) -> str:
+    """A trader's name as the page shows it: their name, or "Trader 0x91…76", never a whole address."""
+    for s in (_worth_load() or {}).get("scores", []):
+        if s["wallet"] == wallet and s.get("name") and not str(s["name"]).startswith("0x"):
+            return str(s["name"])
+    return f"Trader {wallet[:4]}…{wallet[-2:]}"
+
+
+def _on_update(u: dict[str, Any]) -> None:
+    """One message or button tap sent to the bot."""
+    cb = u.get("callback_query")
+    if cb:  # "Stop alerts from …" under an alert
+        chat = str(((cb.get("message") or {}).get("chat") or {}).get("id") or "")
+        data = str(cb.get("data") or "")
+        try:
+            tg("answerCallbackQuery", callback_query_id=cb.get("id"))
+        except RuntimeError:
+            pass
+        if chat and data.startswith("unf:"):
+            w = data[4:]
+            with _follow_lock:
+                d = _load_follows()
+                for x in d["users"].values():
+                    if x.get("chat") == chat and w in x.get("follows", []):
+                        x["follows"].remove(w)
+                _save_follows(d)
+            _say(chat, f"Done: no more alerts from {html.escape(_who(w))}.")
+        return
+    msg = u.get("message") or {}
+    chat = str((msg.get("chat") or {}).get("id") or "")
+    text = str(msg.get("text") or "").strip()
+    if not chat or not text.startswith("/"):
+        return
+    cmd, _, arg = text.partition(" ")
+    cmd, arg = cmd.split("@")[0], arg.strip()
+    if cmd == "/start":
+        hit = _codes.pop(arg, None) if arg else None
+        if hit and time.time() - hit[1] <= CODE_TTL_S:
+            with _follow_lock:
+                d = _load_follows()
+                for x in d["users"].values():  # one chat belongs to one account
+                    if x.get("chat") == chat:
+                        x["chat"] = None
+                mine = _user(d, hit[0])
+                mine["chat"] = chat
+                _save_follows(d)
+            names = ", ".join(_who(w) for w in mine["follows"]) or "nobody yet"
+            _say(chat, "Connected. You'll get a message here when a trader you follow buys something you can still "
+                       f"get into at about their price.\n\nFollowing: {html.escape(names)}\n"
+                       "/list: who you follow · /stop: turn alerts off")  # fmt: skip
+        elif arg:
+            _say(chat, f"That link has expired. Tap Connect Telegram on {SITE} again.")
+        else:
+            _say(chat, f"Follow traders on {SITE}, then tap Connect Telegram there to get an alert when they buy.")
+    elif cmd == "/list":
+        mine = next((x for x in _load_follows()["users"].values() if x.get("chat") == chat), None)
+        names = [_who(w) for w in (mine or {}).get("follows", [])]
+        _say(chat, html.escape("You follow: " + ", ".join(names)) if names else f"You don't follow anyone yet. Find traders on {SITE}.")
+    elif cmd == "/stop":
+        with _follow_lock:
+            d = _load_follows()
+            for x in d["users"].values():
+                if x.get("chat") == chat:
+                    x["chat"] = None
+            _save_follows(d)
+        _say(chat, f"Alerts are off. Tap Connect Telegram on {SITE} to turn them back on.")
+
+
+def _bot_loop() -> None:
+    """Reads what people send the bot (long polling: no webhook to set up)."""
+    while not _follow_stop.is_set():
+        try:
+            updates = tg("getUpdates", offset=_tg["offset"], timeout=25, allowed_updates=["message", "callback_query"])
+            _tg["error"] = None
+        except RuntimeError as e:
+            _tg["error"] = str(e)
+            _follow_stop.wait(10)
+            continue
+        for u in updates or []:
+            _tg["offset"] = max(_tg["offset"], int(u["update_id"]) + 1)
+            try:
+                _on_update(u)
+            except Exception as e:  # one bad message doesn't stop the bot
+                _tg["error"] = f"{type(e).__name__}: {e}"
+
+
+def _cents(p: float) -> str:
+    c = p * 100
+    return f"{c:.1f}¢" if c < 1 or 99 < c < 100 else f"{round(c)}¢"
+
+
+def _alert_cost(wallet: str, t: WhaleTrade, paid: float, size: float, usd: float) -> str | None:
+    """What ALERT_SPEND dollars would buy now, for a trader the page offers copying for; None otherwise."""
+    s = next((x for x in (_worth_load() or {}).get("scores", []) if x["wallet"] == wallet), None)
+    if not s or not copy_offer(s)[0]:
+        return None
+    trade = WhaleTrade(
+        venue="polymarket", trader=wallet, name=None, market=t.market, side="yes", action="buy", price=paid,
+        size=size, usd=usd, at=t.at, trade_id=f"alert:{t.trade_id}", title=t.title, outcome=t.outcome, url=t.url,
+        token=t.token,
+    )  # fmt: skip
+    try:
+        p = reads.whales.preview_copy(trade, spend=ALERT_SPEND, max_slippage=GET_IN)
+    except VenueError:
+        return None
+    if not p.ok or why_not_copy(paid, p.price):
+        return None
+    return f"${ALERT_SPEND:.0f} gets you {p.contracts:g} contracts at {_cents(p.price)}, plus a ${p.fee:.2f} fee."
+
+
+def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, size: float, usd: float) -> str:
+    e = html.escape
+    lines = [f"<b>{e(_who(wallet))}</b> bought <b>{e(t.outcome or 'Yes')}</b> at {_cents(paid)} (${usd:,.0f})",
+             e(t.title or "A Polymarket market"), f"Now {_cents(now)}: you can still get in."]  # fmt: skip
+    cost = _alert_cost(wallet, t, paid, size, usd)
+    if cost:
+        lines.append(cost)
+    links = [f'<a href="{e(SITE)}/#/worth/{wallet}">Their record</a>']
+    if t.url:
+        links.append(f'<a href="{e(t.url)}">Buy on Polymarket</a>')
+    lines.append(" · ".join(links))
+    return "\n".join(lines)
+
+
+def alert_pass() -> int:
+    """One round: each followed trader's trades, read once however many people follow them, and a message per
+    new buy you can still get into to every connected follower. A trader's trades from before their first
+    round are only noted, never alerted. Returns how many messages went out."""
+    to: dict[str, list[str]] = {}
+    for u in _load_follows()["users"].values():
+        if u.get("chat"):
+            for w in u.get("follows") or []:
+                to.setdefault(w, []).append(u["chat"])
+    for w in [w for w in _seen if w not in to]:
+        del _seen[w]
+    sent, now = 0, time.time()
+    for w, chats in to.items():
+        try:
+            d = cached(f"live:{w}", 25, lambda w=w: reads.whales.trader("polymarket", w, trades=100, closed=0))
+        except VenueError:
+            continue
+        first, seen = w not in _seen, _seen.setdefault(w, set())
+        new = [t for t in d.trades if t.trade_id not in seen]
+        seen.update(t.trade_id for t in d.trades)
+        if len(seen) > 2000:
+            _seen[w] = {t.trade_id for t in d.trades}
+        if first:
+            continue
+        prices = {p.market: p.current_price for p in d.positions}
+        buys: dict[str, list[WhaleTrade]] = {}
+        for t in new:
+            if t.action == "buy" and t.size and now - t.at.timestamp() <= ALERT_MAX_AGE_S:
+                buys.setdefault(t.market, []).append(t)
+        for market, ts in buys.items():
+            if now - _alerted.get((w, market), 0) < ALERT_AGAIN_S:
+                continue
+            size, usd = sum(t.size for t in ts), sum(t.usd for t in ts)
+            paid, price_now = usd / size, prices.get(market)
+            if price_now is None or bet_status(paid, price_now) != "in":
+                continue
+            _alerted[(w, market)] = now
+            text = _alert_text(w, ts[-1], paid, price_now, size, usd)
+            stop = {"inline_keyboard": [[{"text": f"Stop alerts from {_who(w)}", "callback_data": f"unf:{w}"}]]}
+            for chat in chats:
+                try:
+                    _say(chat, text, reply_markup=stop)
+                    sent += 1
+                except RuntimeError:
+                    pass  # blocked the bot, or Telegram is down: the next buy tries again
+    return sent
+
+
+def _alert_loop() -> None:
+    while not _follow_stop.is_set():
+        try:
+            alert_pass()
+        except Exception as e:  # keep alerting through a bad round
+            _tg["error"] = f"{type(e).__name__}: {e}"
+        _follow_stop.wait(ALERT_EVERY_S)
 
 
 @app.get("/")

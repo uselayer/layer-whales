@@ -221,7 +221,7 @@ def test_signals_reads_polymarket_only_unless_kalshi_is_switched_on(
     monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: asked.append(("trader", a[0])) or None)
     monkeypatch.setattr(engine.reads.whales, "links", lambda *a, **k: asked.append(("links",)) or [])
     assert engine.VENUES == ("polymarket",)  # the default
-    assert api.get("/api/config").json() == {"venues": ["polymarket"]}
+    assert api.get("/api/config").json() == {"venues": ["polymarket"], "clerk_key": None, "alerts": False}
     api.get("/api/trading-now")
     api.get("/api/top")  # "all" means the venues Signals reads
     assert api.get("/api/top?venue=kalshi").status_code == 404
@@ -229,7 +229,7 @@ def test_signals_reads_polymarket_only_unless_kalshi_is_switched_on(
     assert api.get("/api/links/polymarket/0xabc").status_code == 404  # there's no other venue to check
     assert asked == [("big", ("polymarket",)), ("top", "polymarket")]  # Kalshi was never asked for
     with_kalshi(monkeypatch)  # SIGNALS_VENUES=polymarket,kalshi
-    assert api.get("/api/config").json() == {"venues": ["polymarket", "kalshi"]}
+    assert api.get("/api/config").json()["venues"] == ["polymarket", "kalshi"]
 
 
 def test_the_sandbox_is_gone(api: TestClient) -> None:

@@ -18,9 +18,11 @@ behind Vercel (see README, "Hosting").
   no sandbox, no in-app trading, no automatic copying, and it never holds anyone's keys or funds. Copying a
   trade means the cost preview, then "Buy on Polymarket ↗", where the user buys it themselves. A session never
   places a real-money order, not even a test one.
-- Browsing needs no account. Signing up is asked for only to follow a trader and get alerts, and the button
-  says so ("Follow · get an alert when they buy"). Alerts only while you can still get in. Never let one
-  account see or change another's follows, and never let a response that sets a session cookie be cached.
+- Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
+  asked for only to follow a trader, and the button says so ("Follow · get an alert when they buy"). Alerts go
+  to Telegram, only while you can still get in. The engine checks Clerk's session token itself (public keys,
+  no Clerk secret). Never let one account see or change another's follows, and never let an answer about a
+  signed-in person be cached.
 - Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.
 - Never say a link *is* someone: show the tier ("likely" / "possible") and the evidence.
 - The page is a consumer app, not an analyst's spreadsheet. It helps people find traders worth following and

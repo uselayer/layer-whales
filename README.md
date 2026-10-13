@@ -105,9 +105,31 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   the store. Set `LAYER_API_KEY` in the service's variables; keys never reach the browser.
 - **Vercel** holds the domain and forwards every request to Railway (`web/vercel.json`, deployed from `web/`).
   Caching is off there.
-- **No signup** and no cookie: nothing on the hosted app is anyone's own yet. Sandboxes kept from before (in
-  `/data/visitors/<id>`) are left on the volume, unread, until the owner decides to delete them.
+- **Signing in, only to follow traders** (off until its keys are set): Clerk, with Google and Telegram. The
+  page loads Clerk from the Frontend API its publishable key names, and sends Clerk's session token with
+  `/api/me` requests; the engine checks it against Clerk's public keys. Follows are kept in
+  `/data/follows.json`, by Clerk user id. Sandboxes kept from before (in `/data/visitors/<id>`) are left on
+  the volume, unread, until the owner decides to delete them.
+- **Alerts** on Telegram (off until `TELEGRAM_BOT_TOKEN` is set): "Connect Telegram" on a trader's page gives a
+  one-time link to the bot; Start there connects the chat. Every 30 seconds the engine reads followed traders'
+  trades (once per trader) and messages each connected follower about a new buy they can still get into, with
+  what $10 buys now when copying is offered, and a "Stop alerts from …" button. In the chat, `/list` shows who
+  you follow and `/stop` turns alerts off. The bot uses long polling: no webhook to set up.
 - **Limits**: "Check again" on Worth following only starts a new check when the last one is over an hour old.
+  Someone can follow up to 20 traders.
+
+### Setting up sign-in and alerts (owner)
+
+1. **Telegram bot**: in Telegram, @BotFather → `/newbot`. Put its token in Railway as `TELEGRAM_BOT_TOKEN`.
+2. **Clerk**: in the Clerk dashboard, turn on Google (a production instance needs your own Google OAuth
+   credentials) and make email optional (Telegram doesn't share one). Add Telegram as a custom provider
+   (SSO connections → Add connection → For all users → Custom provider): discovery endpoint
+   `https://oauth.telegram.org/.well-known/openid-configuration`, with the Client ID and Client Secret from
+   @BotFather → your bot → Login Widget, where you also add Clerk's authorized redirect URL as an Allowed URL.
+3. **Domain**: a Clerk production instance asks for DNS records on usesignals.app (its Frontend API, such as
+   `clerk.usesignals.app`); add them where the domain's DNS is managed.
+4. **Railway**: set `CLERK_PUBLISHABLE_KEY` (pk_live_…). No Clerk secret key is needed. `SIGNALS_SITE`
+   (default `https://usesignals.app`) is the origin sign-ins must come from.
 
 ## Good to know
 

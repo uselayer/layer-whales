@@ -53,6 +53,7 @@
   .tabs a { padding: 7px 12px; border-radius: 999px; color: var(--muted); font-size: 14.5px; font-weight: 500; }
   .tabs a:hover { color: var(--fg); }
   .tabs a.on { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent); }
+  .account { margin-left: auto; display: flex; align-items: center; min-height: 32px; }
   .tabbar { display: none; }
   main.wrap { padding-top: 28px; padding-bottom: 40px; min-height: 70vh; }
   footer.foot { color: var(--faint); font-size: 12.5px; padding-top: 8px; padding-bottom: 36px; text-align: center; }
@@ -289,6 +290,7 @@
   .pf-cta { display: grid; gap: 6px; justify-items: end; text-align: right; }
   .pf-cta small { color: var(--muted); font-size: 13px; max-width: 280px; }
   .pf-cta .btn[disabled] { background: var(--soft); color: var(--faint); cursor: default; }
+  .pf-follow { display: contents; }
   .pf-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 22px; }
   .pf-stat { background: var(--card); padding: 14px 16px; min-width: 0; }
   .pf-stat > span { display: block; font-size: 12px; color: var(--muted); }
@@ -430,6 +432,7 @@
     <nav class="tabs" aria-label="Main">
       <a href="#/" data-tab="feed">Feed</a><a href="#/traders" data-tab="traders">Traders</a>
     </nav>
+    <div class="account" id="account"></div>
   </div>
 </header>
 <main class="wrap" id="app"></main>
@@ -455,13 +458,102 @@ let venuesOn = ["polymarket"];
 const kalshiOn = () => venuesOn.includes("kalshi");
 const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
 
-async function api(path, opts) {
+async function api(path, opts = {}) {
+  if (path.startsWith("/api/me")) { // your follows: sent with Clerk's short-lived session token
+    const t = await window.Clerk?.session?.getToken().catch(() => null);
+    if (t) opts = { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${t}` } };
+  }
   const r = await fetch(path, opts);
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body?.detail?.message || (typeof body?.detail === "string" ? body.detail : "") || `Request failed (${r.status})`);
   return body;
 }
 const post = (path, body) => api(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+// ---- signing in (Clerk: Google or Telegram), only to follow traders ----
+// Browsing needs no account. Clerk loads only when the engine has a publishable key (/api/config), from the
+// Frontend API the key names. `me` is who you follow and whether Telegram alerts are connected.
+const auth = { on: false, alerts: false, ready: false, me: null, then: null };
+const signedIn = () => !!window.Clerk?.isSignedIn;
+function loadScript(src, attrs = {}) {
+  return new Promise((ok, fail) => {
+    const s = document.createElement("script");
+    Object.assign(s, { src, async: true, crossOrigin: "anonymous", onload: ok, onerror: fail });
+    for (const [k, v] of Object.entries(attrs)) s.setAttribute(k, v);
+    document.head.appendChild(s);
+  });
+}
+async function startAuth(key, alerts) {
+  const m = /^pk_(test|live)_(.+)$/.exec(key || "");
+  let fapi = "";
+  try { fapi = m ? atob(m[2].replace(/-/g, "+").replace(/_/g, "/")).replace(/\$$/, "") : ""; } catch {}
+  if (!/^[a-z0-9.-]+$/i.test(fapi)) return;
+  try {
+    await loadScript(`https://${fapi}/npm/@clerk/ui@1/dist/ui.browser.js`);
+    await loadScript(`https://${fapi}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, { "data-clerk-publishable-key": key });
+    await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+  } catch { return; } // sign-in can't load: the page works as before, without Follow
+  Object.assign(auth, { on: true, alerts, ready: true });
+  window.Clerk.addListener(async () => {
+    auth.me = signedIn() ? await api("/api/me").catch(() => null) : null;
+    drawAccount();
+    if (auth.me && auth.then) { const f = auth.then; auth.then = null; await f(); }
+    redrawFollow();
+  });
+}
+function drawAccount() {
+  const el = $("#account");
+  if (!el || !auth.on) return;
+  if (signedIn()) { if (!el.dataset.user) { el.innerHTML = ""; el.dataset.user = "1"; window.Clerk.mountUserButton(el); } return; }
+  if (el.dataset.user) { window.Clerk.unmountUserButton(el); delete el.dataset.user; }
+  el.innerHTML = `<button class="btn ghost small" id="signin">Sign in</button>`;
+  $("#signin").onclick = () => window.Clerk.openSignIn();
+}
+// Sign in first when needed, then do `f` (once signed in).
+function whenSignedIn(f) {
+  if (signedIn() && auth.me) return f();
+  auth.then = f;
+  window.Clerk.openSignIn();
+}
+// The Follow control on a trader's page (#follow, data-wallet): Follow, or Following ✓ with Telegram alerts.
+function followHtml(wallet) {
+  if (!auth.on) return "";
+  const w = esc(wallet);
+  if (!auth.me?.follows.includes(wallet)) return `<button class="btn" data-follow="${w}">Follow · get an alert when they buy</button>
+    <small>${signedIn() ? "" : "Sign in with Google or Telegram. "}Alerts come on Telegram, only while you can still get in.</small>`;
+  const alerts = !auth.alerts ? `<small>Alerts aren't switched on yet.</small>`
+    : auth.me.telegram ? `<small>Alerts on Telegram · <button class="link" data-unfollow="${w}">Unfollow</button></small>`
+    : `<button class="btn small" data-tg>Connect Telegram to get alerts</button><small><button class="link" data-unfollow="${w}">Unfollow</button></small>`;
+  return `<span class="btn ghost" style="cursor:default">Following ✓</span>${alerts}`;
+}
+function redrawFollow() {
+  const el = $("#follow");
+  if (!el) return;
+  el.innerHTML = followHtml(el.dataset.wallet);
+  $$("[data-follow]", el).forEach((b) => (b.onclick = () => whenSignedIn(async () => {
+    try { auth.me = await post("/api/me/follows", { wallet: b.dataset.follow }); } catch (e) { toast(esc(e.message)); }
+    redrawFollow();
+  })));
+  $$("[data-unfollow]", el).forEach((b) => (b.onclick = async () => {
+    try { auth.me = await api(`/api/me/follows/${b.dataset.unfollow}`, { method: "DELETE" }); } catch (e) { toast(esc(e.message)); }
+    redrawFollow();
+  }));
+  $$("[data-tg]", el).forEach((b) => (b.onclick = () => connectTelegram(b)));
+}
+// A one-time link to our bot; Start there connects the chat. The tab opens in the tap, so it isn't blocked.
+async function connectTelegram(btn) {
+  const win = window.open("", "_blank");
+  let link;
+  try { ({ link } = await post("/api/me/telegram", {})); } catch (e) { win?.close(); toast(esc(e.message)); return; }
+  if (win) win.location = link; else location.href = link;
+  btn.outerHTML = `<small>Tap Start in Telegram to finish…</small>`;
+  for (let i = 0; i < 300 && !auth.me?.telegram && $("#follow"); i++) { // up to 15 minutes, while the page is open
+    await new Promise((r) => setTimeout(r, 3000));
+    auth.me = await api("/api/me").catch(() => auth.me);
+  }
+  redrawFollow();
+  if (auth.me?.telegram) toast("Telegram connected. You'll get a message when they buy something you can still get into.");
+}
 
 // ---- numbers ----
 // Prices in whole cents; tenths only under 1¢ (or between 99¢ and 100¢), or when two prices would look equal.
@@ -780,7 +872,7 @@ function renderFeed() {
   $("#fbar").innerHTML = `
     <div class="feedtop">
       <button class="follow" id="following">${`<span class="stack">${r.traders.slice(0, 5).map((t) => avatar(t.wallet, 28)).join("")}</span>`}
-        <b>Following ${plural(n, "trader")}</b><span class="chev">›</span></button>
+        <b>${plural(n, "trader")} we follow</b><span class="chev">›</span></button>
       <span class="updated" id="updated">${updatedAgo(feed.at)}</span>
     </div>
     <div class="filters">
@@ -868,7 +960,7 @@ function oneCardPerTrade(bets) {
 }
 
 function followingSheet(traders) {
-  const panel = sheet(`<h2>Following ${plural(traders.length, "trader")}</h2>
+  const panel = sheet(`<h2>${plural(traders.length, "trader")} we follow</h2>
     <p class="explain">The feed shows new trades from traders rated Proven sharp, Quiet sharp or Rising. <button class="link" id="howlink">How we pick traders</button></p>
     <div class="list" style="margin-top:16px">${traders.map((t) => `<a class="trow norank" href="#/worth/${esc(t.wallet)}">${avatar(t.wallet, 36)}
       <span class="tmain"><span class="name">${esc(displayName(t.name, t.wallet))}</span></span>${tier(t.segment)}</a>`).join("")}</div>`);
@@ -1308,7 +1400,7 @@ function renderProfile() {
   app.innerHTML = `<a class="back" href="#/traders">← Traders</a>
     <div class="pf-head">${avatar(s.wallet, 64)}
       <div class="grow"><h1>${esc(name)}</h1><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
-      <div class="pf-cta"><small>${ctaNote}</small></div></div>
+      <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div><small>${ctaNote}</small></div></div>
     <div class="pf-stats">
       <div class="pf-stat"><span>Profit, ${PF_PERIOD[n]}</span><b>${profit != null ? pl(profit, usd(profit, true)) : "—"}</b><small>${started ? `since their first trade, ${ago(started)}` : perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit"}</small></div>
       <div class="pf-stat"><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)}` : "—"}</b><small>${weeksOf(s) && weeksOf(s) < 12 ? "weeks profitable, since their first trade" : "weeks profitable"}</small></div>
@@ -1332,6 +1424,7 @@ function renderProfile() {
   $$("[data-pfperiod]", app).forEach((b) => (b.onclick = () => { pf.period = b.dataset.pfperiod; renderProfile(); }));
   $$("[data-pftab]", app).forEach((b) => (b.onclick = () => { pf.tab = b.dataset.pftab; renderProfile(); }));
   bindActions(app);
+  redrawFollow();
 }
 
 function worthDetails(s) {
@@ -1462,7 +1555,8 @@ function route() {
   else location.replace("#/");
 }
 window.addEventListener("hashchange", route);
-api("/api/config").then((c) => { venuesOn = c.venues; }).catch(() => {}).finally(route); // without it: Polymarket only
+api("/api/config").then((c) => { venuesOn = c.venues; if (c.clerk_key) startAuth(c.clerk_key, c.alerts); })
+  .catch(() => {}).finally(route); // without it: Polymarket only, and no signing in
 </script>
 </body>
 </html>
