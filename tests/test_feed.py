@@ -79,7 +79,7 @@ def test_following_is_your_traders_trades_every_size_and_only_yours(api: TestCli
 def test_the_feed_page_has_following_and_recommended(api: TestClient) -> None:
     page = api.get("/").text
     for words in ('"Following"', '"Recommended"', "#/recommended", "Only trades I can still get into", "Also bought by",
-                  "See the trades of traders you follow", "/api/me/feed", "from Sharps and Rising traders", "research, not tips",
+                  "See the trades of traders you follow", "/api/me/feed", "from Sharps and Rising traders", "not as a signal to buy",
                   "All big trades right now", "3–5 min behind"):  # fmt: skip
         assert words in page, words
     assert '"Traders we follow"' not in page

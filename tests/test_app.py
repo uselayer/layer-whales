@@ -369,8 +369,8 @@ def test_copying_is_offered_only_for_recommended_tiers_with_copies_reliably_abov
     for seg in ("too_fast", "lucky", "no_edge", "no_view", "inactive"):
         ok, why = offer(seg, "yes")  # a good copy result never rescues another tier
         assert not ok and why
-    assert "reliably above zero" in (offer("too_fast", "no")[1] or "")
-    assert not offer("rising", "no")[0] and "reliably above zero" in (offer("rising", "no")[1] or "")
+    assert "we can't tell" in (offer("too_fast", "no")[1] or "")
+    assert not offer("rising", "no")[0] and "we can't tell" in (offer("rising", "no")[1] or "")
     assert not offer("rising", "unknown")[0] and "too few" in (offer("rising", "unknown")[1] or "")
     assert not engine.copy_offer(SCORE)[0]  # no copyable verdict at all: not offered
 
@@ -388,7 +388,12 @@ def test_a_copy_status_is_said_from_the_copy_result_whatever_the_tier() -> None:
     assert status("no_edge", "yes") == "Not offered" and status("inactive", "yes") == "Not offered"
     assert status("quiet", "yes") == "Copyable"
     why = engine.copy_status(_scored("proven", "no") | {"copy": losing})[1] or ""
-    assert why.startswith("Costly to copy: ") and "A reading of the past, not a promise." in why
+    assert why.startswith("Costly to copy: buying after them lost money") and "This is about the past, not a promise." in why
+    # plain words for someone new: "buying after them", never "copies" as a thing that keeps or loses money
+    for seg, cp, copy in (("proven", "no", losing), ("rising", "unknown", None), ("rising", "no", None),
+                          ("no_edge", "yes", None)):  # fmt: skip
+        said = engine.copy_status(_scored(seg, cp) | ({"copy": copy} if copy else {}))[1] or ""
+        assert "copies" not in said.lower() and "reliably" not in said and "95%" not in said, said
     assert engine.copy_fields(None) == {"copy_ok": False, "copy_label": None}  # never scored: nothing said
 
 
@@ -529,19 +534,27 @@ def test_the_traders_list_carries_each_traders_section(api: TestClient, monkeypa
 
 def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offered_for(api: TestClient) -> None:
     page = api.get("/").text
-    for words in ('"Sharps"', '"Rising"', "No trader's copies have been reliably profitable after fees lately.",
+    for words in ('"Sharps"', '"Rising"', "Lately, buying after any of these traders hasn't clearly made money after fees.",
                   "Copying never moves it: a Proven sharp can be costly to copy.",
                   '"Copy not proven"', '"Costly to copy"', '"Not offered"', '"Big profit, edge unproven"',
                   '"Profit rests on one win"', '"Not enough data"', '"Edge not proven"',
-                  "Their trades are research, not tips: we haven't found that buying after them pays.",
+                  "not as a signal to buy: we haven't found that buying after them makes money.",
+                  "Could you make money buying what they buy?", "If you'd bought after them: ",
+                  "How we work out the price",
                   "they paid", "Buy on Polymarket ↗", "weeks up",
                   "A week counts profit taken plus the change in value of trades still open.",
-                  "at least half a cent above the middle price",
+                  "the price you'd actually pay, which is a bit higher than the price on Polymarket's chart",
                   "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip
         assert words in page, words
     assert "weeks profitable" not in page
     for gone in ("Worth copying", "Worth watching", "Lucky", "No clear edge", "You can copy it.", "too_fast"):
         assert gone not in page, gone  # copying is no tier, section or check; no label claims luck it can't show
+    import re
+
+    shown = re.sub(r"(^|\s)//\s.*$", "", page, flags=re.M)  # what people read: the page without code comments
+    for jargon in ("Copies kept", "Copies lost", "What copies", "a copy gets in", "Estimated copy return", "95% range",
+                   "price a copy", "at the ask", "trader's copies", "a copy a few minutes late"):  # fmt: skip
+        assert jargon not in shown, jargon  # plain words for someone who has never heard of copy trading
 
 
 # ---- a wallet's account: when it was read, and never part of it shown as all of it ----
