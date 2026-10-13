@@ -55,7 +55,12 @@ behind Vercel (see README, "Hosting").
     only under 1¢ or when two prices would look equal). No UPPERCASE headers, no tooltip-on-header help.
   - Methodology (tests, z-scores, margins) stays out of the main view: in "How we pick traders" or a Details fold.
   - No wallet addresses on screen: unnamed traders get "Trader 0x91…76" and an identicon.
-  - Must look good at 390px as well as desktop; feed width about 680px. Keep loading, empty and error states.
+  - Must look good at 390px as well as desktop. One width: the header, Feed, Traders and trader profiles share
+    the 1200px container (Top profit keeps a 680px reading column), so the account sits at the header's right and
+    nothing moves between tabs. Feed cards are a grid: three across on desktop, one on a phone. Keep loading,
+    empty and error states.
+  - Market chips live on Traders only. The Feed follows the same choice and says so in one line ("Your markets:
+    Politics, Sports · Change"); Change opens the onboarding picker. Never a second set of filter chips.
   - A trade at 2¢ or less, 98¢ or more, or no longer held is settled (Won / Lost / Closed), never a bargain
     (`bet_status` in `app.py`). "You can still get in" only from 5¢ below to 3¢ above what they paid; further
     either way is "Price moved away" (a big drop means the market turned against them, not a bargain).
