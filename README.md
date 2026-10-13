@@ -40,10 +40,10 @@ The first visit asks one question, which markets interest you (Politics, Sports,
 markets), then opens Traders. The choice is kept in your browser; the market chips on Feed and Traders change it,
 so the two always agree. Then three tabs:
 
-- **Feed**: one switch at the top, **Traders we follow** (the default) or **Big trades**. Both open filtered to
-  your markets: the chips are All, the four markets, and any other category with trades (with how many).
+- **Feed**: one switch at the top, **Traders we follow** (the default) or **Big trades**.
   - **Traders we follow**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp
-    or Rising, one card per trade: the market, their pick, what they paid, the price now, how much they put in,
+    or Rising, one card per trade, opened on your markets (the chips are All, the four markets, and any other
+    category with trades, with how many): the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
     paid (3¢ is the same limit copying uses); **Price moved away** means further either way. A bigger drop means
     the market has turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or
@@ -51,10 +51,10 @@ so the two always agree. Then three tabs:
     feed. Turn off "Only trades I can still get into" to see them all. Tap a card for the details, the trader
     and a link to Polymarket. **Copy trader** copies that trader's next trades in the sandbox; a trade they
     already made isn't copied. It updates every 30 seconds; Polymarket shows trades a few minutes late.
-  - **Big trades** (`#/big`; the old `#/traders/big` link still works): trades of $250 or more right now on Kalshi
-    and Polymarket, one card per trade, with the trader's name when the venue shows it ("Anonymous trader"
-    when it doesn't). A named trader's card opens their page. Only Polymarket trades say which market they're
-    in, so with markets picked, Kalshi trades show under All only.
+  - **Big trades** (`#/big`; the old `#/traders/big` link still works): every trade of $250 or more right now
+    on Kalshi and Polymarket, one card per trade, with the trader's name when the venue shows it ("Anonymous
+    trader" when it doesn't). A named trader's card opens their page. It isn't filtered by your markets: only
+    Polymarket trades say which market they're in, and almost all big trades are Kalshi's.
 - **Traders**: a leaderboard of the Polymarket traders we recommend: Proven sharp, Quiet sharp, Rising, and
   Too fast to copy (the price moves within minutes of their buys, so a copy usually comes too late).
   - One bar: on the left the market chips (your onboarding choice) and **Copyable only**; on the right

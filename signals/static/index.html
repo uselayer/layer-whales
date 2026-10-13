@@ -783,7 +783,8 @@ function refreshCopyButtons() {
 
 // ---- feed ----
 // One switch at the top: the traders we follow (#/, the default) or Big trades (#/big: $250 or more right now,
-// both venues). Both open filtered to your markets, with the same chips, and the same interests, as Traders.
+// both venues, every one of them). Traders we follow opens filtered to your markets, with the same chips, and
+// the same interests, as Traders.
 const feed = { data: null, at: 0, err: null, onlyIn: true, big: null, bigAt: 0, bigErr: null };
 let feedTimer = null;
 const onFeed = () => routeName().startsWith("feed");
@@ -869,29 +870,20 @@ function renderFeed() {
   bindActions($("#flist"));
 }
 
-// Big trades: one card per trade, in the Feed's card style. The SDK's big trades have no price now, so there is
-// no "You can still get in" here; a named trader's card opens their page.
+// Big trades: every trade of $250 or more, one card each, in the Feed's card style. Not filtered by your
+// markets: the SDK only knows Polymarket markets' categories, and almost all big trades are Kalshi's, so a
+// filter would mostly hide them. The SDK's big trades have no price now, so there is no "You can still get in"
+// here; a named trader's card opens their page.
 function renderBig() {
   const rows = feed.big;
   if (!rows) { $("#fbar").innerHTML = ""; $("#flist").innerHTML = errorState(feed.bigErr || "No answer from the app."); bindActions($("#flist")); return; }
-  const counts = {};
-  rows.forEach((t) => { if (t.category) counts[t.category] = (counts[t.category] || 0) + 1; });
-  const picked = interests || [], names = interestNames(picked);
-  const list = rows.filter((t) => inMarkets(t.category));
   $("#fbar").innerHTML = `
-    <div class="feedtop"><span class="muted" style="font-size:14px">Trades of $250 or more right now, on Kalshi and Polymarket.</span>
+    <div class="feedtop"><span class="muted" style="font-size:14px">Every trade of $250 or more right now, on Kalshi and Polymarket.</span>
       <span class="updated" id="updated">${updatedAgo(feed.bigAt)}</span></div>
-    <div class="filters">${marketChips(counts)}</div>
     ${feed.bigErr ? `<p class="inline-err">Couldn't refresh: ${esc(feed.bigErr)}. Showing the last update.</p>` : ""}`;
-  const kalshiNote = picked.length && rows.some((t) => t.venue === "kalshi") ? " Kalshi trades don't say which market they're in yet, so they show under All only." : "";
-  let html;
-  if (!rows.length) html = emptyState("No big trades right now", "Trades of $250 or more show up here as they happen.");
-  else if (!list.length) html = emptyState(`No big ${esc(names)} trades right now`, `None of the last ${plural(rows.length, "big trade")} ${rows.length === 1 ? "is" : "are"} in ${esc(names)}.${kalshiNote}`,
-    `<button class="btn ghost" id="feedall">Show all markets</button>`);
-  else html = `<div class="cards">${list.map(bigCard).join("")}</div>
-    <p class="foot-note">Kalshi names only traders who turned on their social profile.${kalshiNote}</p>`;
-  $("#flist").innerHTML = html;
-  bindFeedChips(document);
+  $("#flist").innerHTML = rows.length
+    ? `<div class="cards">${rows.map(bigCard).join("")}</div><p class="foot-note">Kalshi names only traders who turned on their social profile.</p>`
+    : emptyState("No big trades right now", "Trades of $250 or more show up here as they happen.");
   bindActions($("#flist"));
 }
 function bigCard(t) {
