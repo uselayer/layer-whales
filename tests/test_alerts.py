@@ -268,7 +268,7 @@ def test_big_trade_alerts_are_capped_within_the_daily_cap(api: TestClient, monke
     user("u", "1", follows=(), interests=["Politics"])
     rows: list[WhaleTrade] = []
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
-    monkeypatch.setattr(engine, "_live_read", lambda w: TraderDetail(
+    monkeypatch.setattr(engine, "_live_read", lambda w, *a: TraderDetail(
         Trader(venue="polymarket", id=w, name=None), "visible", {}, [WhalePosition(f"0x{w[2:6]}:0", None, "Yes", 1, 0.49, 0.5, None, None)], []))  # fmt: skip
     users = engine._load_follows()["users"]
     engine.whale_pass(users, time.time())
@@ -343,7 +343,7 @@ def test_no_big_trade_alert_at_a_settled_price(api: TestClient, monkeypatch: pyt
     user("politics", "1", follows=(), interests=["Politics"])
     rows: list[WhaleTrade] = []
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
-    monkeypatch.setattr(engine, "_live_read", lambda w: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
+    monkeypatch.setattr(engine, "_live_read", lambda w, *a: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
                                                                      [WhalePosition("0xw:0", None, "Yes", 1, 0.49, 0.985, None, None)], []))  # fmt: skip
     users = engine._load_follows()["users"]
     engine.whale_pass(users, time.time())
@@ -413,7 +413,7 @@ def test_a_big_trade_at_the_daily_cap_sends_the_limit_message_instead(api: TestC
         engine._send("u", "1", "buy", lambda aid: "x")
     rows: list[WhaleTrade] = []
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
-    monkeypatch.setattr(engine, "_live_read", lambda w: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
+    monkeypatch.setattr(engine, "_live_read", lambda w, *a: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
                                                                      [WhalePosition("0xw:0", None, "Yes", 1, 0.49, 0.5, None, None)], []))  # fmt: skip
     users = engine._load_follows()["users"]
     engine.whale_pass(users, time.time())

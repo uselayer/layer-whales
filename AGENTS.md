@@ -89,7 +89,9 @@ behind Vercel (see README, "Hosting").
     the traders in Worth copying, Rising and Worth watching, with neutral cards for anyone not copy_ok. Recommended
     stays quiet (fewer, bigger trades) and never more prominent than Following: second in the switch, never the
     default. Both keep the switch "Only trades I can still get into", one card per outcome with "Also bought
-    by", and the delay line. Big trades (`#/big`) is linked from the foot of Recommended.
+    by", and the delay line. Big trades (`#/big`) is linked from the foot of Recommended. Traders' trades come from
+    one background poller (`_live_loop`: Recommended's and everyone followed, one at a time, every 30 s); pages
+    only read what it keeps, so a busy Feed never adds Polymarket reads.
   - Market chips live on Traders only. The Feed follows the same choice and says so in one line ("Your markets:
     Politics, Sports · Change"); Change opens the onboarding picker. Never a second set of filter chips.
   - A trade at 2¢ or less, 98¢ or more, or no longer held is settled (Won / Lost / Closed), never a bargain

@@ -491,7 +491,7 @@ const post = (path, body) => api(path, { method: "POST", headers: { "content-typ
 // ---- signing in (Clerk: Google or Telegram), only to follow traders ----
 // Browsing needs no account. Clerk loads only when the engine has a publishable key (/api/config), from the
 // Frontend API the key names. `me` is who you follow and whether Telegram alerts are connected.
-const auth = { on: false, alerts: false, ready: false, loading: false, me: null, then: null };
+const auth = { on: false, alerts: false, ready: false, loading: false, failed: false, me: null, meErr: null, uid: null, then: null };
 const signedIn = () => !!window.Clerk?.isSignedIn;
 function loadScript(src, attrs = {}) {
   return new Promise((ok, fail) => {
@@ -511,10 +511,11 @@ async function startAuth(key, alerts) {
     await loadScript(`https://${fapi}/npm/@clerk/ui@1/dist/ui.browser.js`);
     await loadScript(`https://${fapi}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, { "data-clerk-publishable-key": key });
     await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
-  } catch { auth.loading = false; if (onFeed()) renderFeed(); return; } // sign-in can't load: the page works as before, without Follow
+  } catch { Object.assign(auth, { loading: false, failed: true }); if (onFeed()) renderFeed(); return; } // sign-in can't load: the page works as before, without Follow
   Object.assign(auth, { on: true, alerts, ready: true, loading: false });
   window.Clerk.addListener(async () => {
-    auth.me = signedIn() ? await api("/api/me").catch(() => null) : null;
+    accountIs(signedIn() ? window.Clerk.user?.id || null : null);
+    await readMe();
     if (auth.me) syncInterests();
     drawAccount();
     if (auth.me && auth.then) { const f = auth.then; auth.then = null; await f(); }
@@ -892,7 +893,7 @@ function bindActions(root) {
 // never above Following). Both show your markets, the ones picked at onboarding or with Traders' chips; the chips
 // live on Traders only, the Feed says which markets it shows and Change opens the same picker as onboarding.
 // Big trades (#/big: $250 or more right now) stays reachable from the foot of Recommended.
-const feed = { data: null, at: 0, err: null, mine: null, mineAt: 0, mineErr: null, onlyIn: true, big: null, bigAt: 0, bigErr: null };
+const feed = { data: null, at: 0, err: null, mine: null, mineAt: 0, mineErr: null, onlyIn: true, big: null, bigAt: 0, bigErr: null, seq: 0 };
 let feedTimer = null;
 const onFeed = () => routeName().startsWith("feed");
 const feedView = () => ({ "feed:big": "big", "feed:rec": "rec" })[routeName()] || "follow";
@@ -911,15 +912,30 @@ async function feedPage(view) {
 const canFollowFeed = () => auth.on && signedIn() && !!auth.me;
 async function loadFeed() {
   clearTimeout(feedTimer);
+  const my = ++feed.seq; // a newer call (the Clerk listener, a tab switch) makes this one stale: one 30 s loop only
   const view = feedView(), [k, at, err] = FEED_KEYS[view];
   if (view === "follow" && !canFollowFeed()) { renderFeed(); return; } // signed out: the prompt, nothing to read
-  try {
-    feed[k] = await api(view === "big" ? "/api/trading-now?min_usd=250" : view === "rec" ? "/api/live" : "/api/me/feed");
-    feed[at] = Date.now(); feed[err] = null;
-  } catch (e) { feed[err] = e.message; }
+  const uid = auth.uid;
+  let data = null, error = null;
+  try { data = await api(view === "big" ? "/api/trading-now?min_usd=250" : view === "rec" ? "/api/live" : "/api/me/feed"); }
+  catch (e) { error = e.message; }
+  if (my !== feed.seq || (view === "follow" && uid !== auth.uid)) return; // stale, or someone else signed in since
+  if (error) feed[err] = error; else { feed[k] = data; feed[at] = Date.now(); feed[err] = null; }
   if (!onFeed() || feedView() !== view) return; // the other view, or another page, since
+  clearTimeout(feedTimer);
   feedTimer = setTimeout(() => { if (onFeed()) loadFeed(); }, 30000);
   renderFeed();
+}
+// Who is signed in (Clerk's user id, or null). Another account, or none: the last one's Following goes.
+function accountIs(uid) {
+  if (uid === auth.uid) return;
+  auth.uid = uid;
+  Object.assign(feed, { mine: null, mineAt: 0, mineErr: null });
+}
+// Who you follow (/api/me). A failure is kept, so Following shows it with "Try again", never loading forever.
+async function readMe() {
+  if (!signedIn()) { Object.assign(auth, { me: null, meErr: null }); return; }
+  try { auth.me = await api("/api/me"); auth.meErr = null; } catch (e) { auth.me = null; auth.meErr = e.message || "Couldn't read your account."; }
 }
 
 // Which markets the Feed shows, in one line: "Your markets: Politics, Sports · Change".
@@ -951,7 +967,7 @@ function renderFeed() {
       `<a class="btn ghost" href="#/traders">See the traders</a>`);
     return;
   }
-  const min = usd(r.min_usd ?? 1000);
+  const min = `$${Math.round(r.min_usd ?? 1000).toLocaleString("en-US")}`; // "$1,000", as everywhere else
   renderTrades(r, feed.at, feed.err, {
     who: `${plural(r.traders.length, "trader")} we recommend`,
     note: `<p class="foot-note" style="margin:0 0 12px">Only trades of ${min} or more from Worth copying, Rising and Worth watching traders.</p>
@@ -966,12 +982,17 @@ function renderFeed() {
 function renderFollowing() {
   if (!canFollowFeed()) {
     $("#fbar").innerHTML = "";
-    const loading = auth.loading || (auth.on && signedIn() && !auth.me);
+    const meFailed = auth.on && signedIn() && !auth.me && auth.meErr;
+    const loading = auth.loading || (auth.on && signedIn() && !auth.me && !auth.meErr);
+    const rec = `<a class="btn ghost" href="#/recommended">See Recommended</a>`;
     $("#flist").innerHTML = loading ? skelCards(3)
+      : meFailed ? `<div class="state err"><b>Couldn't load who you follow</b><p>${esc(auth.meErr)}</p><button class="btn ghost" id="meretry">Try again</button></div>`
       : auth.on ? emptyState("See the trades of traders you follow", "Sign in, then follow traders from their page: their trades show up here, and alerts can go to Telegram.",
-        `<button class="btn" id="feedsignin">Sign in</button> <a class="btn ghost" href="#/recommended">See Recommended</a>`)
-      : emptyState("Following needs signing in", "Signing in isn't switched on here. Recommended shows trades from the traders we recommend.", `<a class="btn ghost" href="#/recommended">See Recommended</a>`);
+        `<button class="btn" id="feedsignin">Sign in</button> ${rec}`)
+      : auth.failed ? emptyState("Signing in couldn't load just now", "Following needs signing in. Try again in a minute; Recommended shows trades from the traders we recommend.", rec)
+      : emptyState("Following needs signing in", "Signing in isn't switched on here. Recommended shows trades from the traders we recommend.", rec);
     const b = $("#feedsignin"); if (b) b.onclick = () => window.Clerk.openSignIn();
+    const again = $("#meretry"); if (again) again.onclick = async () => { auth.meErr = null; renderFollowing(); await readMe(); loadFeed(); };
     return;
   }
   const r = feed.mine;
@@ -1071,6 +1092,8 @@ setInterval(() => { const u = $("#updated"), at = feed[FEED_KEYS[feedView()][1]]
 // buy you can best still follow (you can still get in, then whoever bought first) and lists the others;
 // it sorts by the newest buy of the lot.
 const LEAD = { in: 0, moved: 1 };
+// Among buys you can still get into, one copying is offered for leads, so a neutral card never hides it.
+const leadOf = (b) => (LEAD[b.status] ?? 2) * 2 + (b.status === "in" && b.copy_ok === true ? 0 : 1);
 function oneCardPerTrade(bets) {
   const by = new Map();
   for (const b of bets) {
@@ -1079,7 +1102,7 @@ function oneCardPerTrade(bets) {
     by.get(k).push(b);
   }
   return [...by.values()].map((g) => {
-    g.sort((a, b) => (LEAD[a.status] ?? 2) - (LEAD[b.status] ?? 2) || a.at.localeCompare(b.at));
+    g.sort((a, b) => leadOf(a) - leadOf(b) || a.at.localeCompare(b.at));
     const latest = g.reduce((m, x) => (x.at > m ? x.at : m), g[0].at);
     return { ...g[0], also: g.slice(1).map((x) => ({ wallet: x.wallet, name: x.name })), latest };
   }).sort((a, b) => b.latest.localeCompare(a.latest));
