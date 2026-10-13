@@ -361,6 +361,26 @@ def bet_status(paid: float | None, now: float | None) -> str | None:
     return "in" if -FELL_BY - 1e-9 <= now - paid <= GET_IN + 1e-9 else "moved"
 
 
+def why_not_copy(paid: float, now: float | None) -> str | None:
+    """Why buying now at ``now`` isn't copying their trade at ``paid``, in a plain sentence, or None when you
+    can still get in. The same rule as the Feed's status line (``bet_status``), so the engine never copies a
+    trade the page wouldn't offer: settled (2¢ or less, 98¢ or more), or moved away either way."""
+    status = bet_status(paid, now)
+    if status == "in":
+        return None
+    if status == "won":
+        return "The price is 98¢ or more: this market has settled, or as good as. There's nothing left to copy."
+    if status == "lost":
+        return "The price is 2¢ or less: this market has settled against them, or as good as. It isn't copied."
+    if now is None:  # "closed": nothing to price it at
+        return "There's no price for this market right now, so it isn't copied."
+    gap = f"{max(1, round(abs(now - paid) * 100))}¢"
+    if now < paid:
+        return (f"The price is {gap} below what they paid: the market has turned against them since. Buying now "
+                "would be a different trade from theirs, so it isn't copied.")  # fmt: skip
+    return f"The price is {gap} above what they paid, more than the 3¢ copying allows."
+
+
 def _categories(markets: list[str]) -> dict[str, str]:
     """Each Polymarket market's category (Sports, Politics…), read in one batch and kept by the SDK."""
     book = reads.whales.scorer().markets.get(m.partition(":")[0] for m in markets)
@@ -730,24 +750,34 @@ def _their_trade(req: OneTrade) -> WhaleTrade:
     )  # fmt: skip
 
 
+def _checked_preview(req: OneTrade, box: Sandbox) -> Any:
+    """The SDK's preview of copying this trade now, refused (400, a plain sentence) when its price is one you
+    can't still get in at: settled, more than 5¢ below theirs or more than 3¢ above (``why_not_copy``). The SDK
+    itself only refuses a price above theirs plus ``max_slippage``."""
+    if req.spend is not None and req.spend <= 0:
+        raise HTTPException(400, detail="Enter an amount above $0.")
+    try:
+        p = box.paper().whales.preview_copy(_their_trade(req), **_sized(req, box.load_rules()))
+    except VenueError as e:
+        raise venue_error(e) from e
+    if p.ok and (why := why_not_copy(req.price, p.price)):
+        raise HTTPException(400, detail=why)
+    return p
+
+
 @app.post("/api/trade/preview")
 def trade_preview(req: OneTrade, box: Sandbox = Depends(me)) -> dict[str, Any]:
     """What copying this trade now would cost and pay, on the same Polymarket market. Sends nothing."""
-    if req.spend is not None and req.spend <= 0:
-        raise HTTPException(400, detail="Enter an amount above $0.")
-    rules = box.load_rules()
-    try:
-        p = box.paper().whales.preview_copy(_their_trade(req), **_sized(req, rules))
-    except VenueError as e:
-        raise venue_error(e) from e
-    return p.to_dict()
+    return _checked_preview(req, box).to_dict()  # type: ignore[no-any-return]
 
 
 @app.post("/api/trade/copy")
 def trade_copy(req: OneTrade, box: Sandbox = Depends(me)) -> dict[str, Any]:
-    """Buy this trade now in the sandbox, if the price is still at most 3¢ above theirs."""
-    if req.spend is not None and req.spend <= 0:
-        raise HTTPException(400, detail="Enter an amount above $0.")
+    """Buy this trade now in the sandbox, only at a price you can still get in at (see ``_checked_preview``).
+
+    The check reads the book once and ``copy_trade`` reads it again, so a price that moves in between isn't
+    caught: an SDK option that refuses these prices in the same read would close that gap."""
+    _checked_preview(req, box)
     rules = box.load_rules()
     try:
         e = box.paper().whales.copy_trade(_their_trade(req), **_sized(req, rules))
