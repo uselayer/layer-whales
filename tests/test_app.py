@@ -144,6 +144,24 @@ def test_worth_adds_the_leaderboard_columns_from_what_the_check_kept(
     assert (s["typical_usd"], s["last_buy"]) == (99.0, "2026-10-07T00:00:00+00:00")
 
 
+def test_trader_pages_ask_for_closed_positions_and_the_feed_does_not(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[dict[str, Any]] = []
+
+    def trader(*a: Any, **k: Any) -> TraderDetail:
+        asked.append(k)
+        return TraderDetail(AMY, "visible", {"pnl": 1000.0}, [], [TRADE])
+
+    monkeypatch.setattr(engine.reads.whales, "trader", trader)
+    api.get("/api/trader/polymarket/0xabc")
+    assert asked[-1]["closed"] == 50  # the profile's Closed positions (uselayer 0.7)
+    monkeypatch.setattr(engine, "_worth_data", {"scores": [SCORE | {"segment": "proven", "label": "Proven sharps"}]})
+    monkeypatch.setattr(engine, "_categories", lambda markets: {})
+    api.get("/api/live")
+    assert asked[-1]["closed"] == 0  # the feed polls every 25 s: no closed-positions read
+
+
 def test_sample_profit_history_is_local_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engine, "_worth_data", {"finished": "2026-10-07T00:00:00+00:00", "scores": [SCORE | {"pnl_window": 500.0}]})
     monkeypatch.setenv("SIGNALS_MOCK", "1")
