@@ -51,6 +51,11 @@ engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting")
 - **Engine** (Railway project and service `signals`): `railway up --service signals` from the repo root. It
   builds the `Dockerfile`; the store is on the service's volume at `/data`. A deploy restarts the server, and a
   Worth following check that hasn't finished starts over (20–30 min).
+- **From a worktree** (`.claude/worktrees/…`), run `railway up . --path-as-root --service signals`. Without
+  `--path-as-root` it uploads the linked folder (the owner's main checkout), which can be stale: this briefly
+  put old code live on 12 Oct.
+- **After any deploy**, check the live page actually serves the new code: fetch https://usesignals.app and look
+  for something only the new code has.
 - **Forwarding layer** (Vercel project `signals`, holds usesignals.app): `vercel deploy --prod` inside `web/`.
   Only needed when `web/vercel.json` changes.
 - A new checkout or folder isn't linked yet: run `railway link` (project and service `signals`) in the repo root
