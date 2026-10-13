@@ -1051,6 +1051,7 @@ def _chat_owner(chat: str) -> str | None:
 # votes: "Useful" / "Not useful", one per alert and account, changeable.
 
 _db_lock = threading.Lock()
+_db_ready: set[str] = set()
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, uid TEXT NOT NULL, chat TEXT, kind TEXT NOT NULL,
   trader TEXT, outcome TEXT, message_id INTEGER, sent_at REAL NOT NULL, trade_at REAL, day TEXT NOT NULL,
@@ -1076,6 +1077,10 @@ def _db() -> Iterator[sqlite3.Connection]:
         con = sqlite3.connect(alerts_db())
         try:
             con.executescript(_SCHEMA)
+            if str(alerts_db()) not in _db_ready:  # a db from before trigger_at: add the column, once
+                if "trigger_at" not in {r[1] for r in con.execute("PRAGMA table_info(alerts)")}:
+                    con.execute("ALTER TABLE alerts ADD COLUMN trigger_at REAL")
+                _db_ready.add(str(alerts_db()))
             yield con
             con.commit()
         finally:

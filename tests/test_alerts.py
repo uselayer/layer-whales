@@ -483,3 +483,16 @@ def test_traders_chips_never_change_the_saved_markets(api: TestClient, run_js: A
       return [chip, signin, puts];
     })()""")
     assert got == [0, 0, [["Politics"]]]
+
+
+def test_an_alerts_db_from_before_trigger_at_gets_the_column(api: TestClient) -> None:
+    import sqlite3
+
+    engine.STORE_DIR.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(engine.alerts_db())
+    con.execute("CREATE TABLE alerts (id TEXT PRIMARY KEY, uid TEXT NOT NULL, chat TEXT, kind TEXT NOT NULL, trader TEXT,"
+                " outcome TEXT, message_id INTEGER, sent_at REAL NOT NULL, trade_at REAL, day TEXT NOT NULL)")
+    con.commit()
+    con.close()
+    engine._db_ready.discard(str(engine.alerts_db()))
+    assert engine._send("user_1", "555", "buy", lambda aid: "x", trade_at=1.0) is not None
