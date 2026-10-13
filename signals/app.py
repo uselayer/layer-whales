@@ -1314,8 +1314,8 @@ def _who(wallet: str) -> str:
 
 
 CONNECTED = (
-    "Connected. You'll get a message here a few minutes after a trader you follow buys, whatever the amount: what "
-    "they bought, what they paid, the price now and when they traded. Polymarket's public data runs a few minutes "
+    "Connected. You'll get a message here a few minutes after a trader you follow buys or sells, whatever the amount: "
+    "what they traded, at what price, the price now and when they traded. Polymarket's public data runs a few minutes "
     "behind, so alerts are never instant. When two or more of them buy the same thing, one message lists them all, and it's "
     f"updated as more buy. If you've picked markets on Signals, trades of ${WHALE_USD:,.0f} or more there come too. "
     f"At most {DAILY_CAP} alerts a day.\n\nFollowing: {{names}}\n/list: who you follow · /stop: turn alerts off"
@@ -1387,7 +1387,7 @@ def _on_update(u: dict[str, Any]) -> None:
         elif arg:
             _say(chat, f"That link has expired. Tap Connect Telegram on {SITE} again.")
         else:
-            _say(chat, f"Follow traders on {SITE}, then tap Connect Telegram there to get an alert after they buy.")
+            _say(chat, f"Follow traders on {SITE}, then tap Connect Telegram there to get an alert after they trade.")
     elif cmd == "/list":
         mine = next((x for x in _load_follows()["users"].values() if x.get("chat") == chat), None)
         names = [_who(w) for w in (mine or {}).get("follows", [])]
@@ -1484,7 +1484,7 @@ def _today(now: float | None = None) -> str:
     return datetime.fromtimestamp(time.time() if now is None else now, UTC).date().isoformat()
 
 
-COUNTED = ("buy", "group", "whale")  # what the daily cap counts: a group once, its edits never
+COUNTED = ("buy", "sell", "group", "whale")  # what the daily cap counts: a group once, its edits never
 
 
 def _sent_today(uid: str, kinds: tuple[str, ...] = COUNTED) -> int:
@@ -1542,7 +1542,8 @@ def _copy_offered(wallet: str) -> bool:
     return s is not None and copy_offer(s)[0]
 
 
-LINK_TARGETS = {"Buy on Polymarket": "market", "Their record": "record", "Check current price": "check"}
+LINK_TARGETS = {"Buy on Polymarket": "market", "Open on Polymarket": "market", "Their record": "record",
+                "Check current price": "check"}  # fmt: skip
 
 
 def _go(aid: str, target: str, url: str) -> str:
@@ -1568,6 +1569,11 @@ def _lag(at: float, seen: float) -> str:
     return "under a minute" if mins < 1 else f"{mins} min"
 
 
+def _traded(at: float, seen: float) -> str:
+    """When they traded, and how long before this alert that was: "Traded 14:02 UTC, 6 min before this alert."."""
+    return f"Traded {datetime.fromtimestamp(at, UTC):%H:%M} UTC, {_lag(at, seen)} before this alert."
+
+
 def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, at: float, seen: float,
                 record: bool, aid: str | None) -> str:  # fmt: skip
     """What happened, the same for every trader: ``head`` (who bought which outcome, at what price, for how much),
@@ -1579,7 +1585,7 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
     e = html.escape
     status = bet_status(paid, now)
     lines = [head, e(t.title or "A Polymarket market"), f"Now {_cents(now)}{', price already moved' if status != 'in' else ''}.",
-             f"Traded {datetime.fromtimestamp(at, UTC):%H:%M} UTC, {_lag(at, seen)} before this alert."]  # fmt: skip
+             _traded(at, seen)]  # fmt: skip
     if status == "in" and _copy_offered(wallet):
         lines.append(COPY_LINE)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}"),
@@ -1642,6 +1648,53 @@ class NewBuy:
         if self._text is None:
             self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.usd, self.at, self.seen, ALERT_ID_MARK)
         return self._text.replace(ALERT_ID_MARK, aid)
+
+
+def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool, now: float | None, at: float,
+               seen: float, aid: str | None = None) -> str:  # fmt: skip
+    """The Telegram message for a sell by a trader you follow, whoever they are: information only, never a
+    suggestion to sell and nothing about copying. Who sold which outcome at what price (their average across the
+    fills) and for how much, the market, and when they traded, measured against this alert. While they still hold
+    some of it: the price now and "Check current price"; once they hold none, "They no longer hold it." and no price
+    (there's no position to read it from, and no number is made up)."""
+    e = html.escape
+    still = ("They still hold some." if now is None else f"Now {_cents(now)}. They still hold some.") if held else "They no longer hold it."
+    lines = [f"<b>{e(_who(wallet))}</b> sold <b>{e(t.outcome or 'Yes')}</b> at {_cents(price)} (${usd:,.0f})",
+             e(t.title or "A Polymarket market"), still, _traded(at, seen)]  # fmt: skip
+    links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}" if held else None),
+                   ("Their record", f"{SITE}/#/worth/{wallet}"), ("Open on Polymarket", t.url), aid=aid)  # fmt: skip
+    return "\n".join([*lines, links, DATA_DELAY])
+
+
+class NewSell:
+    """One trader's new sell of one outcome in a round, fills merged: the price they got on average, whether they
+    still hold some (an open position), and the price now from it. Its text is built once for every follower."""
+
+    def __init__(self, wallet: str, fills: list[WhaleTrade], held: bool, now: float | None, seen: float) -> None:
+        self.wallet, self.t, self.held, self.now, self.seen = wallet, max(fills, key=lambda f: f.at), held, now, seen
+        self.size, self.usd = sum(f.size for f in fills), sum(f.usd for f in fills)
+        self.at = min(f.at for f in fills).timestamp()
+        self.price = self.usd / self.size
+        self.outcome = self.t.token or self.t.market
+        self._text: str | None = None
+
+    def settled(self) -> bool:
+        """Sold at a settled price, or the price now is (2¢ or less, 98¢ or more): closing out a decided market."""
+        return _settled(self.price) or (self.now is not None and _settled(self.now))
+
+    def text(self, aid: str) -> str:
+        if self._text is None:
+            self._text = _sell_text(self.wallet, self.t, self.price, self.usd, self.held, self.now, self.at, self.seen,
+                                    ALERT_ID_MARK)  # fmt: skip
+        return self._text.replace(ALERT_ID_MARK, aid)
+
+
+def _sold_recently(trader: str, outcome: str, now: float) -> bool:
+    """Whether this trader's sell of this outcome was already alerted (to anyone) in the last ALERT_AGAIN_S, from
+    alerts.db, so a restart doesn't alert it again."""
+    with _db() as con:
+        q = "SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ? LIMIT 1"
+        return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S)).fetchone() is not None
 
 
 def _recently(uid: str | None, trader: str, outcome: str, now: float) -> bool:
@@ -1722,8 +1775,8 @@ def _added_up(w: str, market: str) -> None:
 
 def alert_pass(now: float | None = None) -> int:
     """One round: each followed trader's trades, read once however many people follow them, and for each new
-    buy, whatever the amount and whoever the trader, a message to every connected follower (grouped when 2+ traders they follow
-    bought the same outcome), then big trades in people's chosen markets. A trader's trades from before their
+    buy or sell, whatever the amount and whoever the trader, a message to every connected follower (grouped when 2+ traders they follow
+    bought the same outcome; sells never are), then big trades in people's chosen markets. A trader's trades from before their
     first round are only noted, never alerted. No alert for a buy with no price now (no open position to read it
     from: there's no saying how far the price moved), nor when the price now is settled (2¢ or less, 98¢ or more).
     Returns how many messages went out."""
@@ -1736,6 +1789,7 @@ def alert_pass(now: float | None = None) -> int:
         del _seen[w]
     now = time.time() if now is None else now
     new_buys: list[NewBuy] = []
+    new_sells: list[NewSell] = []
     for w in to:
         try:
             d = _live_read(w, LIVE_ALERT_S)
@@ -1750,9 +1804,16 @@ def alert_pass(now: float | None = None) -> int:
             continue
         prices = {p.market: p.current_price for p in d.positions}
         fills: dict[str, list[WhaleTrade]] = {}
+        sold: dict[str, list[WhaleTrade]] = {}
         for t in new:
-            if t.action == "buy" and t.size and now - t.at.timestamp() <= ALERT_MAX_AGE_S:
-                fills.setdefault(t.market, []).append(t)
+            if t.action in ("buy", "sell") and t.size and now - t.at.timestamp() <= ALERT_MAX_AGE_S:
+                (fills if t.action == "buy" else sold).setdefault(t.market, []).append(t)
+        for market, ts in sold.items():
+            sell = NewSell(w, ts, market in prices, prices.get(market), now)
+            if now - _alerted.get((w, f"sell:{market}"), 0) < ALERT_AGAIN_S or sell.settled() or _sold_recently(w, sell.outcome, now):
+                continue
+            _alerted[(w, f"sell:{market}")] = now
+            new_sells.append(sell)
         totals = _add_up(w, [f for ts in fills.values() for f in ts], now) if fills else {}
         for market, ts in fills.items():
             price = prices.get(market)
@@ -1772,6 +1833,11 @@ def alert_pass(now: float | None = None) -> int:
     for b in new_buys:
         for uid in to[b.wallet]:
             sent += _deliver(uid, users[uid]["chat"], b, cats.get(b.t.market))
+    for sell in new_sells:  # never grouped
+        for uid in to[sell.wallet]:
+            if _send(uid, users[uid]["chat"], "sell", sell.text, trader=sell.wallet, outcome=sell.outcome,
+                     trade_at=sell.at, stop=sell.wallet):  # fmt: skip
+                sent += 1
     return sent + whale_pass(users, now)
 
 

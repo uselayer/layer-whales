@@ -578,7 +578,7 @@ function whenSignedIn(f) {
 function followHtml(wallet) {
   if (!auth.on) return "";
   const w = esc(wallet);
-  if (!auth.me?.follows.includes(wallet)) return `<button class="btn" data-follow="${w}">Follow · get an alert after they buy</button>`;
+  if (!auth.me?.follows.includes(wallet)) return `<button class="btn" data-follow="${w}">Follow · get an alert after they trade</button>`;
   const alerts = !auth.alerts ? `<small>Alerts aren't switched on yet.</small>`
     : auth.me.telegram ? `<small>Alerts on Telegram · <button class="link" data-unfollow="${w}">Unfollow</button></small>`
     : `<button class="btn small" data-tg>Connect Telegram to get alerts</button><small><button class="link" data-unfollow="${w}">Unfollow</button></small>`;
@@ -610,7 +610,7 @@ async function connectTelegram(btn) {
     auth.me = await api("/api/me").catch(() => auth.me);
   }
   redrawFollow();
-  if (auth.me?.telegram) toast("Telegram connected. You'll get a message a few minutes after they buy.");
+  if (auth.me?.telegram) toast("Telegram connected. You'll get a message a few minutes after they trade.");
 }
 
 // ---- numbers ----

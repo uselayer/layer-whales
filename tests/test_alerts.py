@@ -298,8 +298,8 @@ def test_connecting_describes_the_alert_rules(api: TestClient, monkeypatch: pyte
     link = api.post("/api/me/telegram", headers=auth()).json()["link"]
     engine._on_update({"message": {"chat": {"id": 555}, "text": "/start " + link.rsplit("=", 1)[1]}})
     text = engine.tg.sent[-1]["text"]
-    for words in ("Connected.", "a few minutes after a trader you follow buys, whatever the amount",
-                  "what they paid, the price now and when they traded", "alerts are never instant",
+    for words in ("Connected.", "a few minutes after a trader you follow buys or sells, whatever the amount",
+                  "at what price, the price now and when they traded", "alerts are never instant",
                   "two or more of them buy the same thing", "trades of $10,000 or more", "At most 20 alerts a day", "Following: Sam"):  # fmt: skip
         assert words in text, words
     assert "$100" not in text
@@ -556,3 +556,67 @@ def test_fills_seen_before_there_was_a_price_add_into_the_next_alert_across_a_re
     trades.append(trade(SAM, t0 + timedelta(minutes=1), 0.50, 60, "0xcid:0", "b"))
     engine._cache.clear()
     assert engine.alert_pass(now=t0.timestamp() + 90) == 1 and "($120)" in engine.tg.sent[-1]["text"]
+
+
+# ---- sells ----
+
+
+def sold(w: str, at: datetime, price: float = 0.62, usd: float = 800, market: str = "0xcid:0", i: str = "1") -> WhaleTrade:
+    return WhaleTrade("polymarket", w, None, market, "yes", "sell", price, usd / price, usd, at, f"{w}:{market}:sell:{i}",
+                      title="Will it <rain>?", outcome="Yes", url="https://polymarket.com/event/rain", token=f"tok-{market}")  # fmt: skip
+
+
+def test_a_sell_alerts_with_the_price_now_while_they_still_hold_some_and_only_once(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(engine, "copy_offer", lambda s: (True, None))  # copyable or not: a sell never has a copy line
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.61}))
+    t0 = datetime.now(UTC) - timedelta(minutes=6)
+    engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
+    trades += [sold(SAM, t0, 0.62, 500, i="a"), sold(SAM, t0, 0.62, 300, i="b")]  # two fills, one alert
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 6 * 60) == 1
+    m = engine.tg.sent[-1]
+    lines = m["text"].splitlines()
+    assert lines[:4] == ["<b>Sam</b> sold <b>Yes</b> at 62¢ ($800)", "Will it &lt;rain&gt;?", "Now 61¢. They still hold some.",
+                         f"Traded {t0:%H:%M} UTC, 6 min before this alert."]  # fmt: skip
+    assert ">Check current price</a>" in lines[4] and ">Their record</a>" in lines[4] and ">Open on Polymarket</a>" in lines[4]
+    assert lines[5] == engine.DATA_DELAY and engine.COPY_LINE not in m["text"] and "get in" not in m["text"]
+    assert m["reply_markup"]["inline_keyboard"][1][0]["callback_data"] == f"unf:{SAM}"  # Stop alerts from Sam
+    assert engine._sent_today("user_1") == 1  # counts towards the daily cap
+    trades.append(sold(SAM, t0 + timedelta(minutes=1), i="c"))  # sold more soon after: no second alert
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 7 * 60) == 0
+    engine._seen.clear()  # a restart
+    engine._alerted.clear()
+    engine._cache.clear()
+    engine.alert_pass(now=t0.timestamp() + 8 * 60)  # first round after it: noted only
+    trades.append(sold(SAM, t0 + timedelta(minutes=2), i="d"))
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 9 * 60) == 0  # alerts.db remembers the sell
+
+
+def test_a_sell_of_everything_says_so_and_never_makes_up_a_price(api: TestClient) -> None:
+    t = sold(SAM, datetime(2026, 10, 13, 14, 2, tzinfo=UTC))
+    at = t.at.timestamp()
+    text = engine._sell_text(SAM, t, 0.62, 800, False, None, at, at + 30)
+    lines = text.splitlines()
+    assert lines[2:4] == ["They no longer hold it.", "Traded 14:02 UTC, under a minute before this alert."]
+    assert "Now" not in text and "Check current price" not in text and "Open on Polymarket" in lines[4]
+    held = engine._sell_text(SAM, t, 0.62, 800, True, None, at, at + 30)  # still hold some, but no price to show
+    assert "They still hold some." in held.splitlines() and "Now" not in held and "Check current price" in held
+
+
+@pytest.mark.parametrize(("paid", "now"), [(0.99, 0.99), (0.50, 0.01), (0.01, None)])
+def test_no_alert_for_a_sell_at_a_settled_price(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch, paid: float, now: float | None
+) -> None:
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {} if now is None else {"0xcid:0": now}))
+    engine.alert_pass()
+    trades.append(sold(SAM, datetime.now(UTC), paid))
+    engine._cache.clear()
+    assert engine.alert_pass() == 0
