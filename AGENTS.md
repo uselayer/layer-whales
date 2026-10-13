@@ -39,8 +39,8 @@ behind Vercel (see README, "Hosting").
     ever stuck on that screen.
   - Traders lists the traders we recommend (Proven sharp, Quiet sharp, Rising, No proven copy advantage; its
     pill says "Copy not proven" to fit at 390px) in three sections, from the engine's `section_of`: **Worth
-    copying** (copying is offered: `copy_ok`; always shown, with one line when nobody is), **Rising**, and
-    **Worth watching** (No proven copy advantage: skilled traders worth keeping an eye on; copying isn't
+    copying** (copying is offered: `copy_ok`; while nobody's is, the Feed's "Copying is paused" callout sits
+    above the list instead and "Copyable only" is greyed out), **Rising**, and **Worth watching** (No proven copy advantage: skilled traders worth keeping an eye on; copying isn't
     offered). Each section has the same columns, its own ranks and "Show more"; "Copyable only" shows Worth
     copying, and "See all checked traders" is one flat list. A trader copying isn't offered for gets no copy
     cue anywhere: grey "Not offered" in the Copying column, and an open trade of theirs (their page, a Feed

@@ -256,6 +256,7 @@
   .lb-view { display: flex; align-items: center; gap: 10px; flex: none; }
   .lb-divider { width: 1px; height: 20px; background: var(--line); flex: none; margin-inline: 4px; }
   .lb-chip { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; flex: none; cursor: pointer; }
+  .lb-chip[aria-disabled="true"] { color: var(--faint); cursor: not-allowed; }
   .lb-chip[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .lb-search { position: relative; display: flex; align-items: center; }
   .lb-search svg { position: absolute; left: 11px; width: 15px; height: 15px; color: var(--faint); pointer-events: none; }
@@ -606,6 +607,10 @@ function ago(t) {
   if (s < 86400) return `${Math.round(s / 3600)}h ago`;
   return `${Math.round(s / 86400)}d ago`;
 }
+// One "Copying is paused" callout for the Feed and Traders, shown while no trader's copies are offered.
+const PAUSED_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg>`;
+const pausedNote = (rest) => `<div class="paused">${PAUSED_ICON}<p><b>Copying is paused.</b> No trader's copies have been reliably profitable after fees lately. ${rest}</p></div>`;
+
 // Next to "Updated" on the Feed: the delay in a few words, the full sentence behind the ⓘ (tap or hover).
 const LAG = `<span class="lag"><button type="button" class="lag-btn" aria-describedby="lagtip">3–5 min behind<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><span class="lag-tip" role="tooltip" id="lagtip">Polymarket's public data runs 3–5 minutes behind, so trades show up here a few minutes after they're made.</span></span>`;
 const fresh = (ms) => `<span class="fresh"><span class="updated" id="updated">${updatedAgo(ms)}</span>·${LAG}</span>`;
@@ -924,8 +929,7 @@ function renderFeed() {
       <label class="switch"><input type="checkbox" id="onlyin" ${feed.onlyIn ? "checked" : ""}><span class="track"></span>Only trades I can still get into</label>
     </div>
     ${feed.err ? `<p class="inline-err">Couldn't refresh: ${esc(feed.err)}. Showing the last update.</p>` : ""}
-    ${r.traders.some((t) => t.copy_ok) ? "" : `<div class="paused"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6v12M15 6v12"/></svg>
-      <p><b>Copying is paused.</b> No trader's copies have been reliably profitable after fees yet. Their trades still show here. <a class="link" href="#/traders">Why?</a></p></div>`}
+    ${r.traders.some((t) => t.copy_ok) ? "" : pausedNote(`Their trades still show here. <a class="link" href="#/traders">Why?</a>`)}
     ${r.failed ? `<p class="foot-note" style="margin:0 0 12px">${plural(r.failed, "trader")} couldn't be read just now; retrying.</p>` : ""}`;
   $("#onlyin").onchange = (e) => { feed.onlyIn = e.target.checked; renderFeed(); };
   $("#following").onclick = () => followingSheet(r.traders);
@@ -1190,6 +1194,8 @@ function renderWorth() {
     return;
   }
   const scores = res.scores;
+  const paused = !scores.some(isCopyable); // nobody's copies are offered: "Copyable only" has nothing to show
+  if (paused) lb.copyOnly = false;
   const history = scores.some((s) => Array.isArray(s.pnl_weeks));
   const periods = scores.some((s) => s.periods);
   if (!periods) lb.period = "30d";
@@ -1230,15 +1236,15 @@ function renderWorth() {
   // One list of rows, with its own ranks and "Show more": a section, or every checked trader.
   const rows = (list, key) => `${list.map((s, i) => row(s, i, lb.more[key])).join("")}
       ${list.length > RANKED && !lb.more[key] ? `<button type="button" class="lb-more" data-lbmore="${key}">Show ${list.length - RANKED} more</button>` : ""}`;
-  // Recommended traders come in sections: Worth copying (always shown, with a line when nobody is), then Rising
-  // and Worth watching when they have anyone. "See all checked traders" stays one marked list.
+  // Recommended traders come in sections: Worth copying, then Rising and Worth watching when they have anyone.
+  // While nobody can be copied, the "Copying is paused" callout above the list says so instead of an empty
+  // Worth copying; when someone can but not in your picks, the section stays with a line saying so.
+  // "See all checked traders" stays one marked list.
   const sections = lb.all ? null : SECTIONS.map(([key, title, sub]) => {
     const list = shown.filter((s) => s.section === key);
-    if (!list.length && key !== "copy") return "";
-    const none = !scores.some(isCopyable) ? "No trader's copies have been reliably profitable after fees lately."
-      : "No trader you can copy matches what you've picked.";
+    if (!list.length && (key !== "copy" || paused)) return "";
     return `<section class="lb-section" aria-label="${title}"><div class="lb-sec"><h2>${title}</h2><p>${sub}</p></div>
-      ${list.length ? rows(list, key) : `<p class="lb-secnone">${none}</p>`}</section>`;
+      ${list.length ? rows(list, key) : `<p class="lb-secnone">No trader you can copy matches what you've picked.</p>`}</section>`;
   }).join("");
 
   let body;
@@ -1251,8 +1257,6 @@ function renderWorth() {
     body = emptyState("That wallet isn't in this list", "We can still check its trades, including your own wallet. It takes up to a minute.", `<a class="btn" href="#/worth/${esc(q)}">Check this wallet</a>`);
   } else if (q) {
     body = emptyState("No trader matches", `Nobody called “${esc(lb.q.trim())}” here. Paste a full wallet address to check any wallet.`, `<button class="btn ghost" id="lbclear">Clear search</button>`);
-  } else if (lb.copyOnly && !scores.some(isCopyable)) {
-    body = emptyState("Copying is paused", "No trader's copies have been reliably profitable after fees yet, so copying is paused. We don't loosen the checks to fill this list.", `<button class="btn ghost" id="lbcopyoff">Show all recommended traders</button>`);
   } else if (picked.length && pool.length) {
     body = emptyState(`No ${esc(names)} traders this time`, `No ${esc(names)} trader passed the checks${lb.copyOnly ? " and can be copied" : ""}, and we don't loosen them to fill the list.`, `<button class="btn ghost" id="lball">Show all markets</button>`);
   } else {
@@ -1267,7 +1271,7 @@ function renderWorth() {
         <button type="button" class="lb-chip" data-lbmkt="" aria-pressed="${!picked.length}">All</button>
         ${[...INTERESTS, ...picked.filter((c) => !INTERESTS.includes(c))].map((c) => `<button type="button" class="lb-chip" data-lbmkt="${esc(c)}" aria-pressed="${picked.includes(c)}">${esc(c)}</button>`).join("")}
         <span class="lb-divider" aria-hidden="true"></span>
-        <button type="button" class="lb-chip" id="lbcopy" aria-pressed="${lb.copyOnly}">Copyable only</button>
+        <button type="button" class="lb-chip" id="lbcopy" aria-pressed="${lb.copyOnly}" ${paused ? `aria-disabled="true" title="Copying is paused: no trader can be copied right now"` : ""}>Copyable only</button>
       </div>
       <div class="lb-view">
         <label class="lb-search" for="lbq"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M14 14l4 4"/></svg><input id="lbq" type="search" placeholder="Search name or wallet" value="${esc(lb.q)}" autocomplete="off" aria-label="Search by trader name or wallet address"></label>
@@ -1277,6 +1281,7 @@ function renderWorth() {
       </div>
     </div>
     ${sample ? `<p class="lb-note">Sample profit history (SIGNALS_MOCK=1): weeks in profit, trend and 7D/90D are made up here, to review the page. They never show on the hosted app.</p>` : ""}
+    ${paused ? pausedNote(`We don't loosen the checks to fill this list. <button class="link" id="howpaused">How we decide</button>`) : ""}
     ${body}
     <p class="lb-foot">${st.running ? `Checking again${st.total ? ` (${st.done} of ${st.total})` : ""}…` : `Checked ${plural(scores.length, "trader")} ${ago(res.finished)} · <button class="link" id="wrefresh">Check again</button>`}
       · <button class="link" id="how">How we pick traders</button>
@@ -1290,14 +1295,14 @@ function renderWorth() {
       ${st.error ? ` · <span style="color:var(--danger)">Last check failed: ${esc(st.error)}</span>` : ""}</p>`;
 
   $$("[data-lbmkt]", box).forEach((b) => (b.onclick = () => { toggleInterest(b.dataset.lbmkt); renderWorth(); }));
-  $("#lbcopy").onclick = () => { lb.copyOnly = !lb.copyOnly; renderWorth(); };
+  $("#lbcopy").onclick = () => { if (paused) return toast("Copying is paused: no trader can be copied right now."); lb.copyOnly = !lb.copyOnly; renderWorth(); };
   $("#lbq").oninput = (e) => {
     lb.q = e.target.value; const at = e.target.selectionStart; renderWorth();
     const s = $("#lbq"); if (s) { s.focus(); s.setSelectionRange(at, at); } };
   $("#lbsort").onchange = (e) => { lb.sort = e.target.value; renderWorth(); };
   $$("[data-lbsort]", box).forEach((b) => (b.onclick = () => { lb.sort = b.dataset.lbsort; renderWorth(); }));
   $$("[data-lbperiod]", box).forEach((b) => (b.onclick = () => { lb.period = b.dataset.lbperiod; renderWorth(); }));
-  const off = $("#lbcopyoff"); if (off) off.onclick = () => { lb.copyOnly = false; renderWorth(); };
+  const howp = $("#howpaused"); if (howp) howp.onclick = howSheet;
   $$("[data-lbmore]", box).forEach((b) => (b.onclick = () => { lb.more[b.dataset.lbmore] = true; renderWorth(); }));
   const clear = $("#lbclear"); if (clear) clear.onclick = () => { lb.q = ""; renderWorth(); };
   const all = $("#lball"); if (all) all.onclick = () => { setInterests([]); renderWorth(); };
