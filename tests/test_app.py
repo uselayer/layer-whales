@@ -39,7 +39,13 @@ def local() -> engine.Sandbox:
     return engine.sandbox(engine.LOCAL)
 
 
-def test_pages_and_reads(api: TestClient) -> None:
+def with_kalshi(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SIGNALS_VENUES=polymarket,kalshi: Signals reads Kalshi too (off by default)."""
+    monkeypatch.setattr(engine, "VENUES", ("polymarket", "kalshi"))
+
+
+def test_pages_and_reads(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_kalshi(monkeypatch)
     assert "Signals" in api.get("/").text
     assert 'href="/static/icon.svg"' in api.get("/").text  # the in-app logo as the browser icon
     for path in ("/static/icon.svg", "/favicon.ico"):
@@ -55,6 +61,7 @@ def test_pages_and_reads(api: TestClient) -> None:
 def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    with_kalshi(monkeypatch)
     monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
     monkeypatch.setattr(engine, "_copy_loop", lambda: None)
     r = api.put("/api/copy/rules", json={"size": 3, "max_above": 0.02}).json()
@@ -214,8 +221,44 @@ def test_big_trades_carry_their_market_category(api: TestClient, monkeypatch: py
         markets = Book()
 
     monkeypatch.setattr(engine.reads.whales, "scorer", lambda *a, **k: Scorer())
+    with_kalshi(monkeypatch)
     rows = api.get("/api/trading-now").json()
     assert [(t["venue"], t["category"]) for t in rows] == [("polymarket", "Sports"), ("kalshi", None)]
+
+
+def test_signals_reads_polymarket_only_unless_kalshi_is_switched_on(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The SDK covers both venues; Signals asks it for Polymarket only (SIGNALS_VENUES), never reads and hides.
+    asked: list[Any] = []
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: asked.append(("big", k.get("venues"))) or [])
+    monkeypatch.setattr(engine.reads.whales, "top", lambda venue, **k: asked.append(("top", venue)) or [])
+    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: asked.append(("trader", a[0])) or None)
+    monkeypatch.setattr(engine.reads.whales, "links", lambda *a, **k: asked.append(("links",)) or [])
+    assert engine.VENUES == ("polymarket",)  # the default
+    assert api.get("/api/config").json() == {"venues": ["polymarket"]}
+    api.get("/api/trading-now")
+    api.get("/api/top")  # "all" means the venues Signals reads
+    assert api.get("/api/top?venue=kalshi").status_code == 404
+    assert api.get("/api/trader/kalshi/amy").status_code == 404
+    assert api.get("/api/links/polymarket/0xabc").status_code == 404  # there's no other venue to check
+    assert asked == [("big", ("polymarket",)), ("top", "polymarket")]  # Kalshi was never asked for
+    r = api.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"})
+    assert r.status_code == 400 and "Polymarket" in r.json()["detail"]
+
+    # A Kalshi copy rule saved before stays saved but doesn't run, and My trades says why.
+    monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
+    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
+    local().save_rules({"size": 5, "max_above": 0.03, "traders": [{"venue": "kalshi", "id": "amy"}]})
+    local().apply_rules()
+    assert local().copiers == {}
+    rule = api.get("/api/copy").json()["rules"]["traders"][0]
+    assert rule["id"] == "amy" and rule["error"].startswith("Paused")
+    with_kalshi(monkeypatch)  # SIGNALS_VENUES=polymarket,kalshi: it runs again, nothing to bring back
+    local().apply_rules()
+    assert list(local().copiers) == ["kalshi:amy"]
+    assert api.get("/api/config").json() == {"venues": ["polymarket", "kalshi"]}
+    api.post("/api/paper/reset")
 
 
 def test_the_feed_follows_recommended_traders_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -332,6 +375,7 @@ def test_my_trades_groups_repeat_copies_and_compares_with_theirs() -> None:
 
 
 def test_hosted_each_browser_gets_its_own_sandbox(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_kalshi(monkeypatch)
     monkeypatch.setattr(engine, "HOSTED", True)
     monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
     monkeypatch.setattr(engine, "_copy_loop", lambda: None)
