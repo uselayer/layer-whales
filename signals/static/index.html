@@ -791,16 +791,28 @@ function fillExplain(p, b, spend) {
   const allIn = p.total / p.contracts;
   return `Your ${money(spend)} fills at ${c(p.price)}${p.worst_price > p.price + 0.0005 ? " on average" : ""}, ${gap}. With the fee, ${c(allIn)} a contract against their ${c(b.price)}.`;
 }
+// The order book holds less than the amount near their price (the SDK's max_spend: everything for sale up to
+// 3¢ above what they paid, fee included): "Only $340 is available within 3¢ of their price".
+const availableLine = (room) => `Only ${money(room).replace(/\.00$/, "")} is available within 3¢ of their price.`;
+// Slippage, named: your average fill against the best price for sale now (best_price, from the engine).
+function slippageLine(p) {
+  if (p.best_price == null || p.price == null) return "";
+  const c = (x) => `${Math.round(x * 1000) / 10}¢`, slip = p.price - p.best_price;
+  return slip > 0.0005
+    ? `<p>Slippage: your average fill, ${c(p.price)}, is ${c(slip)} above the best price for sale, ${c(p.best_price)}, because this amount buys into dearer offers.</p>`
+    : `<p>Slippage: none. It all fills at the best price for sale, ${c(p.best_price)}.</p>`;
+}
 // Money you put in or get back, to the cent: "$49.91", "+$42.09".
 const money = (x, signed = false) => x == null ? "—" : `${x < 0 ? "−" : signed && x > 0 ? "+" : ""}$${Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 async function costBox(box, b, amount = 10) {
   box.innerHTML = `<div class="head">What copying it costs</div>
-    <p>How much would you put in, fee included? Priced from what's for sale on Polymarket right now.</p>
+    <p>${b.at ? `They bought ${ago(b.at)}${b.price != null ? ` at ${cents(b.price)}` : ""}. ` : ""}How much would you put in, fee included? Priced from what's for sale on Polymarket right now.</p>
     <div class="amount"><label class="box"><span class="muted">$</span><input id="amt" inputmode="decimal" autocomplete="off" aria-label="Amount in dollars" value="${amount}"></label>
       ${PICKS.map((v) => `<button type="button" data-amt="${v}" aria-pressed="${v === amount}">$${v}</button>`).join("")}</div>
     <div id="pv"><div class="skel" style="width:70%;height:14px"></div></div>
+    <p>Prices can change before you buy on Polymarket.</p>
     ${b.url ? `<a class="btn wide" id="buyon" href="${esc(b.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">Buy on Polymarket ↗</a>
-      <p class="fine">Signals places no orders. Prices can move before your order gets there.</p>` : ""}`;
+      <p class="fine">Signals places no orders: you buy on Polymarket yourself.</p>` : ""}`;
   const input = $("#amt", box), pv = $("#pv", box);
   const top = document.getElementById("sheetstatus"), before = top ? top.innerHTML : "";
   const setTop = (st, why) => { if (top) top.innerHTML = `${STATUS[st] ? statusLine(st) : `<span class="status moved"><i></i>${esc(st)}</span>`}<p class="explain">${esc(why)}</p>`; };
@@ -817,9 +829,10 @@ async function costBox(box, b, amount = 10) {
     if (my !== seq || !box.isConnected) return; // a newer amount is on its way
     if (!p.ok) {
       const room = p.depth_checked && p.max_spend > 0 ? Math.floor(p.max_spend * 100) / 100 : 0;
-      if (p.depth_checked) setTop(room ? "Not enough for sale for this amount" : "Price moved away", sdkText(p.reason));
+      // The order book can't fill the amount near their price: say how much it can, in one plain line.
+      if (p.depth_checked) setTop(room ? "Not enough for sale for this amount" : "Price moved away", room ? availableLine(room) : "Nothing is for sale within 3¢ of their price right now.");
       pv.innerHTML = p.depth_checked
-        ? (room >= 1 ? `<p><button type="button" class="btn ghost small" id="useroom">Use ${money(room)} instead</button></p>` : `<p>Nothing is for sale close to their price right now.</p>`)
+        ? (room >= 1 ? `<p>${availableLine(room)}</p><p><button type="button" class="btn ghost small" id="useroom">Use ${money(room)} instead</button></p>` : `<p>Nothing is for sale within 3¢ of their price right now.</p>`)
         : `<p>${esc(sdkText(p.reason))}</p>`;
       const use = $("#useroom", pv);
       if (use) use.onclick = () => { input.value = room.toFixed(2); clearTimeout(timer); show(); };
@@ -837,7 +850,8 @@ async function costBox(box, b, amount = 10) {
       <div class="kv" style="margin:0 0 14px">
         <div><span>${ifWins(b.outcome)}</span><b>You get ${money(p.payout)}</b></div><div><span>${ifLoses(b.outcome)}</span><b>You lose ${money(p.total)}</b></div>
       </div>
-      <p style="margin-top:-6px">That's ${pl(p.profit_if_win, money(p.profit_if_win, true))} if it wins. Each contract pays $1 if it wins and nothing if it loses.${!p.depth_checked ? " Polymarket's order book couldn't be read just now, so an order this size might fill higher." : ""}</p>`;
+      <p style="margin-top:-6px">That's ${pl(p.profit_if_win, money(p.profit_if_win, true))} if it wins. Each contract pays $1 if it wins and nothing if it loses.${!p.depth_checked ? " Polymarket's order book couldn't be read just now, so an order this size might fill higher." : ""}</p>
+      ${slippageLine(p)}`;
   };
   input.oninput = () => { clearTimeout(timer); timer = setTimeout(show, 350); };
   $$("[data-amt]", box).forEach((x) => (x.onclick = () => { input.value = x.dataset.amt; clearTimeout(timer); show(); }));
@@ -1383,6 +1397,27 @@ function pfChart(s, n) {
   return { svg, worst };
 }
 
+// "Lately": when they last bought, and their last three buys (market, side, price), each linking to the market.
+// From their trades read now (the Activity tab's), else the buys the check kept, while those load.
+function latelyLine(s, d) {
+  const fresh = d && !d.error && Array.isArray(d.trades);
+  const buys = fresh ? d.trades.filter((x) => x.action === "buy") : s.recent || [];
+  const by = new Map(); // one per market, newest first; their price there is the average of the buys read
+  for (const b of buys) {
+    const k = b.token || b.market;
+    const g = by.get(k) || { ...b, usd: 0, size: 0, n: 0, sum: 0 };
+    if (!by.has(k)) by.set(k, g);
+    if (b.size) { g.usd += b.usd || 0; g.size += b.size; } else { g.sum += b.price || 0; g.n += 1; }
+    if (String(b.at) > String(g.at)) g.at = b.at;
+  }
+  const last = [...by.values()].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 3);
+  const when = last[0]?.at || s.last_buy;
+  if (!last.length) return when ? `Last bought ${ago(when)}.` : "No buys in the last 30 days.";
+  const price = (g) => g.size ? g.usd / g.size : g.n ? g.sum / g.n : g.price;
+  const one = (g) => `${g.outcome ? `${esc(g.outcome)} on ` : ""}${g.url ? `<a class="link" href="${esc(g.url)}" target="_blank" rel="noopener">${esc(g.title || "a market")}</a>` : esc(g.title || "a market")} at ${cents(price(g))}`;
+  return `Last bought ${ago(when)}: ${last.map(one).join("; ")}.`;
+}
+
 function renderProfile() {
   const s = pf.s, d = pf.detail, n = pf.period, app = $("#app");
   if (!s || !app) return;
@@ -1412,13 +1447,9 @@ function renderProfile() {
   const ctaNote = can ? "Copies' estimated return after fees is reliably above zero" : s.segment === "too_fast" ? `No proven copy advantage. ${copyEstimate(s) || "The price moves before a copy gets in."}` : esc(s.copy_why || "Not recommended");
   const period = (cls) => s.periods ? `<div class="lb-period ${cls}" role="group" aria-label="Period">${Object.keys(PF_PERIOD).map((p) => `<button type="button" data-pfperiod="${p}" aria-pressed="${n === p}">${p.toUpperCase()}</button>`).join("")}</div>` : "";
 
-  // why they're here: three plain sentences, plus the SDK's own warnings
-  const consistent = [up != null && weeksOf(s) ? `Up in ${up} of ${weeksOf(s) < 12 ? `the ${weeksOf(s)} weeks since their first trade` : "the last 12 weeks"}` : null, s.settled ? `${s.won} of the ${s.settled} trades we checked that settled went their way` : null].filter(Boolean).join("; ");
-  const steady = without == null ? "" : without > 0 ? " Still in profit without their biggest win." : ` Most of their profit is one win (${usd(s.biggest_win)}).`;
-  const how = [cats.slice(0, 2).map((c) => c.category).join(" and ") || null, band ? `buys around ${band}` : s.avg_price != null ? `pays ${cents(s.avg_price)} on average` : null,
-    s.typical_usd != null ? `usually ${usd(s.typical_usd)}${share != null ? ` (${lbPct(share).replace("+", "")} of their wallet)` : ""}` : null,
-    s.trades_per_day != null ? perDayText(s.trades_per_day) : null, s.held_share != null ? `holds ${Math.round(s.held_share * 100)}% of closed positions until the market settles` : null].filter(Boolean).join(", ");
-  const copyWhy = `${can ? "Yes" : s.segment === "too_fast" ? "Not proven" : "Not offered"}: ${gap != null ? `a copy a few minutes late paid about ${centsSigned(gap).replace("+", "")} more than they did` : "we couldn't measure the price a copy would get"}${s.copy_return != null ? `, and the estimated copy return is ${lbPct(s.copy_return)} after fees${copyRange(s) ? ` (95% range ${copyRange(s)})` : ""}${!can && s.copy_return > 0 ? ", not reliably above zero" : ""}` : ""}.${!can && s.segment !== "too_fast" && s.copy_why ? ` ${s.copy_why}` : ""}`;
+  // why they're here: five short lines (the engine writes four, from the check: why_lines), plus the SDK's own warnings
+  const why = s.why || {};
+  const lately = latelyLine(s, d);
   const risks = (s.risks || []).map(sdkText);
 
   // the tabs
@@ -1491,9 +1522,11 @@ function renderProfile() {
         : `<p class="pf-empty">Their profit history isn't available yet.</p>`}
       ${profit != null && per.realized != null && per.unrealized != null ? `<p class="pf-statnote">From trading, after fees: ${pl(per.realized, usd(per.realized, true))} taken (sold or settled) and ${pl(per.unrealized, usd(per.unrealized, true))} on positions still open.${per.income ? ` Rewards and rebates (${usd(per.income)}) aren't counted.` : ""}</p>` : ""}</section>
     <section class="pf-card"><h2>Why they're here</h2><div class="pf-why">
-      <div><b>Consistent</b><p>${consistent ? `${esc(consistent.charAt(0).toUpperCase() + consistent.slice(1))}.` : "Too few settled trades to say yet."}${steady}</p></div>
-      <div><b>How they trade</b><p>${how ? `${esc(how.charAt(0).toUpperCase() + how.slice(1))}.` : "—"}</p></div>
-      <div><b>Can you copy them</b><p>${esc(copyWhy)}</p></div>
+      <div><b>What they trade</b><p>${why.trades ? esc(why.trades) : "—"}</p></div>
+      <div><b>How they trade</b><p>${why.how ? esc(why.how) : "—"}</p></div>
+      <div><b>Lately</b><p>${lately}</p></div>
+      <div><b>Why they're on the list</b><p>${esc(why.listed || "—")}</p></div>
+      <div><b>Copying</b><p>${esc(why.copying || s.copy_why || "—")}</p></div>
       ${risks.length ? `<div><b>Worth knowing</b><p>${risks.map(esc).join(" ")}</p></div>` : ""}
     </div></section>
     <div class="pf-tabs" role="tablist">${[["positions", "Positions"], ["activity", "Activity"], ["stats", "Stats"]].map(([k, l]) => `<button type="button" role="tab" data-pftab="${k}" aria-selected="${pf.tab === k}">${l}</button>`).join("")}</div>
