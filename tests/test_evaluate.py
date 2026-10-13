@@ -184,7 +184,9 @@ def test_lately_tops_up_from_the_checks_buys_to_three(run_js: Any) -> None:
 
 def test_the_sdks_best_price_is_used_when_it_has_one(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # uselayer 0.8.2's CopyPreview carries best_price (the best ask, before the fee): no one-contract read then.
-    newer = _preview(price=0.534, worst_price=0.55, best_price=0.52)
+    from dataclasses import replace
+
+    newer = replace(_preview(price=0.534, worst_price=0.55), best_price=0.52)
     asked: list[dict[str, Any]] = []
 
     def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
@@ -195,4 +197,4 @@ def test_the_sdks_best_price_is_used_when_it_has_one(api: TestClient, monkeypatc
     body = {"wallet": "0xabc", "market": "0xcid:1", "price": 0.52, "spend": 50}
     assert api.post("/api/trade/preview", json=body).json()["best_price"] == 0.52
     assert len(asked) == 1  # the SDK said it: no one-contract read
-    assert _preview().best_price is None  # when the SDK couldn't say: the one-contract fallback (above) stays
+    assert _preview().best_price is None  # a preview without it (no book read): the one-contract fallback (above) stays
