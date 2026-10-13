@@ -310,9 +310,17 @@ def _board(s: dict[str, Any]) -> dict[str, Any]:
         ats = [b["at"] for b in (s.get("recent") or []) + bets if b.get("at")]
         out["last_buy"] = max(ats) if ats else None
     window = s.get("window") or []
-    if len(window) == 2 and s.get("decisions") is not None:
-        days = max(1.0, (_iso_ts(window[1]) - _iso_ts(window[0])) / 86400)
-        out["trades_per_day"] = round(s["decisions"] / days, 2)
+    if len(window) == 2:
+        # The SDK reads at most 5,000 fills, so a busy trader's read can start after the window does: their
+        # trades a day, usual trade and win record then cover only the days read (fills_from, uselayer 0.8).
+        read_from = s.get("fills_from")
+        if isinstance(read_from, str):
+            read_from = _iso_ts(read_from)
+        start = max(_iso_ts(window[0]), float(read_from or 0))
+        days = max(1.0, (_iso_ts(window[1]) - start) / 86400)
+        out["covered_days"] = round(days)
+        if s.get("decisions") is not None:
+            out["trades_per_day"] = round(s["decisions"] / days, 2)
     price = s.get("avg_price") or _median([b.get("price") for b in bets])
     copy = Stat.from_dict(s["copy"]) if s.get("copy") else None
     # What a copier a few minutes late kept after the fee, per dollar they paid: an estimate with its 95% range.
