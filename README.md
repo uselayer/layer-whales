@@ -1,7 +1,8 @@
 # Signals
 
-See the biggest traders on Kalshi and Polymarket, open one to see their trades, check whether they trade on the
-other venue too, and copy their next trades in a sandbox.
+See the best traders on Polymarket, open one to see their trades, and copy their next trades in a sandbox.
+Signals is Polymarket-only for now; the SDK also covers Kalshi, which `SIGNALS_VENUES=polymarket,kalshi` turns
+back on (Kalshi traders, both venues' leaderboards, and whether a trader trades on the other venue too).
 
 Built on the [uselayer](https://uselayer.sh) Python SDK (`client.whales`). Run it on your machine, or use the
 hosted version at [usesignals.app](https://usesignals.app). Either way copies run in a sandbox (real prices and
@@ -20,10 +21,12 @@ LAYER_API_KEY=lyr_... uv run signals
 
 Then open http://127.0.0.1:8790.
 
-- **Layer API key** (optional but recommended): used to find the same market on the other venue, to compare two
+- `SIGNALS_VENUES` (default `polymarket`): the venues Signals reads. `polymarket,kalshi` adds Kalshi; with it
+  off, Signals never calls Kalshi, and Kalshi copy rules saved before stay saved but paused.
+- **Layer API key** (optional, with Kalshi on): used to find the same market on the other venue, to compare two
   traders' trades. Get one at uselayer.sh.
-- **Kalshi key** (optional): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy Kalshi traders. Copying
-  Polymarket traders needs no key.
+- **Kalshi key** (optional, with Kalshi on): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy Kalshi
+  traders. Copying Polymarket traders needs no key.
 - `SIGNALS_PORT` (default 8790) and `SIGNALS_STORE_DIR` (default `~/.uselayer/signals`) change the port and
   where the sandbox account, copy rules and Worth following results live. `SIGNALS_WORTH_WALLETS` (default 200)
   is how many wallets Worth following checks.
@@ -51,10 +54,11 @@ so the two always agree. Then three tabs:
     feed. Turn off "Only trades I can still get into" to see them all. Tap a card for the details, the trader
     and a link to Polymarket. **Copy trader** copies that trader's next trades in the sandbox; a trade they
     already made isn't copied. It updates every 30 seconds; Polymarket shows trades a few minutes late.
-  - **Big trades** (`#/big`; the old `#/traders/big` link still works): every trade of $250 or more right now
-    on Kalshi and Polymarket, one card per trade, with the trader's name when the venue shows it ("Anonymous
-    trader" when it doesn't). A named trader's card opens their page. It isn't filtered by your markets: only
-    Polymarket trades say which market they're in, and almost all big trades are Kalshi's.
+  - **Big trades** (`#/big`; the old `#/traders/big` link still works): trades of $250 or more right now on
+    Polymarket, one card per trade, opened on your markets like the rest of the Feed. A named trader's card
+    opens their page. With Kalshi on, it shows every big trade on both venues instead ("Anonymous trader" when
+    Kalshi doesn't name them), not filtered by your markets: the SDK has no categories for Kalshi markets, and
+    almost all big trades are Kalshi's.
 - **Traders**: a leaderboard of the Polymarket traders we recommend: Proven sharp, Quiet sharp, Rising, and
   Too fast to copy (the price moves within minutes of their buys, so a copy usually comes too late).
   - One bar: on the left the market chips (your onboarding choice) and **Copyable only**; on the right
@@ -70,7 +74,7 @@ so the two always agree. Then three tabs:
     own. An empty result says so and offers **Show all markets**; the checks are never loosened to fill it.
   - The footer counts who's left out (Lucky traders, market makers, arbitrage, no clear edge) and **See all
     checked traders** shows everyone but market makers and arbitrage, each marked. It also links to **Top
-    profit** (both venues' leaderboards). "How we pick traders" explains the checks in plain words.
+    profit** (Polymarket's leaderboard; both venues' with Kalshi on). "How we pick traders" explains the checks in plain words.
   - Wallets come from the leaderboards and from busy markets' trades. The first check takes 20–30 minutes and
     is kept in the store dir, so later launches show the last result at once while a new check runs in the
     background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
@@ -83,7 +87,7 @@ so the two always agree. Then three tabs:
     closed), **Activity** (their recent buys and sells) and **Stats** (consistency, risk, style, execution), with
     the evidence (each check, how the price moved after their buys, by category, the trades checked) under **How
     we measure this**. The wallet is their cash (read on-chain) plus open positions; anything that can't be read shows "—", never $0.
-  - **A leaderboard trader's page** (Top profit, Feed → Big trades) also asks **Same person on the other venue?**: accounts that may
+  - **A leaderboard trader's page** (Top profit, Feed → Big trades), with Kalshi on, also asks **Same person on the other venue?**: accounts that may
     be the same person, each with the evidence (the same name or X handle on an account that really trades,
     and trades in the same market, the same way, within 5 minutes). It's an inference, never a confirmed
     identity.
@@ -113,7 +117,7 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
 
 ## Good to know
 
-- Kalshi's trader data comes from the public endpoints behind kalshi.com's Leaderboard and profile pages.
+- With Kalshi on: Kalshi's trader data comes from the public endpoints behind kalshi.com's Leaderboard and profile pages.
   Kalshi doesn't document them, so they can change.
 - Kalshi traders choose whether to show their trades. Most leaderboard whales hide them: their page says
   so, and they can't be copied directly. Traders under **Feed → Big trades** usually show theirs.

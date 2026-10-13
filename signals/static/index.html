@@ -125,7 +125,7 @@
   .switch input:focus-visible + .track { outline: 2px solid var(--fg); outline-offset: 2px; }
 
   /* cards */
-  .cards { display: grid; gap: 12px; }
+  .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; } /* a long name truncates, never widens the cards */
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; box-shadow: var(--shadow); }
   .trade { cursor: pointer; transition: border-color .15s, transform .15s; }
   .trade:hover { border-color: color-mix(in srgb, var(--fg) 18%, var(--line)); }
@@ -467,6 +467,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const sdkText = (t) => String(t ?? "").replace(/\b([Bb])et(s?)\b/g, (_, b, s) => (b === "B" ? "Trade" : "trade") + s)
   .replace(/\bat (0\.\d+) or better\b/g, (_, x) => `at ${Math.round(parseFloat(x) * 1000) / 10}¢ or better`);
 const VENUE = { kalshi: "Kalshi", polymarket: "Polymarket", polymarket_us: "Polymarket US" };
+// The venues Signals reads (SIGNALS_VENUES on the engine, from /api/config): Polymarket only for now. Kalshi's
+// views (Top profit's venue choice, Kalshi trader pages, "Same person on Kalshi?") show only when it's on.
+let venuesOn = ["polymarket"];
+const kalshiOn = () => venuesOn.includes("kalshi");
 const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
 
 async function api(path, opts) {
@@ -515,9 +519,10 @@ function updatedAgo(ms) {
 // ---- who: names, aliases, avatars, tiers ----
 // No wallet addresses on screen: a trader without a real name gets "Trader 0x91…76" and an identicon.
 const ADDR = /^0x[0-9a-f]{6,}/i;
+const SHORT_ADDR = /^0x[0-9a-f]{2,}\s*(…|\.{2,3})\s*[0-9a-f]{2,}$/i; // Polymarket names some wallets "0xd654…23e3"
 function displayName(name, id) {
   const n = String(name || "").trim();
-  if (n && !ADDR.test(n)) return n;
+  if (n && !ADDR.test(n) && !SHORT_ADDR.test(n)) return n;
   const w = ADDR.test(id || "") ? id : (n.match(/^0x[0-9a-f]+/i) || [""])[0];
   return w ? `Trader ${w.slice(0, 4)}…${w.slice(-2)}` : "Anonymous";
 }
@@ -783,8 +788,8 @@ function refreshCopyButtons() {
 
 // ---- feed ----
 // One switch at the top: the traders we follow (#/, the default) or Big trades (#/big: $250 or more right now,
-// both venues, every one of them). Traders we follow opens filtered to your markets, with the same chips, and
-// the same interests, as Traders.
+// on the venues Signals reads). Both open filtered to your markets, with the same chips, and the same
+// interests, as Traders (Big trades only while Signals reads Polymarket alone: see renderBig).
 const feed = { data: null, at: 0, err: null, onlyIn: true, big: null, bigAt: 0, bigErr: null };
 let feedTimer = null;
 const onFeed = () => routeName().startsWith("feed");
@@ -870,20 +875,31 @@ function renderFeed() {
   bindActions($("#flist"));
 }
 
-// Big trades: every trade of $250 or more, one card each, in the Feed's card style. Not filtered by your
-// markets: the SDK only knows Polymarket markets' categories, and almost all big trades are Kalshi's, so a
-// filter would mostly hide them. The SDK's big trades have no price now, so there is no "You can still get in"
-// here; a named trader's card opens their page.
+// Big trades: trades of $250 or more on the venues Signals reads, one card each, in the Feed's card style.
+// Polymarket only (for now), every trade knows its market, so Big trades opens on your markets like the rest of
+// the Feed. With Kalshi on, it shows everything: the SDK has no categories for Kalshi markets, and almost all
+// big trades are Kalshi's, so a filter would mostly hide them. The SDK's big trades have no price now, so there
+// is no "You can still get in" here; a named trader's card opens their page.
 function renderBig() {
   const rows = feed.big;
   if (!rows) { $("#fbar").innerHTML = ""; $("#flist").innerHTML = errorState(feed.bigErr || "No answer from the app."); bindActions($("#flist")); return; }
+  const filtered = !kalshiOn(), counts = {};
+  rows.forEach((t) => { if (t.category) counts[t.category] = (counts[t.category] || 0) + 1; });
+  const names = interestNames(filtered ? interests || [] : []);
+  const list = filtered ? rows.filter((t) => inMarkets(t.category)) : rows;
+  const where = venuesOn.map((v) => VENUE[v]).join(" and ");
   $("#fbar").innerHTML = `
-    <div class="feedtop"><span class="muted" style="font-size:14px">Every trade of $250 or more right now, on Kalshi and Polymarket.</span>
+    <div class="feedtop"><span class="muted" style="font-size:14px">${filtered ? "Trades" : "Every trade"} of $250 or more right now, on ${where}.</span>
       <span class="updated" id="updated">${updatedAgo(feed.bigAt)}</span></div>
+    ${filtered ? `<div class="filters">${marketChips(counts)}</div>` : ""}
     ${feed.bigErr ? `<p class="inline-err">Couldn't refresh: ${esc(feed.bigErr)}. Showing the last update.</p>` : ""}`;
-  $("#flist").innerHTML = rows.length
-    ? `<div class="cards">${rows.map(bigCard).join("")}</div><p class="foot-note">Kalshi names only traders who turned on their social profile.</p>`
-    : emptyState("No big trades right now", "Trades of $250 or more show up here as they happen.");
+  let html;
+  if (!rows.length) html = emptyState("No big trades right now", "Trades of $250 or more show up here as they happen.");
+  else if (!list.length) html = emptyState(`No big ${esc(names)} trades right now`, `None of the last ${plural(rows.length, "big trade")} ${rows.length === 1 ? "is" : "are"} in ${esc(names)}.`,
+    `<button class="btn ghost" id="feedall">Show all markets</button>`);
+  else html = `<div class="cards">${list.map(bigCard).join("")}</div>${kalshiOn() ? `<p class="foot-note">Kalshi names only traders who turned on their social profile.</p>` : ""}`;
+  $("#flist").innerHTML = html;
+  bindFeedChips(document);
   bindActions($("#flist"));
 }
 function bigCard(t) {
@@ -891,7 +907,7 @@ function bigCard(t) {
   const pick = t.outcome && t.venue === "polymarket" ? t.outcome : t.outcome ? `${t.side.toUpperCase()} · ${t.outcome}` : t.side.toUpperCase();
   return `<article class="card${href ? " trade" : ""}"${href ? ` data-href="${href}" tabindex="0"` : ""}>
     <div class="trade-top">${avatar(t.trader ? `${t.venue}:${t.trader}` : "anon", 28)}<span class="who"><span class="name">${t.trader ? esc(displayName(t.name, t.trader)) : "Anonymous trader"}</span></span>
-      <span class="when">${[t.category, VENUE[t.venue], ago(t.at)].filter(Boolean).map(esc).join(" · ")}</span></div>
+      <span class="when">${[t.category, kalshiOn() ? VENUE[t.venue] : null, ago(t.at)].filter(Boolean).map(esc).join(" · ")}</span></div>
     <h3 class="trade-title">${esc(t.title || t.market)}</h3>
     <div class="trade-tags"><span class="chip">${esc(pick)}</span>${marketLink(t.url, `${VENUE[t.venue]} ↗`)}</div>
     <div class="trade-nums"><span>${t.action === "buy" ? "Bought" : "Sold"} at <b>${cents(t.price)}</b></span><span class="amt">${usd(t.usd)}</span></div>
@@ -1169,9 +1185,11 @@ function renderWorth() {
 
 async function topView() {
   const box = $("#tview");
+  if (!kalshiOn()) topOpts.venue = "polymarket"; // one venue: no venue to choose
   if (topOpts.venue === "all") topOpts.by = "pnl";
-  const opts = `<div class="opts">${[["all", "Both venues"], ["kalshi", "Kalshi"], ["polymarket", "Polymarket"]].map(([v, l]) => `<button data-venue="${v}" class="${topOpts.venue === v ? "on" : ""}">${l}</button>`).join("")}
-    <span class="gap"></span>${[["pnl", "By profit"], ["volume", "By volume"]].map(([v, l]) => `<button data-by="${v}" class="${topOpts.by === v ? "on" : ""}" ${v === "volume" && topOpts.venue === "all" ? 'disabled title="Pick one venue: Kalshi counts contracts, Polymarket dollars"' : ""}>${l}</button>`).join("")}</div>`;
+  const venues = kalshiOn() ? [["all", "Both venues"], ["kalshi", "Kalshi"], ["polymarket", "Polymarket"]] : [];
+  const opts = `<div class="opts">${venues.map(([v, l]) => `<button data-venue="${v}" class="${topOpts.venue === v ? "on" : ""}">${l}</button>`).join("")}
+    ${venues.length ? `<span class="gap"></span>` : ""}${[["pnl", "By profit"], ["volume", "By volume"]].map(([v, l]) => `<button data-by="${v}" class="${topOpts.by === v ? "on" : ""}" ${v === "volume" && topOpts.venue === "all" ? 'disabled title="Pick one venue: Kalshi counts contracts, Polymarket dollars"' : ""}>${l}</button>`).join("")}</div>`;
   box.innerHTML = opts + skelRows(8);
   const bindOpts = () => {
     $$("[data-venue]", box).forEach((b) => (b.onclick = () => { topOpts.venue = b.dataset.venue; topView(); }));
@@ -1186,7 +1204,7 @@ async function topView() {
       <span class="rank">${i + 1}</span>${avatar(`${t.venue}:${t.id}`, 40)}
       <span class="tmain"><span class="line"><span class="name">${esc(displayName(t.name, t.id))}</span></span><span class="sub">${VENUE[t.venue]}${vol(t) ? ` · ${vol(t)}` : ""}</span></span>
       <span class="tnum"><b>${pl(t.pnl, usd(t.pnl, true))}</b><small>all time</small></span></a>`).join("")}</div>
-    <p class="foot-note">The venues' own leaderboards. Big profit isn't the same as skill: see Worth following.</p>` : emptyState("No traders"));
+    <p class="foot-note">${kalshiOn() ? "The venues' own leaderboards" : "Polymarket's own leaderboard"}. Big profit isn't the same as skill: see Worth following.</p>` : emptyState("No traders"));
   bindOpts();
 }
 
@@ -1444,7 +1462,7 @@ async function traderPage(venue, id) {
     <div class="tiles">${tiles.map(([k, v]) => `<div class="tile"><span>${k}</span><b>${v}</b></div>`).join("")}</div>
     ${venue === "polymarket" ? `<p class="foot-note"><a class="link" href="#/worth/${esc(t.id)}">Is ${esc(name)} worth following? See their record →</a></p>` : ""}
     <div class="card copybox" id="copybox"></div>
-    <h2 class="h2">Same person on ${venue === "kalshi" ? "Polymarket" : "Kalshi"}?</h2><div class="card" id="links"><p class="muted" style="margin:0">Checking both venues (up to 30 seconds)…</p></div>
+    ${kalshiOn() ? `<h2 class="h2">Same person on ${venue === "kalshi" ? "Polymarket" : "Kalshi"}?</h2><div class="card" id="links"><p class="muted" style="margin:0">Checking both venues (up to 30 seconds)…</p></div>` : ""}
     <h2 class="h2">Open trades</h2><div id="open">${skelCards(2)}</div>
     <h2 class="h2">Recent trades</h2>${hidden ? `<div class="card">${emptyState("Hidden by the trader")}</div>` : d.trades.length ? `<div class="list">${d.trades.slice(0, 20).map((x) => `<div class="row"><div><div class="t">${esc(x.title || x.market)}</div>
       <div class="s">${x.action === "buy" ? "Bought" : "Sold"} ${esc(x.outcome && x.venue === "polymarket" ? x.outcome : x.outcome ? `${x.side.toUpperCase()} · ${x.outcome}` : x.side.toUpperCase())} at ${cents(x.price)} · ${ago(x.at)}${x.url ? ` · ${marketLink(x.url, `${VENUE[x.venue]} ↗`)}` : ""}</div></div><div class="r">${usd(x.usd)}</div></div>`).join("")}</div>` : `<div class="card">${emptyState("No recent trades")}</div>`}`;
@@ -1452,7 +1470,7 @@ async function traderPage(venue, id) {
   if (hidden) box.innerHTML = `<div class="head">Can't be copied</div><p style="margin:0">${esc(name)} hides their trades on Kalshi. If they trade on Polymarket too, you can copy that account instead (see below).</p>`;
   else copyBox(box, t);
   loadOpenTrades(null, venue, id);
-  loadLinks(venue, id);
+  if (kalshiOn()) loadLinks(venue, id); // it reads the other venue: only when Signals reads both
 }
 
 async function loadLinks(venue, id) {
@@ -1554,6 +1572,10 @@ function routeName() {
   if (h === "#/mine") return "mine";
   return h;
 }
+function venueOffPage(venue) {
+  $("#app").innerHTML = `<a class="back" href="#/traders">← Traders</a>${emptyState(`${esc(VENUE[venue] || venue)} isn't in Signals right now`,
+    "Signals covers Polymarket traders for now.", `<a class="btn ghost" href="#/traders">See the traders</a>`)}`;
+}
 function route() {
   if (OLD[location.hash]) { location.replace(OLD[location.hash]); return; }
   closeSheet(); clearTimeout(feedTimer); clearTimeout(worthTimer);
@@ -1570,12 +1592,13 @@ function route() {
   else if (name.startsWith("traders:")) tradersPage(name.split(":")[1]);
   else if (name === "mine") minePage();
   else if (w) worthTraderPage(w[1].toLowerCase());
+  else if (t && !venuesOn.includes(t[1])) venueOffPage(t[1]); // an old link to a Kalshi trader
   else if (t) traderPage(t[1], decodeURIComponent(t[2]));
   else location.replace("#/");
 }
 window.addEventListener("hashchange", route);
 loadCopy().then(() => { if (onFeed()) refreshCopyButtons(); });
-route();
+api("/api/config").then((c) => { venuesOn = c.venues; }).catch(() => {}).finally(route); // without it: Polymarket only
 </script>
 </body>
 </html>
