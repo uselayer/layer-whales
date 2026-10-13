@@ -70,7 +70,7 @@ REASON_LABELS = {
                                   "needed to judge a trader",
     "not_trading_lately": "Not trading lately: no buy in the last {active} days",
     "dormant": "Dormant: no buy in the last {evidence} days",
-    "too_few": "Scored: not enough data, too few of their trades could be checked",
+    "too_few": "Scored: limited evidence, too few of their trades could be checked to measure skill either way",
     "parlays": "Scored: skill unmeasured, they trade mostly parlays, which have no price history",
     "edge_losing": "Scored: the price moves their way, but they lost money from trading over 30 days",
     "no_edge": "Scored: edge not proven",

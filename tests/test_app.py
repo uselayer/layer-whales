@@ -560,7 +560,7 @@ def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offe
     for words in ('"Sharps"', '"Rising"', "Lately, buying after any of these traders hasn't clearly made money after fees.",
                   "Copying never moves it: a Proven sharp can be costly to copy.",
                   '"Copy not proven"', '"Costly to copy"', '"Not offered"', '"Big profit, edge unproven"',
-                  '"Profit rests on one win"', '"Not enough data"', '"Edge not proven"',
+                  '"Profit rests on one win"', '"Limited evidence"', '"Edge not proven"',
                   "not as a signal to buy: we haven't found that buying after them makes money.",
                   "Could you make money buying what they buy?", "If you'd bought after them: ",
                   "How we work out the price",
