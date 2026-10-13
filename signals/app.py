@@ -373,6 +373,7 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
     d = directory()
     halt = stop or threading.Event()
     started = d.sweep_started()
+    print(f"directory sweep started ({DIRECTORY_RATE:g} reads a second at most)", flush=True)
     sightings = new = 0
     held = 0.0
     error: str | None = None
@@ -407,6 +408,10 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
     except (sqlite3.Error, OSError) as e:
         error = error or f"{type(e).__name__}: {e}"
     d.sweep_finished(started, error)
+    # one line for the logs (hosted: Railway's), so a sweep can be watched without the owner's /api/directory
+    print(f"directory sweep {'stopped' if error else 'done'} in {(time.time() - started) / 60:.0f} min: "
+          f"{sightings} sightings, {new} new wallets, held {held / 60:.0f} min{f', error: {error}' if error else ''}",
+          flush=True)  # fmt: skip
     return {"sightings": sightings, "new": new, "held_s": held, "error": error}
 
 
