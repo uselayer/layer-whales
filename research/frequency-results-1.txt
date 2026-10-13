@@ -1,0 +1,118 @@
+Part 1: wallets scored in every window: 450  (errors: 0)
+
+=== frequent: 150 wallets
+  A30 segments: {'no_view': 24, 'no_edge': 125, 'lucky': 1}  (bets with a 5-min price: 10%)
+  A90 segments: {'no_view': 24, 'no_edge': 125, 'lucky': 1}  (bets with a 5-min price: 5%)
+  B   segments: {'no_view': 17, 'no_edge': 130, 'lucky': 1, 'too_fast': 2}  (bets with a 5-min price: 98%)
+  all         picks 150 | 1 PROFIT  20% up [14%–27%] vs all z +nan, median $-9, +0.05¢/$, still trading 114/150
+                        | 2 SKILL  edge -1.98¢ ±0.74 (z -5.3, 3912 ev) | own settle -0.05¢ ±1.30 (z -0.1, 3730 ev)
+                        | 3 COPY   copy -3.18¢ ±0.79 (z -7.9, 3928 ev) | copier settle +0.07¢ ±1.12 (z +0.1, 3679 ev)
+  R30-settle  picks   5 | 1 PROFIT  20% up [4%–62%] vs all z +0.0, median $-19, +0.04¢/$, still trading 4/5
+                        | 2 SKILL  edge -5.38¢ ±3.11 (z -3.4, 150 ev) | own settle -0.15¢ ±4.19 (z -0.1, 168 ev)
+                        | 3 COPY   copy -4.76¢ ±2.92 (z -3.2, 157 ev) | copier settle +0.38¢ ±3.70 (z +0.2, 157 ev)
+  R90-settle  picks  12 | 1 PROFIT  50% up [25%–75%] vs all z +2.4, median $0, +1.36¢/$, still trading 10/12  PASS
+                        | 2 SKILL  edge -4.17¢ ±2.06 (z -4.0, 393 ev) | own settle +1.06¢ ±4.15 (z +0.5, 344 ev)
+                        | 3 COPY   copy -6.38¢ ±2.45 (z -5.1, 406 ev) | copier settle +2.10¢ ±3.62 (z +1.1, 337 ev)
+  R30-profit  picks  54 | 1 PROFIT  28% up [18%–41%] vs all z +1.2, median $-8, +1.06¢/$, still trading 48/54
+                        | 2 SKILL  edge -1.94¢ ±0.99 (z -3.9, 1358 ev) | own settle -1.42¢ ±2.13 (z -1.3, 1239 ev)
+                        | 3 COPY   copy -4.41¢ ±1.35 (z -6.4, 1364 ev) | copier settle -1.37¢ ±1.97 (z -1.4, 1235 ev)
+  R90-profit  picks  56 | 1 PROFIT  27% up [17%–40%] vs all z +1.0, median $-6, +1.03¢/$, still trading 47/56
+                        | 2 SKILL  edge -0.91¢ ±1.38 (z -1.3, 1195 ev) | own settle -1.07¢ ±2.38 (z -0.9, 1139 ev)
+                        | 3 COPY   copy -2.97¢ ±1.50 (z -3.9, 1196 ev) | copier settle -1.76¢ ±2.10 (z -1.6, 1135 ev)
+  R30-both    picks   2 | 1 PROFIT  50% up [9%–91%] vs all z +1.0, median $481, +0.57¢/$, still trading 2/2
+                        | 2 SKILL  edge +2.46¢ ±2.08 (z +2.3, 58 ev)  PASS | own settle -1.06¢ ±7.26 (z -0.3, 58 ev)
+                        | 3 COPY   copy -0.71¢ ±1.06 (z -1.3, 58 ev) | copier settle -3.91¢ ±6.75 (z -1.1, 58 ev)
+  R90-both    picks   7 | 1 PROFIT  57% up [25%–84%] vs all z +2.3, median $1, +0.17¢/$, still trading 6/7  PASS
+                        | 2 SKILL  edge -4.02¢ ±3.18 (z -2.5, 192 ev) | own settle +1.54¢ ±5.43 (z +0.6, 177 ev)
+                        | 3 COPY   copy -9.02¢ ±3.34 (z -5.3, 192 ev) | copier settle +1.18¢ ±4.81 (z +0.5, 177 ev)
+  (* SDK verdicts on windows past Polymarket's 5-minute price history: not valid, shown for the record)
+  R30-rec*    picks   0
+  R30-skill*  picks   1
+  R90-rec*    picks   0
+  R90-skill*  picks   2
+  persistence A30→B own settle return across wallets (8+ events both): -0.08  n=85
+  persistence A30→B trading P&L, rank correlation: +0.12  n=150
+  persistence A90→B own settle return across wallets (8+ events both): +0.03  n=88
+  persistence A90→B trading P&L, rank correlation: +0.06  n=150
+
+=== selective: 150 wallets
+  A30 segments: {'no_edge': 150}  (bets with a 5-min price: 10%)
+  A90 segments: {'no_edge': 141, 'no_view': 9}  (bets with a 5-min price: 0%)
+  B   segments: {'no_edge': 147, 'no_view': 3}  (bets with a 5-min price: 100%)
+  all         picks 150 | 1 PROFIT  14% up [9%–20%] vs all z +nan, median $0, -9.85¢/$, still trading 45/150
+                        | 2 SKILL  edge -1.06¢ ±2.82 (z -0.7, 417 ev) | own settle -5.64¢ ±4.56 (z -2.4, 376 ev)
+                        | 3 COPY   copy -3.98¢ ±2.89 (z -2.7, 419 ev) | copier settle -4.73¢ ±3.94 (z -2.4, 376 ev)
+  R30-settle  picks   0
+  R90-settle  picks   5 | 1 PROFIT  20% up [4%–62%] vs all z +0.4, median $0, -0.22¢/$, still trading 3/5
+                        | 2 SKILL  edge -3.69¢ ±6.23 (z -1.2, 47 ev) | own settle -11.77¢ ±13.54 (z -1.7, 48 ev)
+                        | 3 COPY   copy -8.50¢ ±10.71 (z -1.6, 47 ev) | copier settle -8.63¢ ±12.83 (z -1.3, 48 ev)
+  R30-profit  picks  33 | 1 PROFIT  33% up [20%–50%] vs all z +2.6, median $0, -187.66¢/$, still trading 15/33
+                        | 2 SKILL  edge -1.24¢ ±1.29 (z -1.9, 40 ev) | own settle -3.46¢ ±15.80 (z -0.4, 28 ev)
+                        | 3 COPY   copy -3.87¢ ±3.87 (z -2.0, 40 ev) | copier settle -3.51¢ ±15.75 (z -0.4, 28 ev)
+  R90-profit  picks  37 | 1 PROFIT  16% up [8%–31%] vs all z +0.3, median $0, -16.37¢/$, still trading 13/37
+                        | 2 SKILL  edge -3.02¢ ±4.72 (z -1.3, 87 ev) | own settle -11.93¢ ±10.29 (z -2.3, 75 ev)
+                        | 3 COPY   copy -5.72¢ ±6.26 (z -1.8, 87 ev) | copier settle -9.81¢ ±9.35 (z -2.1, 75 ev)
+  R30-both    picks   0
+  R90-both    picks   5 | 1 PROFIT  20% up [4%–62%] vs all z +0.4, median $0, -0.22¢/$, still trading 3/5
+                        | 2 SKILL  edge -3.69¢ ±6.23 (z -1.2, 47 ev) | own settle -11.77¢ ±13.54 (z -1.7, 48 ev)
+                        | 3 COPY   copy -8.50¢ ±10.71 (z -1.6, 47 ev) | copier settle -8.63¢ ±12.83 (z -1.3, 48 ev)
+  (* SDK verdicts on windows past Polymarket's 5-minute price history: not valid, shown for the record)
+  R30-rec*    picks   0
+  R30-skill*  picks   0
+  R90-rec*    picks   0
+  R90-skill*  picks   0
+  persistence A30→B own settle return across wallets (8+ events both): +nan  n=0
+  persistence A30→B trading P&L, rank correlation: +0.01  n=150
+  persistence A90→B own settle return across wallets (8+ events both): +0.13  n=13
+  persistence A90→B trading P&L, rank correlation: +0.03  n=150
+
+=== sparse: 150 wallets
+  A30 segments: {'no_edge': 141, 'no_view': 9}  (bets with a 5-min price: 12%)
+  A90 segments: {'no_edge': 134, 'no_view': 16}  (bets with a 5-min price: 3%)
+  B   segments: {'no_edge': 146, 'inactive': 1, 'no_view': 3}  (bets with a 5-min price: 97%)
+  all         picks 150 | 1 PROFIT  19% up [14%–26%] vs all z +nan, median $0, -6.19¢/$, still trading 41/150
+                        | 2 SKILL  edge -0.09¢ ±2.76 (z -0.1, 279 ev) | own settle +2.89¢ ±4.96 (z +1.1, 282 ev)
+                        | 3 COPY   copy -3.61¢ ±3.00 (z -2.4, 291 ev) | copier settle +1.46¢ ±4.12 (z +0.7, 280 ev)
+  R30-settle  picks   0
+  R90-settle  picks   0
+  R30-profit  picks  42 | 1 PROFIT  55% up [40%–69%] vs all z +4.6, median $0, +5.97¢/$, still trading 26/42  PASS
+                        | 2 SKILL  edge -0.90¢ ±1.24 (z -1.4, 78 ev) | own settle +0.42¢ ±9.92 (z +0.1, 72 ev)
+                        | 3 COPY   copy -3.80¢ ±2.54 (z -2.9, 80 ev) | copier settle -0.27¢ ±10.04 (z -0.1, 71 ev)
+  R90-profit  picks  65 | 1 PROFIT  40% up [29%–52%] vs all z +3.2, median $0, -24.54¢/$, still trading 31/65
+                        | 2 SKILL  edge -0.20¢ ±2.59 (z -0.2, 156 ev) | own settle +1.33¢ ±6.36 (z +0.4, 157 ev)
+                        | 3 COPY   copy -4.12¢ ±4.17 (z -1.9, 168 ev) | copier settle -0.53¢ ±4.96 (z -0.2, 156 ev)
+  R30-both    picks   0
+  R90-both    picks   0
+  (* SDK verdicts on windows past Polymarket's 5-minute price history: not valid, shown for the record)
+  R30-rec*    picks   0
+  R30-skill*  picks   0
+  R90-rec*    picks   0
+  R90-skill*  picks   0
+  persistence A30→B own settle return across wallets (8+ events both): +nan  n=0
+  persistence A30→B trading P&L, rank correlation: +0.35  n=150
+  persistence A90→B own settle return across wallets (8+ events both): +nan  n=2
+  persistence A90→B trading P&L, rank correlation: +0.20  n=150
+
+Selective traders picked by R90-both, A90 then B:
+  s1lentparadox        A90 settle +15.13¢ ±12.25 (z +2.4, 56 ev) P&L $        19  →  B settle — P&L $        -1 edge —
+  RichardT             A90 settle +12.38¢ ±12.08 (z +2.0, 55 ev) P&L $       356  →  B settle -10.93¢ ±13.73 (z -1.6, 47 ev) P&L $       -98 edge -3.69¢ ±6.23 (z -1.2, 47 ev)
+  cypherian            A90 settle +13.58¢ ±12.24 (z +2.2, 24 ev) P&L $       113  →  B settle — P&L $         0 edge —
+  DerpKing             A90 settle +2.04¢ ±1.27 (z +3.2, 25 ev) P&L $         5  →  B settle — P&L $         0 edge —
+  Larsenjorgen         A90 settle +17.26¢ ±16.89 (z +2.0, 18 ev) P&L $       124  →  B settle — P&L $         0 edge —
+
+Exploratory (not pre-registered): B trading P&L of at least $100, by band and rule
+  frequent  all         picks 150 | made $100+:  13  lost $100+:  55 | total $      8,034
+  frequent  R30-settle  picks   5 | made $100+:   1  lost $100+:   1 | total $        169
+  frequent  R90-settle  picks  12 | made $100+:   4  lost $100+:   3 | total $      8,000
+  frequent  R30-profit  picks  54 | made $100+:   8  lost $100+:  20 | total $    100,634
+  frequent  R90-profit  picks  56 | made $100+:   4  lost $100+:  20 | total $     91,023
+  frequent  R30-both    picks   2 | made $100+:   1  lost $100+:   0 | total $        962
+  frequent  R90-both    picks   7 | made $100+:   2  lost $100+:   2 | total $        454
+  selective all         picks 150 | made $100+:   2  lost $100+:   7 | total $     -9,960
+  selective R90-settle  picks   5 | made $100+:   0  lost $100+:   0 | total $        -99
+  selective R30-profit  picks  33 | made $100+:   0  lost $100+:   1 | total $     -7,979
+  selective R90-profit  picks  37 | made $100+:   0  lost $100+:   1 | total $     -8,104
+  selective R90-both    picks   5 | made $100+:   0  lost $100+:   0 | total $        -99
+  sparse    all         picks 150 | made $100+:   2  lost $100+:   6 | total $    -50,386
+  sparse    R30-profit  picks  42 | made $100+:   2  lost $100+:   0 | total $        462
+  sparse    R90-profit  picks  65 | made $100+:   2  lost $100+:   2 | total $    -46,437

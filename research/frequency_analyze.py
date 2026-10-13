@@ -159,10 +159,26 @@ def corr(pairs: list[tuple[float, float]]) -> float:
     return sum((x - mx) * (y - my) for x, y in pairs) / len(pairs) / (sx * sy) if sx and sy else float("nan")
 
 
+def _ranks(xs: list[float]) -> list[float]:
+    """Ranks with ties sharing their average rank (many wallets have exactly $0 in a window)."""
+    order = sorted(range(len(xs)), key=lambda i: xs[i])
+    out = [0.0] * len(xs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and xs[order[j + 1]] == xs[order[i]]:
+            j += 1
+        for k in range(i, j + 1):
+            out[order[k]] = (i + j) / 2
+        i = j + 1
+    return out
+
+
 def rank_corr(pairs: list[tuple[float, float]]) -> float:
-    ra = {i: k for k, i in enumerate(sorted(range(len(pairs)), key=lambda i: pairs[i][0]))}
-    rb = {i: k for k, i in enumerate(sorted(range(len(pairs)), key=lambda i: pairs[i][1]))}
-    return corr([(ra[i], rb[i]) for i in range(len(pairs))])
+    """Spearman's rank correlation, ties averaged."""
+    if len(pairs) < 3:
+        return float("nan")
+    return corr(list(zip(_ranks([a for a, _ in pairs]), _ranks([b for _, b in pairs]))))
 
 
 def priced(rows: list[Row], win: str) -> str:
@@ -223,3 +239,14 @@ if PART == 1:
         sa, sb = own_settle(a), own_settle(b)
         print(f"  {str(a.get('name'))[:20]:20} A90 settle {fmt(sa)} P&L ${a.get('trading_pnl_window') or 0:>10,.0f}"
               f"  →  B settle {fmt(sb)} P&L ${b.get('trading_pnl_window') or 0:>10,.0f} edge {fmt(pooled([r], 'edge'))}")  # fmt: skip
+
+# Exploratory, not pre-registered: how much money is at stake. Most wallets in this pool trade small, so "in profit"
+# can mean a few cents; this counts wallets whose window-B trading P&L was at least $100 either way.
+print("\nExploratory (not pre-registered): B trading P&L of at least $100, by band and rule")
+for grp in ("frequent", "selective", "sparse"):
+    G = [r for r in R if r["group"] == grp]
+    for name, rule in RULES.items():
+        S = [r["B"].get("trading_pnl_window") or 0 for r in G if rule(r)]
+        if S:
+            print(f"  {grp:9} {name:11} picks {len(S):3} | made $100+: {sum(p >= 100 for p in S):3}  lost $100+: "
+                  f"{sum(p <= -100 for p in S):3} | total ${sum(S):>11,.0f}")

@@ -1,0 +1,89 @@
+Using CPython 3.14.7 interpreter at: /opt/homebrew/opt/python@3.14/bin/python3.14
+Creating virtual environment at: .venv
+   Building signals @ file:///Users/preciousemakenemi/dev/signals/.claude/worktrees/frequency-study
+      Built signals @ file:///Users/preciousemakenemi/dev/signals/.claude/worktrees/frequency-study
+Installed 29 packages in 35ms
+band $1,000+: 500 closed markets, 60 picked
+band $10,000+: 500 closed markets, 60 picked
+band $100,000+: 500 closed markets, 60 picked
+band $1,000,000+: 500 closed markets, 60 picked
+23454 wallets traded in them in the 90 days before T
+classified 60 in 16s: frequent 44, selective 13, sparse 2
+classified 120 in 28s: frequent 84, selective 29, sparse 3
+classified 180 in 39s: frequent 124, selective 46, sparse 3
+classified 240 in 53s: frequent 150, selective 54, sparse 8
+classified 300 in 65s: frequent 150, selective 61, sparse 13
+classified 360 in 79s: frequent 150, selective 73, sparse 16
+classified 420 in 89s: frequent 150, selective 94, sparse 16
+classified 480 in 102s: frequent 150, selective 109, sparse 18
+classified 540 in 114s: frequent 150, selective 126, sparse 20
+classified 600 in 126s: frequent 150, selective 141, sparse 21
+classified 660 in 137s: frequent 150, selective 150, sparse 24
+classified 720 in 151s: frequent 150, selective 150, sparse 24
+classified 780 in 176s: frequent 150, selective 150, sparse 26
+classified 840 in 192s: frequent 150, selective 150, sparse 29
+classified 900 in 204s: frequent 150, selective 150, sparse 29
+classified 960 in 216s: frequent 150, selective 150, sparse 31
+classified 1020 in 230s: frequent 150, selective 150, sparse 34
+classified 1080 in 241s: frequent 150, selective 150, sparse 36
+classified 1140 in 256s: frequent 150, selective 150, sparse 41
+classified 1200 in 292s: frequent 150, selective 150, sparse 43
+classified 1260 in 305s: frequent 150, selective 150, sparse 44
+classified 1320 in 316s: frequent 150, selective 150, sparse 46
+classified 1380 in 328s: frequent 150, selective 150, sparse 48
+classified 1440 in 340s: frequent 150, selective 150, sparse 49
+classified 1500 in 351s: frequent 150, selective 150, sparse 51
+classified 1560 in 364s: frequent 150, selective 150, sparse 54
+classified 1620 in 376s: frequent 150, selective 150, sparse 57
+classified 1680 in 388s: frequent 150, selective 150, sparse 57
+classified 1740 in 400s: frequent 150, selective 150, sparse 61
+classified 1800 in 411s: frequent 150, selective 150, sparse 61
+classified 1860 in 424s: frequent 150, selective 150, sparse 62
+classified 1920 in 437s: frequent 150, selective 150, sparse 67
+classified 1980 in 448s: frequent 150, selective 150, sparse 68
+classified 2040 in 464s: frequent 150, selective 150, sparse 71
+classified 2100 in 485s: frequent 150, selective 150, sparse 73
+classified 2160 in 497s: frequent 150, selective 150, sparse 74
+classified 2220 in 511s: frequent 150, selective 150, sparse 74
+classified 2280 in 522s: frequent 150, selective 150, sparse 77
+classified 2340 in 536s: frequent 150, selective 150, sparse 79
+classified 2400 in 550s: frequent 150, selective 150, sparse 79
+classified 2460 in 564s: frequent 150, selective 150, sparse 80
+classified 2520 in 578s: frequent 150, selective 150, sparse 82
+classified 2580 in 590s: frequent 150, selective 150, sparse 82
+classified 2640 in 603s: frequent 150, selective 150, sparse 85
+classified 2700 in 615s: frequent 150, selective 150, sparse 88
+classified 2760 in 641s: frequent 150, selective 150, sparse 90
+classified 2820 in 654s: frequent 150, selective 150, sparse 92
+classified 2880 in 664s: frequent 150, selective 150, sparse 94
+classified 2940 in 677s: frequent 150, selective 150, sparse 96
+classified 3000 in 691s: frequent 150, selective 150, sparse 97
+classified 3060 in 706s: frequent 150, selective 150, sparse 98
+classified 3120 in 717s: frequent 150, selective 150, sparse 102
+classified 3180 in 729s: frequent 150, selective 150, sparse 104
+classified 3240 in 742s: frequent 150, selective 150, sparse 108
+classified 3300 in 753s: frequent 150, selective 150, sparse 112
+classified 3360 in 764s: frequent 150, selective 150, sparse 116
+classified 3420 in 780s: frequent 150, selective 150, sparse 118
+classified 3480 in 794s: frequent 150, selective 150, sparse 120
+classified 3540 in 807s: frequent 150, selective 150, sparse 121
+classified 3600 in 820s: frequent 150, selective 150, sparse 121
+classified 3660 in 832s: frequent 150, selective 150, sparse 122
+classified 3720 in 844s: frequent 150, selective 150, sparse 124
+classified 3780 in 857s: frequent 150, selective 150, sparse 126
+classified 3840 in 868s: frequent 150, selective 150, sparse 126
+classified 3900 in 881s: frequent 150, selective 150, sparse 127
+classified 3960 in 893s: frequent 150, selective 150, sparse 129
+classified 4020 in 909s: frequent 150, selective 150, sparse 131
+classified 4080 in 920s: frequent 150, selective 150, sparse 131
+classified 4140 in 932s: frequent 150, selective 150, sparse 133
+classified 4200 in 944s: frequent 150, selective 150, sparse 139
+classified 4260 in 956s: frequent 150, selective 150, sparse 139
+classified 4320 in 969s: frequent 150, selective 150, sparse 141
+classified 4380 in 1019s: frequent 150, selective 150, sparse 142
+classified 4440 in 1035s: frequent 150, selective 150, sparse 143
+classified 4500 in 1048s: frequent 150, selective 150, sparse 143
+classified 4560 in 1061s: frequent 150, selective 150, sparse 145
+classified 4620 in 1078s: frequent 150, selective 150, sparse 149
+classified 4680 in 1097s: frequent 150, selective 150, sparse 150
+classified: {'sparse': 150, 'frequent': 3116, 'selective': 1123, 'too_few': 290, 'error': 1} | kept: {'frequent': 150, 'selective': 150, 'sparse': 150}
