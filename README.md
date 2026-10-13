@@ -1,7 +1,7 @@
 # Signals
 
-See the best traders on Polymarket, open one to see their trades, and see what copying a trade would really
-cost you before you buy it on Polymarket.
+See the best traders on Polymarket, open one to see their trades, and see what buying any open trade would
+really cost you now before you buy it on Polymarket.
 Signals is Polymarket-only for now; the SDK also covers Kalshi, which `SIGNALS_VENUES=polymarket,kalshi` turns
 back on (Kalshi traders, both venues' leaderboards, and whether a trader trades on the other venue too).
 
@@ -53,10 +53,13 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     the market has turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or
     less, 98¢ or more, or one they no longer hold is **Won**, **Lost** or **Closed**, and drops out of the default
     feed. Turn off "Only trades I can still get into" to see them all. Tap a card for the details and the
-    trader. A trade you can still get into has **Check your price**: pick an amount and it's priced from
-    Polymarket's order book right now (at most 3¢ above their price), with the fee, your price per contract
-    against theirs, and what you get if it wins. **Buy on Polymarket ↗** opens the market there; Signals places
-    no orders. It updates every 30 seconds; Polymarket shows trades a few minutes late.
+    trader. Every trade has **Check your price** (**What buying now costs**), whoever the trader and whether or
+    not copying them is offered: pick an amount and the engine prices it from Polymarket's order book right now,
+    up to 3¢ above the cheapest price for sale (said on the page), with the fee, the estimated slippage, what's
+    for sale within that limit, when the book was read, and what you get if it wins. Their price is shown for
+    context only. The engine reads the price and whether the market is still taking orders itself (Polymarket's
+    market status, not the price). It's an estimate, not a guaranteed fill. **Buy on Polymarket ↗** opens the
+    market there; Signals places no orders. It updates every 30 seconds; Polymarket shows trades a few minutes late.
   - **Big trades** (`#/big`, linked from the foot of Recommended; the old `#/traders/big` link still works): trades of $250 or more right now on
     Polymarket, one card per trade, opened on your markets like the rest of the Feed. A named trader's card
     opens their page. With Kalshi on, it shows every big trade on both venues instead ("Anonymous trader" when
@@ -84,11 +87,12 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
     `client.whales.discover()` / `score()` in the SDK.
   - **A trader's profile** (from the leaderboard or a wallet search): their market and last trade, a link to their
-    Polymarket profile, and whether they're copyable. A stat strip (profit and per $ traded for the
+    Polymarket profile, their tier, and their copy status under Follow (Copyable, Copy not proven or Not
+    recommended, with "Why?"). A stat strip (profit and per $ traded for the
     period, 12-week consistency, win record and usual trade over the last 30 days, wallet; a note says the period
     switch changes only profit), a profit chart for 7D / 30D / 90D with the stretches
-    below their previous high shaded, and **Why they're here** in three plain lines (consistent, how they trade,
-    can you copy them) plus the SDK's own warnings. Tabs: **Positions** (open, with "You can still get in", and
+    below their previous high shaded, and **Why they're here**: why they're on the list, their copy status and its reason, the SDK's
+    own warnings as a callout, then a short table (markets, buys at, new markets, holds, last bought). Tabs: **Positions** (open, with "You can still get in", and
     closed), **Activity** (their recent buys and sells) and **Stats** (consistency, risk, style, execution), with
     the evidence (each check, how the price moved after their buys, by category, the trades checked) under **How
     we measure this**. The wallet is their cash (read on-chain) plus open positions; anything that can't be read shows "—", never $0.
@@ -114,10 +118,12 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   the volume, unread, until the owner decides to delete them.
 - **Alerts** on Telegram (off until `TELEGRAM_BOT_TOKEN` is set): "Connect Telegram" on a trader's page gives a
   one-time link to the bot; Start there connects the chat. Every 30 seconds the engine reads followed traders'
-  trades (once per trader) and messages each connected follower about every new buy of $100 or more (split buys
-  within 30 minutes add up), with how
-  far the price has moved (and what $10 buys now when copying is offered and the price is still in range),
-  "Useful / Not useful" and a "Stop alerts from …" button. Two or more followed traders buying the same outcome
+  trades (once per trader) and messages each connected follower about every new buy and sell, whatever the amount
+  and whoever the trader (split buys within 30 minutes add up): who bought what, at what price, the market, the price
+  now, and when they traded with how long before the alert that was. A trader copying is offered for gets one more
+  line while the price is still near theirs; costs stay on the trade's page, which "Check current price" opens.
+  A sell says whether they still hold some (then the price now) or none, and is never a suggestion to sell.
+  Every alert has "Useful / Not useful" and a "Stop alerts from …" button. Two or more followed traders buying the same outcome
   make one grouped message, edited in place as more buy. Big trades ($10,000 or more, from the SDK's big trades)
   in the markets someone picked (onboarding or the Feed's Change, saved to their account; Skip means none) alert them too. At most 20 alerts per person per UTC day. What
   was sent, the buys behind grouped alerts and the votes are kept in `/data/alerts.db` (SQLite). In the chat,
@@ -125,7 +131,9 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
 - **Trader directory** (phase 1: finding; phase 2: keeping scores): every Polymarket wallet Signals finds, and
   where, kept across runs in `/data/directory.db` (SQLite). Once a day the engine sweeps every Polymarket leaderboard (88: profit and
   volume, four periods, overall and each category, to rank ~10,050) and open markets at every level of activity
-  (the SDK's `find_wallets`, uselayer 0.9): about 18,000 reads, roughly 2.5 hours. It stays out of the Feed's way:
+  (the SDK's `find_wallets`, uselayer 0.9): about 18,000 reads, roughly 2.5 hours. A restart (a deploy) doesn't start it
+  over: each leaderboard, and the markets, is marked once read to its end, and the next sweep reads only what wasn't
+  read in the last day. It stays out of the Feed's way:
   at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one trader at a time, needs
   at most ~3.3), and none while the Worth following check runs, which can use all 8. Traders in the Feed's big
   trades, wallets opened that the last check didn't have (pasted into search, mostly) and followed wallets are kept
@@ -149,7 +157,12 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   alert's links (each goes through `/go/<alert id>/<target>`, which counts the tap and redirects: to Polymarket
   or Signals only, and even when counting fails), "Stop alerts" taps and unfollows (and how many came within 7
   days of an alert about that trader), Useful / Not useful votes, follows per visitor who picks interests (the
-  pick is counted anonymously, no id at all) and followers who connected Telegram. To read the summary:
+  pick is counted anonymously, no id at all) and followers who connected Telegram. Also anonymous (no id, wallet
+  or trade): every "What buying now costs" quote, with how it ended (`ok`, `no_book`, `price_changed`, `short`,
+  `closed`, `rate_limited`, `error`), how many Polymarket reads it took and how long (`quotes`: reads per quote,
+  median and p90 milliseconds, share rate-limited), and every trade page or trader page that couldn't open because
+  the wallet has no Polymarket profile (`no_profile`, next to the alerts' "Check your price" taps for scale). To
+  read the summary:
   - locally: `curl http://127.0.0.1:8790/api/metrics` (from the same machine only);
   - hosted: the owner sets `SIGNALS_METRICS_KEY` in Railway's variables, then
     `curl -H "Authorization: Bearer $SIGNALS_METRICS_KEY" https://usesignals.app/api/metrics`. Without the key

@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from uselayer import Trader, TraderDetail, Whales, WhalePosition, WhaleTrade
+from uselayer.whales import CopyPreview
 
 from signals import app as engine
 
@@ -29,7 +30,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
     )
     monkeypatch.setattr(w, "links", lambda *a, **k: [])
     monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
-    # The last check found 0xabc copyable: the cost preview only prices a trader the page offers copying for.
+    # The last check found 0xabc copyable (the Feed and Traders show it; a quote is priced for anyone).
     monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [COPYABLE]})
     monkeypatch.setattr(engine, "_worth_one", {})
     return TestClient(engine.app)
@@ -262,62 +263,94 @@ def test_market_links_go_to_the_event_on_polymarket() -> None:
     assert s["recent"][0]["url"] == "https://polymarket.com/event/ita-isr" and s["sample"][0]["url"] is None
 
 
-def test_what_copying_one_feed_trade_costs_now(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def _quote(**kw: Any) -> CopyPreview:
+    """A preview as the SDK returns it: one book read, best_price the cheapest ask at that moment."""
+    t = WhaleTrade("polymarket", "0xabc", None, "0xcid:1", "yes", "buy", 0.52, 0, 0, datetime.now(UTC), "x")
+    base: dict[str, Any] = {"trade": t, "ok": True, "reason": "", "venue": "polymarket", "market": "0xcid:1",
+                            "side": "yes", "contracts": 5.0, "price": 0.53, "worst_price": 0.53, "limit": 0.55,
+                            "cost": 2.65, "fee": 0.06, "total": 2.71, "payout": 5.0, "profit_if_win": 2.29,
+                            "max_spend": 400.0, "depth_checked": True, "best_price": 0.52}  # fmt: skip
+    return CopyPreview(**(base | kw))
+
+
+def test_what_buying_one_feed_trade_costs_now(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[Any] = []
 
-    class Preview:
-        ok, price = True, 0.53
-
-        def to_dict(self) -> dict[str, Any]:
-            return {"ok": True, "price": 0.53, "total": 2.71, "payout": 5.0, "profit_if_win": 2.29}
-
-    def preview(self: Any, trade: Any, **kw: Any) -> Preview:
+    def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
         seen.append((self, trade, kw))
-        return Preview()
+        return _quote()
 
     monkeypatch.setattr(Whales, "preview_copy", preview)
     body = {"wallet": "0xabc", "name": "ThorinCSGO", "market": "0xcid:1", "price": 0.52, "title": "Ducks vs. Jets",
             "outcome": "Jets", "at": "2026-10-09T20:00:00+00:00", "token": "tok-jets"}  # fmt: skip
-    assert api.post("/api/trade/preview", json=body).json()["total"] == 2.71
+    r = api.post("/api/trade/preview", json=body).json()
+    assert (r["total"], r["best_price"], r["limit"], r["their_price"]) == (2.71, 0.52, 0.55, 0.52)
+    assert datetime.fromisoformat(r["priced_at"]).tzinfo is not None  # when the book and the market were read
+    assert len(seen) == 1  # the cheapest price for sale is their price: one read prices it
     whales, trade, kw = seen[0]
     assert whales is engine.reads.whales  # a read: no sandbox, no store of yours
     assert (trade.venue, trade.market, trade.side, trade.action, trade.price) == ("polymarket", "0xcid:1", "yes", "buy", 0.52)
-    assert kw == {"size": 5.0, "max_slippage": 0.03}  # no amount: 5 contracts, at most 3¢ above their price
+    assert kw == {"size": 5.0, "max_slippage": 0.03}  # no amount: 5 contracts, at most 3¢ above the best price
     assert trade.token == "tok-jets"  # the exact outcome token reaches the SDK
     api.post("/api/trade/preview", json=body | {"spend": 50})
     assert seen[1][2] == {"spend": 50.0, "max_slippage": 0.03}  # an amount from the page, fee included
     assert api.post("/api/trade/preview", json=body | {"spend": 0}).status_code == 400
-    assert not list(engine.STORE_DIR.iterdir())  # nothing kept
+    assert [f.name for f in engine.STORE_DIR.iterdir()] == ["alerts.db"]  # only the anonymous count of quotes
+    with engine._db() as con:
+        assert [r[:2] for r in con.execute("SELECT outcome, reads FROM quotes")] == [("ok", 1), ("ok", 1)]
+        assert not con.execute("SELECT 1 FROM events").fetchall()
 
 
-def test_the_preview_refuses_prices_you_cant_still_get_in_at(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    # The SDK only refuses a price more than 3¢ above theirs. The engine also refuses a settled market (2¢ or
-    # less, 98¢ or more) and one more than 5¢ below what they paid, by the Feed's own rule (bet_status).
-    now = {"price": 0.5}
+def test_the_quote_is_priced_from_the_market_now_not_their_price(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Their price was 60¢; the market has moved. The first read finds the cheapest price for sale now (the SDK's
+    # best_price, set even though nothing was for sale within 3¢ of theirs); the second prices the amount from it.
+    # A price the page sends (price_now) is never used, and a price that looks settled is still priced.
+    seen: list[float] = []
+    book = {"best": 0.70}
 
-    class Preview:
-        ok = True
+    def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
+        seen.append(trade.price)
+        if trade.price != book["best"]:
+            return _quote(ok=False, reason="Nothing to buy at 0.63 or better right now.", contracts=None,
+                          price=book["best"], limit=0.63, max_spend=0.0, best_price=book["best"])  # fmt: skip
+        return _quote(price=book["best"] + 0.005, best_price=book["best"], limit=round(book["best"] + 0.03, 2))
 
-        @property
-        def price(self) -> float:
-            return now["price"]
+    monkeypatch.setattr(Whales, "preview_copy", preview)
+    body = {"wallet": "0xabc", "market": "0xcid:1", "price": 0.60, "price_now": 0.61, "spend": 50}
+    for best in (0.70, 0.40, 0.985, 0.015):  # moved up, moved down, priced like it's settled either way
+        book["best"], seen[:] = best, []
+        r = api.post("/api/trade/preview", json=body).json()
+        assert seen == [0.60, best] and r["ok"] and r["best_price"] == best and r["their_price"] == 0.60, (best, r)
 
-        def to_dict(self) -> dict[str, Any]:
-            return {"ok": True, "price": now["price"]}
 
-    monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: Preview())
-    body = {"wallet": "0xabc", "market": "0xcid:1", "price": 0.60}
-    for price, words in ((0.985, "98¢ or more"), (0.02, "2¢ or less"), (0.54, "6¢ below"), (0.64, "4¢ above")):
-        now["price"] = price
-        r = api.post("/api/trade/preview", json=body)
-        assert r.status_code == 400 and words in r.json()["detail"], (price, r.text)
-    assert engine.why_not_copy(0.97, 0.99) is not None  # their price was fine, the market's isn't any more
-    now["price"] = 0.56  # 4¢ below: you can still get in
-    assert api.post("/api/trade/preview", json=body).json()["price"] == 0.56
+def test_a_quote_without_a_book_is_priced_from_polymarkets_best_price(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[float] = []
+
+    def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
+        seen.append(trade.price)
+        return _quote(depth_checked=False, best_price=None, price=0.66, worst_price=None)
+
+    monkeypatch.setattr(Whales, "preview_copy", preview)
+    r = api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.60}).json()
+    assert seen == [0.60, 0.66] and r["best_price"] is None  # no book read: no slippage claimed
+
+
+def test_a_closed_market_is_said_from_its_status_not_its_price(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The SDK reads Polymarket's market (closed, acceptingOrders) before the book: a 50¢ price says nothing about it.
+    calls: list[Any] = []
+    closed = _quote(ok=False, reason="Polymarket isn't taking orders on this market now.", contracts=None, price=None,
+                    worst_price=None, limit=None, cost=None, fee=None, total=None, payout=None, profit_if_win=None,
+                    max_spend=None, depth_checked=False, best_price=None)  # fmt: skip
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: calls.append(trade) or closed)
+    r = api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.5})
+    assert r.status_code == 200 and not r.json()["ok"] and "isn't taking orders" in r.json()["reason"]
+    assert len(calls) == 1  # nothing more to read
 
 
 def test_why_not_copy_is_bet_status() -> None:
-    # One rule: whatever the Feed calls "You can still get in", the engine prices, and nothing else.
+    # One rule: whatever the Feed calls "You can still get in", an alert prices, and nothing else.
     for paid in (0.05, 0.3, 0.6, 0.95):
         for now in [x / 200 for x in range(0, 201)]:
             assert (engine.why_not_copy(paid, now) is None) == (engine.bet_status(paid, now) == "in"), (paid, now)
@@ -338,31 +371,21 @@ def test_copying_is_offered_only_for_recommended_tiers_with_copies_reliably_abov
         assert not ok and why
     assert "reliably above zero" in (offer("too_fast", "no")[1] or "")
     assert not offer("rising", "no")[0] and "reliably above zero" in (offer("rising", "no")[1] or "")
-    assert not offer("rising", "unknown")[0] and "Too few" in (offer("rising", "unknown")[1] or "")
+    assert not offer("rising", "unknown")[0] and "too few" in (offer("rising", "unknown")[1] or "")
     assert not engine.copy_offer(SCORE)[0]  # no copyable verdict at all: not offered
 
 
-def test_the_preview_refuses_a_trader_the_page_doesnt_offer_copying_for(
+def test_any_traders_trade_is_priced_and_no_score_is_read_for_it(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Whether copying is offered is the trader's record, shown apart: never a gate on what buying costs.
     monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [
         COPYABLE, _scored("too_fast", "no", "0xfast"), _scored("no_edge", "yes", "0xmeh")]})  # fmt: skip
-    monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: pytest.fail("previewed"))
-    for wallet, words in (("0xfast", "No proven copy advantage"), ("0xmeh", "Not a trader we recommend")):
-        r = api.post("/api/trade/preview", json={"wallet": wallet, "market": "0xcid:1", "price": 0.5})
-        assert r.status_code == 400 and words in r.json()["detail"]
-
-    class Lucky:
-        def __init__(self, w: str) -> None:
-            self.w = w
-
-        def to_dict(self) -> dict[str, Any]:
-            return _scored("lucky", "yes", self.w)
-
-    # A wallet nobody has scored yet is scored first, then judged by the same rule.
-    monkeypatch.setattr(engine.reads.whales, "score", Lucky)
-    r = api.post("/api/trade/preview", json={"wallet": "0xnew", "market": "0xcid:1", "price": 0.5})
-    assert r.status_code == 400 and "Not a trader we recommend" in r.json()["detail"]
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: _quote())
+    monkeypatch.setattr(engine.reads.whales, "score", lambda w: pytest.fail("scored"))
+    for wallet in ("0xabc", "0xfast", "0xmeh", "0xnew"):  # offered, Copy not proven, not recommended, never scored
+        r = api.post("/api/trade/preview", json={"wallet": wallet, "market": "0xcid:1", "price": 0.52})
+        assert r.status_code == 200 and r.json()["ok"], wallet
 
 
 def test_traders_and_the_feed_carry_the_same_copy_verdict(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -475,8 +498,8 @@ def test_the_traders_list_carries_each_traders_section(api: TestClient, monkeypa
 def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offered_for(api: TestClient) -> None:
     page = api.get("/").text
     for words in ("Worth copying", "Worth watching", "No trader's copies have been reliably profitable after fees lately.",
-                  "Skilled traders worth keeping an eye on. Copying isn't offered: the price moves before you'd get in.",
-                  "Not offered", "they paid", "Buy on Polymarket ↗", "weeks up",
+                  "Skilled traders worth keeping an eye on. Copy not proven: the price moves before you'd get in.",
+                  '"Copy not proven"', '"Not recommended"', "they paid", "Buy on Polymarket ↗", "weeks up",
                   "A week counts profit taken plus the change in value of trades still open.",
                   "at least half a cent above the middle price",
                   "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip
@@ -507,3 +530,62 @@ def test_a_wallets_account_says_when_it_was_read_and_which_part_is_missing(
     api.get(f"/api/account/{wallet}")
     assert seen == [wallet]  # kept for a minute: one read
     assert api.get("/api/account/0x123").status_code == 400
+
+
+def _owner_metrics(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """/api/metrics as the owner sees it locally (same machine, not hosted, no key)."""
+    monkeypatch.setattr(engine, "METRICS_KEY", "")
+    monkeypatch.setattr(engine, "HOSTED", False)
+    return TestClient(engine.app, client=("127.0.0.1", 50000)).get("/api/metrics").json()  # type: ignore[no-any-return]
+
+
+def test_a_quote_the_book_moved_under_says_price_changed_and_is_counted(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Their price 60¢, the cheapest for sale 70¢; by the second read it's 75¢, above the 73¢ limit: not a lack of
+    # liquidity, so price_changed (the page: "Price changed—refresh quote", no price shown).
+    def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
+        if trade.price == 0.60:
+            return _quote(ok=False, reason="Nothing to buy at 0.63 or better right now.", contracts=None, price=0.70,
+                          limit=0.63, max_spend=0.0, best_price=0.70)  # fmt: skip
+        return _quote(ok=False, reason="Nothing to buy at 0.73 or better right now.", contracts=None, price=0.75,
+                      limit=0.73, max_spend=0.0, best_price=0.75)  # fmt: skip
+
+    monkeypatch.setattr(Whales, "preview_copy", preview)
+    r = api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.60, "spend": 50}).json()
+    assert r["price_changed"] and not r["ok"]
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: _quote())
+    assert api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.52}).json()["price_changed"] is False
+
+    def limited(self: Any, trade: Any, **kw: Any) -> CopyPreview:
+        raise engine.VenueError("rate_limited", "polymarket said too many requests.", venue="polymarket", status=429)
+
+    monkeypatch.setattr(Whales, "preview_copy", limited)
+    assert api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.52}).status_code == 502
+    m = _owner_metrics(monkeypatch)["quotes"]
+    assert m["n"] == 3 and m["by_outcome"] == {"ok": 1, "price_changed": 1, "rate_limited": 1}
+    assert m["polymarket_reads"] == 2 + 1 + 1 and m["share_rate_limited"] == 0.333 and m["ms"]["median"] is not None
+    with engine._db() as con:  # nothing about who asked or which trade
+        assert [c[1] for c in con.execute("PRAGMA table_info(quotes)")] == ["at", "outcome", "reads", "ms"]
+
+
+def test_how_a_quote_ended_is_named_for_the_metrics() -> None:
+    o = engine._quote_outcome
+    assert o(_quote(), False) == "ok" and o(_quote(depth_checked=False), False) == "no_book"
+    assert o(_quote(ok=False, reason="polymarket said too many requests."), False) == "rate_limited"
+    assert o(_quote(ok=False, reason="Polymarket isn't taking orders on this market now.", max_spend=None, depth_checked=False), False) == "closed"
+    assert o(_quote(ok=False, reason="Only $40.00 is for sale", max_spend=40.0), False) == "short"
+    assert o(_quote(ok=False, reason="whatever"), True) == "price_changed"
+
+
+def test_a_wallet_with_no_profile_is_counted_where_it_stops_a_page(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def gone(*a: Any, **kw: Any) -> Any:
+        raise engine.VenueError("not_found", "polymarket doesn't know that: profile not found", venue="polymarket", status=404)
+
+    monkeypatch.setattr(engine, "_live_read", gone)
+    monkeypatch.setattr(engine.reads.whales, "trader", gone)
+    assert api.get(f"/api/bet/0x{'1' * 40}/0xcid:1").status_code == 502
+    assert api.get(f"/api/trader/polymarket/0x{'2' * 40}").status_code == 502
+    assert _owner_metrics(monkeypatch)["no_profile"]["by_page"] == {"check": 1, "trader": 1}
+    with engine._db() as con:  # no wallet kept
+        assert con.execute("SELECT uid, alert_id, trader FROM events WHERE kind = 'no_profile'").fetchall() == [(None, None, None)] * 2
