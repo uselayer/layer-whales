@@ -63,10 +63,15 @@ def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
     r = api.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"}).json()
     assert [t["id"] for t in r["rules"]["traders"]] == ["0xabc", "amy"]
     cp = local().copiers["polymarket:0xabc"]  # copied where they bet: Polymarket
-    assert (cp.size, cp.venue, cp.max_slippage, cp.categories, cp.copy_sells) == (3, "polymarket", 0.02, ("Sports",), False)
+    assert (cp.size, cp.venue, cp.max_slippage, cp.copy_sells) == (3, "polymarket", 0.02, False)
+    assert cp.categories == () and "categories" not in r["rules"]["traders"][0]  # always everything: no picking
     assert local().copiers["kalshi:amy"].venue == "kalshi"
     assert local().load_rules()["size"] == 3  # saved to disk
     assert [t["id"] for t in api.delete("/api/copy/traders/kalshi/amy").json()["rules"]["traders"]] == ["0xabc"]
+    # a rule saved with categories, from before copying was always everything, keeps working as saved
+    local().save_rules(local().load_rules() | {"traders": [{"venue": "polymarket", "id": "0xabc", "categories": ["Sports"]}]})
+    local().apply_rules()
+    assert local().copiers["polymarket:0xabc"].categories == ("Sports",)
 
     event = {"at": "2026-10-07T00:00:00+00:00", "status": "copied", "order_id": "o1", "venue": "kalshi",
              "market": "KX-A", "side": "yes", "source": {"title": "A game"}}  # fmt: skip
