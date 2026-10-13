@@ -129,6 +129,9 @@ def test_worth_adds_the_leaderboard_columns_from_what_the_check_kept(
     assert s["last_buy"] == "2026-10-06T12:00:00+00:00"
     assert s["copy_return"] == pytest.approx(0.02)  # 1¢ kept on a 50¢ buy
     assert "pnl_weeks" not in s and "sample_data" not in s  # profit history only from the SDK
+    # a wallet scored on demand has no won/settled from the check: worked out from its checked bets
+    settled = [{"payout": 1, "price": 0.6}, {"payout": 0, "price": 0.4}, {"payout": None, "price": 0.5}]
+    assert engine._board(SCORE | {"sample": settled})["won"] == 1 and engine._board(SCORE | {"sample": settled})["settled"] == 2
     # the SDK's own figures win once it has them (uselayer 0.6)
     monkeypatch.setattr(engine, "_worth_data", {"finished": "2026-10-07T00:00:00+00:00",
                                                 "scores": [kept | {"typical_usd": 99.0, "last_buy": "2026-10-07T00:00:00+00:00"}]})  # fmt: skip

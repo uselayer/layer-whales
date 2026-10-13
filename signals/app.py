@@ -249,6 +249,10 @@ def _board(s: dict[str, Any]) -> dict[str, Any]:
     """The leaderboard's fields for one scored trader, added to (never replacing) what the score has."""
     bets = s.get("sample") or []
     out: dict[str, Any] = {}
+    if s.get("settled") is None and bets:  # a wallet scored on demand: the check works these out, here we do
+        settled = [b for b in bets if b.get("payout") is not None]
+        out["won"], out["settled"] = sum(1 for b in settled if b["payout"] == 1), len(settled)
+        out["odds"] = sum(b["price"] for b in settled) / len(settled) if settled else None
     if s.get("typical_usd") is None:
         out["typical_usd"] = _median([b.get("usd") for b in bets])
     if s.get("last_buy") is None:
