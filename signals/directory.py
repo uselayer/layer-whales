@@ -64,6 +64,7 @@ CREATE INDEX IF NOT EXISTS sightings_by_source ON sightings (source, last_seen);
 CREATE INDEX IF NOT EXISTS sightings_by_category ON sightings (category);
 CREATE TABLE IF NOT EXISTS sweeps (started REAL PRIMARY KEY, finished REAL, sightings INTEGER NOT NULL DEFAULT 0,
   new INTEGER NOT NULL DEFAULT 0, error TEXT);
+CREATE TABLE IF NOT EXISTS sweep_parts (part TEXT PRIMARY KEY, done_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS scores (wallet TEXT PRIMARY KEY, scored_at REAL NOT NULL, via TEXT NOT NULL,
   format INTEGER, segment TEXT, skill TEXT, copyable TEXT, style TEXT, confidence TEXT, active INTEGER, bets INTEGER,
   decisions INTEGER, edge REAL, edge_z REAL, copy REAL, copy_low REAL, trading_pnl_window REAL, pnl REAL, volume REAL,
@@ -348,6 +349,33 @@ class Directory:
                 "UPDATE sweeps SET finished = ?, error = ? WHERE started = ?",
                 (time.time() if at is None else at, error, started),
             )
+
+    def part_done(self, part: str, at: float | None = None) -> None:
+        """One part of a sweep read to its end, with everything it found kept: a leaderboard (``"PNL MONTH
+        POLITICS"``) or ``"markets"``. A sweep after a restart skips parts done since the last cutoff."""
+        with self._db() as con:
+            con.execute("INSERT OR REPLACE INTO sweep_parts VALUES (?, ?)", (part, time.time() if at is None else at))
+
+    def backfill_parts(self, order: list[str], since: float) -> int:
+        """For a directory from before ``sweep_parts`` (a sweep was cut off by a deploy before it kept its progress):
+        a sweep reads the leaderboards in ``order``, so every board before the last one with sightings since
+        ``since`` was read to its end. Marks those done, as of their last sighting; the last one, maybe cut off
+        partway, is read again. Only when no part was ever marked. Returns how many it marked."""
+        with self._db() as con:
+            if con.execute("SELECT 1 FROM sweep_parts LIMIT 1").fetchone():
+                return 0
+            seen = dict(con.execute(
+                "SELECT place, MAX(last_seen) FROM sightings WHERE source = 'leaderboard' AND last_seen >= ? "
+                "GROUP BY place", (since,)
+            ))  # fmt: skip
+            reached = max((i for i, b in enumerate(order) if b in seen), default=-1)
+            done = [(b, seen[b]) for b in order[:reached] if b in seen]
+            con.executemany("INSERT OR REPLACE INTO sweep_parts VALUES (?, ?)", done)
+        return len(done)
+
+    def parts_done_since(self, since: float) -> set[str]:
+        with self._db() as con:
+            return {r[0] for r in con.execute("SELECT part FROM sweep_parts WHERE done_at >= ?", (since,))}
 
     def last_sweep(self) -> dict[str, Any] | None:
         """The latest sweep that finished without an error, or None."""

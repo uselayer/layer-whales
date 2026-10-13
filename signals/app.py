@@ -37,6 +37,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from uselayer import Client, VenueError, WhaleTrade
+from uselayer.whale_finder import all_boards
 from uselayer.whale_scores import CATEGORY_TAGS, COPY_BETS, RECOMMENDED, SEGMENTS, Stat, category_of, copyable_verdict
 
 from signals.directory import Directory, Seen, from_sighting
@@ -400,14 +401,30 @@ def _feed_note(trades: list[WhaleTrade], cats: dict[str, str]) -> None:
     ])  # fmt: skip
 
 
+MARKETS_PART = "markets"  # the sweep's market part, as sweep_parts names it (a leaderboard is "PNL MONTH POLITICS")
+
+
+def sweep_left(d: Directory, now: float | None = None) -> tuple[list[tuple[str, str, str]], bool]:
+    """What a sweep still has to read: the leaderboards, and whether the markets, not read to their end in the last
+    DIRECTORY_SWEEP_S. After a restart (a deploy) a sweep picks up here instead of starting over."""
+    done = d.parts_done_since((time.time() if now is None else now) - DIRECTORY_SWEEP_S)
+    return [b for b in all_boards() if " ".join(b) not in done], MARKETS_PART not in done
+
+
 def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
-    """One sweep: followed wallets, then the SDK's ``find_wallets`` (every leaderboard, then markets of every
-    size), kept as they come. While the Worth following check runs it waits, between reads (the SDK reads only as
-    it's asked for the next wallet). Returns what it kept, how long it waited, and the error if it stopped early."""
+    """One sweep: followed wallets, then the SDK's ``find_wallets`` over what's left (``sweep_left``): the
+    leaderboards, then markets of every size, kept as they come. Each leaderboard is marked done once the sweep has
+    moved past it and kept everything it found, and the markets once they're all read, so a restart loses at most
+    the board it was on. While the Worth following check runs it waits, between reads (the SDK reads only as it's
+    asked for the next wallet). Returns what it kept, how long it waited, and the error if it stopped early."""
     d = directory()
     halt = stop or threading.Event()
+    # a sweep cut off before sweeps kept their progress: the boards it got past count as read (once)
+    d.backfill_parts([" ".join(b) for b in all_boards()], time.time() - DIRECTORY_SWEEP_S)
+    boards, markets = sweep_left(d)
     started = d.sweep_started()
-    print(f"directory sweep started ({DIRECTORY_RATE:g} reads a second at most)", flush=True)
+    print(f"directory sweep started: {len(boards)} of {len(all_boards())} leaderboards"
+          f"{' and the markets' if markets else ''} to read ({DIRECTORY_RATE:g} reads a second at most)", flush=True)  # fmt: skip
     sightings = new = 0
     held = 0.0
     error: str | None = None
@@ -421,12 +438,26 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
             sightings, new = sightings + len(batch), new + n
             batch.clear()
 
+    board: str | None = None  # the leaderboard being read: done once the sweep has moved past it
+
+    def board_done() -> None:
+        if board is not None:
+            keep()  # everything found on it is kept before it's marked done
+            d.part_done(board)
+
     try:
         batch += [Seen(w, "follow") for w in sorted({w for u in _load_follows()["users"].values() for w in u.get("follows") or []})]
-        for s in reads.whales.find_wallets(per_second=DIRECTORY_RATE):
+        found = reads.whales.find_wallets(
+            leaderboards=bool(boards), boards=boards, markets=markets, per_second=DIRECTORY_RATE
+        )
+        for s in found:
             if halt.is_set():
                 error = "Stopped before it finished (the app was shutting down)."
                 break
+            where = s.where if s.source == "leaderboard" else None
+            if where != board:  # on to the next board, or to the markets
+                board_done()
+                board = where
             batch.append(from_sighting(s))
             if len(batch) >= DIRECTORY_BATCH:
                 keep()
@@ -435,7 +466,12 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
                 halt.wait(DIRECTORY_HOLD_S)
                 held += DIRECTORY_HOLD_S
             _directory_state["held"] = None
-    except Exception as e:  # what it found stays; the next sweep starts over
+        else:  # read to the end: the last board, and the markets if they were read
+            board_done()
+            if markets:
+                keep()
+                d.part_done(MARKETS_PART)
+    except Exception as e:  # what it found stays; the next sweep picks up from the board it was on
         error = f"{type(e).__name__}: {e}"
     try:
         keep()  # the last batch, however the sweep ended
@@ -450,13 +486,13 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
 
 
 def _directory_loop() -> None:
-    """A sweep whenever the last finished one is DIRECTORY_SWEEP_S old, a minute after launch (the page's reads
-    first); after a failed one, again in DIRECTORY_RETRY_S."""
+    """A sweep whenever a leaderboard or the markets weren't read in the last DIRECTORY_SWEEP_S (``sweep_left``),
+    a minute after launch (the page's reads first); after a failed one, again in DIRECTORY_RETRY_S."""
     _directory_stop.wait(60)
     while not _directory_stop.is_set():
         try:
-            last = directory().last_sweep()
-            if not _worth["running"] and (last is None or time.time() - last["finished"] >= DIRECTORY_SWEEP_S):
+            boards, markets = sweep_left(directory())
+            if not _worth["running"] and (boards or markets):
                 _directory_state["running"] = True
                 try:
                     result = directory_sweep(_directory_stop)
@@ -479,6 +515,8 @@ def directory_stats(request: Request, response: Response) -> dict[str, Any]:
     _owner(request)
     response.headers["Cache-Control"] = "private, no-store"
     stats = cached("directory", DIRECTORY_STATS_TTL_S, lambda: directory().stats())
+    boards, markets = sweep_left(directory())
+    stats["sweep_left"] = {"leaderboards": len(boards), "of": len(all_boards()), "markets": markets}
     return stats | {"sweeping": _directory_state["running"], "held": _directory_state.get("held"),
                     "last_error": directory().last_error()}
 
