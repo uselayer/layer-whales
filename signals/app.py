@@ -150,7 +150,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
-WORTH_FORMAT = 3  # bump when the kept result gains fields; an older one is re-checked on launch (3: won/settled/odds)
+WORTH_FORMAT = 4  # bump when the kept result gains fields; an older one is re-checked on launch (4: uselayer 0.6.0 scores)
 WORTH_MIN_AGE_HOSTED_S = 3600  # hosted: "Check again" only starts a new check once the last is this old
 WORTH_ONE_KEEP = 500  # wallets scored on demand, kept until the next check
 _worth_stop = threading.Event()
@@ -332,7 +332,7 @@ def with_links(s: dict[str, Any]) -> dict[str, Any]:
 # Their buys over the last day, one row per bet (fills on the same outcome merged), with the price now:
 # the current price of their open position. Polymarket's public trade feed runs a few minutes behind.
 
-FEED_SEGMENTS = ("proven", "quiet", "rising")  # the Follow and Watch verdicts
+FEED_SEGMENTS = ("proven", "quiet", "rising")  # the Follow and Watch verdicts; "inactive" traders aren't followed
 FEED_HOURS = 24
 GET_IN = 0.03  # at most this far above their price you can still get in: the same limit copying uses
 FELL_BY = 0.05  # at most this far below: a bigger drop means the market turned against them, a different trade
