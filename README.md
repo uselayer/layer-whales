@@ -39,13 +39,12 @@ evidence does and doesn't show. Before you copy a trade, it shows what that woul
 against theirs, what your amount fills at, the fee. That isn't a promise of profit.
 
 The first visit asks one question, which markets interest you (Politics, Sports, Crypto, Esports, or Skip for all
-markets), then opens Traders. The choice is kept in your browser; the market chips on Feed and Traders change it,
-so the two always agree. Then two tabs:
+markets), then opens Traders. The choice is kept in your browser; the market chips on Traders change it, and the Feed
+follows it ("Your markets: … · Change" opens the same picker), so the two always agree. Then two tabs:
 
 - **Feed**: one switch at the top, **Traders we follow** (the default) or **Big trades**.
   - **Traders we follow**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp
-    or Rising, one card per trade, opened on your markets (the chips are All, the four markets, and any other
-    category with trades, with how many): the market, their pick, what they paid, the price now, how much they put in,
+    or Rising, one card per trade, opened on your markets, three across on a desktop: the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
     paid; **Price moved away** means further either way. A bigger drop means
     the market has turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or

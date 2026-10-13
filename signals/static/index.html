@@ -40,7 +40,8 @@
   a { color: inherit; text-decoration: none; }
   button { font: inherit; color: inherit; }
   h1, h2, h3 { font-weight: 600; letter-spacing: -0.015em; margin: 0; }
-  .wrap { max-width: 680px; margin: 0 auto; padding: 0 16px; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; } /* one width for the header, every tab and the footer */
+  main.wrap.narrow { max-width: 680px; } /* a reading column: Top profit and a venue trader's page */
   .muted { color: var(--muted); }
 
   /* header */
@@ -104,13 +105,8 @@
   .feedtop { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   .updated { color: var(--faint); font-size: 13px; white-space: nowrap; }
   .filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-  .cats { display: flex; min-width: 0; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
-  .cats::-webkit-scrollbar { display: none; }
-  .cats button { border: 0; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); color: var(--fg); font-size: 14px;
-    font-weight: 500; padding: 7px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
-  .cats button.on { background: var(--accent); color: var(--on-accent); box-shadow: none; }
-  .cats button .n { color: var(--faint); font-weight: 400; margin-left: 4px; }
-  .cats button.on .n { color: color-mix(in srgb, var(--on-accent) 70%, transparent); }
+  .mkts { font-size: 14px; color: var(--muted); min-width: 0; }
+  .mkts b { color: var(--fg); font-weight: 500; }
   .switch { position: relative; max-width: 100%; display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); cursor: pointer; user-select: none; white-space: nowrap; }
   .switch input { position: absolute; opacity: 0; pointer-events: none; }
   .switch .track { width: 36px; height: 22px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s; flex: none; }
@@ -122,6 +118,10 @@
 
   /* cards */
   .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; } /* a long name truncates, never widens the cards */
+  #flist .cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+  #flist .card { display: flex; flex-direction: column; }
+  #flist .card > :has(+ .trade-foot) { margin-bottom: 12px; }
+  #flist .trade-foot { margin-top: auto; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; box-shadow: var(--shadow); }
   .trade { cursor: pointer; transition: border-color .15s, transform .15s; }
   .trade:hover { border-color: color-mix(in srgb, var(--fg) 18%, var(--line)); }
@@ -238,7 +238,6 @@
   .pick .alt:hover { color: var(--fg); }
 
   /* Traders: a leaderboard. One bar: filters on the left, how you view the list on the right */
-  .wrap.wide { max-width: 1200px; }
   .lb-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin-bottom: 16px; }
   .lb-filters { display: flex; align-items: center; gap: 6px; flex: none; padding-block: 2px; scrollbar-width: none; }
   .lb-filters::-webkit-scrollbar { display: none; }
@@ -812,8 +811,9 @@ function bindActions(root) {
 
 // ---- feed ----
 // One switch at the top: the traders we follow (#/, the default) or Big trades (#/big: $250 or more right now,
-// on the venues Signals reads). Both open filtered to your markets, with the same chips, and the same
-// interests, as Traders (Big trades only while Signals reads Polymarket alone: see renderBig).
+// on the venues Signals reads). Both show your markets, the ones picked at onboarding or with Traders' chips
+// (Big trades only while Signals reads Polymarket alone: see renderBig). The chips live on Traders only; the
+// Feed says which markets it shows, and Change opens the same picker as onboarding.
 const feed = { data: null, at: 0, err: null, onlyIn: true, big: null, bigAt: 0, bigErr: null };
 let feedTimer = null;
 const onFeed = () => routeName().startsWith("feed");
@@ -838,17 +838,19 @@ async function loadFeed() {
   renderFeed();
 }
 
-// The market chips, as on Traders: All, the four markets, then any other category with trades here (with
-// how many). Tapping one changes your interests, so Feed and Traders always agree.
-function marketChips(counts = {}) {
+// Which markets the Feed shows, in one line: "Your markets: Politics, Sports · Change".
+function marketLine() {
   const picked = interests || [];
-  const extra = [...new Set([...Object.keys(counts), ...picked])].filter((c) => !INTERESTS.includes(c)).sort();
-  const chip = (c, label, on) => `<button type="button" data-mkt="${esc(c)}" class="${on ? "on" : ""}" aria-pressed="${on}">${esc(label)}${c && counts[c] ? `<span class="n">${counts[c]}</span>` : ""}</button>`;
-  return `<div class="cats" role="group" aria-label="Markets">${chip("", "All", !picked.length)}${[...INTERESTS, ...extra].map((c) => chip(c, c, picked.includes(c))).join("")}</div>`;
+  return `<span class="mkts">Your markets: <b>${picked.length ? esc(picked.join(", ")) : "All"}</b><span class="sep">·</span><button class="link" id="mktchange">Change</button></span>`;
 }
 const inMarkets = (cat) => !(interests || []).length || interests.includes(cat);
-function bindFeedChips(root) {
-  $$("[data-mkt]", root).forEach((b) => (b.onclick = () => { toggleInterest(b.dataset.mkt); renderFeed(); }));
+function marketsSheet() {
+  const panel = sheet(`<div id="mktpick"></div><p class="explain" style="margin:18px 0 0;text-align:center;font-size:13px">Traders shows the same markets.</p>`);
+  interestPicker($("#mktpick", panel), { selected: (interests || []).filter((c) => INTERESTS.includes(c)), go: "Show these markets",
+    alt: "All markets", onDone: (v) => { setInterests(v); closeSheet(); renderFeed(); } });
+}
+function bindFeedMarkets() {
+  const change = $("#mktchange"); if (change) change.onclick = marketsSheet;
   const all = $("#feedall"); if (all) all.onclick = () => { toggleInterest(""); renderFeed(); };
 }
 
@@ -864,10 +866,8 @@ function renderFeed() {
     return;
   }
   const n = r.traders.length;
-  const counts = {};
   const cards = oneCardPerTrade(r.bets);
   const pool = cards.filter((b) => !feed.onlyIn || b.status === "in");
-  pool.forEach((b) => { if (b.category) counts[b.category] = (counts[b.category] || 0) + 1; });
   const names = interestNames(interests || []);
   $("#fbar").innerHTML = `
     <div class="feedtop">
@@ -876,7 +876,7 @@ function renderFeed() {
       <span class="updated" id="updated">${updatedAgo(feed.at)}</span>
     </div>
     <div class="filters">
-      ${marketChips(counts)}
+      ${marketLine()}
       <label class="switch"><input type="checkbox" id="onlyin" ${feed.onlyIn ? "checked" : ""}><span class="track"></span>Only trades I can still get into</label>
     </div>
     ${feed.err ? `<p class="inline-err">Couldn't refresh: ${esc(feed.err)}. Showing the last update.</p>` : ""}
@@ -896,7 +896,7 @@ function renderFeed() {
   $("#flist").innerHTML = html;
   const all = $("#showall");
   if (all) all.onclick = () => { feed.onlyIn = false; renderFeed(); };
-  bindFeedChips(document);
+  bindFeedMarkets();
   bindActions($("#flist"));
 }
 
@@ -908,15 +908,14 @@ function renderFeed() {
 function renderBig() {
   const rows = feed.big;
   if (!rows) { $("#fbar").innerHTML = ""; $("#flist").innerHTML = errorState(feed.bigErr || "No answer from the app."); bindActions($("#flist")); return; }
-  const filtered = !kalshiOn(), counts = {};
-  rows.forEach((t) => { if (t.category) counts[t.category] = (counts[t.category] || 0) + 1; });
+  const filtered = !kalshiOn();
   const names = interestNames(filtered ? interests || [] : []);
   const list = filtered ? rows.filter((t) => inMarkets(t.category)) : rows;
   const where = venuesOn.map((v) => VENUE[v]).join(" and ");
   $("#fbar").innerHTML = `
     <div class="feedtop"><span class="muted" style="font-size:14px">${filtered ? "Trades" : "Every trade"} of $250 or more right now, on ${where}.</span>
       <span class="updated" id="updated">${updatedAgo(feed.bigAt)}</span></div>
-    ${filtered ? `<div class="filters">${marketChips(counts)}</div>` : ""}
+    ${filtered ? `<div class="filters">${marketLine()}</div>` : ""}
     ${feed.bigErr ? `<p class="inline-err">Couldn't refresh: ${esc(feed.bigErr)}. Showing the last update.</p>` : ""}`;
   let html;
   if (!rows.length) html = emptyState("No big trades right now", "Trades of $250 or more show up here as they happen.");
@@ -924,7 +923,7 @@ function renderBig() {
     `<button class="btn ghost" id="feedall">Show all markets</button>`);
   else html = `<div class="cards">${list.map(bigCard).join("")}</div>${kalshiOn() ? `<p class="foot-note">Kalshi names only traders who turned on their social profile.</p>` : ""}`;
   $("#flist").innerHTML = html;
-  bindFeedChips(document);
+  bindFeedMarkets();
   bindActions($("#flist"));
 }
 function bigCard(t) {
@@ -993,8 +992,8 @@ function howSheet() {
 
 // ---- interests: asked once per browser ----
 // Kept in localStorage; [] means all markets, null not asked yet. Storage can be blocked (private windows),
-// so the choice then holds for this visit only and onboarding never traps anyone. Onboarding offers the four
-// markets; the Feed's chips can add another category it has trades in (Economy, Weather…), kept the same way.
+// so the choice then holds for this visit only and onboarding never traps anyone. Onboarding, Traders' chips and
+// the Feed's Change all set the same choice, from the four markets.
 const INTERESTS = ["Politics", "Sports", "Crypto", "Esports"];
 const INTERESTS_KEY = "signals.interests";
 let interests = (() => {
@@ -1008,7 +1007,7 @@ function setInterests(v) {
   interests = v;
   try { localStorage.setItem(INTERESTS_KEY, JSON.stringify(v)); } catch {}
 }
-// A market chip, on Feed or Traders: "" (All) clears them; any other turns that market on or off.
+// A market chip on Traders (and the Feed's "Show all markets"): "" (All) clears them; any other turns that market on or off.
 function toggleInterest(c) {
   const now = new Set(interests || []);
   if (!c) now.clear(); else now.has(c) ? now.delete(c) : now.add(c);
@@ -1543,8 +1542,7 @@ function route() {
   const t = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
   const tab = name.startsWith("feed") ? "feed" : "traders";
   $$("[data-tab]").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
-  const wide = (name === "traders:worth" && interests !== null) || location.hash.startsWith("#/worth/"); // the leaderboard and profiles need the room
-  $$(".wrap").forEach((el) => el.classList.toggle("wide", wide));
+  $("#app").classList.toggle("narrow", name === "traders:top" || !!t); // one width everywhere else, header included
   window.scrollTo(0, 0);
   if (interests === null && (name.startsWith("feed") || name === "traders:worth")) onboardingPage(); // first run; links to a trader skip it
   else if (name.startsWith("feed")) feedPage(feedView());
