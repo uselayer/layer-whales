@@ -71,6 +71,8 @@
   .tier.t3 { background: var(--soft); color: var(--muted); }
   .tier.s-proven { --c: var(--gain); } .tier.s-quiet { --c: var(--teal); } .tier.s-rising { --c: var(--blue); } .tier.s-fast { --c: var(--amber); }
   .tier[class*="s-"] { background: color-mix(in srgb, var(--c) 11%, var(--card)); color: color-mix(in srgb, var(--c) 80%, var(--fg)); }
+  button.tier { border: 0; font: inherit; font-size: 12px; font-weight: 500; line-height: 1.35; cursor: pointer; }
+  button.tier:hover { background: color-mix(in srgb, var(--c) 20%, var(--card)); }
   .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; }
   .badge svg { width: 13px; height: 13px; }
   .chip { display: inline-block; font-size: 13px; font-weight: 500; padding: 3px 10px; border-radius: 8px; background: var(--soft); color: var(--fg); }
@@ -398,6 +400,25 @@
   .kv > div > span { display: block; color: var(--muted); font-size: 12.5px; }
   .kv b { font-weight: 600; font-size: 16px; }
   .explain { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+  /* How we pick traders: two tabs, The checks and The tiers */
+  .how-tabs { display: flex; background: var(--soft); border-radius: 999px; padding: 3px; margin: 14px 0 4px; }
+  .how-tabs button { flex: 1; border: 0; background: none; padding: 7px 14px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; }
+  .how-tabs button[aria-selected="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .how { isolation: isolate; }
+  .how-tier.hl { background: var(--soft); border-radius: 12px; }
+  /* a shade behind the check, taking in its number, without moving the item (and so its number) */
+  #sheet .how li.hl { position: relative; margin: 14px 0; }
+  #sheet .how li.hl::before { content: ""; position: absolute; inset: -8px -10px -8px -28px; background: var(--soft); border-radius: 12px; z-index: -1; }
+  .how-tier { display: grid; gap: 6px; justify-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .how-tier.hl { padding: 12px; margin: 0 -12px; border-bottom-color: transparent; }
+  .how-tier p { margin: 0; font-size: 14.5px; }
+  .how h3 { font-size: 15px; margin: 20px 0 6px; }
+  .how-more { margin-top: 6px; }
+  .how-more > summary { list-style: none; cursor: pointer; color: var(--muted); font-size: 13.5px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+  .how-more > summary::-webkit-details-marker { display: none; }
+  .how-more > summary::before { content: "›"; display: inline-block; transition: transform .15s; }
+  .how-more[open] > summary::before { transform: rotate(90deg); }
+  .how-more > p { color: var(--muted); font-size: 13.5px; margin: 6px 0 0; }
   .sheet-who { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--soft); margin-top: 16px; }
   .sheet-who .grow { flex: 1; min-width: 0; display: grid; }
   .fine { color: var(--muted); font-size: 13px; text-align: center; margin: 10px 0 0; }
@@ -666,7 +687,10 @@ const TIER = {
 };
 // A trader's page: the scored page for a Polymarket wallet, else the venue leaderboard page.
 const traderHref = (venue, id) => venue === "polymarket" ? `#/worth/${esc(id)}` : `#/t/${venue}/${encodeURIComponent(id)}`;
-const tier = (seg) => TIER[seg] ?`<span class="tier ${TIER[seg][1]}">${TIER[seg][0]}</span>` : "";
+// `tap`: the pill opens what the tier means. Only where it isn't inside a link (a Feed card, not a list row).
+const tier = (seg, tap) => !TIER[seg] ? "" : tap && SEG_ORDER.includes(seg)
+  ? `<button type="button" class="tier ${TIER[seg][1]}" data-tier="${seg}" aria-label="${TIER[seg][0]}: what this tier means">${TIER[seg][0]}</button>`
+  : `<span class="tier ${TIER[seg][1]}">${TIER[seg][0]}</span>`;
 
 // ---- trade status: one line with a dot ----
 const STATUS = {
@@ -739,7 +763,7 @@ function tradeCard(b, i, { who = true } = {}) {
   // (no copy_ok there): where the price is, no colour, no "you can still get in". The market link stays for all.
   const offered = b.copy_ok === true;
   const name = displayName(b.name, b.wallet);
-  const top = who ? `<div class="trade-top">${avatar(b.wallet, 28)}<span class="who"><span class="name">${esc(name)}</span>${tier(b.segment)}</span>
+  const top = who ? `<div class="trade-top">${avatar(b.wallet, 28)}<span class="who"><span class="name">${esc(name)}</span>${tier(b.segment, true)}</span>
       <span class="when">${[b.category, b.at ? ago(b.at) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>` : "";
   // the engine's copy rule (copy_ok), as on Traders and the trader's page: only then is copying priced
   const act = who && b.copy_ok === true && b.status === "in" && b.wallet && b.market ? `<button class="btn small" data-open-trade="${i}">Check your price</button>` : "";
@@ -1115,33 +1139,69 @@ function followingSheet(traders, kind = "rec") {
     <div class="list" style="margin-top:16px">${traders.map((t) => `<a class="trow norank" href="#/worth/${esc(t.wallet)}">${avatar(t.wallet, 36)}
       <span class="tmain"><span class="name">${esc(displayName(t.name, t.wallet))}</span></span>${tier(t.segment)}</a>`).join("")}</div>`);
   $$("a", panel).forEach((a) => a.addEventListener("click", closeSheet));
-  $("#howlink", panel).onclick = howSheet;
+  $("#howlink", panel).onclick = () => howSheet();
 }
 
-function howSheet() {
-  sheet(`<h2>How we pick traders</h2>
-    <p class="explain" style="margin-top:12px">We look at Polymarket traders on the leaderboards and in busy markets, and check up to 60 of each one's trades from the last 30 days against Polymarket's own price history.</p>
-    <ol>
-      <li><b>The price moves their way.</b> A few minutes after they buy, has the market come round to their view? That's the main sign of skill.</li>
-      <li><b>Enough trades to trust it.</b> One good week isn't a record. Trades on the same game count once.</li>
-      <li><b>Not one lucky win.</b> Their edge has to hold without their best trades, and their profit without their biggest win.</li>
-      <li><b>Profitable from trading.</b> They made money from trading over the last 30 days. Rewards and rebates don't count.</li>
-      <li><b>You can copy it.</b> Buying the same thing a minute or more after them, and paying the fee, still has to pay off an hour later, and not by luck: even the low end of our estimate has to be above zero, over at least 8 trades. We price each copy at the ask, what a buyer pays: at least half a cent above the middle price Polymarket's history shows.</li>
-      <li><b>They take a side.</b> Market makers and arbitrage traders have no view to follow, so they're left out.</li>
-      <li><b>Still trading.</b> Nobody who hasn't bought anything in a week is recommended.</li>
-    </ol>
-    <p class="explain"><b>Weeks up</b> (12-week consistency): ${WEEK_COUNTS}</p>
-    <h3 style="font-size:15px;margin:18px 0 6px">The tiers</h3>
-    <ul>
-      <li><b>Proven sharp:</b> passes every check over at least 40 separate trades, on an account the leaderboards list or a big one.</li>
-      <li><b>Quiet sharp:</b> the same over at least 25 trades, on a small account no leaderboard lists.</li>
-      <li><b>Rising:</b> good early signs, too few trades to be sure yet.</li>
-      <li><b>No proven copy advantage</b> (marked "Copy not proven"): real skill, but by the time you'd get in the price has moved, so copies make little or nothing after fees. A small positive estimate can still show; it isn't reliably above zero. Copying isn't offered.</li>
-    </ul>
-    <p class="explain">Traders lists them in three parts: <b>Worth copying</b> (copies have been reliably profitable after fees), <b>Rising</b>, and <b>Worth watching</b> (No proven copy advantage: skilled traders worth keeping an eye on, and following for alerts, but not copying).</p>
-    <p class="explain">Left out of recommendations: <b>Lucky</b> (over $50K profit from trading, but it rests on one win, or the price doesn't move their way after they buy), <b>No clear edge</b> (the price doesn't clearly move their way, or too few trades to tell), <b>Not trading lately</b>, and market makers and arbitrage (<b>No view</b>).</p>
-    <p class="explain">A reading of the past, not a promise. Signals places no orders: you buy on Polymarket yourself.</p>`);
+// "How we pick traders": The checks (what we look at) and The tiers (what passing earns, and where it's listed).
+// `tab` opens one of them; `focus` marks a check ("copy") or a tier ("proven", …) and scrolls to it.
+const HOW_CHECKS = [
+  ["edge", "The price moves their way.", "A few minutes after they buy, has the market come round to their view? That's the main sign of skill."],
+  ["n", "Enough trades to trust it.", "One good week isn't a record. Trades on the same game count once."],
+  ["luck", "Not one lucky win.", "Their edge has to hold without their best trades, and their profit without their biggest win."],
+  ["profit", "Profitable from trading.", "They made money from trading over the last 30 days. Rewards and rebates don't count."],
+  ["copy", "You can copy it.", "Buying the same thing a minute or more after them, and paying the fee, still has to pay off an hour later, and not by luck.",
+    ["How we price a copy", "Even the low end of our estimate has to be above zero, over at least 8 trades. We price each copy at the ask, what a buyer pays: at least half a cent above the middle price Polymarket's history shows."]],
+  ["side", "They take a side.", "Market makers and arbitrage traders have no view to follow, so they're left out."],
+  ["active", "Still trading.", "Nobody who hasn't bought anything in a week is recommended."],
+];
+const HOW_TIERS = [
+  ["proven", "Passes every check over at least 40 separate trades, on an account the leaderboards list or a big one."],
+  ["quiet", "The same over at least 25 trades, on a small account no leaderboard lists."],
+  ["rising", "Good early signs, too few trades to be sure yet."],
+  ["too_fast", "<b>No proven copy advantage.</b> Real skill, but by the time you'd get in the price has moved, so copies make little or nothing after fees. A small positive estimate can still show; it isn't reliably above zero. Copying isn't offered."],
+];
+const howMore = ([label, text]) => `<details class="how-more"><summary>${label}</summary><p>${text}</p></details>`;
+
+function howSheet(tab = "checks", focus = null) {
+  const tabs = [["checks", "The checks"], ["tiers", "The tiers"]];
+  const panel = sheet(`<h2>How we pick traders</h2>
+    <div class="how-tabs" role="tablist" aria-label="How we pick traders">${tabs.map(([k, l]) => `<button type="button" role="tab" id="howtab-${k}" aria-controls="howpanel-${k}" data-howtab="${k}">${l}</button>`).join("")}</div>
+    <div class="how" role="tabpanel" id="howpanel-checks" aria-labelledby="howtab-checks">
+      <p class="explain" style="margin-top:12px">We look at Polymarket traders on the leaderboards and in busy markets, and check up to 60 of each one's trades from the last 30 days against Polymarket's own price history.</p>
+      <ol>${HOW_CHECKS.map(([k, head, line, more]) => `<li data-howfocus="${k}"><b>${head}</b> ${line}${more ? howMore(more) : ""}</li>`).join("")}</ol>
+      <p class="explain">A trader who passes gets a tier. <button type="button" class="link" data-howtab="tiers">See the tiers →</button></p>
+    </div>
+    <div class="how" role="tabpanel" id="howpanel-tiers" aria-labelledby="howtab-tiers">
+      <p class="explain" style="margin-top:12px">The tier says how sure we are of a trader's skill. Copying is offered only when copies have also paid off after fees.</p>
+      ${HOW_TIERS.map(([k, text]) => `<div class="how-tier" data-howfocus="${k}">${tier(k)}<p>${text}</p></div>`).join("")}
+      <h3>Where they're listed</h3>
+      <ul>${SECTIONS.map(([, title, sub]) => `<li><b>${title}:</b> ${sub}</li>`).join("")}</ul>
+      ${howMore(["Left out of recommendations", "<b>Lucky</b> (over $50K profit from trading, but it rests on one win, or the price doesn't move their way after they buy), <b>No clear edge</b> (the price doesn't clearly move their way, or too few trades to tell), <b>Not trading lately</b>, and market makers and arbitrage (<b>No view</b>)."])}
+      <h3>Reading the list</h3>
+      <p class="explain" style="margin-top:0"><b>Weeks up</b> (12-week consistency): ${WEEK_COUNTS}</p>
+    </div>
+    <p class="explain" style="margin-top:18px">A reading of the past, not a promise. Signals places no orders: you buy on Polymarket yourself.</p>`);
+  const show = (k) => {
+    tabs.forEach(([t]) => {
+      const on = t === k, btn = $(`#howtab-${t}`, panel);
+      btn.setAttribute("aria-selected", on); btn.tabIndex = on ? 0 : -1;
+      $(`#howpanel-${t}`, panel).hidden = !on;
+    });
+    panel.scrollTop = 0;
+  };
+  $$("[data-howtab]", panel).forEach((b) => (b.onclick = () => { show(b.dataset.howtab); $(`#howtab-${b.dataset.howtab}`, panel).focus(); }));
+  $(".how-tabs", panel).onkeydown = (e) => { // the arrow keys move between the two tabs
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const on = tabs.findIndex(([t]) => $(`#howtab-${t}`, panel).getAttribute("aria-selected") === "true");
+    const k = tabs[(on + 1) % tabs.length][0];
+    show(k); $(`#howtab-${k}`, panel).focus();
+  };
+  show(tab);
+  const el = focus && $(`[data-howfocus="${focus}"]`, panel);
+  if (el) { el.classList.add("hl"); el.scrollIntoView({ block: "center" }); }
 }
+// A tier pill that's a button (on Feed cards) opens what that tier means.
+document.addEventListener("click", (e) => { const t = e.target.closest("[data-tier]"); if (t) howSheet("tiers", t.dataset.tier); });
 
 // ---- interests: asked once per browser ----
 // Kept in localStorage; [] means all markets, null not asked yet. Storage can be blocked (private windows),
@@ -1410,7 +1470,7 @@ function renderWorth() {
       </div>
     </div>
     ${sample ? `<p class="lb-note">Sample profit history (SIGNALS_MOCK=1): weeks in profit, trend and 7D/90D are made up here, to review the page. They never show on the hosted app.</p>` : ""}
-    ${paused ? pausedNote(`We don't loosen the checks to fill this list. <button class="link" id="howpaused">How we decide</button>`) : ""}
+    ${paused ? pausedNote(`We don't loosen the checks to fill this list. <button class="link" id="howpaused">Why it's paused</button>`) : ""}
     ${body}
     <p class="lb-foot">${st.running ? `Checking again${st.total ? ` (${st.done} of ${st.total})` : ""}…` : `Checked ${plural(scores.length, "trader")} ${ago(res.finished)} · <button class="link" id="wrefresh">Check again</button>`}
       · <button class="link" id="how">How we pick traders</button>
@@ -1431,12 +1491,12 @@ function renderWorth() {
   $("#lbsort").onchange = (e) => { lb.sort = e.target.value; renderWorth(); };
   $$("[data-lbsort]", box).forEach((b) => (b.onclick = () => { lb.sort = b.dataset.lbsort; renderWorth(); }));
   $$("[data-lbperiod]", box).forEach((b) => (b.onclick = () => { lb.period = b.dataset.lbperiod; renderWorth(); }));
-  const howp = $("#howpaused"); if (howp) howp.onclick = howSheet;
+  const howp = $("#howpaused"); if (howp) howp.onclick = () => howSheet("checks", "copy");
   $$("[data-lbmore]", box).forEach((b) => (b.onclick = () => { lb.more[b.dataset.lbmore] = true; renderWorth(); }));
   const clear = $("#lbclear"); if (clear) clear.onclick = () => { lb.q = ""; renderWorth(); };
   const all = $("#lball"); if (all) all.onclick = () => { setInterests([]); renderWorth(); };
   const rec = $("#lbrec"); if (rec) rec.onclick = () => { lb.all = !lb.all; renderWorth(); };
-  $("#how").onclick = howSheet;
+  $("#how").onclick = () => howSheet();
   const again = $("#wrefresh"); if (again) again.onclick = async () => { await api("/api/worth/refresh", { method: "POST" }); worthView(); };
 }
 
