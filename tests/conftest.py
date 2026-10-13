@@ -30,13 +30,13 @@ def js_defs(*names: str) -> str:
 
 @pytest.fixture
 def run_js() -> Any:
-    """``run_js(names, expr)``: defines the page's ``names``, evaluates ``expr`` and returns its JSON value."""
+    """``run_js(names, expr)``: defines the page's ``names``, evaluates ``expr`` (awaited when it's a promise) and returns its JSON value."""
     node = shutil.which("node")
     if not node:
         pytest.skip("Node isn't installed: the page's JavaScript rules can't be run here")
 
     def run(names: tuple[str, ...], expr: str) -> Any:
-        code = js_defs(*names) + f"\nprocess.stdout.write(JSON.stringify({expr}));"
+        code = js_defs(*names) + f"\nPromise.resolve({expr}).then((v) => process.stdout.write(JSON.stringify(v)));"
         r = subprocess.run([node, "-e", code], capture_output=True, text=True, timeout=30, check=False)
         assert r.returncode == 0, r.stderr
         return json.loads(r.stdout)
