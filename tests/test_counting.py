@@ -168,3 +168,49 @@ def test_metrics_are_for_the_owner_only(api: TestClient, monkeypatch: pytest.Mon
 
 def test_the_page_counts_an_interest_pick_anonymously(api: TestClient) -> None:
     assert '"/api/count/picked"' in api.get("/").text
+
+
+# ---- review fixes ----
+
+
+def test_a_grouped_alerts_delay_counts_from_the_buy_that_sent_it(api: TestClient) -> None:
+    user(follows=(SAM, ANN))
+    engine._deliver("user_1", "555", buy(SAM, 60), "Politics")  # an hour ago: alone
+    engine._deliver("user_1", "555", buy(ANN, 2), "Politics")  # two minutes ago: sends the group
+    with engine._db() as con:
+        (lag,) = con.execute("SELECT sent_at - COALESCE(trigger_at, trade_at) FROM alerts WHERE kind = 'group'").fetchone()
+    assert 100 <= lag <= 140  # about 2 minutes, not the hour since the first buy
+    assert metrics(api)["alerts"]["minutes_from_trade_to_alert"]["n"] == 2
+
+
+def test_each_followers_links_name_their_own_alert(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from uselayer import Trader, TraderDetail, WhalePosition
+
+    user("user_1", "555")
+    user("user_2", "777")
+    trades: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(
+        Trader(venue="polymarket", id=SAM, name=None), "visible", {}, [WhalePosition("0xc:0", None, "Yes", 1, 0.5, 0.5, None, None)], list(trades)))  # fmt: skip
+    engine.alert_pass()
+    trades.append(buy(SAM, 1).t)
+    engine._cache.clear()
+    assert engine.alert_pass() == 2
+    for m in engine.tg.sent:
+        aid = engine._alert_of(m["chat_id"], m.get("message_id") or engine.tg.sent.index(m) + 1)
+        assert f"/go/{aid}/market?to=" in m["text"] and "\x00" not in m["text"]
+
+
+def test_go_and_metrics_never_answer_500_to_odd_input(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    r = api.get("/go/abcd1234/market", params={"to": "https://[::1"}, follow_redirects=False)
+    assert (r.status_code, r.headers["location"]) == (302, engine.SITE)
+    monkeypatch.setattr(engine, "METRICS_KEY", "owner-secret")
+    away = TestClient(engine.app, client=("203.0.113.9", 4000))
+    assert away.get("/api/metrics", headers={"Authorization": "Bearer ünïcode".encode()}).status_code == 404
+
+
+def test_a_stop_counts_only_when_they_still_followed_the_trader(api: TestClient) -> None:
+    user(follows=(SAM,))
+    tap = {"callback_query": {"id": "q", "data": f"unf:{SAM}", "message": {"chat": {"id": 555}, "message_id": 1}}}
+    engine._on_update(tap)
+    engine._on_update(tap)  # tapped again, already unfollowed
+    assert metrics(api)["stops"]["stop_taps"] == 1

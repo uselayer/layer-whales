@@ -1153,7 +1153,9 @@ def _on_update(u: dict[str, Any]) -> None:
         if chat and data.startswith("unf:"):
             w = data[4:]
             mid = (cb.get("message") or {}).get("message_id")
-            count("stop", uid=_chat_owner(chat), trader=w, alert_id=_alert_of(chat, mid))
+            owner = _chat_owner(chat)
+            if owner and w in ((_load_follows()["users"].get(owner) or {}).get("follows") or []):  # a real stop
+                count("stop", uid=owner, trader=w, alert_id=_alert_of(chat, mid))
             with _follow_lock:
                 d = _load_follows()
                 for x in d["users"].values():
@@ -1702,9 +1704,13 @@ def _alert_known(alert_id: str) -> bool:
 
 def _allowed(url: str) -> bool:
     """Where a /go link may send someone: Polymarket, or Signals itself. Nowhere else (no open redirect)."""
-    u = urllib.parse.urlsplit(url)
-    site = urllib.parse.urlsplit(SITE)
-    return u.scheme == "https" and (u.hostname == "polymarket.com" or (u.scheme, u.netloc) == (site.scheme, site.netloc))
+    try:
+        u = urllib.parse.urlsplit(url)
+        site = urllib.parse.urlsplit(SITE)
+        host = u.hostname
+    except ValueError:  # a malformed link (a bad port, a broken IPv6 host): Signals itself, never a 500
+        return False
+    return u.scheme == "https" and (host == "polymarket.com" or (u.scheme, u.netloc) == (site.scheme, site.netloc))
 
 
 @app.get("/go/{alert_id}/{target}")
@@ -1730,7 +1736,7 @@ def _owner(request: Request) -> None:
     from the environment) as a Bearer token. Anyone else gets a 404, as if there were nothing here."""
     auth = request.headers.get("authorization", "")
     key = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
-    if METRICS_KEY and key and secrets.compare_digest(key, METRICS_KEY):
+    if METRICS_KEY and key and secrets.compare_digest(key.encode(), METRICS_KEY.encode()):  # bytes: any text is a 404
         return
     local = request.client is not None and request.client.host in ("127.0.0.1", "::1")
     if not HOSTED and local and not request.headers.get("x-forwarded-for"):
@@ -1752,8 +1758,9 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
     week = 7 * 86400
     with _db() as con:
         sent = dict(con.execute("SELECT kind, COUNT(*) FROM alerts WHERE sent_at >= ? GROUP BY kind", (since,)).fetchall())
-        lags = [r[0] / 60 for r in con.execute("SELECT sent_at - trade_at FROM alerts WHERE sent_at >= ? AND trade_at IS NOT NULL"
-                                                " AND kind != 'cap'", (since,))]  # fmt: skip
+        # from the buy that sent the alert (trigger_at; a group's is its latest buyer's, not its first)
+        lags = [r[0] / 60 for r in con.execute("SELECT sent_at - COALESCE(trigger_at, trade_at) FROM alerts WHERE sent_at >= ?"
+                                                " AND COALESCE(trigger_at, trade_at) IS NOT NULL AND kind != 'cap'", (since,))]  # fmt: skip
         taps = dict(con.execute("SELECT target, COUNT(*) FROM events WHERE kind = 'tap' AND at >= ? GROUP BY target", (since,)).fetchall())
         tapped = con.execute("SELECT COUNT(DISTINCT e.alert_id) FROM events e JOIN alerts a ON a.id = e.alert_id"
                              " WHERE e.kind = 'tap' AND e.at >= ?", (since,)).fetchone()[0]  # fmt: skip
