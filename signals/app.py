@@ -429,10 +429,12 @@ class CopyRules(BaseModel):
 
 
 class CopyTrader(BaseModel):
+    """Copy all of a trader's next trades, in every market. There is no "only some categories": a rule saved
+    with ``categories`` before keeps working as saved (see ``_make_copier``), but no new one gets them."""
+
     venue: str
     id: str
     name: str | None = None
-    categories: list[str] = []
 
 
 def _key(venue: str, id: str) -> str:

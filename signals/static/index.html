@@ -218,9 +218,6 @@
   .receipt span { color: var(--muted); }
   .receipt .total span, .receipt .total b { color: var(--fg); font-weight: 600; }
   .copybox .on-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .catpick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
-  .catpick button { border: 0; border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--soft); color: var(--muted); }
-  .catpick button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
   details.fold { margin-top: 32px; border-top: 1px solid var(--line); }
   details.fold > summary { list-style: none; cursor: pointer; padding: 16px 0; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
   details.fold > summary::-webkit-details-marker { display: none; }
@@ -606,8 +603,8 @@ let copy = null; // { rules: {size, max_above, traders: [...]}, recent: [...] }
 const isCopied = (venue, id) => !!copy?.rules.traders.find((t) => t.venue === venue && t.id === id);
 async function loadCopy() { try { copy = await api("/api/copy"); } catch {} return copy; }
 setInterval(loadCopy, 15000);
-async function startCopy(t, categories = []) {
-  copy = await post("/api/copy/traders", { venue: t.venue, id: t.id, name: t.name, categories });
+async function startCopy(t) { // everything they trade next, in every market
+  copy = await post("/api/copy/traders", { venue: t.venue, id: t.id, name: t.name });
   toast(`Copying ${esc(displayName(t.name, t.id))}'s next trades in the sandbox.<a href="#/mine">My trades</a>`);
 }
 async function stopCopy(venue, id) { copy = await api(`/api/copy/traders/${venue}/${encodeURIComponent(id)}`, { method: "DELETE" }); }
@@ -1340,7 +1337,8 @@ async function fillYouMade(el, t, lead = "") {
   el.hidden = false;
 }
 
-// The copy card on a trader's page: start copying (optionally only some categories), or stop.
+// The copy card on a trader's page: start copying all their next trades, or stop. (A rule saved before
+// copying was always everything may still say "Only Sports": it keeps working as saved.)
 async function copyBox(box, t, opts = {}) {
   if (!copy) { box.innerHTML = `<div class="skel" style="width:60%;height:14px"></div>`; await loadCopy(); }
   if (!box.isConnected) return;
@@ -1355,18 +1353,14 @@ async function copyBox(box, t, opts = {}) {
     fillYouMade($("#made", box), t, on.categories?.length ? `Only ${esc(on.categories.join(", "))}. ` : "");
     return;
   }
-  const cats = opts.categories || [], strong = opts.strong || [];
   box.innerHTML = `<div class="head">Copy their buys</div>
-    <p>Each new buy they make becomes your own sandbox order in the same market on ${VENUE[t.venue]}: ${r.size} contracts, at most 3¢ above their price, held until it settles. Real prices and fees, no real money.${opts.note ? " " + esc(opts.note) : ""}</p>
+    <p>Each new buy they make, in any market, becomes your own sandbox order in the same market on ${VENUE[t.venue]}: ${r.size} contracts, at most 3¢ above their price, held until it settles. Real prices and fees, no real money.${opts.note ? " " + esc(opts.note) : ""}</p>
     <p id="made" hidden></p>
-    ${cats.length > 1 ? `<div class="catpick">${cats.map((c) => `<button aria-pressed="${!strong.length || strong.includes(c)}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>` : ""}
     <button class="btn wide" id="docopy">Copy trader</button>`;
   fillYouMade($("#made", box), t);
-  $$(".catpick button", box).forEach((b) => (b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true")));
   $("#docopy", box).onclick = async () => {
     $("#docopy", box).disabled = true;
-    const picked = $$(".catpick button[aria-pressed=true]", box).map((b) => b.dataset.c);
-    try { await startCopy(t, cats.length > 1 && picked.length < cats.length ? picked : []); copyBox(box, t, opts); }
+    try { await startCopy(t); copyBox(box, t, opts); }
     catch (e) { $("#docopy", box).disabled = false; box.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(e.message)}</p>`); }
   };
 }
