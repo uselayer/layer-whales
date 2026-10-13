@@ -141,7 +141,12 @@ def test_worth_adds_the_leaderboard_columns_from_what_the_check_kept(
     monkeypatch.setattr(engine, "_worth_data", {"finished": "2026-10-07T00:00:00+00:00", "scores": [kept]})
     s = api.get("/api/worth").json()["result"]["scores"][0]
     assert s["typical_usd"] == 30.0  # the median buy: one big bet doesn't set it
-    assert s["trades_per_day"] == 2.0  # 60 decisions over 30 days
+    assert s["trades_per_day"] == 2.0 and s["covered_days"] == 30  # 60 decisions over 30 days
+    # a busy trader: the SDK's 5,000 fills (uselayer 0.8 says from when) cover only the last 10 days
+    for read_from in ("2026-09-27T00:00:00+00:00", datetime(2026, 9, 27, tzinfo=UTC).timestamp()):
+        busy = engine._board(kept | {"fills_from": read_from})
+        assert (busy["trades_per_day"], busy["covered_days"]) == (6.0, 10)
+    assert engine._board(kept | {"fills_from": "2026-08-01T00:00:00+00:00"})["covered_days"] == 30  # never past the window
     assert s["last_buy"] == "2026-10-06T12:00:00+00:00"
     assert s["copy_return"] == pytest.approx(0.02)  # 1¢ kept on a 50¢ buy
     assert "pnl_weeks" not in s and "sample_data" not in s  # profit history only from the SDK
