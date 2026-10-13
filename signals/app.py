@@ -62,6 +62,7 @@ def venue_on(venue: str) -> None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
     threading.Thread(target=_live_loop, daemon=True).start()  # keeps the Feed's and alerts' trader reads filled
+    _directory_later(_directory_import)  # the scores kept before the directory had them (once: then a no-op)
     if DIRECTORY_ON:  # finds wallets for the trader directory, once a day, at a rate that leaves the site its reads
         threading.Thread(target=_directory_loop, daemon=True).start()
     if TG_TOKEN:  # alerts: the bot's messages (connecting a chat, /list, /stop), and new buys of followed traders
@@ -269,6 +270,7 @@ def _worth_run() -> None:
             s["sample"] = s["sample"][:30]
         STORE_DIR.mkdir(parents=True, exist_ok=True)
         worth_file().write_text(json.dumps(data))
+        _directory_later(lambda d: d.keep_scores(_with_format(data), "check", _iso_ts(data["finished"])))
         _worth_data = data
         _worth_one.clear()
         _worth["error"] = None
@@ -305,11 +307,13 @@ def _worth_loop() -> None:
         _worth_stop.wait(60)
 
 
-# ---- the trader directory (phase 1: finding wallets, see directory.py) ----
+# ---- the trader directory (phase 1: finding wallets; phase 2: keeping their scores; see directory.py) ----
 # Every wallet Signals finds, and where, kept across runs: the SDK's sweep of every leaderboard and of markets
 # at every level of activity, once a day, plus traders in the Feed's big trades, wallets opened that the last
-# check didn't have, and followed wallets. Nothing is scored or shown from it yet: the Worth following check still
-# picks its own wallets. /api/directory gives counts only. SIGNALS_DIRECTORY=0 turns the sweep off.
+# check didn't have, and followed wallets. Every score worked out is kept there too (the Worth following check's,
+# a trader page's, a failed try, and on launch the last check's from worth-following.json), at no extra reads.
+# Nothing is shown from it yet: the Worth following check still picks its own wallets and the page reads its file.
+# /api/directory gives counts only. SIGNALS_DIRECTORY=0 turns the sweep off; scores are kept either way.
 
 DIRECTORY_ON = os.environ.get("SIGNALS_DIRECTORY", "1") != "0"
 DIRECTORY_SWEEP_S = 24 * 3600  # a new sweep once the last finished one is this old
@@ -350,6 +354,33 @@ def _directory_note_later(seen: list[Seen]) -> None:
     _directory_writer.submit(_directory_note, seen)
 
 
+def _directory_later(write: Callable[[Directory], Any]) -> None:
+    """Any other write to the directory (a score, a failed try, the import) on the writer thread, in order with
+    the sightings. It never fails a page or the check: what went wrong is kept for /api/directory."""
+
+    def run() -> None:
+        try:
+            write(directory())
+        except Exception as e:  # the page, the check and the next write go on
+            _directory_state["note_error"] = f"{type(e).__name__}: {e}"
+
+    _directory_writer.submit(run)
+
+
+def _with_format(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """A kept check's scores, each with the check's format (which version of the score it is)."""
+    return [s | {"format": data.get("format")} for s in data.get("scores", [])]
+
+
+def _directory_import(d: Directory) -> None:
+    """The scores the last check kept in worth-following.json, into the directory as of when that check finished.
+    Each launch: the first time it adds them; after that it's the same score again, and the directory keeps the
+    one it has (a newer check, or a trader page's, is never replaced)."""
+    data = _worth_load()
+    if data and data.get("scores") and data.get("finished"):
+        d.keep_scores(_with_format(data), "import", _iso_ts(data["finished"]))
+
+
 def _feed_note(trades: list[WhaleTrade], cats: dict[str, str]) -> None:
     """The Polymarket traders in the Feed's big trades, each trade kept once, by its market's category."""
     fresh = [t for t in trades if t.venue == "polymarket" and t.trader and t.trade_id not in _feed_noted]
@@ -361,7 +392,8 @@ def _feed_note(trades: list[WhaleTrade], cats: dict[str, str]) -> None:
     _directory_note_later([
         Seen(str(t.trader).lower(), "feed", cats.get(t.market) or "Other",
              name=None if not t.name or t.name.startswith("0x") else t.name, category=cats.get(t.market),
-             example=t.market.partition(":")[0], example_title=t.title, trades=1, usd=t.usd)
+             example=t.market.partition(":")[0], example_title=t.title, trades=1, usd=t.usd,
+             traded_at=t.at.timestamp())
         for t in fresh
     ])  # fmt: skip
 
@@ -712,7 +744,13 @@ def _score_of(wallet: str) -> dict[str, Any]:
         try:
             _worth_one[w] = reads.whales.score(w).to_dict()
         except VenueError as e:
+            if _WALLET.fullmatch(w):
+                why = f"{type(e).__name__}: {e}"
+                _directory_later(lambda d: d.score_failed(w, why))
             raise venue_error(e) from e
+        if _WALLET.fullmatch(w):
+            scored = _worth_one[w] | {"format": WORTH_FORMAT}
+            _directory_later(lambda d: d.keep_scores([scored], "page"))
         if len(_worth_one) > WORTH_ONE_KEEP:
             del _worth_one[next(iter(_worth_one))]  # the oldest
     return _worth_one[w]
