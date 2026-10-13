@@ -66,8 +66,11 @@ behind Vercel (see README, "Hosting").
     copying** (copying is offered: `copy_ok`; while nobody's is, the Feed's "Copying is paused" callout sits
     above the list instead and "Copyable only" is greyed out), **Rising**, and **Worth watching** (No proven copy advantage: skilled traders worth keeping an eye on; copying isn't
     offered). Each section has the same columns, its own ranks and "Show more"; "Copyable only" shows Worth
-    copying, and "See all checked traders" is one flat list. A trader copying isn't offered for gets no copy
-    cue anywhere: grey "Not offered" in the Copying column, and an open trade of theirs (their page, a Feed
+    copying, and "See all checked traders" is one flat list. A trader's copy status is one of three words,
+    the same everywhere (the engine's `copy_offer` and the page's `copyLabel`): **Copyable**, **Copy not
+    proven** (a tier we recommend whose copies aren't reliably above zero) or **Not recommended**; a reason
+    reads "Copy not proven: …". A trader who isn't Copyable gets no copy
+    cue anywhere: their status in grey in the Copying column, and an open trade of theirs (their page, a Feed
     card, a trader page) says only "Now 52¢ · they paid 49¢", never green or "you can still get in". The
     "Buy on Polymarket" link, which only opens the market, stays for everyone. Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
     win record and usual trade the last 30 days. Consistency is "X of N weeks up", where a week counts profit

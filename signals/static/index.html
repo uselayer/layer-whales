@@ -324,10 +324,20 @@
   .pf-chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
   .pf-legend { font-size: 12px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
   .pf-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; background: var(--line); }
-  .pf-why { display: grid; gap: 12px; margin-top: 12px; }
-  .pf-why > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }
-  .pf-why b { font-weight: 600; }
-  .pf-why p { margin: 0; color: var(--muted); }
+  /* Why they're here: the verdict, their copy status, a warning, then the facts */
+  .pf-verdict { margin: 10px 0 0; font-size: 15px; }
+  .pf-copying { margin: 10px 0 0; color: var(--muted); font-size: 14px; border-radius: 10px; transition: background .3s, box-shadow .3s; }
+  .pf-copying b { color: var(--fg); font-weight: 600; }
+  .pf-copying.hl { background: var(--soft); box-shadow: 0 0 0 8px var(--soft); }
+  .pf-warn { display: flex; gap: 10px; align-items: flex-start; background: var(--soft); border-radius: 12px; padding: 10px 14px; margin-top: 14px; font-size: 14px; }
+  .pf-warn svg { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+  .pf-warn p { margin: 0; }
+  .pf-facts { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px 16px; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; }
+  .pf-facts dt { color: var(--muted); }
+  .pf-facts dd { margin: 0; }
+  .pf-name { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  .pf-copy { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .pf-copy .status { font-size: 13px; }
   .pf-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 26px; }
   .pf-tabs button { border: 0; background: none; padding: 10px 14px; font: inherit; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
   .pf-tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
@@ -349,7 +359,7 @@
   @media (max-width: 760px) {
     .pf-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .pf-stats .pf-stat:last-child { grid-column: span 2; }
-    .pf-why > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .pf-facts { grid-template-columns: 100px minmax(0, 1fr); gap: 8px 12px; }
     .pf-kv { grid-template-columns: minmax(0, 1fr); }
     .pf-cta { justify-items: start; text-align: left; width: 100%; }
     .pf-head h1 { font-size: 24px; }
@@ -798,7 +808,7 @@ function tradeSheet(b) {
       ${b.at || b.category ? `<div><span>When</span><b>${b.at ? ago(b.at) : "—"}</b></div><div><span>Category</span><b>${esc(b.category || "—")}</b></div>` : ""}
     </div>
     ${b.wallet ? `<a class="sheet-who" href="#/worth/${esc(b.wallet)}">${avatar(b.wallet, 36)}<span class="grow"><span class="name">${esc(name)}</span><span class="muted" style="font-size:13px">See their record</span></span>${tier(b.segment)}</a>` : ""}
-    ${b.copy_ok === false && b.wallet ? `<p class="fine">Copying isn't offered for this trader. <a class="link" href="#/worth/${esc(b.wallet)}">See their record</a></p>` : ""}
+    ${b.copy_ok === false && b.wallet ? `<p class="fine">${copyLabel(b)}. <a class="link" href="#/worth/${esc(b.wallet)}">See their record</a></p>` : ""}
     ${b.copy_ok === true && b.wallet && b.status === "in" && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>`
       : b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">${OPEN.has(b.status) ? "Buy on Polymarket ↗" : "Open on Polymarket ↗"}</a></p>` : ""}`);
   bindActions(panel);
@@ -1158,7 +1168,7 @@ const HOW_TIERS = [
   ["proven", "Passes every check over at least 40 separate trades, on an account the leaderboards list or a big one."],
   ["quiet", "The same over at least 25 trades, on a small account no leaderboard lists."],
   ["rising", "Good early signs, too few trades to be sure yet."],
-  ["too_fast", "<b>No proven copy advantage.</b> Real skill, but by the time you'd get in the price has moved, so copies make little or nothing after fees. A small positive estimate can still show; it isn't reliably above zero. Copying isn't offered."],
+  ["too_fast", "Real skill, but by the time you'd get in the price has moved, so copies make little or nothing after fees. A small positive estimate can still show; it isn't reliably above zero."],
 ];
 const howMore = ([label, text]) => `<details class="how-more"><summary>${label}</summary><p>${text}</p></details>`;
 
@@ -1172,7 +1182,7 @@ function howSheet(tab = "checks", focus = null) {
       <p class="explain">A trader who passes gets a tier. <button type="button" class="link" data-howtab="tiers">See the tiers →</button></p>
     </div>
     <div class="how" role="tabpanel" id="howpanel-tiers" aria-labelledby="howtab-tiers">
-      <p class="explain" style="margin-top:12px">The tier says how sure we are of a trader's skill. Copying is offered only when copies have also paid off after fees.</p>
+      <p class="explain" style="margin-top:12px">The tier says how sure we are of a trader's skill. A trader is <b>Copyable</b> only when copies have also paid off after fees; otherwise <b>Copy not proven</b>.</p>
       ${HOW_TIERS.map(([k, text]) => `<div class="how-tier" data-howfocus="${k}">${tier(k)}<p>${text}</p></div>`).join("")}
       <h3>Where they're listed</h3>
       <ul>${SECTIONS.map(([, title, sub]) => `<li><b>${title}:</b> ${sub}</li>`).join("")}</ul>
@@ -1295,8 +1305,8 @@ const lb = { copyOnly: false, q: "", sort: null, period: "30d", all: false, more
 // Traders' sections, from the engine's section_of: one rule, so the list and its tests agree.
 const SECTIONS = [
   ["copy", "Worth copying", "Copies a few minutes late have been reliably profitable after fees."],
-  ["rising", "Rising", "Good early signs, too few trades to be sure yet. Copying isn't offered yet."],
-  ["watch", "Worth watching", "Skilled traders worth keeping an eye on. Copying isn't offered: the price moves before you'd get in."],
+  ["rising", "Rising", "Good early signs, too few trades to be sure yet. Copy not proven yet."],
+  ["watch", "Worth watching", "Skilled traders worth keeping an eye on. Copy not proven: the price moves before you'd get in."],
 ];
 
 async function tradersPage(view) {
@@ -1322,11 +1332,15 @@ async function worthView() {
 // reliably above zero after fees (the bottom of the 95% range). Traders, a profile, the Feed and the copy routes
 // all use it, so none can offer what another refuses.
 const isCopyable = (s) => s.copy_ok === true;
+// A trader's copy status, in the same words everywhere and as the engine's copy_offer: Copyable, Copy not proven
+// (a tier we recommend whose copies aren't reliably above zero), or Not recommended.
+const copyLabel = (s) => isCopyable(s) ? "Copyable" : SEG_ORDER.includes(s?.segment) ? "Copy not proven" : "Not recommended";
 // What a copy kept after fees is an estimate: always with its 95% range, and never shown as a gain unless the
 // whole range is above zero.
 const copyRange = (s) => s.copy_return_low != null && s.copy_return_high != null ? `${lbPct(s.copy_return_low)} to ${lbPct(s.copy_return_high)}` : null;
-const copyEstimate = (s) => s.copy_return == null ? null : `Estimated copy return: ${lbPct(s.copy_return)} after fees${copyRange(s) ? ` (95% range ${copyRange(s)})` : ""}${isCopyable(s)
-  ? "." : s.copy_return > 0 ? ", but results aren't reliably above zero." : "; the price moves before a copy gets in."}`;
+const copyFigure = (s) => s.copy_return == null ? null : `Estimated copy return: ${lbPct(s.copy_return)} after fees${copyRange(s) ? ` (95% range ${copyRange(s)})` : ""}`;
+// with no reason beside it (a list row), a positive estimate says why it still isn't copyable
+const copyEstimate = (s) => s.copy_return == null ? null : `${copyFigure(s)}${!isCopyable(s) && s.copy_return > 0 ? ", but it isn't reliably above zero." : "."}`;
 // Weeks in profit out of the weeks they have history for: a week before their first trade isn't a losing week.
 const weeksUp = (s) => s.weeks_up ?? null;
 // What "up" means for a week: trading profit, so open trades count at their value that week.
@@ -1403,11 +1417,11 @@ function renderWorth() {
     const up = weeksUp(s), known = weeksOf(s), profit = profitOf(s, n), perDollar = perDollarOf(s, n), copy = s.copy_return;
     const notRec = !SEG_ORDER.includes(s.segment) ? ` · ${esc(TIER[s.segment]?.[0] || "Not recommended")}` : "";
     const cat = s.categories?.[0]?.category;
-    // Copying is offered or it isn't: a trader it isn't offered for never gets a figure that reads as a gain.
+    // Copyable or not: a trader who isn't never gets a figure that reads as a gain, only their status (copyLabel).
     const copyMain = isCopyable(s) ? (copy == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(copy, lbPct(copy))}</span>`)
-      : `<span class="lb-main lb-muted">Not offered</span>`;
+      : `<span class="lb-main lb-muted">${copyLabel(s)}</span>`;
     const copySub = isCopyable(s) ? (copyRange(s) ? `range ${copyRange(s)}` : "estimate, after fees")
-      : !SEG_ORDER.includes(s.segment) ? "not recommended" : copy != null ? `estimate ${lbPct(copy)}` : "";
+      : copy != null ? `estimate ${lbPct(copy)}` : "";
     return `<a class="lb-cols lb-row" href="#/worth/${esc(s.wallet)}" ${i >= RANKED && !open ? "hidden" : ""}>
       <span class="lb-rank">${i + 1}</span>
       <span class="lb-who">${avatar(s.wallet, 40)}<span style="min-width:0"><span class="nm">${esc(displayName(s.name, s.wallet))}</span><span class="lb-sub">${[cat, s.last_buy ? `active ${ago(s.last_buy)}` : ""].filter(Boolean).map(esc).join(" · ")}${notRec}</span></span></span>
@@ -1418,7 +1432,7 @@ function renderWorth() {
       <span class="lb-usual">${s.typical_usd != null ? `<span class="lb-main">${usd(s.typical_usd)}</span><span class="lb-sub">${perDayText(s.trades_per_day)}</span>` : `<span class="lb-none">—</span>`}</span>
       <span class="lb-copy">${copyMain}<span class="lb-sub">${copySub}</span></span>
       <span class="lb-meta">${[s.settled ? `${readPeriod(s).replace("l", "L")}: won ${s.won} of ${s.settled}` : "", s.typical_usd != null ? `usually ${usd(s.typical_usd)}` : "", perDayText(s.trades_per_day)].filter(Boolean).join(" · ")}</span>
-      <span class="lb-copyline">${isCopyable(s) ? copyEstimate(s) || "" : `<span class="lb-muted">${SEG_ORDER.includes(s.segment) ? `Copying not offered.${copy != null ? ` ${copyEstimate(s)}` : ""}` : `Not recommended${copy != null ? `: estimated copy return ${lbPct(copy)}` : ""}`}</span>`}</span>
+      <span class="lb-copyline">${isCopyable(s) ? `Copyable.${copy != null ? ` ${copyEstimate(s)}` : ""}` : `<span class="lb-muted">${copyLabel(s)}.${copy != null ? ` ${copyEstimate(s)}` : ""}</span>`}</span>
     </a>`;
   };
 
@@ -1572,29 +1586,17 @@ function pfChart(s, n) {
   return { svg, worst };
 }
 
-// "Lately": when they last bought, and their last three buys (market, side, price), each linking to the market.
-// From their trades read now (the Activity tab's), else the buys the check kept, while those load.
-function latelyLine(s, d) {
-  const fresh = d && !d.error && Array.isArray(d.trades);
-  // their trades read now, topped up from the buys the check kept when those give fewer than three markets
-  const buys = [...(fresh ? d.trades.filter((x) => x.action === "buy") : []), ...(s.recent || [])];
-  const by = new Map(); // one per market, newest first; their price there is the average of the buys read
-  for (const b of buys) {
-    const k = b.market; // both sources name the market the same way (the check's buys have no token)
-    if (!by.has(k) && by.size >= 3) continue;
-    const g = by.get(k) || { ...b, usd: 0, size: 0, n: 0, sum: 0, src: b.size ? "fresh" : "check" };
-    if (!by.has(k)) by.set(k, g);
-    if (g.src !== (b.size ? "fresh" : "check")) continue; // one source per market: the fresh read wins
-    if (b.size) { g.usd += b.usd || 0; g.size += b.size; } else { g.sum += b.price || 0; g.n += 1; }
-    if (String(b.at) > String(g.at)) g.at = b.at;
-  }
-  const last = [...by.values()].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 3);
-  const when = last[0]?.at || s.last_buy;
-  if (!last.length) return when ? `Last bought ${ago(when)}.` : "No recent buys.";
-  const price = (g) => g.size ? g.usd / g.size : g.n ? g.sum / g.n : g.price;
-  const one = (g) => `${g.outcome ? `${esc(g.outcome)} on ` : ""}${g.url ? `<a class="link" href="${esc(g.url)}" target="_blank" rel="noopener">${esc(g.title || "a market")}</a>` : esc(g.title || "a market")} at ${cents(price(g))}`;
-  return `Last bought ${ago(when)}: ${last.map(one).join("; ")}.`;
+// When they last bought: the newest of their trades read now (the Activity tab's), the buys the check kept and
+// the check's last buy. Which markets is the Activity tab's job.
+function lastBuyAt(s, d) {
+  const fresh = d && !d.error && Array.isArray(d.trades) ? d.trades.filter((x) => x.action === "buy") : [];
+  return [...fresh, ...(s.recent || []), { at: s.last_buy }].map((b) => b.at).filter(Boolean)
+    .reduce((m, at) => (m == null || String(at) > String(m) ? at : m), null);
 }
+// A copy status sentence ("Copy not proven: …", from the engine) with its status in bold.
+const COPY_LABELS = ["Copyable", "Copy not proven", "Not recommended"];
+const boldStatus = (t) => { const l = COPY_LABELS.find((x) => t.startsWith(x)); return l ? `<b>${l}</b>${esc(t.slice(l.length))}` : esc(t); };
+const WARN_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 15 14H1z"/><path d="M8 6.2v3.6M8 11.9v.1"/></svg>`;
 
 function renderProfile() {
   const s = pf.s, d = pf.detail, n = pf.period, app = $("#app");
@@ -1622,13 +1624,23 @@ function renderProfile() {
   const band = Array.isArray(s.price_band) ? `${cents(s.price_band[0])}–${cents(s.price_band[1])}` : null;
   const chart = pfChart(s, n);
   const can = isCopyable(s);
-  const ctaNote = can ? "Copies' estimated return after fees is reliably above zero" : s.segment === "too_fast" ? `No proven copy advantage. ${copyEstimate(s) || "The price moves before a copy gets in."}` : esc(s.copy_why || "Not recommended");
+  // Under Follow: their copy status, one line with a dot; "Why?" goes to the reason in Why they're here.
+  const copyStatus = `<div class="pf-copy"><span class="status${can ? " in" : ""}"><i></i>${copyLabel(s)}${can && s.copy_return != null ? ` · est. ${lbPct(s.copy_return)} after fees` : ""}</span>
+    · <button type="button" class="link" id="whycopy">Why?</button></div>`;
   const period = (cls) => s.periods ? `<div class="lb-period ${cls}" role="group" aria-label="Period">${Object.keys(PF_PERIOD).map((p) => `<button type="button" data-pfperiod="${p}" aria-pressed="${n === p}">${p.toUpperCase()}</button>`).join("")}</div>` : "";
 
-  // why they're here: five short lines (the engine writes four, from the check: why_lines), plus the SDK's own warnings
+  // why they're here: the verdict and their copy status (the engine's why_lines), the SDK's own warnings, then the
+  // facts, one short value each. Their usual trade is in the tiles above, their recent markets in Activity.
   const why = s.why || {};
-  const lately = latelyLine(s, d);
   const risks = (s.risks || []).map(sdkText);
+  const lastAt = lastBuyAt(s, d);
+  const facts = [
+    ["Markets", why.trades ? esc(why.trades) : null],
+    ["Buys at", band || (s.avg_price != null ? `about ${cents(s.avg_price)}` : null)],
+    ["New markets", s.trades_per_day != null ? perDayText(s.trades_per_day) : null],
+    ["Holds", s.held_share != null ? `${Math.round(s.held_share * 100)}% of closed positions until the market settles` : null],
+    ["Last bought", lastAt ? `${ago(lastAt)} · <button type="button" class="link" id="pfactivity">See activity</button>` : null],
+  ].filter(([, v]) => v);
 
   // the tabs
   let body;
@@ -1685,8 +1697,8 @@ function renderProfile() {
 
   app.innerHTML = `<a class="back" href="#/traders">← Traders</a>
     <div class="pf-head">${avatar(s.wallet, 64)}
-      <div class="grow"><h1>${esc(name)}</h1><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
-      <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div><small>${ctaNote}</small></div></div>
+      <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${tier(s.segment, true)}</div><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
+      <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div>${copyStatus}</div></div>
     <div class="pf-stats">
       <div class="pf-stat"><span>Profit, ${PF_PERIOD[n]}</span><b>${profit != null ? pl(profit, usd(profit, true)) : "—"}</b><small>${started ? `since their first trade, ${ago(started)}` : perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit"}</small></div>
       <div class="pf-stat"><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)}` : "—"}</b><small>${weeksOf(s) && weeksOf(s) < 12 ? "weeks up, since their first trade. " : "weeks up. "}${WEEK_COUNTS}</small></div>
@@ -1699,18 +1711,23 @@ function renderProfile() {
       ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
         : `<p class="pf-empty">Their profit history isn't available yet.</p>`}
       ${profit != null && per.realized != null && per.unrealized != null ? `<p class="pf-statnote">From trading, after fees: ${pl(per.realized, usd(per.realized, true))} taken (sold or settled) and ${pl(per.unrealized, usd(per.unrealized, true))} on positions still open.${per.income ? ` Rewards and rebates (${usd(per.income)}) aren't counted.` : ""}</p>` : ""}</section>
-    <section class="pf-card"><h2>Why they're here</h2><div class="pf-why">
-      <div><b>What they trade</b><p>${why.trades ? esc(why.trades) : "—"}</p></div>
-      <div><b>How they trade</b><p>${why.how ? esc(why.how) : "—"}</p></div>
-      <div><b>Lately</b><p>${lately}</p></div>
-      <div><b>Why they're on the list</b><p>${esc(why.listed || "—")}</p></div>
-      <div><b>Copying</b><p>${esc(why.copying || s.copy_why || "—")}</p></div>
-      ${risks.length ? `<div><b>Worth knowing</b><p>${risks.map(esc).join(" ")}</p></div>` : ""}
-    </div></section>
+    <section class="pf-card"><h2>Why they're here</h2>
+      ${why.listed ? `<p class="pf-verdict">${esc(why.listed)}</p>` : ""}
+      <p class="pf-copying" id="pfcopy">${boldStatus(why.copying || s.copy_why || `${copyLabel(s)}.`)}${s.copy_return != null ? ` ${esc(copyFigure(s))}.` : ""}</p>
+      ${risks.length ? `<div class="pf-warn">${WARN_ICON}<p>${risks.map(esc).join(" ")}</p></div>` : ""}
+      ${facts.length ? `<dl class="pf-facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` : ""}
+    </section>
     <div class="pf-tabs" role="tablist">${[["positions", "Positions"], ["activity", "Activity"], ["stats", "Stats"]].map(([k, l]) => `<button type="button" role="tab" data-pftab="${k}" aria-selected="${pf.tab === k}">${l}</button>`).join("")}</div>
     <div>${body}</div>`;
   $$("[data-pfperiod]", app).forEach((b) => (b.onclick = () => { pf.period = b.dataset.pfperiod; renderProfile(); }));
   $$("[data-pftab]", app).forEach((b) => (b.onclick = () => { pf.tab = b.dataset.pftab; renderProfile(); }));
+  $("#whycopy", app).onclick = () => {
+    const el = $("#pfcopy", app);
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.add("hl"); setTimeout(() => el.classList.remove("hl"), 1800);
+  };
+  const act = $("#pfactivity", app);
+  if (act) act.onclick = () => { pf.tab = "activity"; renderProfile(); $(".pf-tabs", app)?.scrollIntoView({ block: "start", behavior: "smooth" }); };
   bindActions(app);
   redrawFollow();
 }
