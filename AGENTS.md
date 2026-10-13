@@ -22,13 +22,15 @@ behind Vercel (see README, "Hosting").
   asked for only to follow a trader, and the button says so ("Follow · get an alert when they buy"). Alerts go
   to Telegram (`alert_pass` in `app.py`), for every buy of $100 or more by a trader you follow, with how far the
   price has moved: outside the "can still get in" range it says "paid 49¢ · now 60¢, price already moved", never
-  "get in", whoever the trader. At most 20 alerts per person per UTC day, then one "You've reached today's alert
-  limit; more tomorrow" and nothing until the next day. When 2+ traders you follow buy the same outcome within 6
-  hours (1 hour in Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the
-  price now) and later buys edit it in place; it counts once. Every alert has "Useful / Not useful" (one vote per
-  alert and account, changeable). Big trades ($10,000 or more) in your saved markets alert you whoever the trader,
-  at most 5 a day within the 20; only people who have saved markets get them (signed in, the interests choice is
-  kept on the account, per account like follows). Following is also keeping an eye on a trader, not only copying:
+  "get in", whoever the trader. No alert at all when the price now is settled (2¢ or less, 98¢ or more). At most
+  20 alerts per person per UTC day, then one "You've reached today's alert limit; more tomorrow" and nothing until
+  the next day. When 2+ traders you follow buy the same outcome, each within 6 hours of the one before (1 hour in
+  Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the price now) and
+  later buys edit it in place; it counts once. Every alert has "Useful / Not useful" (one vote per alert and
+  account, changeable). Big trades ($10,000 or more) in your chosen markets alert you whoever the trader, at most 5
+  a day within the 20. Only a choice made where the page asks (onboarding, or the Feed's "Your markets · Change")
+  is kept on the account (per account like follows); Traders' chips only filter the view, and nothing saved or []
+  (Skip, all markets) means no big-trade alerts. Following is also keeping an eye on a trader, not only copying:
   for a trader copying isn't offered for, the alert reads neutrally (what they bought and the price now, their
   record, and "Buy on Polymarket", which only opens the market), never "you can still get in" and never green.
   Every alert and trade card keeps that link to the market, whoever the trader. Every alert, and the Feed, says
@@ -43,7 +45,7 @@ behind Vercel (see README, "Hosting").
   at, the fee. Nothing on the page may imply that copying makes money. Two tabs (Feed, Traders).
   - Onboarding (first visit, once per browser) asks one question: which markets interest you (Politics, Sports,
     Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
-    localStorage (and on the account when signed in, for big-trade alerts), every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
+    localStorage (and, when picked here or with the Feed's Change, on the account for big-trade alerts), every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
     ever stuck on that screen.
   - Traders lists the traders we recommend (Proven sharp, Quiet sharp, Rising, No proven copy advantage; its
     pill says "Copy not proven" to fit at 390px) in three sections, from the engine's `section_of`: **Worth

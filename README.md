@@ -115,7 +115,7 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   far the price has moved (and what $10 buys now when copying is offered and the price is still in range),
   "Useful / Not useful" and a "Stop alerts from …" button. Two or more followed traders buying the same outcome
   make one grouped message, edited in place as more buy. Big trades ($10,000 or more, from the SDK's big trades)
-  in the markets someone saved to their account alert them too. At most 20 alerts per person per UTC day. What
+  in the markets someone picked (onboarding or the Feed's Change, saved to their account; Skip means none) alert them too. At most 20 alerts per person per UTC day. What
   was sent, the buys behind grouped alerts and the votes are kept in `/data/alerts.db` (SQLite). In the chat,
   `/list` shows who you follow and `/stop` turns alerts off. The bot uses long polling: no webhook to set up.
 - **Limits**: "Check again" on Worth following only starts a new check when the last one is over an hour old.

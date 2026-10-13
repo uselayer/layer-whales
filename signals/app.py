@@ -1053,7 +1053,8 @@ def _chat_owner(chat: str) -> str | None:
 _db_lock = threading.Lock()
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, uid TEXT NOT NULL, chat TEXT, kind TEXT NOT NULL,
-  trader TEXT, outcome TEXT, message_id INTEGER, sent_at REAL NOT NULL, trade_at REAL, day TEXT NOT NULL);
+  trader TEXT, outcome TEXT, message_id INTEGER, sent_at REAL NOT NULL, trade_at REAL, day TEXT NOT NULL,
+  trigger_at REAL);
 CREATE INDEX IF NOT EXISTS alerts_by_day ON alerts (uid, day);
 CREATE TABLE IF NOT EXISTS buys (uid TEXT NOT NULL, outcome TEXT NOT NULL, trader TEXT NOT NULL, price REAL,
   usd REAL, at REAL NOT NULL);
@@ -1104,10 +1105,13 @@ def _keyboard(alert_id: str, stop: str | None = None) -> dict[str, Any]:
 
 
 def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, trader: str | None = None,
-          outcome: str | None = None, trade_at: float | None = None, stop: str | None = None) -> str | None:  # fmt: skip
+          outcome: str | None = None, trade_at: float | None = None, stop: str | None = None,
+          trigger_at: float | None = None) -> str | None:  # fmt: skip
     """Send one alert if today's cap allows it; its id, or None when it wasn't sent. At the cap, the first alert
-    that doesn't fit sends CAP_TEXT instead, once a day, and the rest are dropped until the next UTC day.
-    ``text_for`` gets the alert's id (its links can name it)."""
+    that doesn't fit sends CAP_TEXT instead, once a day (a failed send tries again with the next one), and the
+    rest are dropped until the next UTC day. ``text_for`` gets the alert's id (its links can name it).
+    ``trade_at``: when the alert's buys began (a group's first buy); ``trigger_at``: when the buy that sent it was
+    made (defaults to ``trade_at``)."""
     if _sent_today(uid) >= DAILY_CAP:
         if not _sent_today(uid, ("cap",)):
             try:
@@ -1124,9 +1128,9 @@ def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, tra
     except RuntimeError:
         return None  # blocked the bot, or Telegram is down: the next buy tries again
     with _db() as con:
-        con.execute("INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        con.execute("INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (aid, uid, chat, kind, trader, outcome, (msg or {}).get("message_id") if isinstance(msg, dict) else None,
-                     time.time(), trade_at, _today()))  # fmt: skip
+                     time.time(), trade_at, _today(), trade_at if trigger_at is None else trigger_at))  # fmt: skip
     return aid
 
 
@@ -1205,8 +1209,17 @@ def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: flo
     return "\n".join(lines)
 
 
+ALERT_ID_MARK = "\x00alert\x00"  # stands in for the alert id in a text built once for every follower
+
+
+def _settled(now: float) -> bool:
+    """2¢ or less, 98¢ or more: the market has settled, or as good as (AGENTS.md's rule). Nothing to alert."""
+    return now <= SETTLED_LOW or now >= SETTLED_HIGH
+
+
 class NewBuy:
-    """One trader's new buy of one outcome, fills merged: what they paid on average and the price now."""
+    """One trader's new buy of one outcome, fills merged: what they paid on average and the price now. Its alert
+    text (and the copy-cost preview in it) is built once, however many people follow the trader."""
 
     def __init__(self, wallet: str, fills: list[WhaleTrade], now: float) -> None:
         self.wallet, self.t = wallet, max(fills, key=lambda f: f.at)
@@ -1214,23 +1227,54 @@ class NewBuy:
         self.paid, self.now = self.usd / self.size, now
         self.at = min(f.at for f in fills).timestamp()  # when they bought: their first fill
         self.outcome = self.t.token or self.t.market  # the exact outcome token; the outcome index is sometimes junk
+        self._text: str | None = None
+
+    def text(self, aid: str) -> str:
+        if self._text is None:
+            self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.size, self.usd)
+        return self._text.replace(ALERT_ID_MARK, aid)
+
+
+def _recently(uid: str | None, trader: str, outcome: str, now: float) -> bool:
+    """Whether this trader's buy of this outcome was already alerted in the last ALERT_AGAIN_S, from alerts.db,
+    so a restart doesn't alert it again (to anyone, or to ``uid`` for a big trade)."""
+    with _db() as con:
+        if uid is None:
+            q = "SELECT 1 FROM buys WHERE trader = ? AND outcome = ? AND at >= ? LIMIT 1"
+            return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S)).fetchone() is not None
+        q = "SELECT 1 FROM alerts WHERE uid = ? AND kind = 'whale' AND trader = ? AND outcome = ? AND sent_at >= ? LIMIT 1"
+        return con.execute(q, (uid, trader, outcome, now - ALERT_AGAIN_S)).fetchone() is not None
+
+
+def _cluster(rows: list[tuple[str, float, float]], at: float, window: float) -> list[tuple[str, float, float]]:
+    """The run of buys around ``at`` in which each is within ``window`` of the one before (a sliding window), so a
+    late-arriving buy with an earlier time still joins, and a buy within the window of the latest joins too."""
+    runs: list[list[tuple[str, float, float]]] = []
+    for r in sorted(rows, key=lambda r: r[2]):
+        if runs and r[2] - runs[-1][-1][2] <= window:
+            runs[-1].append(r)
+        else:
+            runs.append([r])
+    return next((run for run in runs if run[0][2] <= at <= run[-1][2]), [])
 
 
 def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
     """Tell one person about one buy by a trader they follow: alone, or grouped with other traders they follow
-    who bought the same outcome within GROUP_S (GROUP_FAST_S for Sports and Esports). The second buyer sends the
-    grouped alert; later ones edit it in place (Telegram editMessageText), never a new ping. Returns messages sent."""
+    who bought the same outcome, each within GROUP_S of the one before (GROUP_FAST_S in Sports and Esports; GROUP_S
+    when the category isn't known). The second buyer sends the grouped alert; later ones edit it in place (Telegram
+    editMessageText), never a new ping. Returns messages sent."""
     window = GROUP_FAST_S if category in FAST_CATEGORIES else GROUP_S
     with _db() as con:
         con.execute("INSERT INTO buys VALUES (?, ?, ?, ?, ?, ?)", (uid, b.outcome, b.wallet, b.paid, b.usd, b.at))
-        group = con.execute("SELECT id, chat, message_id, trade_at FROM alerts WHERE uid = ? AND kind = 'group' AND outcome = ?"
-                            " AND trade_at >= ? ORDER BY sent_at DESC LIMIT 1", (uid, b.outcome, b.at - window)).fetchone()  # fmt: skip
-        since = group[3] if group else b.at - window
         rows = con.execute("SELECT trader, price, at FROM buys WHERE uid = ? AND outcome = ? AND at >= ? ORDER BY at",
-                           (uid, b.outcome, since)).fetchall()  # fmt: skip
+                           (uid, b.outcome, b.at - 7 * 86400)).fetchall()  # fmt: skip
+        run = _cluster(rows, b.at, window)
+        group = con.execute("SELECT id, chat, message_id FROM alerts WHERE uid = ? AND kind = 'group' AND outcome = ?"
+                            " AND trade_at BETWEEN ? AND ? ORDER BY sent_at DESC LIMIT 1",
+                            (uid, b.outcome, run[0][2], run[-1][2])).fetchone() if run else None  # fmt: skip
     members: dict[str, tuple[str, float, float]] = {}
-    for w, price, at in rows:
-        members.setdefault(w, (w, price, at))  # each trader's first buy in the window
+    for w, price, at in run:
+        members.setdefault(w, (w, price, at))  # each trader's first buy in the run
     first = sorted(members.values(), key=lambda m: m[2])
     if group:
         if group[2] is not None:
@@ -1242,10 +1286,9 @@ def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
         return 0
     if len(first) >= 2:
         aid = _send(uid, chat, "group", lambda _aid: _group_text(first, b.t, b.now), outcome=b.outcome,
-                    trade_at=first[0][2])  # fmt: skip
+                    trade_at=first[0][2], trigger_at=b.at)  # fmt: skip
         return 1 if aid else 0
-    aid = _send(uid, chat, "buy", lambda _aid: _alert_text(b.wallet, b.t, b.paid, b.now, b.size, b.usd),
-                trader=b.wallet, outcome=b.outcome, trade_at=b.at, stop=b.wallet)  # fmt: skip
+    aid = _send(uid, chat, "buy", b.text, trader=b.wallet, outcome=b.outcome, trade_at=b.at, stop=b.wallet)
     return 1 if aid else 0
 
 
@@ -1253,8 +1296,9 @@ def alert_pass() -> int:
     """One round: each followed trader's trades, read once however many people follow them, and for each new
     buy of ALERT_MIN_USD or more, a message to every connected follower (grouped when 2+ traders they follow
     bought the same outcome), then big trades in people's chosen markets. A trader's trades from before their
-    first round are only noted, never alerted. A buy with no price now (no open position to read it from) isn't
-    alerted: there's no saying how far the price moved. Returns how many messages went out."""
+    first round are only noted, never alerted. No alert for a buy with no price now (no open position to read it
+    from: there's no saying how far the price moved), nor when the price now is settled (2¢ or less, 98¢ or more).
+    Returns how many messages went out."""
     users = {uid: u for uid, u in _load_follows()["users"].items() if u.get("chat")}
     to: dict[str, list[str]] = {}
     for uid, u in users.items():
@@ -1282,10 +1326,11 @@ def alert_pass() -> int:
             if t.action == "buy" and t.size and now - t.at.timestamp() <= ALERT_MAX_AGE_S:
                 fills.setdefault(t.market, []).append(t)
         for market, ts in fills.items():
-            if now - _alerted.get((w, market), 0) < ALERT_AGAIN_S or prices.get(market) is None:
+            price = prices.get(market)
+            if now - _alerted.get((w, market), 0) < ALERT_AGAIN_S or price is None or _settled(price):
                 continue
-            b = NewBuy(w, ts, prices[market])  # type: ignore[arg-type]
-            if b.usd < ALERT_MIN_USD:
+            b = NewBuy(w, ts, price)
+            if b.usd < ALERT_MIN_USD or _recently(None, w, b.outcome, now):
                 continue
             _alerted[(w, market)] = now
             new_buys.append(b)
@@ -1315,7 +1360,7 @@ def _whale_text(t: WhaleTrade, now: float, category: str | None) -> str:
     who = f'<a href="{e(SITE)}/#/worth/{w}">{e(_who(w))}</a>' if _scored(w) else e(_who(w))
     status = bet_status(t.price, now)
     price = (f"Paid {_cents(t.price)} · now {_cents(now)}, price already moved." if status != "in"
-             else f"Now {_cents(now)}: you can still get in." if _copy_offered(w)
+             else f"Paid {_cents(t.price)} · now {_cents(now)}: you can still get in." if _copy_offered(w)
              else f"Paid {_cents(t.price)} · now {_cents(now)}.")  # fmt: skip
     where = f" in {e(category)}" if category else ""
     head = f"<b>Big trade{where}:</b> {who} bought <b>{e(t.outcome or 'Yes')}</b> (${t.usd:,.0f}) on {e(t.title or 'a Polymarket market')}"
@@ -1326,9 +1371,10 @@ def _whale_text(t: WhaleTrade, now: float, category: str | None) -> str:
 
 def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
     """Buys of WHALE_USD or more (the SDK's big trades, as the Feed's) in each person's chosen markets, from
-    traders they don't already follow. Only for people who have saved their markets ([] is all of them); at
-    most WHALE_DAILY a day each, within the daily cap. The first round only notes what's there."""
-    wants = {uid: u for uid, u in users.items() if u.get("interests") is not None}
+    traders they don't already follow. Only for people who picked markets and saved them (onboarding or the Feed's
+    Change, signed in): none for nobody saved, and none for [] (Skip, or all markets: no choice made). At most
+    WHALE_DAILY a day each, within the daily cap; never at a settled price. The first round only notes what's there."""
+    wants = {uid: u for uid, u in users.items() if u.get("interests")}
     if not wants:
         return 0
     try:
@@ -1350,23 +1396,24 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
         cats = {}
     sent = 0
     for t in new:
-        w, cat = (t.trader or "").lower(), cats.get(t.market)
-        to = [uid for uid, u in wants.items() if (not u["interests"] or cat in u["interests"])
-              and w not in (u.get("follows") or []) and now - _whale_alerted.get((uid, w, t.market), 0) >= ALERT_AGAIN_S]  # fmt: skip
+        w, cat, outcome = (t.trader or "").lower(), cats.get(t.market), t.token or t.market
+        to = [uid for uid, u in wants.items() if cat in u["interests"] and w not in (u.get("follows") or [])
+              and now - _whale_alerted.get((uid, w, t.market), 0) >= ALERT_AGAIN_S]  # fmt: skip
         if not to:
             continue
         try:
             price_now = next((p.current_price for p in _live_read(w).positions if p.market == t.market), None)
         except VenueError:
             continue
-        if price_now is None:
+        if price_now is None or _settled(price_now):
             continue
+        text = _whale_text(t, price_now, cat)  # once for everyone it goes to
         for uid in to:
-            if _sent_today(uid, ("whale",)) >= WHALE_DAILY:
+            if _sent_today(uid, ("whale",)) >= WHALE_DAILY or _recently(uid, w, outcome, now):
                 continue
             _whale_alerted[(uid, w, t.market)] = now
-            if _send(uid, wants[uid]["chat"], "whale", lambda _aid, t=t, p=price_now, c=cat: _whale_text(t, p, c), trader=w,
-                     outcome=t.token or t.market, trade_at=t.at.timestamp()):  # fmt: skip
+            if _send(uid, wants[uid]["chat"], "whale", lambda aid, x=text: x.replace(ALERT_ID_MARK, aid), trader=w,
+                     outcome=outcome, trade_at=t.at.timestamp()):  # fmt: skip
                 sent += 1
     return sent
 
@@ -1399,7 +1446,7 @@ def main() -> None:
         _OLD_STORE_DIR.rename(STORE_DIR)
     port = int(os.environ.get("SIGNALS_PORT", "8790"))
     print(f"Signals on http://127.0.0.1:{port}  (store: {STORE_DIR})")
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)  # no IPs kept
 
 
 if __name__ == "__main__":

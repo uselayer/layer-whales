@@ -136,6 +136,7 @@ def test_twenty_alerts_a_day_then_one_limit_message_then_nothing_until_tomorrow(
 def test_a_second_trader_buying_the_same_outcome_sends_one_grouped_alert_and_later_buys_edit_it(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(engine, "_today", lambda now=None: "2026-10-13")
     user()
     t0 = datetime(2026, 10, 13, 14, 2, tzinfo=UTC)
     assert engine._deliver("user_1", "555", new_buy(SAM, t0, 0.49, 0.50), "Politics") == 1
@@ -147,14 +148,15 @@ def test_a_second_trader_buying_the_same_outcome_sends_one_grouped_alert_and_lat
     assert lines[1:3] == ["· Sam paid 49¢ at 14:02 UTC", "· Ann paid 51¢ at 14:20 UTC"]  # who went first, first
     assert lines[3] == "Now 53¢." and "Buy on Polymarket" in lines[4] and lines[5] == engine.DATA_DELAY
     assert [b["text"] for b in group["reply_markup"]["inline_keyboard"][0]] == ["Useful", "Not useful"]
-    # A third trader: no new ping, the grouped message is edited in place
-    assert engine._deliver("user_1", "555", new_buy(BOB, t0 + timedelta(hours=2), 0.52, 0.62), "Politics") == 0
+    # A third trader, over 6 hours after the first but within 6 of the latest (the window slides): no new ping, the
+    # grouped message is edited in place
+    assert engine._deliver("user_1", "555", new_buy(BOB, t0 + timedelta(hours=6, minutes=10), 0.52, 0.62), "Politics") == 0
     assert len(engine.tg.sent) == 2
     edit = engine.tg.edits[-1]
     assert (edit["chat_id"], edit["message_id"]) == ("555", 2)
-    assert edit["text"].startswith("<b>3 traders you follow bought Yes</b>") and "· Bob paid 52¢ at 16:02 UTC" in edit["text"]
+    assert edit["text"].startswith("<b>3 traders you follow bought Yes</b>") and "· Bob paid 52¢ at 20:12 UTC" in edit["text"]
     assert "Now 62¢, price already moved." in edit["text"]
-    assert engine._sent_today("user_1") in (0, 2)  # the group counted once (0 if the test day isn't today)
+    assert engine._sent_today("user_1") == 2  # Sam's alert and the group, counted once
 
 
 def test_groups_in_sports_and_esports_need_buys_within_an_hour(api: TestClient) -> None:
@@ -229,7 +231,7 @@ def test_big_trades_alert_people_who_saved_markets_there_whoever_the_trader(
     user("politics", "1", follows=(), interests=["Politics"])
     user("sports", "2", follows=(), interests=["Sports"])
     user("never", "3", follows=())  # never saved interests: no big-trade alerts
-    user("all", "4", follows=(), interests=[])  # Skip: all markets
+    user("all", "4", follows=(), interests=[])  # Skip, or all markets: no choice made, no big-trade alerts
     user("follower", "5", follows=(WHALE,), interests=["Politics"])  # follows the whale: their own alert covers it
     rows: list[WhaleTrade] = [big(WHALE, i="0")]
     asked: list[Any] = []
@@ -242,8 +244,8 @@ def test_big_trades_alert_people_who_saved_markets_there_whoever_the_trader(
     rows.insert(0, big(WHALE, i="1"))
     rows.insert(0, big(WHALE, usd=9_000, market="0xw:1", i="2"))  # under $10,000: not a big trade
     engine._cache.clear()
-    assert engine.whale_pass(users, time.time()) == 2
-    assert sorted(m["chat_id"] for m in engine.tg.sent) == ["1", "4"]
+    assert engine.whale_pass(users, time.time()) == 1
+    assert [m["chat_id"] for m in engine.tg.sent] == ["1"]
     text = engine.tg.sent[-1]["text"]
     lines = text.splitlines()
     assert lines[0] == "<b>Big trade in Politics:</b> Trader 0xdd…dd bought <b>Yes</b> ($12,400) on Will it &lt;rain&gt;?"
@@ -257,13 +259,13 @@ def test_a_big_trade_by_a_scored_trader_links_to_their_signals_page(api: TestCli
     text = engine._whale_text(big(SAM), 0.51, "Politics")
     assert f'<a href="{engine.SITE}/#/worth/{SAM}">Sam</a>' in text
     monkeypatch.setattr(engine, "copy_offer", lambda s: (True, None))
-    assert "Now 51¢: you can still get in." in engine._whale_text(big(SAM), 0.51, None)  # copyable and in range
+    assert "Paid 49¢ · now 51¢: you can still get in." in engine._whale_text(big(SAM), 0.51, None)  # copyable, in range
     assert "price already moved" in engine._whale_text(big(SAM), 0.70, None)
 
 
 def test_big_trade_alerts_are_capped_within_the_daily_cap(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engine, "_today", lambda now=None: "2026-10-13")
-    user("u", "1", follows=(), interests=[])
+    user("u", "1", follows=(), interests=["Politics"])
     rows: list[WhaleTrade] = []
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
     monkeypatch.setattr(engine, "_live_read", lambda w: TraderDetail(
@@ -304,3 +306,180 @@ def test_check_your_price_opens_that_one_trade(api: TestClient, monkeypatch: pyt
     assert b["price"] == pytest.approx(900 / 2000)
     assert api.get(f"/api/bet/{WHALE}/0xnope:0").status_code == 404
     assert api.get("/api/bet/0x12/0xw:0").status_code == 400
+
+
+# ---- review fixes: settled prices, sliding and late groups, failures, restarts ----
+
+
+def detail_of(trades: list[WhaleTrade], prices: dict[str, float]) -> Any:
+    return lambda *a, **k: TraderDetail(Trader(venue="polymarket", id=a[1] if len(a) > 1 else SAM, name=None), "visible", {},
+                                        [WhalePosition(m, None, "Yes", 1, 0.5, p, None, None) for m, p in prices.items()],
+                                        [t for t in trades if t.trader == (a[1] if len(a) > 1 else SAM)])  # fmt: skip
+
+
+@pytest.mark.parametrize("price", [0.98, 0.99, 0.02, 0.005])
+def test_no_alert_at_a_settled_price_alone_or_grouped(api: TestClient, monkeypatch: pytest.MonkeyPatch, price: float) -> None:
+    user(follows=(SAM, ANN))
+    trades: list[WhaleTrade] = []
+    prices = {"0xcid:0": 0.50}
+    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, prices))
+    engine.alert_pass()  # first round: noted only
+    fresh = datetime.now(UTC)
+    trades.append(trade(SAM, fresh, 0.49, 1000, "0xcid:0", "1"))
+    engine._cache.clear()
+    assert engine.alert_pass() == 1  # Sam alone, at 50¢
+    prices["0xcid:0"] = price  # now settled, or as good as
+    trades.append(trade(ANN, fresh, 0.97 if price > 0.5 else 0.03, 1000, "0xcid:0", "2"))
+    engine._cache.clear()
+    assert engine.alert_pass() == 0 and not engine.tg.edits  # no grouped alert either
+    trades.append(trade(SAM, fresh, 0.97, 1000, "0xcid:9", "3"))  # a new market, already at the price
+    prices["0xcid:9"] = price
+    engine._alerted.clear()
+    engine._cache.clear()
+    assert engine.alert_pass() == 0
+
+
+def test_no_big_trade_alert_at_a_settled_price(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user("politics", "1", follows=(), interests=["Politics"])
+    rows: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
+    monkeypatch.setattr(engine, "_live_read", lambda w: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
+                                                                     [WhalePosition("0xw:0", None, "Yes", 1, 0.49, 0.985, None, None)], []))  # fmt: skip
+    users = engine._load_follows()["users"]
+    engine.whale_pass(users, time.time())
+    engine._cache.clear()
+    rows.append(big(WHALE))
+    assert engine.whale_pass(users, time.time()) == 0 and not engine.tg.sent
+
+
+def test_a_late_buy_with_an_earlier_time_joins_its_group(api: TestClient) -> None:
+    user()
+    t0 = datetime(2026, 10, 13, 14, 0, tzinfo=UTC)
+    engine._deliver("user_1", "555", new_buy(SAM, t0), "Politics")
+    engine._deliver("user_1", "555", new_buy(ANN, t0 + timedelta(minutes=30)), "Politics")  # the group
+    assert engine._deliver("user_1", "555", new_buy(BOB, t0 - timedelta(minutes=10), 0.45), "Politics") == 0  # seen late
+    lines = engine.tg.edits[-1]["text"].splitlines()
+    assert lines[0].startswith("<b>3 traders you follow") and lines[1] == "· Bob paid 45¢ at 13:50 UTC"  # first, first
+
+
+def test_groups_use_six_hours_when_the_category_isnt_known(api: TestClient) -> None:
+    user()
+    t0 = datetime(2026, 10, 13, 14, 0, tzinfo=UTC)
+    engine._deliver("user_1", "555", new_buy(SAM, t0), None)
+    engine._deliver("user_1", "555", new_buy(ANN, t0 + timedelta(hours=3)), None)
+    assert engine.tg.sent[-1]["text"].startswith("<b>2 traders you follow")
+
+
+def test_a_failed_or_impossible_edit_sends_no_new_ping(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user()
+    t0 = datetime(2026, 10, 13, 14, 0, tzinfo=UTC)
+    engine._deliver("user_1", "555", new_buy(SAM, t0), "Politics")
+    engine._deliver("user_1", "555", new_buy(ANN, t0 + timedelta(minutes=5)), "Politics")
+    real = engine.tg
+
+    def fails(method: str, **params: Any) -> Any:
+        if method == "editMessageText":
+            raise RuntimeError("Telegram: message to edit not found")
+        return real(method, **params)
+
+    monkeypatch.setattr(engine, "tg", fails)
+    assert engine._deliver("user_1", "555", new_buy(BOB, t0 + timedelta(minutes=9)), "Politics") == 0
+    assert len(real.sent) == 2
+    monkeypatch.setattr(engine, "tg", real)
+    with engine._db() as con:
+        con.execute("UPDATE alerts SET message_id = NULL WHERE kind = 'group'")
+    third = "0x" + "e" * 40
+    assert engine._deliver("user_1", "555", new_buy(third, t0 + timedelta(minutes=12)), "Politics") == 0
+    assert len(real.sent) == 2 and not real.edits  # nothing to edit, and no second group
+
+
+def test_the_limit_message_is_tried_again_when_it_fails(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "_today", lambda now=None: "2026-10-13")
+    user()
+    for _ in range(engine.DAILY_CAP):
+        engine._send("user_1", "555", "buy", lambda aid: "x")
+    real = engine.tg
+    monkeypatch.setattr(engine, "tg", lambda method, **p: (_ for _ in ()).throw(RuntimeError("Telegram didn't answer")))
+    assert engine._send("user_1", "555", "buy", lambda aid: "y") is None
+    monkeypatch.setattr(engine, "tg", real)
+    engine._send("user_1", "555", "buy", lambda aid: "z")
+    assert real.sent[-1]["text"] == engine.CAP_TEXT and len(real.sent) == 21  # sent on the next try, once
+
+
+def test_a_big_trade_at_the_daily_cap_sends_the_limit_message_instead(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "_today", lambda now=None: "2026-10-13")
+    user("u", "1", follows=(), interests=["Politics"])
+    for _ in range(engine.DAILY_CAP):
+        engine._send("u", "1", "buy", lambda aid: "x")
+    rows: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
+    monkeypatch.setattr(engine, "_live_read", lambda w: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
+                                                                     [WhalePosition("0xw:0", None, "Yes", 1, 0.49, 0.5, None, None)], []))  # fmt: skip
+    users = engine._load_follows()["users"]
+    engine.whale_pass(users, time.time())
+    engine._cache.clear()
+    rows.append(big(WHALE))
+    assert engine.whale_pass(users, time.time()) == 0  # under the 5 big trades, but over the 20
+    assert engine.tg.sent[-1]["text"] == engine.CAP_TEXT
+
+
+def test_stop_alerts_from_another_chat_changes_nobody_elses_follows(api: TestClient) -> None:
+    user("user_1", "555", follows=(SAM,))
+    user("user_2", "777", follows=(ANN,))
+    engine._on_update({"callback_query": {"id": "q", "data": f"unf:{SAM}", "message": {"chat": {"id": 777}}}})
+    users = engine._load_follows()["users"]
+    assert users["user_1"]["follows"] == [SAM] and users["user_2"]["follows"] == [ANN]
+
+
+def test_a_restart_doesnt_alert_the_same_trader_and_market_again(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.50}))
+    engine.alert_pass()
+    trades.append(trade(SAM, datetime.now(UTC), 0.49, 1000, "0xcid:0", "1"))
+    engine._cache.clear()
+    assert engine.alert_pass() == 1
+    engine._alerted.clear()  # a restart: what was in memory is gone
+    engine._seen.clear()
+    engine._cache.clear()
+    engine.alert_pass()  # first round after the restart: noted only
+    trades.append(trade(SAM, datetime.now(UTC), 0.50, 1000, "0xcid:0", "2"))  # another fill, same market
+    engine._cache.clear()
+    assert engine.alert_pass() == 0  # alerts.db remembers
+
+
+def test_the_alert_text_and_its_price_check_are_built_once_per_buy(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    for i in range(3):
+        user(f"user_{i}", str(100 + i), follows=(SAM,))
+    built = []
+    real = engine._alert_text
+    monkeypatch.setattr(engine, "_alert_text", lambda *a, **k: built.append(a) or real(*a, **k))
+    trades: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.50}))
+    engine.alert_pass()
+    trades.append(trade(SAM, datetime.now(UTC), 0.49, 1000, "0xcid:0", "1"))
+    engine._cache.clear()
+    assert engine.alert_pass() == 3 and len(built) == 1
+
+
+def test_traders_chips_never_change_the_saved_markets(api: TestClient, run_js: Any) -> None:
+    deps = ("INTERESTS", "PICKED_KEY", "wasPicked", "saveInterests", "setInterests", "syncInterests")
+    got = run_js(deps, """(() => {
+      const puts = [];
+      globalThis.interests = null;
+      globalThis.localStorage = { d: {}, getItem(k) { return this.d[k] ?? null; }, setItem(k, v) { this.d[k] = String(v); } };
+      globalThis.signedIn = () => true;
+      globalThis.auth = { me: { interests: null } };
+      globalThis.api = (path, o) => { puts.push(JSON.parse(o.body).interests); return { then() {} }; };
+      setInterests(["Sports"]);                    // a Traders chip: the view only
+      const chip = puts.length;
+      setInterests([]);                            // the "All" chip
+      syncInterests();                             // signing in with nothing picked: nothing saved
+      const signin = puts.length;
+      setInterests(["Politics"], { picked: true }); // onboarding, or the Feed's Change
+      auth.me.interests = ["Politics"];
+      setInterests([]);                            // the All chip again: the saved choice stays
+      syncInterests();
+      return [chip, signin, puts];
+    })()""")
+    assert got == [0, 0, [["Politics"]]]

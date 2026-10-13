@@ -897,7 +897,7 @@ const inMarkets = (cat) => !(interests || []).length || interests.includes(cat);
 function marketsSheet() {
   const panel = sheet(`<div id="mktpick"></div><p class="explain" style="margin:18px 0 0;text-align:center;font-size:13px">Traders shows the same markets.</p>`);
   interestPicker($("#mktpick", panel), { selected: (interests || []).filter((c) => INTERESTS.includes(c)), go: "Show these markets",
-    alt: "All markets", onDone: (v) => { setInterests(v); closeSheet(); renderFeed(); } });
+    alt: "All markets", onDone: (v) => { setInterests(v, { picked: true }); closeSheet(); renderFeed(); } });
 }
 function bindFeedMarkets() {
   const change = $("#mktchange"); if (change) change.onclick = marketsSheet;
@@ -1057,13 +1057,20 @@ let interests = (() => {
   } catch {}
   return null;
 })();
-function setInterests(v) {
+// `picked`: the choice came from onboarding's question or the Feed's "Your markets · Change", the two places that
+// ask which markets interest you. Only such a choice is kept on your account; Traders' chips only filter the view.
+function setInterests(v, { picked = false } = {}) {
   interests = v;
   try { localStorage.setItem(INTERESTS_KEY, JSON.stringify(v)); } catch {}
-  saveInterests();
+  if (picked) {
+    try { localStorage.setItem(PICKED_KEY, "1"); } catch {}
+    saveInterests();
+  }
 }
-// Signed in, the choice is also kept on your account (the engine's /api/me/interests), so big trades in those
-// markets can alert you on Telegram. Someone who has never saved any gets no big-trade alerts.
+const PICKED_KEY = "signals.interests.picked";
+const wasPicked = () => { try { return localStorage.getItem(PICKED_KEY) === "1"; } catch { return false; } };
+// Signed in, a picked choice is also kept on your account (the engine's /api/me/interests), so big trades in those
+// markets can alert you on Telegram. Nobody saved, or [] (Skip, all markets: no choice made), gets none.
 function saveInterests() {
   if (!signedIn() || !auth.me || !Array.isArray(interests)) return;
   const v = interests.filter((c) => INTERESTS.includes(c));
@@ -1071,12 +1078,13 @@ function saveInterests() {
   api("/api/me/interests", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ interests: v }) })
     .then((me) => { auth.me = me; }, () => {});
 }
-// On signing in: markets picked before signing in go to the account; a new browser takes the account's.
+// On signing in: markets picked before signing in go to the account (never an unchosen [] over a saved choice);
+// a new browser takes the account's.
 function syncInterests() {
-  if (auth.me.interests == null) return saveInterests();
+  if (auth.me.interests == null) { if (wasPicked() && interests?.length) saveInterests(); return; }
   if (interests === null) {
     interests = auth.me.interests;
-    try { localStorage.setItem(INTERESTS_KEY, JSON.stringify(interests)); } catch {}
+    try { localStorage.setItem(INTERESTS_KEY, JSON.stringify(interests)); localStorage.setItem(PICKED_KEY, "1"); } catch {}
     if ($(".onb")) route(); // past onboarding: they've answered it already
   }
 }
@@ -1111,7 +1119,7 @@ function onboardingPage() {
   $("#app").innerHTML = `<section class="onb"><h1>Find traders worth following.</h1>
     <p class="lede">Discover interesting traders, understand how they trade, and decide who to follow.</p><div id="onbpick"></div></section>`;
   interestPicker($("#onbpick"), { go: "Discover traders →", alt: "Skip", onDone: (v) => {
-    setInterests(v);
+    setInterests(v, { picked: true });
     if (location.hash === "#/traders") route(); else location.hash = "#/traders";
   } });
 }
