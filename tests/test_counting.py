@@ -90,7 +90,7 @@ def test_alert_links_go_through_signals_and_count_taps(api: TestClient) -> None:
     text = engine.tg.sent[-1]["text"]
     aid = engine._alert_of("555", 1)
     market = f"{engine.SITE}/go/{aid}/market?to={urllib.parse.quote('https://polymarket.com/event/t', safe='')}"
-    assert f'href="{market}">Buy on Polymarket</a>' in text and f"/go/{aid}/record?to=" in text
+    assert f'href="{market}">Buy on Polymarket International</a>' in text and f"/go/{aid}/record?to=" in text
     r = api.get(f"/go/{aid}/market", params={"to": "https://polymarket.com/event/t"}, follow_redirects=False)
     assert (r.status_code, r.headers["location"], r.headers["cache-control"]) == (302, "https://polymarket.com/event/t", "no-store")
     api.get(f"/go/{aid}/record", params={"to": f"{engine.SITE}/#/worth/{SAM}"}, follow_redirects=False)

@@ -147,6 +147,10 @@
   .trade-nums b { color: var(--fg); font-weight: 600; }
   .trade-nums .amt { color: var(--fg); font-weight: 500; white-space: nowrap; }
   .also { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+  .venue { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+  .venue .ext { white-space: nowrap; }
+  .usbox ul { margin: 0 0 14px; padding-left: 18px; color: var(--muted); font-size: 14px; }
+  .usbox li + li { margin-top: 4px; }
   .trade-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); min-height: 50px; }
   .trade.compact .trade-title { font-size: 17px; margin-top: 0; }
   .trade-tags { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -485,7 +489,7 @@
   </div>
 </header>
 <main class="wrap" id="app"></main>
-<footer class="wrap foot">Built on <a href="https://uselayer.sh" target="_blank" rel="noopener">uselayer</a> · Signals places no orders: you buy on Polymarket yourself</footer>
+<footer class="wrap foot">Built on <a href="https://uselayer.sh" target="_blank" rel="noopener">uselayer</a> · Every trader here trades on Polymarket International · Signals places no orders</footer>
 <nav class="tabbar" aria-label="Main">
   <a href="#/" data-tab="feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h3l2.5-6 4 11 2.5-5H20"/></svg>Feed</a>
   <a href="#/traders" data-tab="traders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.7-3.2 2.9-5 5.5-5s4.8 1.8 5.5 5"/><path d="M15.5 5.2a3 3 0 0 1 0 5.6M17.5 14.4c1.6.7 2.6 2.3 3 4.6"/></svg>Traders</a>
@@ -500,7 +504,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 // Sentences the SDK writes (reasons, checks, evidence) say "bet"; the page says "trade".
 const sdkText = (t) => String(t ?? "").replace(/\b([Bb])et(s?)\b/g, (_, b, s) => (b === "B" ? "Trade" : "trade") + s)
   .replace(/\bat (0\.\d+) or better\b/g, (_, x) => `at ${Math.round(parseFloat(x) * 1000) / 10}¢ or better`);
-const VENUE = { kalshi: "Kalshi", polymarket: "Polymarket", polymarket_us: "Polymarket US" };
+const VENUE = { kalshi: "Kalshi", polymarket: "Polymarket International", polymarket_us: "Polymarket US" };
 // The venues Signals reads (SIGNALS_VENUES on the engine, from /api/config): Polymarket only for now. Kalshi's
 // views (Top profit's venue choice, Kalshi trader pages, "Same person on Kalshi?") show only when it's on.
 let venuesOn = ["polymarket"];
@@ -763,8 +767,29 @@ const emptyState = (title, body = "", action = "") => `<div class="state"><b>${t
 const errorState = (msg) => `<div class="state err"><b>Couldn't load this</b><p>${esc(msg)}</p><button class="btn ghost" data-retry>Try again</button></div>`;
 
 // The market's page on the venue, opened in a new tab, so the trade can be checked there.
-const marketLink = (url, label = "Polymarket ↗") => url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener">${label}</a>` : "";
+const marketLink = (url, label = "Polymarket International ↗") => url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener">${label}</a>` : "";
 const profileLink = (url, venue = "polymarket") => url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener">${VENUE[venue] || "Venue"} profile ↗</a>` : "";
+
+// ---- where a trade happened: Polymarket International, and the market's twin on Polymarket US ----
+// Every trader Signals follows trades on Polymarket International (its trades are public); Signals sees no trades on
+// Polymarket US. A trade's ``us`` (the engine's us_match) is the market's verified twin there, matched by Layer through
+// Kalshi: { found: true, url, outcome, differences }, a checked { found: false }, or null when it couldn't be checked
+// (then nothing is claimed either way). A twin is the same market, never the same price.
+const INTL = "Polymarket International";
+const usLink = (us) => us?.found ? `<a class="ext" href="${esc(us.url)}" target="_blank" rel="noopener">View on Polymarket US ↗</a>` : "";
+const venueNote = (us) => `<p class="venue">${us?.found ? `Traded on ${INTL}. Same market on Polymarket US, where prices and liquidity may differ: ${usLink(us)}`
+  : us ? `Traded on ${INTL} · No verified US match found` : `Traded on ${INTL}`}</p>`;
+const usInline = (us) => us?.found ? ` · ${usLink(us)}` : us ? " · No verified US match found" : "";
+function usBox(b) {
+  const us = b.us, diffs = us?.differences || [];
+  const head = `<div class="head">Polymarket US</div><p>This trade was made on ${INTL}. Signals follows traders there and doesn't see trades on Polymarket US.</p>`;
+  if (!us) return `<div class="card copybox usbox">${head}<p>We couldn't check for a Polymarket US match just now.</p></div>`;
+  if (!us.found) return `<div class="card copybox usbox">${head}<p><b>No verified US match found.</b> Layer hasn't matched this market to one on Polymarket US. It may still be listed there, possibly with different rules.</p></div>`;
+  return `<div class="card copybox usbox">${head}
+    <p>Layer matched the same market on Polymarket US, through Kalshi${us.outcome ? `: <b>${esc(us.outcome)}</b>` : ""}. Polymarket US has its own order book and fees, so prices and liquidity there may differ, and this trader's price isn't one to expect there.</p>
+    ${diffs.length ? `<p>How the two may settle differently:</p><ul>${diffs.map((x) => `<li>${esc(x.text)}</li>`).join("")}</ul>` : "<p>Layer states no differences in how the two settle.</p>"}
+    <a class="btn ghost wide" href="${esc(us.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">View on Polymarket US ↗</a></div>`;
+}
 
 // ---- trade cards (feed, and a trader's open trades) ----
 let shown = []; // the trades on screen, so a card can open its sheet
@@ -783,7 +808,8 @@ function tradeCard(b, i, { who = true } = {}) {
   return `<article class="card trade${who ? "" : " compact"}" data-trade="${i}" tabindex="0">
     ${top}
     <h3 class="trade-title">${esc(b.title || "Untitled market")}</h3>
-    ${b.outcome || b.url ? `<div class="trade-tags">${b.outcome ? `<span class="chip">${esc(b.outcome)}</span>` : ""}${marketLink(b.url, OPEN.has(b.status) ? "Buy on Polymarket ↗" : "Polymarket ↗")}</div>` : ""}
+    ${b.outcome || b.url ? `<div class="trade-tags">${b.outcome ? `<span class="chip">${esc(b.outcome)}</span>` : ""}${b.venue === "kalshi" ? marketLink(b.url, "Kalshi ↗") : marketLink(b.url)}</div>` : ""}
+    ${b.venue === "kalshi" ? "" : venueNote(b.us)}
     <div class="trade-nums"><span>Bought at <b>${paid}</b><span class="sep">·</span>Now <b>${offered ? pl(moveOf(b), now) : now}</b></span><span class="amt">${usd(b.usd)} in</span></div>
     ${alsoBought(b)}
     <div class="trade-foot">${tradeStatus(b, offered)}${act}</div>
@@ -813,7 +839,8 @@ function tradeSheet(b) {
     ${b.wallet ? `<a class="sheet-who" href="#/worth/${esc(b.wallet)}">${avatar(b.wallet, 36)}<span class="grow"><span class="name">${esc(name)}</span><span class="muted" style="font-size:13px">See their record</span></span>${tier(b.segment)}</a>` : ""}
     ${b.copy_ok === false && b.wallet ? `<p class="fine">${copyLabel(b)}. <a class="link" href="#/worth/${esc(b.wallet)}">See their record</a></p>` : ""}
     ${b.wallet && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>`
-      : b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">${OPEN.has(b.status) ? "Buy on Polymarket ↗" : "Open on Polymarket ↗"}</a></p>` : ""}`);
+      : b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">${OPEN.has(b.status) ? "Buy on" : "Open on"} ${INTL} ↗</a></p>` : ""}
+    ${b.venue === "kalshi" ? "" : usBox(b)}`);
   bindActions(panel);
   const box = $("#copynow", panel);
   if (box) costBox(box, b);
@@ -865,12 +892,13 @@ function freshLine(p) {
 const money = (x, signed = false) => x == null ? "—" : `${x < 0 ? "−" : signed && x > 0 ? "+" : ""}$${Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 async function costBox(box, b, amount = 10) {
   box.innerHTML = `<div class="head">What buying now costs</div>
-    <p>How much would you put in, fee included? Estimated from what's for sale on Polymarket right now.${b.price != null ? ` They paid ${cents(b.price)}${b.at ? ` ${ago(b.at)}` : ""}, for context.` : ""}</p>
+    <p>How much would you put in, fee included? Estimated from what's for sale on ${INTL} right now, where they traded.${b.price != null ? ` They paid ${cents(b.price)}${b.at ? ` ${ago(b.at)}` : ""}, for context.` : ""}</p>
     <div class="amount"><label class="box"><span class="muted">$</span><input id="amt" inputmode="decimal" autocomplete="off" aria-label="Amount in dollars" value="${amount}"></label>
       ${PICKS.map((v) => `<button type="button" data-amt="${v}" aria-pressed="${v === amount}">$${v}</button>`).join("")}</div>
     <div id="pv"><div class="skel" style="width:70%;height:14px"></div></div>
-    <p>An estimate, not a guaranteed fill: the order book can change before your order reaches Polymarket, so it may fill higher, only in part, or not at all.</p>
-    ${b.url ? `<a class="btn wide" id="buyon" href="${esc(b.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">Buy on Polymarket ↗</a>
+    <p>An estimate, not a guaranteed fill: the order book can change before your order reaches ${INTL}, so it may fill higher, only in part, or not at all.</p>
+    <p>This estimate is for ${INTL} only. Polymarket US has its own order book and fees, so it doesn't apply there.</p>
+    ${b.url ? `<a class="btn wide" id="buyon" href="${esc(b.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">Buy on ${INTL} ↗</a>
       <p class="fine">Signals places no orders: you buy on Polymarket yourself.</p>` : ""}`;
   const input = $("#amt", box), pv = $("#pv", box);
   let seq = 0, timer = null;
@@ -903,10 +931,10 @@ async function costBox(box, b, amount = 10) {
       return;
     }
     const avg = Math.round(p.price * 1000) / 10, worst = p.worst_price != null ? Math.round(p.worst_price * 1000) / 10 : avg;
-    pv.innerHTML = `<p>${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} on Polymarket, ${p.depth_checked ? `estimated from what's for sale right now. ${fillExplain(p, spend)}` : "at the cheapest price for sale now."}</p>
+    pv.innerHTML = `<p>${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} on ${INTL}, ${p.depth_checked ? `estimated from what's for sale right now. ${fillExplain(p, spend)}` : "at the cheapest price for sale now."}</p>
       <div class="receipt">
         <div><span>${plural(p.contracts, "contract")} × ${worst > avg ? `${avg}¢ average` : `${avg}¢`}</span><b>${money(p.cost)}</b></div>
-        <div><span>Polymarket fee</span><b>${p.fee > 0 ? money(p.fee) : "No fee"}</b></div>
+        <div><span>${INTL} fee</span><b>${p.fee > 0 ? money(p.fee) : "No fee"}</b></div>
         <div class="total"><span>Estimated total</span><b>${money(p.total)}</b></div>
       </div>
       <div class="kv" style="margin:0 0 14px">
@@ -1129,6 +1157,7 @@ function bigCard(t) {
       <span class="when">${[t.category, kalshiOn() ? VENUE[t.venue] : null, ago(t.at)].filter(Boolean).map(esc).join(" · ")}</span></div>
     <h3 class="trade-title">${esc(t.title || t.market)}</h3>
     <div class="trade-tags"><span class="chip">${esc(pick)}</span>${marketLink(t.url, `${VENUE[t.venue]} ↗`)}</div>
+    ${t.venue === "polymarket" ? venueNote(t.us) : ""}
     <div class="trade-nums"><span>${t.action === "buy" ? "Bought" : "Sold"} at <b>${cents(t.price)}</b></span><span class="amt">${usd(t.usd)}</span></div>
     ${t.trader ? "" : `<div class="trade-foot"><span class="muted" style="font-size:14px">Anonymous: ${VENUE[t.venue] || "the venue"} doesn't name this trader.</span></div>`}
   </article>`;
@@ -1669,11 +1698,11 @@ function renderProfile() {
   // the tabs
   let body;
   if (pf.tab === "positions") {
-    const open = d && !d.error ? (d.positions || []).map((p) => ({ title: p.title || p.market, outcome: p.outcome, size: p.size, price: p.avg_price, now: p.current_price, status: p.status, url: p.url }))
+    const open = d && !d.error ? (d.positions || []).map((p) => ({ title: p.title || p.market, outcome: p.outcome, size: p.size, price: p.avg_price, now: p.current_price, status: p.status, url: p.url, us: p.us }))
       .filter((p) => !["won", "lost", "closed"].includes(p.status)) : null;
     const closedSdk = d && Array.isArray(d.closed) ? d.closed : null;
     const settled = (s.sample || []).filter((b) => b.payout != null).slice(0, 10);
-    const openRow = (p) => `<div class="pf-li"><div><div class="t">${esc(p.title)}</div><div class="s">${p.outcome ? `<span class="pf-oc">${esc(p.outcome)}</span>` : ""}${p.size != null ? `${Math.round(p.size).toLocaleString()} at ${cents(p.price)} · ${usd((p.price ?? 0) * p.size)}` : ""}${p.now != null ? ` · now ${cents(p.now)}` : ""}${p.url ? ` · ${marketLink(p.url)}` : ""}</div></div><div class="r">${tradeStatus({ status: p.status, price: p.price, price_now: p.now }, can)}</div></div>`;
+    const openRow = (p) => `<div class="pf-li"><div><div class="t">${esc(p.title)}</div><div class="s">${p.outcome ? `<span class="pf-oc">${esc(p.outcome)}</span>` : ""}${p.size != null ? `${Math.round(p.size).toLocaleString()} at ${cents(p.price)} · ${usd((p.price ?? 0) * p.size)}` : ""}${p.now != null ? ` · now ${cents(p.now)}` : ""}${p.url ? ` · ${marketLink(p.url)}` : ""}${usInline(p.us)}</div></div><div class="r">${tradeStatus({ status: p.status, price: p.price, price_now: p.now }, can)}</div></div>`;
     const closedRow = (c) => {
       const sdk = "result" in c, when = c.closed_at || c.at;
       const bought = sdk ? `${c.size != null ? `${Math.round(c.size).toLocaleString()} ` : ""}${c.avg_price != null ? `at ${cents(c.avg_price)}` : "bought"}` : `bought at ${cents(c.price)}`;
@@ -1687,10 +1716,10 @@ function renderProfile() {
       ${(closedSdk || settled).length ? `<div>${(closedSdk || settled).slice(0, 12).map(closedRow).join("")}</div>` : `<p class="pf-empty">No settled trades yet. Results show up once their markets settle.</p>`}`;
   } else if (pf.tab === "activity") {
     const trades = d && !d.error ? d.trades || [] : null;
-    const act = trades ? trades.map((x) => ({ sell: x.action === "sell", title: x.title || x.market, outcome: x.outcome, usd: x.usd, price: x.price, at: x.at, url: x.url }))
+    const act = trades ? trades.map((x) => ({ sell: x.action === "sell", title: x.title || x.market, outcome: x.outcome, usd: x.usd, price: x.price, at: x.at, url: x.url, us: x.us }))
       : (s.recent || []).map((b) => ({ sell: false, title: b.title || b.market, outcome: b.outcome, usd: b.usd, price: b.price, at: b.at, url: b.url }));
     body = act.length ? `<div>${act.slice(0, 20).map((a) => `<div class="pf-li"><div><div class="t">${a.sell ? "Sold" : "Bought"} ${a.outcome ? `<span class="pf-oc">${esc(a.outcome)}</span>` : ""}${esc(a.title)}</div>
-        <div class="s">${usd(a.usd)} at ${cents(a.price)}${a.url ? ` · ${marketLink(a.url)}` : ""}</div></div><div class="r s">${ago(a.at)}</div></div>`).join("")}</div>`
+        <div class="s">${usd(a.usd)} at ${cents(a.price)}${a.url ? ` · ${marketLink(a.url)}` : ""}${usInline(a.us)}</div></div><div class="r s">${ago(a.at)}</div></div>`).join("")}</div>`
       : `<p class="pf-empty">${trades ? "No trades yet." : "No buys in the last 30 days."}</p>`;
   } else {
     const weeks = s.pnl_weeks || [];
@@ -1762,7 +1791,7 @@ function worthDetails(s) {
   const conf = { high: "high confidence", medium: "medium confidence", low: "low confidence" }[s.confidence] || "";
   return `
     <p class="note">${esc(sdkText(s.source))} · last ${Math.round((new Date(s.window[1]) - new Date(s.window[0])) / 864e5)} days · ${plural(s.bets, "separate trade")} checked · ${conf}
-      · <a class="ext" href="https://polymarket.com/profile/${esc(s.wallet)}" target="_blank" rel="noopener">Polymarket profile ↗</a></p>
+      · <a class="ext" href="https://polymarket.com/profile/${esc(s.wallet)}" target="_blank" rel="noopener">${INTL} profile ↗</a></p>
     <h3>What the numbers mean</h3><ul>
       <li><b>Won:</b> of the trades we checked (their first buy in each market over the ${readPeriod(s)}, bought at 2¢–98¢, up to 60), how many settled their way. Selling early doesn't change it.</li>
       <li><b>Usual trade:</b> the middle of their first buys in each market over the ${readPeriod(s)}. Adding to a trade isn't counted.</li>
@@ -1795,7 +1824,7 @@ async function loadOpenTrades(s, venue = "polymarket", id = s.wallet) {
   if (d.visibility === "hidden") { box.innerHTML = `<div class="card">${emptyState("Hidden by the trader", "They hide their trades on Kalshi, so they can't be shown here.")}</div>`; return; }
   const order = { in: 0, moved: 1 };
   const bets = d.positions.map((p) => ({ title: p.title || p.market, outcome: p.outcome, price: p.avg_price, price_now: p.current_price,
-    usd: p.avg_price != null ? p.avg_price * p.size : p.value, size: p.size, status: p.status, url: p.url }))
+    usd: p.avg_price != null ? p.avg_price * p.size : p.value, size: p.size, status: p.status, url: p.url, us: p.us, venue }))
     .sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2) || (b.usd || 0) - (a.usd || 0)).slice(0, 12);
   shown = bets;
   box.innerHTML = bets.length ? `<div class="cards">${bets.map((b, i) => tradeCard(b, i, { who: false })).join("")}</div>` : `<div class="card">${emptyState("No open trades")}</div>`;
@@ -1826,7 +1855,7 @@ async function traderPage(venue, id) {
     ${kalshiOn() ? `<h2 class="h2">Same person on ${venue === "kalshi" ? "Polymarket" : "Kalshi"}?</h2><div class="card" id="links"><p class="muted" style="margin:0">Checking both venues (up to 30 seconds)…</p></div>` : ""}
     <h2 class="h2">Open trades</h2><div id="open">${skelCards(2)}</div>
     <h2 class="h2">Recent trades</h2>${hidden ? `<div class="card">${emptyState("Hidden by the trader")}</div>` : d.trades.length ? `<div class="list">${d.trades.slice(0, 20).map((x) => `<div class="row"><div><div class="t">${esc(x.title || x.market)}</div>
-      <div class="s">${x.action === "buy" ? "Bought" : "Sold"} ${esc(x.outcome && x.venue === "polymarket" ? x.outcome : x.outcome ? `${x.side.toUpperCase()} · ${x.outcome}` : x.side.toUpperCase())} at ${cents(x.price)} · ${ago(x.at)}${x.url ? ` · ${marketLink(x.url, `${VENUE[x.venue]} ↗`)}` : ""}</div></div><div class="r">${usd(x.usd)}</div></div>`).join("")}</div>` : `<div class="card">${emptyState("No recent trades")}</div>`}`;
+      <div class="s">${x.action === "buy" ? "Bought" : "Sold"} ${esc(x.outcome && x.venue === "polymarket" ? x.outcome : x.outcome ? `${x.side.toUpperCase()} · ${x.outcome}` : x.side.toUpperCase())} at ${cents(x.price)} · ${ago(x.at)}${x.url ? ` · ${marketLink(x.url, `${VENUE[x.venue]} ↗`)}` : ""}${x.venue === "polymarket" ? usInline(x.us) : ""}</div></div><div class="r">${usd(x.usd)}</div></div>`).join("")}</div>` : `<div class="card">${emptyState("No recent trades")}</div>`}`;
   loadOpenTrades(null, venue, id);
   if (kalshiOn()) loadLinks(venue, id); // it reads the other venue: only when Signals reads both
 }

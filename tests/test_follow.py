@@ -149,11 +149,11 @@ def test_every_new_buy_alerts_with_how_far_the_price_moved(api: TestClient, monk
     assert engine.alert_pass() == 2  # one message for the two fills on 0xcid:0, and one for the moved market
     text, moved = engine.tg.sent[-2]["text"], engine.tg.sent[-1]["text"]
     assert "bought <b>Yes</b> at 40¢ ($400)" in moved and "Now 60¢, price already moved." in moved and "get in" not in moved
-    assert "Buy on Polymarket" in moved and moved.endswith("Polymarket's public data runs 3–5 minutes behind.")
+    assert "Buy on Polymarket International" in moved and moved.endswith("Polymarket's public data runs 3–5 minutes behind.")
     # Copying isn't offered for them: following is research too, so the alert gives the same facts, neutrally.
     assert text.splitlines()[:3] == ["<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 41¢ ($820)", "Will it &lt;rain&gt;?", "Now 41¢."]
     assert "before this alert." in text and "you can still get in" not in text and engine.COPY_LINE not in text
-    assert "Buy on Polymarket" in text and SHARP in text  # the link only opens the market
+    assert "Buy on Polymarket International" in text and SHARP in text  # the link only opens the market
     assert text.endswith("Polymarket's public data runs 3–5 minutes behind.")
     keys = engine.tg.sent[-1]["reply_markup"]["inline_keyboard"]
     assert [b["text"] for b in keys[0]] == ["Useful", "Not useful"] and keys[1][0]["callback_data"] == f"unf:{SHARP}"
@@ -172,9 +172,9 @@ def test_an_alert_gives_the_same_facts_for_every_trader_and_a_copy_line_only_whe
     monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: pytest.fail("an alert never prices a copy"))
     at = datetime(2026, 10, 13, 14, 2, tzinfo=UTC).timestamp()
     links = (f'<a href="{engine.SITE}/#/check/{SHARP}/0xcid:0">Check current price</a> · '
-             f'<a href="{engine.SITE}/#/worth/{SHARP}">Their record</a> · <a href="https://polymarket.com/event/rain">Buy on Polymarket</a>')  # fmt: skip
+             f'<a href="{engine.SITE}/#/worth/{SHARP}">Their record</a> · <a href="https://polymarket.com/event/rain">Buy on Polymarket International</a>')  # fmt: skip
     facts = ["<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 40¢ ($40)", "Will it &lt;rain&gt;?", "Now 41¢.",
-             "Traded 14:02 UTC, 6 min before this alert."]  # fmt: skip
+             "Traded 14:02 UTC, 6 min before this alert.", engine.TRADED_INTL]  # fmt: skip
     monkeypatch.setattr(engine, "copy_offer", lambda s: (True, None))
     text = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 40, at, at + 6 * 60 + 10)
     assert text.splitlines() == [*facts, engine.COPY_LINE, links, "Polymarket's public data runs 3–5 minutes behind."]

@@ -108,6 +108,22 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
 
 Traders without a name show as "Trader 0x91…76" with a generated avatar: the page never shows wallet addresses.
 
+### Polymarket International, and Polymarket US
+
+Every trader Signals follows trades on Polymarket International: that's where trades are public. Signals sees no
+trades on Polymarket US, a separate exchange with its own markets, prices and fees. Every trade says so ("Traded on
+Polymarket International"), and the quote ("What buying now costs") is for International only.
+
+When a market has a verified twin on Polymarket US, the trade shows "View on Polymarket US ↗", says prices and
+liquidity there may differ, and lists every way the two may settle differently. Otherwise it says "No verified US
+match found" (which never means the market isn't listed there). Twins come from Layer (`signals/us_match.py`,
+needs `LAYER_API_KEY`): Layer matches each Polymarket to Kalshi, so a twin is the International market's Kalshi
+match and that same Kalshi market's Polymarket US match. Both must be verified on Layer and the same bet (or the same
+bet with stated differences), and the trader's own outcome token must be the one Layer matched; in a plain Yes/No
+market matched to a plain Yes/No market, their No maps to the US market's No. The index is rebuilt every 10 minutes;
+while Layer can't be read (or the index is over 45 minutes old) trades make no US claim either way.
+`/api/metrics` reports it under `us_twins`. Telegram alerts carry the same line and link (taps count as `market_us`).
+
 ## Hosting
 
 usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:

@@ -534,7 +534,7 @@ def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offe
                   '"Copy not proven"', '"Costly to copy"', '"Not offered"', '"Big profit, edge unproven"',
                   '"Profit rests on one win"', '"Not enough data"', '"Edge not proven"',
                   "Their trades are research, not tips: we haven't found that buying after them pays.",
-                  "they paid", "Buy on Polymarket ↗", "weeks up",
+                  "they paid", "Buy on ${INTL} ↗", "weeks up",
                   "A week counts profit taken plus the change in value of trades still open.",
                   "at least half a cent above the middle price",
                   "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip
