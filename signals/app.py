@@ -24,6 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import AsyncIterator, Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -37,6 +38,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from uselayer import Client, VenueError, WhaleTrade
 from uselayer.whale_scores import CATEGORY_TAGS, COPY_BETS, RECOMMENDED, SEGMENTS, Stat, category_of, copyable_verdict
+
+from signals.directory import Directory, Seen, from_sighting
 
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
@@ -59,6 +62,9 @@ def venue_on(venue: str) -> None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
     threading.Thread(target=_live_loop, daemon=True).start()  # keeps the Feed's and alerts' trader reads filled
+    _directory_later(_directory_import)  # the scores kept before the directory had them (once: then a no-op)
+    if DIRECTORY_ON:  # finds wallets for the trader directory, once a day, at a rate that leaves the site its reads
+        threading.Thread(target=_directory_loop, daemon=True).start()
     if TG_TOKEN:  # alerts: the bot's messages (connecting a chat, /list, /stop), and new buys of followed traders
         threading.Thread(target=_bot_loop, daemon=True).start()
         threading.Thread(target=_alert_loop, daemon=True).start()
@@ -66,6 +72,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _worth_stop.set()
     _follow_stop.set()
     _live_stop.set()
+    _directory_stop.set()
 
 
 app = FastAPI(title="Signals", lifespan=lifespan)
@@ -139,6 +146,7 @@ def trading_now(min_usd: float = 250) -> list[dict[str, Any]]:
         cats = _categories(poly) if poly else {}
     except VenueError:
         cats = {}  # the trades still show, under All
+    _feed_note(rows[:100], cats)
     return [t | {"category": cats.get(t["market"]) if t["venue"] == "polymarket" else None} for t in out]
 
 
@@ -262,6 +270,7 @@ def _worth_run() -> None:
             s["sample"] = s["sample"][:30]
         STORE_DIR.mkdir(parents=True, exist_ok=True)
         worth_file().write_text(json.dumps(data))
+        _directory_later(lambda d: d.keep_scores(_with_format(data), "check", _iso_ts(data["finished"])))
         _worth_data = data
         _worth_one.clear()
         _worth["error"] = None
@@ -296,6 +305,180 @@ def _worth_loop() -> None:
             if _worth_age_s() >= WORTH_MAX_AGE_S:
                 worth_refresh()
         _worth_stop.wait(60)
+
+
+# ---- the trader directory (phase 1: finding wallets; phase 2: keeping their scores; see directory.py) ----
+# Every wallet Signals finds, and where, kept across runs: the SDK's sweep of every leaderboard and of markets
+# at every level of activity, once a day, plus traders in the Feed's big trades, wallets opened that the last
+# check didn't have, and followed wallets. Every score worked out is kept there too (the Worth following check's,
+# a trader page's, a failed try, and on launch the last check's from worth-following.json), at no extra reads.
+# Nothing is shown from it yet: the Worth following check still picks its own wallets and the page reads its file.
+# /api/directory gives counts only. SIGNALS_DIRECTORY=0 turns the sweep off; scores are kept either way.
+
+DIRECTORY_ON = os.environ.get("SIGNALS_DIRECTORY", "1") != "0"
+DIRECTORY_SWEEP_S = 24 * 3600  # a new sweep once the last finished one is this old
+DIRECTORY_RETRY_S = 3600  # after a sweep that failed
+# The sweep's reads a second at most. The SDK allows 8 a second per Polymarket host, for everything the engine reads.
+# The Feed's poller reads one trader at a time (4 reads, ~1.2 s), so it never needs more than ~3.3 a second; 3 here
+# leaves room for pages too. The sweep runs at ~2 a second anyway: each read waits for its answer.
+DIRECTORY_RATE = 3.0
+DIRECTORY_HOLD_S = 30  # while the Worth following check runs (it can use the whole allowance), the sweep waits
+DIRECTORY_BATCH = 2000  # sightings kept per write
+DIRECTORY_STATS_TTL_S = 300
+_directory_stop = threading.Event()
+_directory_state: dict[str, Any] = {"running": False}
+_directories: dict[Path, Directory] = {}
+_feed_noted: set[str] = set()  # the Feed's trades already kept, so a cached read isn't kept again
+# Pages hand their sightings to one writer thread: a sweep's batch holds the directory for up to ~0.3 s at full
+# size, and no page should wait for that.
+_directory_writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="directory")
+
+
+def directory() -> Directory:
+    path = STORE_DIR / "directory.db"
+    if path not in _directories:
+        _directories[path] = Directory(path)
+    return _directories[path]
+
+
+def _directory_note(seen: list[Seen]) -> None:
+    """Keeps sightings without ever failing a page: a directory that can't be written is left for the next sweep."""
+    try:
+        directory().add(seen)
+    except (sqlite3.Error, OSError) as e:
+        _directory_state["note_error"] = f"{type(e).__name__}: {e}"
+
+
+def _directory_note_later(seen: list[Seen]) -> None:
+    """``_directory_note`` on the writer thread, so the page answers without waiting for the directory."""
+    _directory_writer.submit(_directory_note, seen)
+
+
+def _directory_later(write: Callable[[Directory], Any]) -> None:
+    """Any other write to the directory (a score, a failed try, the import) on the writer thread, in order with
+    the sightings. It never fails a page or the check: what went wrong is kept for /api/directory."""
+
+    def run() -> None:
+        try:
+            write(directory())
+        except Exception as e:  # the page, the check and the next write go on
+            _directory_state["note_error"] = f"{type(e).__name__}: {e}"
+
+    _directory_writer.submit(run)
+
+
+def _with_format(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """A kept check's scores, each with the check's format (which version of the score it is)."""
+    return [s | {"format": data.get("format")} for s in data.get("scores", [])]
+
+
+def _directory_import(d: Directory) -> None:
+    """The scores the last check kept in worth-following.json, into the directory as of when that check finished.
+    Each launch: the first time it adds them; after that it's the same score again, and the directory keeps the
+    one it has (a newer check, or a trader page's, is never replaced)."""
+    data = _worth_load()
+    if data and data.get("scores") and data.get("finished"):
+        d.keep_scores(_with_format(data), "import", _iso_ts(data["finished"]))
+
+
+def _feed_note(trades: list[WhaleTrade], cats: dict[str, str]) -> None:
+    """The Polymarket traders in the Feed's big trades, each trade kept once, by its market's category."""
+    fresh = [t for t in trades if t.venue == "polymarket" and t.trader and t.trade_id not in _feed_noted]
+    if not fresh:
+        return
+    if len(_feed_noted) > 5000:
+        _feed_noted.clear()
+    _feed_noted.update(t.trade_id for t in fresh)
+    _directory_note_later([
+        Seen(str(t.trader).lower(), "feed", cats.get(t.market) or "Other",
+             name=None if not t.name or t.name.startswith("0x") else t.name, category=cats.get(t.market),
+             example=t.market.partition(":")[0], example_title=t.title, trades=1, usd=t.usd,
+             traded_at=t.at.timestamp())
+        for t in fresh
+    ])  # fmt: skip
+
+
+def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
+    """One sweep: followed wallets, then the SDK's ``find_wallets`` (every leaderboard, then markets of every
+    size), kept as they come. While the Worth following check runs it waits, between reads (the SDK reads only as
+    it's asked for the next wallet). Returns what it kept, how long it waited, and the error if it stopped early."""
+    d = directory()
+    halt = stop or threading.Event()
+    started = d.sweep_started()
+    print(f"directory sweep started ({DIRECTORY_RATE:g} reads a second at most)", flush=True)
+    sightings = new = 0
+    held = 0.0
+    error: str | None = None
+    batch: list[Seen] = []
+
+    def keep() -> None:
+        nonlocal sightings, new
+        if batch:
+            n = d.add(batch)
+            d.sweep_progress(started, len(batch), n)
+            sightings, new = sightings + len(batch), new + n
+            batch.clear()
+
+    try:
+        batch += [Seen(w, "follow") for w in sorted({w for u in _load_follows()["users"].values() for w in u.get("follows") or []})]
+        for s in reads.whales.find_wallets(per_second=DIRECTORY_RATE):
+            if halt.is_set():
+                error = "Stopped before it finished (the app was shutting down)."
+                break
+            batch.append(from_sighting(s))
+            if len(batch) >= DIRECTORY_BATCH:
+                keep()
+            while _worth["running"] and not halt.is_set():  # before the next read: the check has the allowance
+                _directory_state["held"] = "the Worth following check is running"
+                halt.wait(DIRECTORY_HOLD_S)
+                held += DIRECTORY_HOLD_S
+            _directory_state["held"] = None
+    except Exception as e:  # what it found stays; the next sweep starts over
+        error = f"{type(e).__name__}: {e}"
+    try:
+        keep()  # the last batch, however the sweep ended
+    except (sqlite3.Error, OSError) as e:
+        error = error or f"{type(e).__name__}: {e}"
+    d.sweep_finished(started, error)
+    # one line for the logs (hosted: Railway's), so a sweep can be watched without the owner's /api/directory
+    print(f"directory sweep {'stopped' if error else 'done'} in {(time.time() - started) / 60:.0f} min: "
+          f"{sightings} sightings, {new} new wallets, held {held / 60:.0f} min{f', error: {error}' if error else ''}",
+          flush=True)  # fmt: skip
+    return {"sightings": sightings, "new": new, "held_s": held, "error": error}
+
+
+def _directory_loop() -> None:
+    """A sweep whenever the last finished one is DIRECTORY_SWEEP_S old, a minute after launch (the page's reads
+    first); after a failed one, again in DIRECTORY_RETRY_S."""
+    _directory_stop.wait(60)
+    while not _directory_stop.is_set():
+        try:
+            last = directory().last_sweep()
+            if not _worth["running"] and (last is None or time.time() - last["finished"] >= DIRECTORY_SWEEP_S):
+                _directory_state["running"] = True
+                try:
+                    result = directory_sweep(_directory_stop)
+                finally:
+                    _directory_state["running"] = False
+                if result["error"]:
+                    _directory_stop.wait(DIRECTORY_RETRY_S)
+                    continue
+        except (sqlite3.Error, OSError) as e:
+            _directory_state["error"] = f"{type(e).__name__}: {e}"
+            _directory_stop.wait(DIRECTORY_RETRY_S)
+            continue
+        _directory_stop.wait(600)
+
+
+@app.get("/api/directory")
+def directory_stats(request: Request, response: Response) -> dict[str, Any]:
+    """How many wallets the directory has found, and where: counts only, never a wallet. The owner's, as
+    /api/metrics is: locally, or with SIGNALS_METRICS_KEY."""
+    _owner(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    stats = cached("directory", DIRECTORY_STATS_TTL_S, lambda: directory().stats())
+    return stats | {"sweeping": _directory_state["running"], "held": _directory_state.get("held"),
+                    "last_error": directory().last_error()}
 
 
 # ---- the Traders leaderboard's columns ----
@@ -470,7 +653,11 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
     """One wallet's score with its checked bets: from the last refresh, or scored now (5–30 s)."""
     w = wallet.lower()
     data = _worth_load()
-    s = next((x for x in (data or {}).get("scores", []) if x["wallet"] == w), None) or _score_of(w)
+    s = next((x for x in (data or {}).get("scores", []) if x["wallet"] == w), None)
+    if s is None:
+        if _WALLET.fullmatch(w):  # a wallet the last check didn't have, opened here: pasted into search, mostly
+            _directory_note_later([Seen(w, "search")])
+        s = _score_of(w)
     b = _board(s)
     return with_links(s) | b | {"why": why_lines(s | b)}
 
@@ -563,7 +750,13 @@ def _score_of(wallet: str) -> dict[str, Any]:
         try:
             _worth_one[w] = reads.whales.score(w).to_dict()
         except VenueError as e:
+            if _WALLET.fullmatch(w):
+                why = f"{type(e).__name__}: {e}"
+                _directory_later(lambda d: d.score_failed(w, why))
             raise venue_error(e) from e
+        if _WALLET.fullmatch(w):
+            scored = _worth_one[w] | {"format": WORTH_FORMAT}
+            _directory_later(lambda d: d.keep_scores([scored], "page"))
         if len(_worth_one) > WORTH_ONE_KEEP:
             del _worth_one[next(iter(_worth_one))]  # the oldest
     return _worth_one[w]
@@ -1034,6 +1227,7 @@ def follow(req: Follow, response: Response, uid: str = Depends(signed_in)) -> di
             u["follows"].append(w)
             _save_follows(d)
             count("follow", uid=uid, trader=w)
+            _directory_note_later([Seen(w, "follow")])  # the wallet only: who follows them stays in follows.json
     return _me_view(u)
 
 
