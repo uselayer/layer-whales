@@ -137,8 +137,11 @@ def test_alerts_go_out_for_new_buys_you_can_still_get_into(api: TestClient, monk
     engine._cache.clear()
     assert engine.alert_pass() == 1  # one message for the two fills on 0xcid:0; none for the moved market
     text = engine.tg.sent[-1]["text"]
-    assert "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 41¢" in text and "Will it &lt;rain&gt;?" in text
-    assert "Now 41¢: you can still get in." in text and "Buy on Polymarket" in text and SHARP in text
+    # Copying isn't offered for them: following is keeping an eye on them, so the alert reads neutrally.
+    assert "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 41¢ ($82) on Will it &lt;rain&gt;? · now 41¢" in text
+    assert "you can still get in" not in text and "$10 gets you" not in text
+    assert "Buy on Polymarket" in text and SHARP in text  # the link only opens the market
+    assert text.endswith("Polymarket's public data runs 3–5 minutes behind.")
     assert engine.tg.sent[-1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == f"unf:{SHARP}"
     trades.insert(0, buy(5, fresh))
     engine._cache.clear()
@@ -162,6 +165,33 @@ def test_an_alert_prices_ten_dollars_for_a_trader_copying_is_offered_for(
     assert line == "$10 gets you 24 contracts at 41¢, plus a $0.15 fee."
     monkeypatch.setattr(engine, "copy_offer", lambda s: (False, "No."))
     assert engine._alert_cost(SHARP, buy(1, datetime.now(UTC)), 0.40, 100, 40) is None
+
+
+def test_an_alert_for_a_trader_copying_is_offered_for_says_you_can_still_get_in(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(engine, "copy_offer", lambda s: (True, None))
+
+    class Preview:
+        ok, price, contracts, fee = True, 0.41, 24.0, 0.15
+
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: Preview())
+    text = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 100, 40)
+    assert text.splitlines() == [
+        "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 40¢ ($40)",
+        "Will it &lt;rain&gt;?",
+        "Now 41¢: you can still get in.",
+        "$10 gets you 24 contracts at 41¢, plus a $0.15 fee.",
+        f'<a href="{engine.SITE}/#/worth/{SHARP}">Their record</a> · <a href="https://polymarket.com/event/rain">Buy on Polymarket</a>',
+        "Polymarket's public data runs 3–5 minutes behind.",
+    ]
+    monkeypatch.setattr(engine, "copy_offer", lambda s: (False, "No."))
+    neutral = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 100, 40)
+    assert neutral.splitlines() == [
+        "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 40¢ ($40) on Will it &lt;rain&gt;? · now 41¢",
+        f'<a href="{engine.SITE}/#/worth/{SHARP}">Their record on Signals</a> · <a href="https://polymarket.com/event/rain">Buy on Polymarket</a>',
+        "Polymarket's public data runs 3–5 minutes behind.",
+    ]
 
 
 def test_clerk_frontend_api_comes_from_the_publishable_key() -> None:

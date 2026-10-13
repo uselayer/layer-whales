@@ -436,6 +436,54 @@ def test_the_copy_estimate_comes_with_its_range_and_ranks_by_its_bottom() -> Non
     assert engine._board(SCORE)["copy_return"] is None and engine._board(SCORE)["copy_rank"] is None
 
 
+def test_the_copy_estimate_divides_by_what_a_copier_paid_when_the_sdk_says() -> None:
+    # uselayer 0.8.1: copy_entry, what a copier paid (at the ask) on the same bets as the copy result.
+    s = engine._board(COPYABLE | {"avg_price": 0.5, "copy_entry": 0.4})
+    assert (s["copy_return"], s["copy_return_low"], s["copy_return_high"]) == pytest.approx((0.05, 0.025, 0.075))
+    assert s["copy_rank"] == pytest.approx(0.025)
+    # A result kept by uselayer 0.8.0 has no copy_entry: their own average price, as before.
+    assert engine._board(COPYABLE | {"avg_price": 0.5})["copy_return"] == pytest.approx(0.04)
+    assert engine._board(COPYABLE | {"avg_price": 0.5, "copy_entry": None})["copy_return"] == pytest.approx(0.04)
+
+
+# ---- Traders' sections: Worth copying, Rising, Worth watching ----
+
+
+def test_each_recommended_trader_has_one_section_and_only_copying_offered_is_worth_copying() -> None:
+    assert engine.section_of("quiet", True) == "copy" and engine.section_of("proven", True) == "copy"
+    assert engine.section_of("rising", True) == "copy"  # Rising with copies reliably above zero: offered
+    assert engine.section_of("rising", False) == "rising"
+    assert engine.section_of("too_fast", False) == "watch"  # No proven copy advantage: Worth watching
+    for seg in ("lucky", "no_edge", "no_view", "inactive", None):
+        assert engine.section_of(seg, False) is None  # not recommended: only in "See all checked traders"
+    fast = SCORE | {"segment": "too_fast", "copyable": "no", "copy": {"mean": 0.01, "margin": 0.02, "n": 40, "z": 1.0}}
+    assert (engine._board(fast)["section"], engine._board(fast)["copy_ok"]) == ("watch", False)
+    assert engine._board(COPYABLE)["section"] == "copy"
+    assert engine._board(SCORE | {"segment": "rising", "copyable": "unknown"})["section"] == "rising"
+    assert engine._board(SCORE | {"segment": "lucky"})["section"] is None
+
+
+def test_the_traders_list_carries_each_traders_section(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    fast = SCORE | {"wallet": "0xf", "segment": "too_fast", "copyable": "no"}
+    rising = SCORE | {"wallet": "0xr", "segment": "rising", "copyable": "unknown"}
+    lucky = SCORE | {"wallet": "0xl", "segment": "lucky"}
+    monkeypatch.setattr(engine, "_worth_data", {"scores": [COPYABLE, fast, rising, lucky]})
+    got = {s["wallet"]: s["section"] for s in api.get("/api/worth").json()["result"]["scores"]}
+    assert got == {"0xabc": "copy", "0xf": "watch", "0xr": "rising", "0xl": None}
+
+
+def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offered_for(api: TestClient) -> None:
+    page = api.get("/").text
+    for words in ("Worth copying", "Worth watching", "No trader's copies have been reliably profitable after fees lately.",
+                  "Skilled traders worth keeping an eye on. Copying isn't offered: the price moves before you'd get in.",
+                  "Not offered", "they paid", "Buy on Polymarket ↗", "weeks up",
+                  "A week counts profit taken plus the change in value of trades still open.",
+                  "at least half a cent above the middle price",
+                  "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip
+        assert words in page, words
+    assert "weeks profitable" not in page
+
+
 # ---- a wallet's account: when it was read, and never part of it shown as all of it ----
 
 

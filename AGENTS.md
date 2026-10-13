@@ -20,7 +20,11 @@ behind Vercel (see README, "Hosting").
   places a real-money order, not even a test one.
 - Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
   asked for only to follow a trader, and the button says so ("Follow · get an alert when they buy"). Alerts go
-  to Telegram, only while you can still get in. The engine checks Clerk's session token itself (public keys,
+  to Telegram, only while you can still get in. Following is also keeping an eye on a trader, not only copying:
+  for a trader copying isn't offered for, the alert reads neutrally (what they bought and the price now, their
+  record, and "Buy on Polymarket", which only opens the market), never "you can still get in" and never green.
+  Every alert and trade card keeps that link to the market, whoever the trader. Every alert, and the Feed, says
+  Polymarket's public data runs 3–5 minutes behind. The engine checks Clerk's session token itself (public keys,
   no Clerk secret). Never let one account see or change another's follows, and never let an answer about a
   signed-in person be cached.
 - Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.
@@ -33,9 +37,18 @@ behind Vercel (see README, "Hosting").
     Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
     localStorage, every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
     ever stuck on that screen.
-  - Traders is one leaderboard of the traders we recommend (Proven sharp, Quiet sharp, Rising, No proven copy advantage; its pill says "Copy not proven" to fit at 390px).
-    Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
-    win record and usual trade the last 30 days. A positive copy estimate that isn't reliably above zero says so
+  - Traders lists the traders we recommend (Proven sharp, Quiet sharp, Rising, No proven copy advantage; its
+    pill says "Copy not proven" to fit at 390px) in three sections, from the engine's `section_of`: **Worth
+    copying** (copying is offered: `copy_ok`; always shown, with one line when nobody is), **Rising**, and
+    **Worth watching** (No proven copy advantage: skilled traders worth keeping an eye on; copying isn't
+    offered). Each section has the same columns, its own ranks and "Show more"; "Copyable only" shows Worth
+    copying, and "See all checked traders" is one flat list. A trader copying isn't offered for gets no copy
+    cue anywhere: grey "Not offered" in the Copying column, and an open trade of theirs (their page, a Feed
+    card, a trader page) says only "Now 52¢ · they paid 49¢", never green or "you can still get in". The
+    "Buy on Polymarket" link, which only opens the market, stays for everyone. Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
+    win record and usual trade the last 30 days. Consistency is "X of N weeks up", where a week counts profit
+    taken plus the change in value of trades still open. A copy estimate prices the copy at the ask (uselayer
+    0.8.1's `copy_entry`), never the middle price. A positive copy estimate that isn't reliably above zero says so
     ("Estimated copy return: +0.7% after fees, but results aren't reliably above zero"), never shown as a gain.
     One bar: filters on the left (market chips = the onboarding choice, Copyable only), how you view the list on
     the right (search name or wallet, period, sort). Columns are grouped as Track record, Style and Copying.
