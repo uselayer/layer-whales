@@ -69,15 +69,21 @@ behind Vercel (see README, "Hosting").
     Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
     localStorage (and, when picked here or with the Feed's Change, on the account for big-trade alerts), every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
     ever stuck on that screen.
-  - Traders lists the traders we recommend (Proven sharp, Quiet sharp, Rising, No proven copy advantage; its
-    pill says "Copy not proven" to fit at 390px) in three sections, from the engine's `section_of`: **Worth
-    copying** (copying is offered: `copy_ok`; while nobody's is, the Feed's "Copying is paused" callout sits
-    above the list instead and "Copyable only" is greyed out), **Rising**, and **Worth watching** (No proven copy advantage: skilled traders worth keeping an eye on; copying isn't
-    offered). Each section has the same columns, its own ranks and "Show more"; "Copyable only" shows Worth
-    copying, and "See all checked traders" is one flat list. A trader's copy status is one of three words,
-    the same everywhere (the engine's `copy_offer` and the page's `copyLabel`): **Copyable**, **Copy not
-    proven** (a tier we recommend whose copies aren't reliably above zero) or **Not recommended**; a reason
-    reads "Copy not proven: …". A trader who isn't Copyable gets no copy
+  - Three separate readings, never merged: profit (track record), skill (the tier) and copying (copy status).
+    The tier is skill and track record only (uselayer 0.10's `segment`; a kept older result is re-tiered with the
+    SDK's `segment_of`): copying never moves a trader into, out of or between tiers or sections. A trader can be
+    worth following for research when copying them doesn't pay, but nothing may present a trader's activity as a
+    tested way to make money: following and the Feed are research, not tips (`NOT_A_TIP`).
+  - Traders lists the traders we recommend (Proven sharp, Quiet sharp, Rising) in two sections by tier, from the
+    engine's `section_of`: **Sharps** (Proven and Quiet) and **Rising**. Each section has the same columns, its
+    own ranks and "Show more"; "Copyable only" filters on copy status (greyed out, with the "Copying is paused"
+    callout above the list, while nobody is Copyable), and "See all checked traders" is one flat list. A
+    trader's copy status is one of four words, the same everywhere (the engine's `copy_status`, carried as
+    `copy_label` with `copy_ok`, and the page's `copyLabel`): **Copyable** (a recommended tier, and copies
+    reliably above zero after fees), **Costly to copy** (the whole 95% range of what copies kept is below
+    zero), **Copy not proven** (it isn't reliably above zero, or too few to tell) or **Not offered** (copies
+    kept money, but the trader's own record doesn't pass the checks); a reason reads "Costly to copy: …". A
+    trader who isn't Copyable gets no copy
     cue anywhere: their status in grey in the Copying column, and an open trade of theirs (their page, a Feed
     card, a trader page) says only "Now 52¢ · they paid 49¢", never green or "you can still get in". The
     "Buy on Polymarket" link, which only opens the market, stays for everyone. Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
@@ -87,7 +93,9 @@ behind Vercel (see README, "Hosting").
     ("Estimated copy return: +0.7% after fees, but results aren't reliably above zero"), never shown as a gain.
     One bar: filters on the left (market chips = the onboarding choice, Copyable only), how you view the list on
     the right (search name or wallet, period, sort). Columns are grouped as Track record, Style and Copying.
-    Recommendations never include Lucky, No clear edge or No view traders, and the checks are never loosened to
+    Recommendations never include Big profit, edge unproven; Profit rests on one win (big profit that's a loss
+    without their biggest win: the only tier that says luck); Edge not proven; Not enough data (too few trades
+    could be checked: never shown as a verdict on skill); or No view traders, and the checks are never loosened to
     fill the list: an empty result says so and names the interests that had no one. "See all checked traders" may
     show the rest, each marked.
   - Never a made-up number for a real trader on the hosted app. A figure the data doesn't have yet shows "—";
@@ -110,7 +118,7 @@ behind Vercel (see README, "Hosting").
   - The Feed has two parts. **Following** (`#/`, the default, `/api/me/feed`): every trade from the last day of
     the traders you follow, whoever they are (following is also research); signed out it's one short sign-in
     prompt. **Recommended** (`#/recommended`, `/api/live`): trades of $1,000 or more (`RECOMMENDED_MIN_USD`) from
-    the traders in Worth copying, Rising and Worth watching, with neutral cards for anyone not copy_ok. Recommended
+    the traders in Sharps and Rising, with neutral cards for anyone not copy_ok. Recommended
     stays quiet (fewer, bigger trades) and never more prominent than Following: second in the switch, never the
     default. Both keep the switch "Only trades I can still get into", one card per outcome with "Also bought
     by", and the delay line. Big trades (`#/big`) is linked from the foot of Recommended. Traders' trades come from
