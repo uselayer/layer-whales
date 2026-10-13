@@ -100,3 +100,42 @@ A rule "works" on an outcome in a band when:
 - The pool is wallets in markets that closed in June–August, which leans towards short markets.
 - An earlier test (`overlooked-preregistered.md`) found A→B persistence of +0.06 for 30-day windows. A null here is
   plausible and would itself be the answer.
+
+## Amendment 1 (2026-10-13, before any outcome was analysed)
+
+**What had been seen:** the first ~29 wallets of the Part 1 run. Their coverage, and the A30/A90/B segment names
+and bet counts printed in the progress log. No outcome metric (P&L, edge, copy, settlement) was computed or looked
+at.
+
+**Why the change:** Polymarket's price history keeps 5-minute prices for only about 60 days.
+
+| Bet age | Bets with a 5-minute price | Bets with a 1-hour price | Bets settled |
+|---|---|---|---|
+| 0–59 days | 98–100% | — | — |
+| 60–69 days | 22% | 83% | — |
+| 70+ days | 0–2% | ≤14% | 94–100% |
+
+The SDK's skill and copy tests need those prices, so its verdicts for windows ending at T (60 days ago) are mostly
+"unknown". The `R30-rec`, `R30-skill`, `R90-rec` and `R90-skill` rules cannot be evaluated at T. They are still
+printed, marked invalid. This is also a finding in itself: a 90-day window adds nothing to the SDK's 5-minute tests,
+because bets older than ~60 days get no price.
+
+**Part 1** (T = 2026-08-14, the run in progress, unchanged reads). Selection on A30 and A90 uses only what stays
+available:
+
+| Rule | Picks |
+|---|---|
+| `R30-settle` / `R90-settle` | the trader's own hold-to-settlement return per contract (payout − their price), pooled per independent event over the window's settled checked bets: mean > 0, z ≥ 2, 8+ events |
+| `R30-profit` / `R90-profit` | trading P&L in the window > 0 |
+| `R30-both` / `R90-both` | settle and profit |
+| `all` | every wallet in the band |
+
+Outcomes, success bars and comparisons are unchanged; window B is fully priced.
+
+**Part 2** (T2 = 2026-09-13; every A window is fully priced). Today's SDK method, on the same 450 wallets:
+
+- Scores: `score(end=T2, days=30)` to select, `score(end=2026-10-13, days=30)` for the outcome.
+- Rules: `R30-rec`, `R30-skill`, `R30-settle`, `R30-profit` (as above).
+- The same three outcomes and success bars, on that 30-day outcome window.
+
+Part 2 shows what today's method finds, and whether it holds, on the same wallets.
