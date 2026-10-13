@@ -133,7 +133,8 @@ def test_the_sweep_keeps_followed_wallets_then_everything_the_sdk_finds(api: Tes
     monkeypatch.setattr(engine.reads.whales, "find_wallets", find_wallets, raising=False)
     monkeypatch.setattr(engine, "DIRECTORY_BATCH", 2)
     assert engine.directory_sweep() == {"sightings": 4, "new": 3, "held_s": 0.0, "error": None}
-    assert asked == {"per_second": engine.DIRECTORY_RATE}  # held below what the SDK allows, so the site keeps reads
+    assert asked["per_second"] == engine.DIRECTORY_RATE  # held below what the SDK allows, so the site keeps reads
+    assert len(asked["boards"]) == 88 and asked["markets"] is True  # a first sweep reads everything
     s = api.get("/api/directory").json()
     assert s["wallets"] == 3 and s["by_source"]["follow"] == 1 and s["by_source"]["market"] == 1
     assert s["sweeps_finished"] == 1 and s["last_sweep"]["sightings"] == 4 and s["last_error"] is None
@@ -244,3 +245,76 @@ def test_the_feed_doesnt_wait_for_the_directory(api: TestClient, monkeypatch: py
 def test_the_sweeps_rate_leaves_the_feeds_poller_its_reads() -> None:
     # The SDK allows 8 reads a second per Polymarket host; the poller reads one trader (4 reads, ~1.2 s) at a time.
     assert engine.DIRECTORY_RATE + 4 / 1.2 < 8
+
+
+# ---- picking up after a restart ----
+
+
+def sweep_of(*found: Any, asked: dict[str, Any] | None = None, stop_after: int | None = None,
+             stop: threading.Event | None = None) -> Any:  # fmt: skip
+    """A stand-in for the SDK's find_wallets: yields ``found`` (setting ``stop`` after ``stop_after`` of them, as a
+    deploy would), and keeps what it was asked for in ``asked``."""
+
+    def find_wallets(**kw: Any) -> Any:
+        if asked is not None:
+            asked.update(kw)
+        for i, s in enumerate(found):
+            if stop is not None and stop_after is not None and i == stop_after:
+                stop.set()
+            yield s
+
+    return find_wallets
+
+
+def test_a_sweep_cut_off_by_a_deploy_picks_up_where_it_was(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    stop = threading.Event()
+    first = [board(AMY, "PNL DAY OVERALL"), board(BEN, "PNL DAY OVERALL"), board(CAL, "VOL DAY OVERALL"),
+             board(AMY, "PNL WEEK OVERALL")]  # fmt: skip
+    monkeypatch.setattr(engine.reads.whales, "find_wallets", sweep_of(*first, stop=stop, stop_after=3), raising=False)
+    r = engine.directory_sweep(stop)
+    assert r["error"] is not None and r["sightings"] == 3  # all it found is kept
+    boards, markets = engine.sweep_left(engine.directory())
+    # the board it got past is done; the one it was on when the deploy came (VOL DAY) is read again, as is the rest
+    assert ("PNL", "DAY", "OVERALL") not in boards and ("VOL", "DAY", "OVERALL") in boards
+    assert len(boards) == 87 and markets is True
+
+    asked: dict[str, Any] = {}
+    monkeypatch.setattr(engine.reads.whales, "find_wallets",
+                        sweep_of(board(CAL, "VOL DAY OVERALL"), in_market(BEN), asked=asked), raising=False)  # fmt: skip
+    assert engine.directory_sweep()["error"] is None
+    assert len(asked["boards"]) == 87 and ("PNL", "DAY", "OVERALL") not in asked["boards"]  # not read again
+    assert engine.sweep_left(engine.directory())[1] is False  # the markets were read to their end
+
+
+def test_a_sweep_with_nothing_left_reads_nothing_until_a_day_has_passed(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from uselayer.whale_finder import all_boards
+
+    d = engine.directory()
+    for b in all_boards():
+        d.part_done(" ".join(b))
+    d.part_done(engine.MARKETS_PART)
+    assert engine.sweep_left(d) == ([], False)
+    later = engine.sweep_left(d, now=__import__("time").time() + engine.DIRECTORY_SWEEP_S + 1)
+    assert len(later[0]) == 88 and later[1] is True
+
+
+def test_markets_cut_off_partway_are_read_again(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    stop = threading.Event()
+    monkeypatch.setattr(engine.reads.whales, "find_wallets",
+                        sweep_of(in_market(AMY), in_market(BEN, "0xm2"), stop=stop, stop_after=1), raising=False)  # fmt: skip
+    engine.directory_sweep(stop)
+    assert engine.sweep_left(engine.directory())[1] is True
+
+
+def test_a_sweep_from_before_progress_was_kept_counts_the_boards_it_got_past(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # a phase 1 sweep, cut off by a deploy on the third board in the SDK's order: no progress kept, only sightings
+    d = engine.directory()
+    d.add([from_sighting(board(AMY, "PNL DAY OVERALL")), from_sighting(board(BEN, "VOL DAY OVERALL")),
+           from_sighting(board(CAL, "PNL WEEK OVERALL"))])  # fmt: skip
+    asked: dict[str, Any] = {}
+    monkeypatch.setattr(engine.reads.whales, "find_wallets", sweep_of(asked=asked), raising=False)
+    engine.directory_sweep()
+    left = {" ".join(b) for b in asked["boards"]}
+    assert "PNL DAY OVERALL" not in left and "VOL DAY OVERALL" not in left  # got past them: read to their end
+    assert "PNL WEEK OVERALL" in left and len(left) == 86  # the one it was on, maybe partway: read again
+    assert d.backfill_parts(["PNL DAY OVERALL"], 0) == 0  # once only: progress is kept from now on

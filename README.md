@@ -131,7 +131,9 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
 - **Trader directory** (phase 1: finding; phase 2: keeping scores): every Polymarket wallet Signals finds, and
   where, kept across runs in `/data/directory.db` (SQLite). Once a day the engine sweeps every Polymarket leaderboard (88: profit and
   volume, four periods, overall and each category, to rank ~10,050) and open markets at every level of activity
-  (the SDK's `find_wallets`, uselayer 0.9): about 18,000 reads, roughly 2.5 hours. It stays out of the Feed's way:
+  (the SDK's `find_wallets`, uselayer 0.9): about 18,000 reads, roughly 2.5 hours. A restart (a deploy) doesn't start it
+  over: each leaderboard, and the markets, is marked once read to its end, and the next sweep reads only what wasn't
+  read in the last day. It stays out of the Feed's way:
   at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one trader at a time, needs
   at most ~3.3), and none while the Worth following check runs, which can use all 8. Traders in the Feed's big
   trades, wallets opened that the last check didn't have (pasted into search, mostly) and followed wallets are kept
