@@ -159,6 +159,10 @@ def analyse(path: str) -> list[dict[str, Any]]:
     report(path, Ep, "E+  edge z>=2 and profitable in A (today's skill yes)")
     report(path, Em, "E−  edge z>=2 but lost in A (what fix 7 adds)")
     report(path, Em90, "E−90  E− with 90-day trading profit > 0 at T")
+    plaus = lambda r: r["f"]["edge"][0] <= 0.05  # noqa: E731  (amendment 1, exploratory)
+    report(path, [r for r in Em if plaus(r)], "E−plaus  E− with A edge <= 5¢ (amendment 1, exploratory)")
+    report(path, [r for r in Em if not plaus(r)], "E− with A edge > 5¢ (amendment 1, exploratory)")
+    report(path, [r for r in Ep if plaus(r)], "E+plaus  E+ with A edge <= 5¢ (amendment 1, exploratory)")
     if Em:
         print("    E− wallets:")
         for r in Em:
