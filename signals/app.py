@@ -57,12 +57,14 @@ def venue_on(venue: str) -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
+    threading.Thread(target=_live_loop, daemon=True).start()  # keeps the Feed's and alerts' trader reads filled
     if TG_TOKEN:  # alerts: the bot's messages (connecting a chat, /list, /stop), and new buys of followed traders
         threading.Thread(target=_bot_loop, daemon=True).start()
         threading.Thread(target=_alert_loop, daemon=True).start()
     yield
     _worth_stop.set()
     _follow_stop.set()
+    _live_stop.set()
 
 
 app = FastAPI(title="Signals", lifespan=lifespan)
@@ -72,15 +74,24 @@ reads = Client(store=":memory:")  # leaderboards, traders, links, cost previews:
 # ---- a small cache, so clicking around doesn't re-read the venues ----
 
 _cache: dict[str, tuple[float, Any]] = {}
+_flight: dict[str, threading.Lock] = {}  # one read at a time per key: concurrent misses share it
+_flight_lock = threading.Lock()
 
 
 def cached(key: str, ttl_s: float, fn: Callable[[], Any]) -> Any:
+    """``fn()``, kept ``ttl_s`` seconds under ``key``. Concurrent misses on one key share a single read."""
     hit = _cache.get(key)
     if hit and time.monotonic() - hit[0] < ttl_s:
         return hit[1]
-    value = fn()
-    _cache[key] = (time.monotonic(), value)
-    return value
+    with _flight_lock:
+        lock = _flight.setdefault(key, threading.Lock())
+    with lock:
+        hit = _cache.get(key)  # someone else may have just read it
+        if hit and time.monotonic() - hit[0] < ttl_s:
+            return hit[1]
+        value = fn()
+        _cache[key] = (time.monotonic(), value)
+        return value
 
 
 def venue_error(e: VenueError) -> HTTPException:
@@ -584,7 +595,8 @@ def with_links(s: dict[str, Any]) -> dict[str, Any]:
 # Their buys over the last day, one row per bet (fills on the same outcome merged), with the price now:
 # the current price of their open position. Polymarket's public trade feed runs a few minutes behind.
 
-FEED_SEGMENTS = ("proven", "quiet", "rising")  # the Follow and Watch verdicts; "inactive" traders aren't followed
+FEED_SEGMENTS = RECOMMENDED  # Traders' three sections: Worth copying, Rising, Worth watching ("inactive" isn't in it)
+RECOMMENDED_MIN_USD = 1000.0  # the Feed's Recommended shows only trades this big: fewer, bigger trades
 FEED_HOURS = 24
 GET_IN = 0.03  # at most this far above their price you can still get in: the cost preview's limit too
 FELL_BY = 0.05  # at most this far below: a bigger drop means the market turned against them, a different trade
@@ -635,9 +647,55 @@ def _categories(markets: list[str]) -> dict[str, str]:
     return {m: category_of(book[c]) for m in markets if (c := m.partition(":")[0]) in book}
 
 
-def _live_read(wallet: str) -> Any:
-    """A trader's last 100 trades and open positions, kept 25 s: the Feed, alerts and the price check share it."""
-    return cached(f"live:{wallet}", 25, lambda: reads.whales.trader("polymarket", wallet, trades=100, closed=0))
+LIVE_POLL_S = 30  # the poller refreshes every Recommended and followed trader this often, one at a time
+LIVE_STALE_S = 120  # pages read what the poller keeps up to this old; only a miss reads Polymarket itself
+LIVE_ALERT_S = 60  # alerts want it fresher
+LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
+
+
+def _live_read(wallet: str, max_age: float = LIVE_STALE_S) -> Any:
+    """A trader's last 100 trades and open positions: what the poller keeps (_live_loop), read from Polymarket
+    only when it's missing or older than ``max_age`` (and then once, however many ask at the same time)."""
+    return cached(f"live:{wallet}", max_age, lambda: reads.whales.trader("polymarket", wallet, trades=100, closed=0))
+
+
+def _live_wanted() -> set[str]:
+    """The traders whose trades the Feed and alerts read: Recommended's, and everyone someone follows."""
+    rec = {s["wallet"] for s in (_worth_load() or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS}
+    return rec | {w for u in _load_follows()["users"].values() for w in u.get("follows") or []}
+
+
+def live_poll_once(stop: threading.Event | None = None) -> int:
+    """One round of the poller: each wanted trader read in turn (never in a burst: the SDK's Polymarket budget is
+    shared), skipping one read in the last LIVE_POLL_S; then traders nobody wants any more are dropped."""
+    wanted, done = _live_wanted(), 0
+    for w in sorted(wanted):
+        if stop is not None and stop.is_set():
+            break
+        try:
+            _live_read(w, LIVE_POLL_S - 5)
+            done += 1
+        except VenueError:
+            continue
+    now = time.monotonic()
+    for key in [k for k in list(_cache) if k.startswith("live:")]:
+        hit = _cache.get(key)
+        if key[5:] not in wanted and hit and now - hit[0] > LIVE_KEEP_S:
+            _cache.pop(key, None)
+    return done
+
+
+def _live_loop() -> None:
+    while not _live_stop.is_set():
+        started = time.monotonic()
+        try:
+            live_poll_once(_live_stop)
+        except Exception as e:  # keep the cache filled through a bad round
+            _worth["live_error"] = f"{type(e).__name__}: {e}"
+        _live_stop.wait(max(5.0, LIVE_POLL_S - (time.monotonic() - started)))
+
+
+_live_stop = threading.Event()
 
 
 def _bets_of(d: Any, who: dict[str, Any], since: datetime | None = None) -> list[dict[str, Any]]:
@@ -684,26 +742,39 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
 
 @app.get("/api/live")
 def live() -> dict[str, Any]:
+    """The Feed's Recommended: trades of RECOMMENDED_MIN_USD or more over the last FEED_HOURS from the traders in
+    Traders' three sections (Worth copying, Rising, Worth watching). Quiet on purpose: fewer, bigger trades."""
     data = _worth_load()
-    follow = [s for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
+    people = [s | {"copy_ok": copy_offer(s)[0]} for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
+    bets, failed = _feed(people, RECOMMENDED_MIN_USD)
+    return {"traders": [{k: s[k] for k in ("wallet", "name", "segment", "label", "copy_ok")} for s in people],
+            "failed": failed, "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD, "bets": bets}  # fmt: skip
+
+
+def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> tuple[list[dict[str, Any]], int]:
+    """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), newest first, with
+    status and category; and how many traders couldn't be read."""
     since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
     bets: list[dict[str, Any]] = []
     failed = 0
-    offers = {s["wallet"]: copy_offer(s)[0] for s in follow}
-    for s in follow:
+
+    for s in people:  # from what the poller keeps: a page view never reads Polymarket for dozens of traders
         try:
             d = _live_read(s["wallet"])
         except VenueError:
             failed += 1
             continue
-        bets += _bets_of(d, s | {"copy_ok": offers[s["wallet"]]}, since)
+        if not s.get("name"):
+            s["name"] = d.trader.name  # a followed wallet we haven't scored: their Polymarket name, as on their cards
+        bets += [b for b in _bets_of(d, s, since) if b["usd"] >= min_usd]
     bets.sort(key=lambda b: b["at"], reverse=True)
-    cats = _categories([b["market"] for b in bets]) if bets else {}
+    try:
+        cats = _categories([b["market"] for b in bets]) if bets else {}
+    except VenueError:
+        cats = {}  # the trades still show, under All
     for b in bets:
         b["status"], b["category"] = bet_status(b["price"], b["price_now"]), cats.get(b["market"])
-    return {"traders": [{"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
-                         "copy_ok": offers[s["wallet"]]} for s in follow],
-            "failed": failed, "hours": FEED_HOURS, "bets": bets}  # fmt: skip
+    return bets, failed
 
 
 def _iso_ts(s: str) -> float:
@@ -968,6 +1039,19 @@ def unfollow(wallet: str, response: Response, uid: str = Depends(signed_in)) -> 
             u["follows"].remove(wallet.lower())
             _save_follows(d)
     return _me_view(u)
+
+
+@app.get("/api/me/feed")
+def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
+    """The Feed's Following: your followed traders' buys over the last FEED_HOURS, every size. Whoever they are:
+    a trader the last check didn't score has no tier, and copying isn't offered for them (copy_ok False)."""
+    _private(response)
+    follows = list((_load_follows()["users"].get(uid) or {}).get("follows") or [])
+    scores = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
+    people = [{"wallet": w, "name": (s := scores.get(w) or {}).get("name"), "segment": s.get("segment"),
+               "label": s.get("label"), "copy_ok": bool(s) and copy_offer(s)[0]} for w in follows]  # fmt: skip
+    bets, failed = _feed(people)
+    return {"traders": people, "failed": failed, "hours": FEED_HOURS, "bets": bets}
 
 
 @app.post("/api/me/telegram")
@@ -1436,7 +1520,7 @@ def alert_pass(now: float | None = None) -> int:
     new_buys: list[NewBuy] = []
     for w in to:
         try:
-            d = _live_read(w)
+            d = _live_read(w, LIVE_ALERT_S)
         except VenueError:
             continue
         first, seen = w not in _seen, _seen.setdefault(w, set())
@@ -1530,7 +1614,7 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
         if not to:
             continue
         try:
-            price_now = next((p.current_price for p in _live_read(w).positions if p.market == t.market), None)
+            price_now = next((p.current_price for p in _live_read(w, LIVE_ALERT_S).positions if p.market == t.market), None)
         except VenueError:
             continue
         if price_now is None or _settled(price_now):

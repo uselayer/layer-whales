@@ -163,7 +163,7 @@ def test_live_bets_carry_status_and_category(api: TestClient, monkeypatch: pytes
     at = datetime.now(UTC)
 
     def buy(m: str, p: float) -> WhaleTrade:
-        return WhaleTrade("polymarket", "0xabc", "sharpie", m, "yes", "buy", p, 100, p * 100, at, m)
+        return WhaleTrade("polymarket", "0xabc", "sharpie", m, "yes", "buy", p, 5000, p * 5000, at, m)  # $1,000+: Recommended shows bigger trades only
 
     def pos(m: str, now: float) -> WhalePosition:
         return WhalePosition(m, None, "Yes", 100, 0.5, now, None, None)
@@ -372,7 +372,7 @@ def test_traders_and_the_feed_carry_the_same_copy_verdict(api: TestClient, monke
     board = {s["wallet"]: s for s in api.get("/api/worth").json()["result"]["scores"]}
     assert board["0xabc"]["copy_ok"] is True and board["0xr"]["copy_ok"] is False and board["0xr"]["copy_why"]
     assert api.get("/api/worth/0xr").json()["copy_ok"] is False  # a trader's page
-    buy = WhaleTrade("polymarket", "x", "x", "0xc:0", "yes", "buy", 0.4, 10, 4.0, datetime.now(UTC), "t9", title="A")
+    buy = WhaleTrade("polymarket", "x", "x", "0xc:0", "yes", "buy", 0.4, 5000, 2000.0, datetime.now(UTC), "t9", title="A")
     monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(AMY, "visible", {}, [], [buy]))
     monkeypatch.setattr(engine, "_categories", lambda markets: {})
     live = api.get("/api/live").json()

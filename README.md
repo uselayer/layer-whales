@@ -42,9 +42,12 @@ The first visit asks one question, which markets interest you (Politics, Sports,
 markets), then opens Traders. The choice is kept in your browser; the market chips on Traders change it, and the Feed
 follows it ("Your markets: … · Change" opens the same picker), so the two always agree. Then two tabs:
 
-- **Feed**: one switch at the top, **Traders we follow** (the default) or **Big trades**.
-  - **Traders we follow**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp
-    or Rising, one card per trade, opened on your markets, three across on a desktop: the market, their pick, what they paid, the price now, how much they put in,
+- **Feed**: one switch at the top, **Following** (the default) or **Recommended**.
+  - **Following**: signed in, every trade over the last 24 hours from the traders you follow, whoever they are.
+    Signed out, a short prompt to sign in.
+  - **Recommended**: trades of $1,000 or more over the last 24 hours from the traders in Traders' three sections
+    (Worth copying, Rising, Worth watching). Quieter on purpose, and never the default.
+  - Both: one card per trade, opened on your markets, three across on a desktop: the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
     paid; **Price moved away** means further either way. A bigger drop means
     the market has turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or
@@ -54,7 +57,7 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     Polymarket's order book right now (at most 3¢ above their price), with the fee, your price per contract
     against theirs, and what you get if it wins. **Buy on Polymarket ↗** opens the market there; Signals places
     no orders. It updates every 30 seconds; Polymarket shows trades a few minutes late.
-  - **Big trades** (`#/big`; the old `#/traders/big` link still works): trades of $250 or more right now on
+  - **Big trades** (`#/big`, linked from the foot of Recommended; the old `#/traders/big` link still works): trades of $250 or more right now on
     Polymarket, one card per trade, opened on your markets like the rest of the Feed. A named trader's card
     opens their page. With Kalshi on, it shows every big trade on both venues instead ("Anonymous trader" when
     Kalshi doesn't name them), not filtered by your markets: the SDK has no categories for Kalshi markets, and

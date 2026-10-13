@@ -491,7 +491,7 @@ const post = (path, body) => api(path, { method: "POST", headers: { "content-typ
 // ---- signing in (Clerk: Google or Telegram), only to follow traders ----
 // Browsing needs no account. Clerk loads only when the engine has a publishable key (/api/config), from the
 // Frontend API the key names. `me` is who you follow and whether Telegram alerts are connected.
-const auth = { on: false, alerts: false, ready: false, me: null, then: null };
+const auth = { on: false, alerts: false, ready: false, loading: false, failed: false, me: null, meErr: null, uid: null, then: null };
 const signedIn = () => !!window.Clerk?.isSignedIn;
 function loadScript(src, attrs = {}) {
   return new Promise((ok, fail) => {
@@ -506,19 +506,23 @@ async function startAuth(key, alerts) {
   let fapi = "";
   try { fapi = m ? atob(m[2].replace(/-/g, "+").replace(/_/g, "/")).replace(/\$$/, "") : ""; } catch {}
   if (!/^[a-z0-9.-]+$/i.test(fapi)) return;
+  auth.loading = true; // the Feed's Following waits for it rather than asking a signed-in person to sign in
   try {
     await loadScript(`https://${fapi}/npm/@clerk/ui@1/dist/ui.browser.js`);
     await loadScript(`https://${fapi}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, { "data-clerk-publishable-key": key });
     await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
-  } catch { return; } // sign-in can't load: the page works as before, without Follow
-  Object.assign(auth, { on: true, alerts, ready: true });
+  } catch { Object.assign(auth, { loading: false, failed: true }); if (onFeed()) renderFeed(); return; } // sign-in can't load: the page works as before, without Follow
+  Object.assign(auth, { on: true, alerts, ready: true, loading: false });
   window.Clerk.addListener(async () => {
-    auth.me = signedIn() ? await api("/api/me").catch(() => null) : null;
+    accountIs(signedIn() ? window.Clerk.user?.id || null : null);
+    await readMe();
     if (auth.me) syncInterests();
     drawAccount();
     if (auth.me && auth.then) { const f = auth.then; auth.then = null; await f(); }
     redrawFollow();
+    if (onFeed() && feedView() === "follow") loadFeed(); // Following is yours: read it once we know who you are
   });
+  if (onFeed() && feedView() === "follow") loadFeed();
 }
 function drawAccount() {
   const el = $("#account");
@@ -884,32 +888,54 @@ function bindActions(root) {
 }
 
 // ---- feed ----
-// One switch at the top: the traders we follow (#/, the default) or Big trades (#/big: $250 or more right now,
-// on the venues Signals reads). Both show your markets, the ones picked at onboarding or with Traders' chips
-// (Big trades only while Signals reads Polymarket alone: see renderBig). The chips live on Traders only; the
-// Feed says which markets it shows, and Change opens the same picker as onboarding.
-const feed = { data: null, at: 0, err: null, onlyIn: true, big: null, bigAt: 0, bigErr: null };
+// Two parts: Following (#/, the default: trades of the traders you follow, signed in; a short sign-in prompt when
+// signed out) and Recommended (#/recommended: $1,000 or more from Traders' three sections, quieter on purpose and
+// never above Following). Both show your markets, the ones picked at onboarding or with Traders' chips; the chips
+// live on Traders only, the Feed says which markets it shows and Change opens the same picker as onboarding.
+// Big trades (#/big: $250 or more right now) stays reachable from the foot of Recommended.
+const feed = { data: null, at: 0, err: null, mine: null, mineAt: 0, mineErr: null, onlyIn: true, big: null, bigAt: 0, bigErr: null, seq: 0 };
 let feedTimer = null;
 const onFeed = () => routeName().startsWith("feed");
-const feedView = () => routeName() === "feed:big" ? "big" : "follow";
+const feedView = () => ({ "feed:big": "big", "feed:rec": "rec" })[routeName()] || "follow";
+const FEED_PARTS = [["follow", "#/", "Following"], ["rec", "#/recommended", "Recommended"]];
+// What each view keeps: [data, updated at, error] keys in `feed`.
+const FEED_KEYS = { follow: ["mine", "mineAt", "mineErr"], rec: ["data", "at", "err"], big: ["big", "bigAt", "bigErr"] };
 
 async function feedPage(view) {
-  $("#app").innerHTML = `<nav class="seg" aria-label="Feed">${[["follow", "#/", "Traders we follow"], ["big", "#/big", "Big trades"]]
+  $("#app").innerHTML = `<nav class="seg" aria-label="Feed">${FEED_PARTS
     .map(([k, href, l]) => `<a href="${href}" class="${view === k ? "on" : ""}"${view === k ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</nav>
     <div id="fbar"></div><div id="flist">${skelCards(3)}</div>`;
-  if (view === "big" ? feed.big : feed.data) renderFeed();
+  if (feed[FEED_KEYS[view][0]] || (view === "follow" && !canFollowFeed())) renderFeed();
   await loadFeed();
 }
+// Following needs to know who you follow: signed in, with your follows read.
+const canFollowFeed = () => auth.on && signedIn() && !!auth.me;
 async function loadFeed() {
   clearTimeout(feedTimer);
-  const big = feedView() === "big";
-  try {
-    if (big) { feed.big = await api("/api/trading-now?min_usd=250"); feed.bigAt = Date.now(); feed.bigErr = null; }
-    else { feed.data = await api("/api/live"); feed.at = Date.now(); feed.err = null; }
-  } catch (e) { if (big) feed.bigErr = e.message; else feed.err = e.message; }
-  if (!onFeed() || (feedView() === "big") !== big) return; // the other view, or another page, since
+  const my = ++feed.seq; // a newer call (the Clerk listener, a tab switch) makes this one stale: one 30 s loop only
+  const view = feedView(), [k, at, err] = FEED_KEYS[view];
+  if (view === "follow" && !canFollowFeed()) { renderFeed(); return; } // signed out: the prompt, nothing to read
+  const uid = auth.uid;
+  let data = null, error = null;
+  try { data = await api(view === "big" ? "/api/trading-now?min_usd=250" : view === "rec" ? "/api/live" : "/api/me/feed"); }
+  catch (e) { error = e.message; }
+  if (my !== feed.seq || (view === "follow" && uid !== auth.uid)) return; // stale, or someone else signed in since
+  if (error) feed[err] = error; else { feed[k] = data; feed[at] = Date.now(); feed[err] = null; }
+  if (!onFeed() || feedView() !== view) return; // the other view, or another page, since
+  clearTimeout(feedTimer);
   feedTimer = setTimeout(() => { if (onFeed()) loadFeed(); }, 30000);
   renderFeed();
+}
+// Who is signed in (Clerk's user id, or null). Another account, or none: the last one's Following goes.
+function accountIs(uid) {
+  if (uid === auth.uid) return;
+  auth.uid = uid;
+  Object.assign(feed, { mine: null, mineAt: 0, mineErr: null });
+}
+// Who you follow (/api/me). A failure is kept, so Following shows it with "Try again", never loading forever.
+async function readMe() {
+  if (!signedIn()) { Object.assign(auth, { me: null, meErr: null }); return; }
+  try { auth.me = await api("/api/me"); auth.meErr = null; } catch (e) { auth.me = null; auth.meErr = e.message || "Couldn't read your account."; }
 }
 
 // Which markets the Feed shows, in one line: "Your markets: Politics, Sports · Change".
@@ -929,46 +955,92 @@ function bindFeedMarkets() {
 }
 
 function renderFeed() {
-  if (feedView() === "big") return renderBig();
+  const view = feedView();
+  if (view === "big") return renderBig();
+  if (view === "follow") return renderFollowing();
   const r = feed.data;
-  if (!r) { $("#flist").innerHTML = errorState(feed.err || "No answer from the app."); bindActions($("#flist")); return; }
+  if (!r) { $("#fbar").innerHTML = ""; $("#flist").innerHTML = errorState(feed.err || "No answer from the app."); bindActions($("#flist")); return; }
   if (!r.traders.length) {
     $("#fbar").innerHTML = "";
-    $("#flist").innerHTML = emptyState("No traders to follow yet",
-      "The first check of Polymarket traders takes 20–30 minutes. The feed fills in once it finds traders worth following.",
+    $("#flist").innerHTML = emptyState("No traders to recommend yet",
+      "The first check of Polymarket traders takes 20–30 minutes. Recommended fills in once it finds traders worth following.",
       `<a class="btn ghost" href="#/traders">See the traders</a>`);
     return;
   }
-  const n = r.traders.length;
+  const min = `$${Math.round(r.min_usd ?? 1000).toLocaleString("en-US")}`; // "$1,000", as everywhere else
+  renderTrades(r, feed.at, feed.err, {
+    who: `${plural(r.traders.length, "trader")} we recommend`,
+    note: `<p class="foot-note" style="margin:0 0 12px">Only trades of ${min} or more from Worth copying, Rising and Worth watching traders.</p>
+      ${r.traders.some((t) => t.copy_ok) ? "" : pausedNote(`Their trades still show here. <a class="link" href="#/traders">Why?</a>`)}`,
+    none: [`No trades of ${min} or more in the last ${r.hours} hours`, "Recommended shows only bigger trades, so it's often quiet. Trades show up here a few minutes after they're made."],
+    sheet: () => followingSheet(r.traders, "rec"),
+    foot: `<p class="foot-note"><a class="link" href="#/big">All big trades right now</a></p>`,
+  });
+}
+
+// Following: the traders you follow, for alerts or research, whoever they are. Signed out, one short prompt.
+function renderFollowing() {
+  if (!canFollowFeed()) {
+    $("#fbar").innerHTML = "";
+    const meFailed = auth.on && signedIn() && !auth.me && auth.meErr;
+    const loading = auth.loading || (auth.on && signedIn() && !auth.me && !auth.meErr);
+    const rec = `<a class="btn ghost" href="#/recommended">See Recommended</a>`;
+    $("#flist").innerHTML = loading ? skelCards(3)
+      : meFailed ? `<div class="state err"><b>Couldn't load who you follow</b><p>${esc(auth.meErr)}</p><button class="btn ghost" id="meretry">Try again</button></div>`
+      : auth.on ? emptyState("See the trades of traders you follow", "Sign in, then follow traders from their page: their trades show up here, and alerts can go to Telegram.",
+        `<button class="btn" id="feedsignin">Sign in</button> ${rec}`)
+      : auth.failed ? emptyState("Signing in couldn't load just now", "Following needs signing in. Try again in a minute; Recommended shows trades from the traders we recommend.", rec)
+      : emptyState("Following needs signing in", "Signing in isn't switched on here. Recommended shows trades from the traders we recommend.", rec);
+    const b = $("#feedsignin"); if (b) b.onclick = () => window.Clerk.openSignIn();
+    const again = $("#meretry"); if (again) again.onclick = async () => { auth.meErr = null; renderFollowing(); await readMe(); loadFeed(); };
+    return;
+  }
+  const r = feed.mine;
+  if (!r) { $("#fbar").innerHTML = ""; $("#flist").innerHTML = feed.mineErr ? errorState(feed.mineErr) : skelCards(3); bindActions($("#flist")); return; }
+  if (!r.traders.length) {
+    $("#fbar").innerHTML = "";
+    $("#flist").innerHTML = emptyState("You don't follow anyone yet", "Follow a trader from their page to see their trades here.", `<a class="btn" href="#/traders">Find traders</a>`);
+    return;
+  }
+  renderTrades(r, feed.mineAt, feed.mineErr, {
+    who: `${plural(r.traders.length, "trader")} you follow`, note: "",
+    none: [`None of the traders you follow traded in the last ${r.hours} hours`, "New trades show up here a few minutes after they're made."],
+    sheet: () => followingSheet(r.traders, "follow"), foot: "",
+  });
+}
+
+// One list of trade cards (Following or Recommended): who, when it was updated, your markets, the switch, notes,
+// then one card per outcome ("Also bought by" for the rest) and the empty states.
+function renderTrades(r, at, err, { who, note, none, sheet: openSheet, foot }) {
   const cards = oneCardPerTrade(r.bets);
   const pool = cards.filter((b) => !feed.onlyIn || b.status === "in");
   const names = interestNames(interests || []);
   $("#fbar").innerHTML = `
     <div class="feedtop">
       <button class="follow" id="following">${`<span class="stack">${r.traders.slice(0, 5).map((t) => avatar(t.wallet, 28)).join("")}</span>`}
-        <b>${plural(n, "trader")} we follow</b><span class="chev">›</span></button>
-      ${fresh(feed.at)}
+        <b>${who}</b><span class="chev">›</span></button>
+      ${fresh(at)}
     </div>
     <div class="filters">
       ${marketLine()}
       <label class="switch"><input type="checkbox" id="onlyin" ${feed.onlyIn ? "checked" : ""}><span class="track"></span>Only trades I can still get into</label>
     </div>
-    ${feed.err ? `<p class="inline-err">Couldn't refresh: ${esc(feed.err)}. Showing the last update.</p>` : ""}
-    ${r.traders.some((t) => t.copy_ok) ? "" : pausedNote(`Their trades still show here. <a class="link" href="#/traders">Why?</a>`)}
+    ${err ? `<p class="inline-err">Couldn't refresh: ${esc(err)}. Showing the last update.</p>` : ""}
+    ${note}
     ${r.failed ? `<p class="foot-note" style="margin:0 0 12px">${plural(r.failed, "trader")} couldn't be read just now; retrying.</p>` : ""}`;
   $("#onlyin").onchange = (e) => { feed.onlyIn = e.target.checked; renderFeed(); };
-  $("#following").onclick = () => followingSheet(r.traders);
+  $("#following").onclick = openSheet;
   bindLag();
 
   shown = pool.filter((b) => inMarkets(b.category));
   const anyHere = cards.some((b) => inMarkets(b.category)); // before "Only trades I can still get into"
   let html;
-  if (!r.bets.length) html = emptyState(`None of your traders traded in the last ${r.hours} hours`, "New trades show up here within a few minutes of being made. Polymarket shows trades a few minutes late.");
+  if (!r.bets.length) html = emptyState(none[0], none[1]);
   else if (!shown.length && anyHere) html = emptyState("Nothing you can still get into",
-    `Every ${names ? esc(names) + " " : ""}trade from the last ${r.hours} hours has moved away or settled.`, `<button class="btn ghost" id="showall">Show all trades</button>`);
+    `Every ${names ? esc(names) + " " : ""}trade here from the last ${r.hours} hours has moved away or settled.`, `<button class="btn ghost" id="showall">Show all trades</button>`);
   else if (!shown.length) html = emptyState(`No ${esc(names)} trades`, `Nothing in ${esc(names)} in the last ${r.hours} hours.`, `<button class="btn ghost" id="feedall">Show all markets</button>`);
   else html = `<div class="cards">${shown.map((b, i) => tradeCard(b, i)).join("")}</div>`;
-  $("#flist").innerHTML = html;
+  $("#flist").innerHTML = html + foot;
   const all = $("#showall");
   if (all) all.onclick = () => { feed.onlyIn = false; renderFeed(); };
   bindFeedMarkets();
@@ -1014,12 +1086,14 @@ function bigCard(t) {
     ${t.trader ? "" : `<div class="trade-foot"><span class="muted" style="font-size:14px">Anonymous: ${VENUE[t.venue] || "the venue"} doesn't name this trader.</span></div>`}
   </article>`;
 }
-setInterval(() => { const u = $("#updated"), at = feedView() === "big" ? feed.bigAt : feed.at; if (u && at) u.innerHTML = updatedAgo(at); }, 5000);
+setInterval(() => { const u = $("#updated"), at = feed[FEED_KEYS[feedView()][1]]; if (u && at) u.innerHTML = updatedAgo(at); }, 5000);
 
 // Traders we follow often buy the same thing, minutes apart: one card per outcome they bought. It shows the
 // buy you can best still follow (you can still get in, then whoever bought first) and lists the others;
 // it sorts by the newest buy of the lot.
 const LEAD = { in: 0, moved: 1 };
+// Among buys you can still get into, one copying is offered for leads, so a neutral card never hides it.
+const leadOf = (b) => (LEAD[b.status] ?? 2) * 2 + (b.status === "in" && b.copy_ok === true ? 0 : 1);
 function oneCardPerTrade(bets) {
   const by = new Map();
   for (const b of bets) {
@@ -1028,15 +1102,16 @@ function oneCardPerTrade(bets) {
     by.get(k).push(b);
   }
   return [...by.values()].map((g) => {
-    g.sort((a, b) => (LEAD[a.status] ?? 2) - (LEAD[b.status] ?? 2) || a.at.localeCompare(b.at));
+    g.sort((a, b) => leadOf(a) - leadOf(b) || a.at.localeCompare(b.at));
     const latest = g.reduce((m, x) => (x.at > m ? x.at : m), g[0].at);
     return { ...g[0], also: g.slice(1).map((x) => ({ wallet: x.wallet, name: x.name })), latest };
   }).sort((a, b) => b.latest.localeCompare(a.latest));
 }
 
-function followingSheet(traders) {
-  const panel = sheet(`<h2>${plural(traders.length, "trader")} we follow</h2>
-    <p class="explain">The feed shows new trades from traders rated Proven sharp, Quiet sharp or Rising. <button class="link" id="howlink">How we pick traders</button></p>
+function followingSheet(traders, kind = "rec") {
+  const panel = sheet(`<h2>${plural(traders.length, "trader")} ${kind === "follow" ? "you follow" : "we recommend"}</h2>
+    <p class="explain">${kind === "follow" ? "Following shows every trade of theirs from the last day. Follow or unfollow from a trader's page."
+      : "Recommended shows trades of $1,000 or more from the traders in Worth copying, Rising and Worth watching."} <button class="link" id="howlink">How we pick traders</button></p>
     <div class="list" style="margin-top:16px">${traders.map((t) => `<a class="trow norank" href="#/worth/${esc(t.wallet)}">${avatar(t.wallet, 36)}
       <span class="tmain"><span class="name">${esc(displayName(t.name, t.wallet))}</span></span>${tier(t.segment)}</a>`).join("")}</div>`);
   $$("a", panel).forEach((a) => a.addEventListener("click", closeSheet));
@@ -1686,7 +1761,7 @@ async function checkPage(wallet, market) {
 const DELAY_LINE = "Polymarket's public data runs 3–5 minutes behind, so trades show up here a few minutes after they're made.";
 
 // ---- routing ----
-// #/ feed · #/big the feed's Big trades · #/traders[/top] · #/worth/<wallet> · #/t/<venue>/<id> ·
+// #/ the Feed's Following · #/recommended its Recommended · #/big Big trades · #/traders[/top] · #/worth/<wallet> · #/t/<venue>/<id> ·
 // #/check/<wallet>/<market> (an alert's "Check your price").
 // Old links still work: Big trades used to be #/traders/big; My trades (#/mine, #/copied) went with the sandbox.
 const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/", "#/mine": "#/", "#/traders/big": "#/big" };
@@ -1694,6 +1769,7 @@ function routeName() {
   const h = location.hash || "#/";
   if (h === "#/" || h === "#") return "feed";
   if (h === "#/big") return "feed:big";
+  if (h === "#/recommended") return "feed:rec";
   if (h === "#/traders") return "traders:worth";
   if (h === "#/traders/top") return "traders:top";
   return h;
