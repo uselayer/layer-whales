@@ -84,11 +84,12 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
     `client.whales.discover()` / `score()` in the SDK.
   - **A trader's profile** (from the leaderboard or a wallet search): their market and last trade, a link to their
-    Polymarket profile, and whether they're copyable. A stat strip (profit and per $ traded for the
+    Polymarket profile, their tier, and their copy status under Follow (Copyable, Copy not proven or Not
+    recommended, with "Why?"). A stat strip (profit and per $ traded for the
     period, 12-week consistency, win record and usual trade over the last 30 days, wallet; a note says the period
     switch changes only profit), a profit chart for 7D / 30D / 90D with the stretches
-    below their previous high shaded, and **Why they're here** in three plain lines (consistent, how they trade,
-    can you copy them) plus the SDK's own warnings. Tabs: **Positions** (open, with "You can still get in", and
+    below their previous high shaded, and **Why they're here**: why they're on the list, their copy status and its reason, the SDK's
+    own warnings as a callout, then a short table (markets, buys at, new markets, holds, last bought). Tabs: **Positions** (open, with "You can still get in", and
     closed), **Activity** (their recent buys and sells) and **Stats** (consistency, risk, style, execution), with
     the evidence (each check, how the price moved after their buys, by category, the trades checked) under **How
     we measure this**. The wallet is their cash (read on-chain) plus open positions; anything that can't be read shows "—", never $0.

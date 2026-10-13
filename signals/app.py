@@ -402,22 +402,28 @@ def section_of(segment: str | None, copy_ok: bool) -> str | None:
     return "rising" if segment == "rising" else "watch"
 
 
+# A trader's copy status, in the same words everywhere (Traders, a trader's page, the Feed, the copy routes):
+# Copyable; Copy not proven (a tier we recommend whose copies aren't reliably above zero); or Not recommended.
+LABEL_COPYABLE, LABEL_NOT_PROVEN, LABEL_NOT_RECOMMENDED = "Copyable", "Copy not proven", "Not recommended"
+
+
 def copy_offer(s: dict[str, Any]) -> tuple[bool, str | None]:
-    """Whether Signals offers copying this trader, and if not, why, in a plain sentence. One rule for Traders, a
-    trader's page, the Feed and the copy routes: a recommended tier (Proven sharp, Quiet sharp, Rising), and
-    copies a few minutes late reliably above zero after fees (the SDK's ``copyable``: the bottom of the 95%
-    range above zero). Never Sharp but too fast, Lucky, No clear edge, market makers or traders away."""
+    """Whether Signals offers copying this trader, and if not, why: one plain sentence that starts with their
+    status ("Copy not proven: …"). One rule for Traders, a trader's page, the Feed and the copy routes: a
+    recommended tier (Proven sharp, Quiet sharp, Rising), and copies a few minutes late reliably above zero
+    after fees (the SDK's ``copyable``: the bottom of the 95% range above zero). Never Sharp but too fast,
+    Lucky, No clear edge, market makers or traders away."""
     seg = s.get("segment")
     if seg == "too_fast":
-        return False, "No proven copy advantage: what copies kept after fees isn't reliably above zero, so copying isn't offered."
+        return False, f"{LABEL_NOT_PROVEN}: the price moves before a copy gets in, so what copies kept after fees isn't reliably above zero."
     if seg == "inactive":
-        return False, "They haven't traded in the last 7 days, so copying isn't offered while they're away."
+        return False, f"{LABEL_NOT_RECOMMENDED}: they haven't traded in the last 7 days."
     if seg not in COPY_TIERS:
-        return False, "Not a trader we recommend, so copying isn't offered."
+        return False, f"{LABEL_NOT_RECOMMENDED}: only the traders we recommend can be copyable."
     if s.get("copyable") == "unknown":
-        return False, "Too few of their trades had prices after the buy to tell whether copies gain, so copying isn't offered yet."
+        return False, f"{LABEL_NOT_PROVEN}: too few of their trades had prices after the buy to tell whether copies gain."
     if s.get("copyable") != "yes":
-        return False, "What copies a few minutes late kept after fees isn't reliably above zero, so copying isn't offered."
+        return False, f"{LABEL_NOT_PROVEN}: what copies a few minutes late kept after fees isn't reliably above zero."
     return True, None
 
 
@@ -541,8 +547,8 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
         listed += " " + "; ".join(record)[0].upper() + "; ".join(record)[1:] + "."
 
     ok, why = s.get("copy_ok"), s.get("copy_why")
-    copying = ("Offered, because copies a few minutes late were reliably above zero after fees in the trades we checked; a reading of the past, not a promise."
-               if ok else why or "Not offered.")  # fmt: skip
+    copying = (f"{LABEL_COPYABLE}: copies a few minutes late were reliably above zero after fees in the trades we checked; a reading of the past, not a promise."
+               if ok else why or f"{LABEL_NOT_RECOMMENDED}.")  # fmt: skip
     return {"trades": trades, "how": how_line[:1].upper() + how_line[1:] + "." if how_line else None,
             "listed": listed, "copying": copying}  # fmt: skip
 

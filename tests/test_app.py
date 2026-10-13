@@ -338,7 +338,7 @@ def test_copying_is_offered_only_for_recommended_tiers_with_copies_reliably_abov
         assert not ok and why
     assert "reliably above zero" in (offer("too_fast", "no")[1] or "")
     assert not offer("rising", "no")[0] and "reliably above zero" in (offer("rising", "no")[1] or "")
-    assert not offer("rising", "unknown")[0] and "Too few" in (offer("rising", "unknown")[1] or "")
+    assert not offer("rising", "unknown")[0] and "too few" in (offer("rising", "unknown")[1] or "")
     assert not engine.copy_offer(SCORE)[0]  # no copyable verdict at all: not offered
 
 
@@ -348,7 +348,7 @@ def test_the_preview_refuses_a_trader_the_page_doesnt_offer_copying_for(
     monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [
         COPYABLE, _scored("too_fast", "no", "0xfast"), _scored("no_edge", "yes", "0xmeh")]})  # fmt: skip
     monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: pytest.fail("previewed"))
-    for wallet, words in (("0xfast", "No proven copy advantage"), ("0xmeh", "Not a trader we recommend")):
+    for wallet, words in (("0xfast", "Copy not proven: "), ("0xmeh", "Not recommended: ")):
         r = api.post("/api/trade/preview", json={"wallet": wallet, "market": "0xcid:1", "price": 0.5})
         assert r.status_code == 400 and words in r.json()["detail"]
 
@@ -362,7 +362,7 @@ def test_the_preview_refuses_a_trader_the_page_doesnt_offer_copying_for(
     # A wallet nobody has scored yet is scored first, then judged by the same rule.
     monkeypatch.setattr(engine.reads.whales, "score", Lucky)
     r = api.post("/api/trade/preview", json={"wallet": "0xnew", "market": "0xcid:1", "price": 0.5})
-    assert r.status_code == 400 and "Not a trader we recommend" in r.json()["detail"]
+    assert r.status_code == 400 and "Not recommended: " in r.json()["detail"]
 
 
 def test_traders_and_the_feed_carry_the_same_copy_verdict(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -475,8 +475,8 @@ def test_the_traders_list_carries_each_traders_section(api: TestClient, monkeypa
 def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offered_for(api: TestClient) -> None:
     page = api.get("/").text
     for words in ("Worth copying", "Worth watching", "No trader's copies have been reliably profitable after fees lately.",
-                  "Skilled traders worth keeping an eye on. Copying isn't offered: the price moves before you'd get in.",
-                  "Not offered", "they paid", "Buy on Polymarket ↗", "weeks up",
+                  "Skilled traders worth keeping an eye on. Copy not proven: the price moves before you'd get in.",
+                  '"Copy not proven"', '"Not recommended"', "they paid", "Buy on Polymarket ↗", "weeks up",
                   "A week counts profit taken plus the change in value of trades still open.",
                   "at least half a cent above the middle price",
                   "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip
