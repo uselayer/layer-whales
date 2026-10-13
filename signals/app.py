@@ -35,6 +35,17 @@ HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
 _OLD_STORE_DIR = Path.home() / ".uselayer" / "whales-demo"  # before the rename to Signals: main() moves it once
 HOSTED = os.environ.get("SIGNALS_HOSTED") == "1"
+# The venues Signals reads. The SDK covers Kalshi and Polymarket; Signals is Polymarket-only for now, and adds
+# Kalshi back with SIGNALS_VENUES=polymarket,kalshi. Every read passes this to the SDK, so a venue that's off
+# is never called at all (not read and then hidden). Polymarket is always on: the Feed and Traders are built on it.
+VENUES: tuple[str, ...] = ("polymarket", *(("kalshi",) if "kalshi" in os.environ.get("SIGNALS_VENUES", "").split(",") else ()))
+VENUE_NAMES = {"polymarket": "Polymarket", "kalshi": "Kalshi"}
+
+
+def venue_on(venue: str) -> None:
+    """Refuse (404, a plain sentence) a venue Signals doesn't read right now."""
+    if venue not in VENUES:
+        raise HTTPException(404, detail=f"Signals covers {' and '.join(VENUE_NAMES[v] for v in VENUES)} only right now.")
 
 
 @asynccontextmanager
@@ -72,8 +83,18 @@ def venue_error(e: VenueError) -> HTTPException:
 # ---- reads ----
 
 
+@app.get("/api/config")
+def config() -> dict[str, Any]:
+    """What the page needs to know before it draws: which venues Signals reads (see VENUES)."""
+    return {"venues": list(VENUES)}
+
+
 @app.get("/api/top")
 def top(venue: str = "all", by: str = "pnl", limit: int = 25) -> list[dict[str, Any]]:
+    if venue == "all" and len(VENUES) == 1:
+        venue = VENUES[0]  # "all" is only the venues Signals reads: the SDK's "all" would read Kalshi too
+    elif venue != "all":
+        venue_on(venue)
     try:
         rows = cached(
             f"top:{venue}:{by}:{limit}", 120, lambda: reads.whales.top(venue, by=by, limit=limit)  # type: ignore[arg-type]
@@ -85,18 +106,27 @@ def top(venue: str = "all", by: str = "pnl", limit: int = 25) -> list[dict[str, 
 
 @app.get("/api/trading-now")
 def trading_now(min_usd: float = 250) -> list[dict[str, Any]]:
-    """Recent large trades, newest first. Named Kalshi traders here usually show their trades."""
+    """Recent large trades on the venues Signals reads, newest first (the Feed's Big trades). Named Kalshi
+    traders here usually show their trades. A Polymarket trade carries its market's category, so the page can
+    filter by your markets; the SDK has no categories for Kalshi markets, so theirs is None."""
     try:
-        rows = cached(f"now:{min_usd}", 20, lambda: reads.whales.big_trades(min_usd, kalshi_pages=5))
+        rows = cached(f"now:{min_usd}", 20, lambda: reads.whales.big_trades(min_usd, venues=VENUES, kalshi_pages=5))  # type: ignore[arg-type]
     except VenueError as e:
         raise venue_error(e) from e
-    return [t.to_dict() for t in rows[:100]]
+    out = [t.to_dict() for t in rows[:100]]
+    poly = [t["market"] for t in out if t["venue"] == "polymarket"]
+    try:
+        cats = _categories(poly) if poly else {}
+    except VenueError:
+        cats = {}  # the trades still show, under All
+    return [t | {"category": cats.get(t["market"]) if t["venue"] == "polymarket" else None} for t in out]
 
 
 @app.get("/api/trader/{venue}/{trader_id}")
 def trader(venue: str, trader_id: str) -> dict[str, Any]:
+    venue_on(venue)
     try:
-        d = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40))  # type: ignore[arg-type]
+        d = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40, closed=50))  # type: ignore[arg-type]
     except VenueError as e:
         raise venue_error(e) from e
     out = d.to_dict()
@@ -133,9 +163,13 @@ def position_links(wallet: str) -> dict[str, str | None]:
 
 @app.get("/api/links/{venue}/{trader_id}")
 def links(venue: str, trader_id: str) -> dict[str, Any]:
-    """Accounts on the other venue that may be the same person. Takes 5–30 s: it reads both venues."""
+    """Accounts on the other venue that may be the same person. Takes 5–30 s: it reads both venues, so it's
+    off (404) unless Signals reads both."""
+    venue_on(venue)
+    if len(VENUES) < 2:
+        raise HTTPException(404, detail="Signals covers one venue right now, so there's no other venue to check.")
     try:
-        t = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40))  # type: ignore[arg-type]
+        t = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40, closed=50))  # type: ignore[arg-type]
         found = cached(f"links:{venue}:{trader_id}", 600, lambda: reads.whales.links(t.trader))
     except VenueError as e:
         raise venue_error(e) from e
@@ -150,7 +184,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
-WORTH_FORMAT = 4  # bump when the kept result gains fields; an older one is re-checked on launch (4: uselayer 0.6.0 scores)
+WORTH_FORMAT = 5  # bump when the kept result gains fields; an older one is re-checked on launch (5: uselayer 0.7.0 scores)
 WORTH_MIN_AGE_HOSTED_S = 3600  # hosted: "Check again" only starts a new check once the last is this old
 WORTH_ONE_KEEP = 500  # wallets scored on demand, kept until the next check
 _worth_stop = threading.Event()
@@ -397,7 +431,7 @@ def live() -> dict[str, Any]:
     for s in follow:
         try:
             d = cached(
-                f"live:{s['wallet']}", 25, lambda w=s["wallet"]: reads.whales.trader("polymarket", w, trades=100)
+                f"live:{s['wallet']}", 25, lambda w=s["wallet"]: reads.whales.trader("polymarket", w, trades=100, closed=0)
             )
         except VenueError:
             failed += 1
@@ -449,10 +483,12 @@ class CopyRules(BaseModel):
 
 
 class CopyTrader(BaseModel):
+    """Copy all of a trader's next trades, in every market. There is no "only some categories": a rule saved
+    with ``categories`` before keeps working as saved (see ``_make_copier``), but no new one gets them."""
+
     venue: str
     id: str
     name: str | None = None
-    categories: list[str] = []
 
 
 def _key(venue: str, id: str) -> str:
@@ -525,7 +561,8 @@ class Sandbox:
         with _lock:
             self.copiers.clear()
             for t in rules["traders"]:
-                self.copiers[_key(t["venue"], t["id"])] = self._make_copier(rules, t)
+                if t["venue"] in VENUES:  # a venue that's off: the rule stays saved, but nothing reads it
+                    self.copiers[_key(t["venue"], t["id"])] = self._make_copier(rules, t)
         if self.copiers:
             _start_loop()
 
@@ -682,6 +719,8 @@ def copy_state(box: Sandbox = Depends(me)) -> dict[str, Any]:
         st = box.status.get(_key(t["venue"], t["id"]), {})
         t["checked_s_ago"] = None if st.get("checked_at") is None else round(now - st["checked_at"], 1)
         t["error"] = st.get("error")
+        if t["venue"] not in VENUES:
+            t["error"] = f"Paused: Signals covers {VENUE_NAMES['polymarket']} only right now, so {VENUE_NAMES.get(t['venue'], t['venue'])} traders aren't copied."
     return {"rules": rules, "recent": list(reversed(box.recent[-50:]))}
 
 
@@ -694,6 +733,8 @@ def set_rules(req: CopyRules, box: Sandbox = Depends(me)) -> dict[str, Any]:
 
 @app.post("/api/copy/traders")
 def add_trader(req: CopyTrader, box: Sandbox = Depends(me)) -> dict[str, Any]:
+    if req.venue not in VENUES:
+        raise HTTPException(400, detail=f"Signals covers {' and '.join(VENUE_NAMES[v] for v in VENUES)} traders only right now.")
     rules = box.load_rules()
     others = [t for t in rules["traders"] if _key(t["venue"], t["id"]) != _key(req.venue, req.id)]
     if HOSTED and len(others) >= MAX_TRADERS:

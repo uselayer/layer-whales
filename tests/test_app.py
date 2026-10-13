@@ -39,7 +39,13 @@ def local() -> engine.Sandbox:
     return engine.sandbox(engine.LOCAL)
 
 
-def test_pages_and_reads(api: TestClient) -> None:
+def with_kalshi(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SIGNALS_VENUES=polymarket,kalshi: Signals reads Kalshi too (off by default)."""
+    monkeypatch.setattr(engine, "VENUES", ("polymarket", "kalshi"))
+
+
+def test_pages_and_reads(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_kalshi(monkeypatch)
     assert "Signals" in api.get("/").text
     assert 'href="/static/icon.svg"' in api.get("/").text  # the in-app logo as the browser icon
     for path in ("/static/icon.svg", "/favicon.ico"):
@@ -55,6 +61,7 @@ def test_pages_and_reads(api: TestClient) -> None:
 def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    with_kalshi(monkeypatch)
     monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
     monkeypatch.setattr(engine, "_copy_loop", lambda: None)
     r = api.put("/api/copy/rules", json={"size": 3, "max_above": 0.02}).json()
@@ -63,10 +70,15 @@ def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
     r = api.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"}).json()
     assert [t["id"] for t in r["rules"]["traders"]] == ["0xabc", "amy"]
     cp = local().copiers["polymarket:0xabc"]  # copied where they bet: Polymarket
-    assert (cp.size, cp.venue, cp.max_slippage, cp.categories, cp.copy_sells) == (3, "polymarket", 0.02, ("Sports",), False)
+    assert (cp.size, cp.venue, cp.max_slippage, cp.copy_sells) == (3, "polymarket", 0.02, False)
+    assert cp.categories == () and "categories" not in r["rules"]["traders"][0]  # always everything: no picking
     assert local().copiers["kalshi:amy"].venue == "kalshi"
     assert local().load_rules()["size"] == 3  # saved to disk
     assert [t["id"] for t in api.delete("/api/copy/traders/kalshi/amy").json()["rules"]["traders"]] == ["0xabc"]
+    # a rule saved with categories, from before copying was always everything, keeps working as saved
+    local().save_rules(local().load_rules() | {"traders": [{"venue": "polymarket", "id": "0xabc", "categories": ["Sports"]}]})
+    local().apply_rules()
+    assert local().copiers["polymarket:0xabc"].categories == ("Sports",)
 
     event = {"at": "2026-10-07T00:00:00+00:00", "status": "copied", "order_id": "o1", "venue": "kalshi",
              "market": "KX-A", "side": "yes", "source": {"title": "A game"}}  # fmt: skip
@@ -139,6 +151,24 @@ def test_worth_adds_the_leaderboard_columns_from_what_the_check_kept(
     assert (s["typical_usd"], s["last_buy"]) == (99.0, "2026-10-07T00:00:00+00:00")
 
 
+def test_trader_pages_ask_for_closed_positions_and_the_feed_does_not(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[dict[str, Any]] = []
+
+    def trader(*a: Any, **k: Any) -> TraderDetail:
+        asked.append(k)
+        return TraderDetail(AMY, "visible", {"pnl": 1000.0}, [], [TRADE])
+
+    monkeypatch.setattr(engine.reads.whales, "trader", trader)
+    api.get("/api/trader/polymarket/0xabc")
+    assert asked[-1]["closed"] == 50  # the profile's Closed positions (uselayer 0.7)
+    monkeypatch.setattr(engine, "_worth_data", {"scores": [SCORE | {"segment": "proven", "label": "Proven sharps"}]})
+    monkeypatch.setattr(engine, "_categories", lambda markets: {})
+    api.get("/api/live")
+    assert asked[-1]["closed"] == 0  # the feed polls every 25 s: no closed-positions read
+
+
 def test_sample_profit_history_is_local_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engine, "_worth_data", {"finished": "2026-10-07T00:00:00+00:00", "scores": [SCORE | {"pnl_window": 500.0}]})
     monkeypatch.setenv("SIGNALS_MOCK", "1")
@@ -199,6 +229,59 @@ def test_live_bets_carry_status_and_category(api: TestClient, monkeypatch: pytes
     assert open_[1]["status"] == "lost"
     assert [p["url"] for p in open_] == ["https://polymarket.com/event/ita-isr/will-italy-win", None]
     assert api.get("/static/fonts/HostGrotesk-latin-var.woff2").status_code == 200
+
+
+def test_big_trades_carry_their_market_category(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The Feed's Big trades filter by your markets, like the rest of the Feed.
+    poly = WhaleTrade("polymarket", "0xabc", None, "c1:0", "yes", "buy", 0.4, 1000, 400.0, datetime(2026, 10, 7, tzinfo=UTC), "p1")
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [poly, TRADE])
+
+    class Book:
+        def get(self, ids: Any) -> dict[str, Any]:
+            return {c: {"tags": [{"label": "Sports"}]} for c in ids}
+
+    class Scorer:
+        markets = Book()
+
+    monkeypatch.setattr(engine.reads.whales, "scorer", lambda *a, **k: Scorer())
+    with_kalshi(monkeypatch)
+    rows = api.get("/api/trading-now").json()
+    assert [(t["venue"], t["category"]) for t in rows] == [("polymarket", "Sports"), ("kalshi", None)]
+
+
+def test_signals_reads_polymarket_only_unless_kalshi_is_switched_on(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The SDK covers both venues; Signals asks it for Polymarket only (SIGNALS_VENUES), never reads and hides.
+    asked: list[Any] = []
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: asked.append(("big", k.get("venues"))) or [])
+    monkeypatch.setattr(engine.reads.whales, "top", lambda venue, **k: asked.append(("top", venue)) or [])
+    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: asked.append(("trader", a[0])) or None)
+    monkeypatch.setattr(engine.reads.whales, "links", lambda *a, **k: asked.append(("links",)) or [])
+    assert engine.VENUES == ("polymarket",)  # the default
+    assert api.get("/api/config").json() == {"venues": ["polymarket"]}
+    api.get("/api/trading-now")
+    api.get("/api/top")  # "all" means the venues Signals reads
+    assert api.get("/api/top?venue=kalshi").status_code == 404
+    assert api.get("/api/trader/kalshi/amy").status_code == 404
+    assert api.get("/api/links/polymarket/0xabc").status_code == 404  # there's no other venue to check
+    assert asked == [("big", ("polymarket",)), ("top", "polymarket")]  # Kalshi was never asked for
+    r = api.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"})
+    assert r.status_code == 400 and "Polymarket" in r.json()["detail"]
+
+    # A Kalshi copy rule saved before stays saved but doesn't run, and My trades says why.
+    monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
+    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
+    local().save_rules({"size": 5, "max_above": 0.03, "traders": [{"venue": "kalshi", "id": "amy"}]})
+    local().apply_rules()
+    assert local().copiers == {}
+    rule = api.get("/api/copy").json()["rules"]["traders"][0]
+    assert rule["id"] == "amy" and rule["error"].startswith("Paused")
+    with_kalshi(monkeypatch)  # SIGNALS_VENUES=polymarket,kalshi: it runs again, nothing to bring back
+    local().apply_rules()
+    assert list(local().copiers) == ["kalshi:amy"]
+    assert api.get("/api/config").json() == {"venues": ["polymarket", "kalshi"]}
+    api.post("/api/paper/reset")
 
 
 def test_the_feed_follows_recommended_traders_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -367,6 +450,7 @@ def test_my_trades_groups_repeat_copies_and_compares_with_theirs() -> None:
 
 
 def test_hosted_each_browser_gets_its_own_sandbox(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_kalshi(monkeypatch)
     monkeypatch.setattr(engine, "HOSTED", True)
     monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
     monkeypatch.setattr(engine, "_copy_loop", lambda: None)

@@ -1,11 +1,16 @@
 # This repo
 
-Signals, on the uselayer SDK: top traders on Kalshi and Polymarket, a page per trader, cross-venue links and
-sandbox copy trading. It runs on the user's machine (`uv run signals`) and is hosted at usesignals.app: the same
+Signals, on the uselayer SDK: top traders on Polymarket (Kalshi too when switched on, see below), a page per
+trader, cross-venue links (with Kalshi on) and sandbox copy trading. It runs on the user's machine (`uv run signals`) and is hosted at usesignals.app: the same
 engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting").
 
 - All venue reads, links and copies go through `client.whales` in the SDK. Don't add venue calls or matching
   logic here; put it in the SDK.
+- Signals is Polymarket-only for now; the SDK stays multi-venue. `SIGNALS_VENUES` (`VENUES` in `app.py`, default
+  `polymarket`; `polymarket,kalshi` adds Kalshi back) is the one switch: every read passes it to the SDK
+  (`big_trades(venues=…)`, `top(venue=…)`), and a venue that's off is refused, never read and then hidden. The
+  page gets it from `/api/config` and hides Kalshi's views (Top profit's venue choice, Kalshi trader pages,
+  "Same person on the other venue?") while it's off.
 - Keys come from the environment (hosted: Railway's service variables), are never logged, returned by the
   engine or written to disk.
 - Paper mode only, hosted or not. Never run live mode or place a real-money order.
