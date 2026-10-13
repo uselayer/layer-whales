@@ -310,6 +310,8 @@ def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeyp
     seen: list[Any] = []
 
     class Preview:
+        ok, price = True, 0.53
+
         def to_dict(self) -> dict[str, Any]:
             return {"ok": True, "price": 0.53, "total": 2.71, "payout": 5.0, "profit_if_win": 2.29}
 
@@ -340,6 +342,56 @@ def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeyp
     assert out["order_id"] == "pm-1" and out["trader"]["name"] == "ThorinCSGO"
     assert json.loads(local().copied_file().read_text().splitlines()[-1])["order_id"] == "pm-1"  # in My trades
     api.post("/api/paper/reset")
+
+
+def test_copying_one_trade_refuses_prices_you_cant_still_get_in_at(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The SDK only refuses a price more than 3¢ above theirs. The engine also refuses a settled market (2¢ or
+    # less, 98¢ or more) and one more than 5¢ below what they paid, by the Feed's own rule (bet_status).
+    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
+    now = {"price": 0.5}
+    copies: list[Any] = []
+
+    class Preview:
+        ok = True
+
+        @property
+        def price(self) -> float:
+            return now["price"]
+
+        def to_dict(self) -> dict[str, Any]:
+            return {"ok": True, "price": now["price"]}
+
+    class Event:
+        status = "copied"
+
+        def to_dict(self) -> dict[str, Any]:
+            return {"status": "copied", "order_id": "pm-2", "venue": "polymarket", "market": "0xcid:1",
+                    "side": "yes", "at": "2026-10-12T00:00:00+00:00", "source": {}}  # fmt: skip
+
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: Preview())
+    monkeypatch.setattr(Whales, "copy_trade", lambda self, trade, **kw: copies.append(trade) or Event())
+    body = {"wallet": "0xabc", "market": "0xcid:1", "price": 0.60}
+    for price, words in ((0.985, "98¢ or more"), (0.02, "2¢ or less"), (0.54, "6¢ below"), (0.64, "4¢ above")):
+        now["price"] = price
+        for path in ("/api/trade/preview", "/api/trade/copy"):
+            r = api.post(path, json=body)
+            assert r.status_code == 400 and words in r.json()["detail"], (price, path, r.text)
+    assert copies == []  # nothing was bought
+    assert engine.why_not_copy(0.97, 0.99) is not None  # their price was fine, the market's isn't any more
+    now["price"] = 0.56  # 4¢ below: you can still get in
+    assert api.post("/api/trade/preview", json=body).json()["price"] == 0.56
+    assert api.post("/api/trade/copy", json=body).json()["order_id"] == "pm-2" and len(copies) == 1
+    api.post("/api/paper/reset")
+
+
+def test_why_not_copy_is_bet_status() -> None:
+    # One rule: whatever the Feed calls "You can still get in", the engine copies, and nothing else.
+    for paid in (0.05, 0.3, 0.6, 0.95):
+        for now in [x / 200 for x in range(0, 201)]:
+            assert (engine.why_not_copy(paid, now) is None) == (engine.bet_status(paid, now) == "in"), (paid, now)
+    assert engine.why_not_copy(0.5, None) is not None
 
 
 def test_my_trades_has_a_copy_right_after_it_is_made(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
