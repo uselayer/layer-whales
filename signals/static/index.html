@@ -503,8 +503,13 @@ async function startAuth(key, alerts) {
 function drawAccount() {
   const el = $("#account");
   if (!el || !auth.on) return;
-  if (signedIn()) { if (!el.dataset.user) { el.innerHTML = ""; el.dataset.user = "1"; window.Clerk.mountUserButton(el); } return; }
-  if (el.dataset.user) { window.Clerk.unmountUserButton(el); delete el.dataset.user; }
+  // Clerk takes over the element it mounts in (its class too), so it gets a child: #account keeps its
+  // class, and with it its place at the header's right edge.
+  if (signedIn()) {
+    if (!el.dataset.user) { el.innerHTML = `<div id="userbtn"></div>`; el.dataset.user = "1"; window.Clerk.mountUserButton($("#userbtn")); }
+    return;
+  }
+  if (el.dataset.user) { window.Clerk.unmountUserButton($("#userbtn")); delete el.dataset.user; }
   el.innerHTML = `<button class="btn ghost small" id="signin">Sign in</button>`;
   $("#signin").onclick = () => window.Clerk.openSignIn();
 }
