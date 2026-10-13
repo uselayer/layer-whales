@@ -14,21 +14,19 @@ behind Vercel (see README, "Hosting").
   "Same person on the other venue?") while it's off.
 - Keys come from the environment (hosted: Railway's service variables), are never logged, returned by the
   engine or written to disk.
-- No sandbox: Signals never simulates copies. Copying a trade is a real order that the user signs in their own
-  wallet; the app never signs an order, never holds keys or funds, and never places an order on its own (no
-  automatic copying). Until in-app signing is built, the cost preview links out to Polymarket to buy. A session
-  never places a real-money order itself, not even a test one.
-- Hosted, browsing needs no account. Signing up (wallet sign-in) is asked for only to follow a trader and get
-  alerts, and the button says so ("Follow · get an alert when they buy"). Alerts only while you can still get
-  in. Never let one account see or change another's follows or trades, and never let a response that sets a
-  session cookie be cached.
+- Signals is a consumer website (usesignals.app); running it locally is for development. It places no orders:
+  no sandbox, no in-app trading, no automatic copying, and it never holds anyone's keys or funds. Copying a
+  trade means the cost preview, then "Buy on Polymarket ↗", where the user buys it themselves. A session never
+  places a real-money order, not even a test one.
+- Browsing needs no account. Signing up is asked for only to follow a trader and get alerts, and the button
+  says so ("Follow · get an alert when they buy"). Alerts only while you can still get in. Never let one
+  account see or change another's follows, and never let a response that sets a session cookie be cached.
 - Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.
 - Never say a link *is* someone: show the tier ("likely" / "possible") and the evidence.
 - The page is a consumer app, not an analyst's spreadsheet. It helps people find traders worth following and
   understand why: who they are, how they trade, and what the evidence does and doesn't show. Before anyone
   copies a trade, show what it would really cost them: the price now against theirs, what their amount fills
-  at, the fee. Nothing on the page may imply that copying makes money. Two tabs (Feed, Traders); My trades
-  comes back with real, signed trades.
+  at, the fee. Nothing on the page may imply that copying makes money. Two tabs (Feed, Traders).
   - Onboarding (first visit, once per browser) asks one question: which markets interest you (Politics, Sports,
     Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
     localStorage, every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
