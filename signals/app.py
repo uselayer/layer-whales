@@ -729,12 +729,15 @@ def trade_preview(req: OneTrade) -> dict[str, Any]:
 
 
 def _best_price(req: OneTrade, p: Any) -> float | None:
-    """The cheapest price for sale now, to name the slippage (your average fill against it). The SDK's preview
-    doesn't return it when the amount fills, so: when every contract filled at one level, the average is the
-    best price; when the walk went deeper, a one-contract preview's price is the best ask (the SDK returns it
-    even when one contract is under the market's smallest order). None when the order book couldn't be read."""
+    """The cheapest price for sale now, to name the slippage (your average fill against it). A uselayer release
+    whose CopyPreview has ``best_price`` (the best ask, before the fee) gives it; uselayer 0.8.1's doesn't, so then:
+    when every contract filled at one level, the average is the best price; when the walk went deeper, a
+    one-contract preview's price is the best ask (the SDK returns it even when one contract is under the market's
+    smallest order). None when the order book couldn't be read."""
     if not p.ok or not getattr(p, "depth_checked", False) or p.price is None:
         return None
+    if getattr(p, "best_price", None) is not None:  # the SDK says it: no second read
+        return float(p.best_price)
     if getattr(p, "worst_price", None) is None or p.worst_price <= p.price + 1e-9:
         return float(p.price)
     try:

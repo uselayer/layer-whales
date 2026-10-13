@@ -180,3 +180,26 @@ def test_lately_tops_up_from_the_checks_buys_to_three(run_js: Any) -> None:
     line = run_js(deps, f"latelyLine({json.dumps(s)}, {json.dumps(d)})")
     assert "Yes on One at 50¢; No on Two at 30¢; Yes on Three at 70¢." in line  # m1 once, from the fresh read
     assert run_js(deps, "latelyLine({recent: []}, {trades: []})") == "No recent buys."
+
+
+def test_the_sdks_best_price_is_used_when_it_has_one(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A newer uselayer's CopyPreview carries best_price (the best ask, before the fee): no one-contract read then.
+    from dataclasses import dataclass, fields
+
+    @dataclass(frozen=True)
+    class NewerPreview(CopyPreview):
+        best_price: float | None = None
+
+    deep = _preview(price=0.534, worst_price=0.55)
+    newer = NewerPreview(**{f.name: getattr(deep, f.name) for f in fields(deep)}, best_price=0.52)
+    asked: list[dict[str, Any]] = []
+
+    def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
+        asked.append(kw)
+        return newer
+
+    monkeypatch.setattr(Whales, "preview_copy", preview)
+    body = {"wallet": "0xabc", "market": "0xcid:1", "price": 0.52, "spend": 50}
+    assert api.post("/api/trade/preview", json=body).json()["best_price"] == 0.52
+    assert len(asked) == 1  # the SDK said it: no one-contract read
+    assert not hasattr(_preview(), "best_price")  # uselayer 0.8.1 has none: the one-contract fallback (above) stays
