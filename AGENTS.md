@@ -21,9 +21,15 @@ engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting")
     Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
     localStorage, every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
     ever stuck on that screen.
-  - Worth following has two groups, in this order: "Worth exploring" (Proven sharp, Quiet sharp, Rising) and "Too
-    fast to copy". Recommendations never include Lucky, No clear edge or No view traders, and the checks are never
-    loosened to fill a group: an empty group says so and names the interests that had no one.
+  - Traders is one leaderboard of the traders we recommend (Proven sharp, Quiet sharp, Rising, Too fast to copy).
+    One bar: filters on the left (market chips = the onboarding choice, Copyable only), how you view the list on
+    the right (search name or wallet, period, sort). Columns are grouped as Track record, Style and Copying.
+    Recommendations never include Lucky, No clear edge or No view traders, and the checks are never loosened to
+    fill the list: an empty result says so and names the interests that had no one. "See all checked traders" may
+    show the rest, each marked.
+  - Never a made-up number for a real trader on the hosted app. A figure the data doesn't have yet shows "—";
+    sample values (`SIGNALS_MOCK=1`) are for reviewing the page locally only. "Copyable" is plain text: green
+    stays for "you can still get in". The SDK's per-dollar figure is a return per dollar traded, never "ROI".
   - Words: say "trade", never "bet"; say "sandbox", never "paper money" or "paper" (real prices and fees, no real
     money). The copy button says "Copy trader" / "Copying trader ✓": copying copies a trader's next trades.
     Copying a trade they already placed is not built, so no label may imply it.
