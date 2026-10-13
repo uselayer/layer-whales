@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import time
+import urllib.parse
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -250,7 +251,9 @@ def test_big_trades_alert_people_who_saved_markets_there_whoever_the_trader(
     lines = text.splitlines()
     assert lines[0] == "<b>Big trade in Politics:</b> Trader 0xdd…dd bought <b>Yes</b> ($12,400) on Will it &lt;rain&gt;?"
     assert lines[1] == "Paid 49¢ · now 51¢."  # neutral: no "get in" for a trader copying isn't offered for
-    assert f'href="{engine.SITE}/#/check/{WHALE}/0xw:0">Check your price</a>' in lines[2] and "Buy on Polymarket" in lines[2]
+    # each link goes through /go (counted), on to Check your price and the market
+    check = urllib.parse.quote(f"{engine.SITE}/#/check/{WHALE}/0xw:0", safe="")
+    assert f"/check?to={check}" in lines[2] and ">Check your price</a>" in lines[2] and "Buy on Polymarket" in lines[2]
     assert lines[3] == engine.DATA_DELAY
     assert "Stop alerts" not in str(engine.tg.sent[-1]["reply_markup"])  # they don't follow them
 

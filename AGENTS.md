@@ -14,6 +14,10 @@ behind Vercel (see README, "Hosting").
   "Same person on the other venue?") while it's off.
 - Keys come from the environment (hosted: Railway's service variables), are never logged, returned by the
   engine or written to disk.
+- Counting (README, "Counting"): per alert and per follow, in the store's `alerts.db`, never anything personal
+  beyond the signed-in account (no IPs, no user agents; an interest pick is counted with no id at all). Alert
+  links go through `/go/<alert id>/<target>`, which redirects to Polymarket or Signals only, and still redirects
+  when counting fails. `/api/metrics` is the owner's: locally, or with `SIGNALS_METRICS_KEY`; never public.
 - Signals is a consumer website (usesignals.app); running it locally is for development. It places no orders:
   no sandbox, no in-app trading, no automatic copying, and it never holds anyone's keys or funds. Copying a
   trade means the cost preview, then "Buy on Polymarket ↗", where the user buys it themselves. A session never

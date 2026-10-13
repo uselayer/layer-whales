@@ -21,6 +21,7 @@ import sqlite3
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
@@ -31,7 +32,7 @@ from typing import Any
 import jwt
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from uselayer import Client, VenueError, WhaleTrade
@@ -1026,6 +1027,7 @@ def follow(req: Follow, response: Response, uid: str = Depends(signed_in)) -> di
                 raise HTTPException(400, detail=f"You can follow up to {MAX_FOLLOWS} traders. Unfollow one to add another.")
             u["follows"].append(w)
             _save_follows(d)
+            count("follow", uid=uid, trader=w)
     return _me_view(u)
 
 
@@ -1038,6 +1040,7 @@ def unfollow(wallet: str, response: Response, uid: str = Depends(signed_in)) -> 
         if wallet.lower() in u["follows"]:
             u["follows"].remove(wallet.lower())
             _save_follows(d)
+            count("unfollow", uid=uid, trader=wallet.lower())
     return _me_view(u)
 
 
@@ -1149,6 +1152,10 @@ def _on_update(u: dict[str, Any]) -> None:
             pass
         if chat and data.startswith("unf:"):
             w = data[4:]
+            mid = (cb.get("message") or {}).get("message_id")
+            owner = _chat_owner(chat)
+            if owner and w in ((_load_follows()["users"].get(owner) or {}).get("follows") or []):  # a real stop
+                count("stop", uid=owner, trader=w, alert_id=_alert_of(chat, mid))
             with _follow_lock:
                 d = _load_follows()
                 for x in d["users"].values():
@@ -1175,6 +1182,7 @@ def _on_update(u: dict[str, Any]) -> None:
                 mine = _user(d, hit[0])
                 mine["chat"] = chat
                 _save_follows(d)
+            count("telegram", uid=hit[0])
             names = ", ".join(_who(w) for w in mine["follows"]) or "nobody yet"
             _say(chat, CONNECTED.format(names=html.escape(names)))
         elif arg:
@@ -1231,7 +1239,7 @@ def _chat_owner(chat: str) -> str | None:
 # across rounds and restarts.
 # votes: "Useful" / "Not useful", one per alert and account, changeable.
 
-_db_lock = threading.Lock()
+_db_lock = threading.RLock()  # re-entrant: a nested read never hangs the alert loop
 _db_ready: set[str] = set()
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, uid TEXT NOT NULL, chat TEXT, kind TEXT NOT NULL,
@@ -1245,6 +1253,8 @@ CREATE TABLE IF NOT EXISTS pending (trade_id TEXT PRIMARY KEY, trader TEXT NOT N
   price REAL, size REAL NOT NULL, usd REAL NOT NULL, at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS votes (alert_id TEXT NOT NULL, uid TEXT NOT NULL, useful INTEGER NOT NULL,
   at REAL NOT NULL, PRIMARY KEY (alert_id, uid));
+CREATE TABLE IF NOT EXISTS events (at REAL NOT NULL, kind TEXT NOT NULL, uid TEXT, alert_id TEXT, target TEXT,
+  trader TEXT);
 """
 
 
@@ -1351,12 +1361,23 @@ def _alert_cost(wallet: str, t: WhaleTrade, paid: float, size: float, usd: float
     return f"${ALERT_SPEND:.0f} gets you {p.contracts:g} contracts at {_cents(p.price)}, plus a ${p.fee:.2f} fee."
 
 
-def _links(*pairs: tuple[str, str | None]) -> str:
+LINK_TARGETS = {"Buy on Polymarket": "market", "Their record": "record", "Their record on Signals": "record",
+                "Check your price": "check"}  # fmt: skip
+
+
+def _go(aid: str, target: str, url: str) -> str:
+    """A link in an alert, routed through Signals so a tap is counted (``/go``): it redirects to ``url``."""
+    return f"{SITE}/go/{aid}/{target}?{urllib.parse.urlencode({'to': url})}"
+
+
+def _links(*pairs: tuple[str, str | None], aid: str | None = None) -> str:
+    """The links under an alert; with the alert's id, each goes through ``/go`` so taps can be counted."""
     e = html.escape
-    return " · ".join(f'<a href="{e(url)}">{label}</a>' for label, url in pairs if url)
+    return " · ".join(f'<a href="{e(_go(aid, LINK_TARGETS[label], url) if aid else url)}">{label}</a>'
+                      for label, url in pairs if url)  # fmt: skip
 
 
-def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, size: float, usd: float) -> str:
+def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, size: float, usd: float, aid: str | None = None) -> str:
     """The Telegram message for one new buy by a trader you follow, showing how far the price has moved.
 
     Price moved out of the "can still get in" range (``bet_status`` isn't ``in``): "Paid 49¢ · now 60¢, price
@@ -1371,21 +1392,21 @@ def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, size: float
     if bet_status(paid, now) != "in":
         return "\n".join([f"<b>{who}</b> bought <b>{pick}</b> (${usd:,.0f}) on {title}",
                           f"Paid {_cents(paid)} · now {_cents(now)}, price already moved.",
-                          _links(("Their record", record), ("Buy on Polymarket", t.url)), DATA_DELAY])  # fmt: skip
+                          _links(("Their record", record), ("Buy on Polymarket", t.url), aid=aid), DATA_DELAY])  # fmt: skip
     if not _copy_offered(wallet):
         return "\n".join([
             f"<b>{who}</b> bought <b>{pick}</b> at {_cents(paid)} (${usd:,.0f}) on {title} · now {_cents(now)}",
-            _links(("Their record on Signals", record), ("Buy on Polymarket", t.url)), DATA_DELAY,
+            _links(("Their record on Signals", record), ("Buy on Polymarket", t.url), aid=aid), DATA_DELAY,
         ])  # fmt: skip
     lines = [f"<b>{who}</b> bought <b>{pick}</b> at {_cents(paid)} (${usd:,.0f})", title,
              f"Now {_cents(now)}: you can still get in."]  # fmt: skip
     cost = _alert_cost(wallet, t, paid, size, usd)
     if cost:
         lines.append(cost)
-    return "\n".join([*lines, _links(("Their record", record), ("Buy on Polymarket", t.url)), DATA_DELAY])
+    return "\n".join([*lines, _links(("Their record", record), ("Buy on Polymarket", t.url), aid=aid), DATA_DELAY])
 
 
-def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: float) -> str:
+def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: float, aid: str | None = None) -> str:
     """One message for 2+ traders you follow buying the same outcome: each one's price and buy time, in the
     order they bought (so you see who went first), and the price now. Neutral for everyone: no "get in"."""
     e = html.escape
@@ -1393,7 +1414,7 @@ def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: flo
     for w, price, at in members:
         lines.append(f"· {e(_who(w))} paid {_cents(price)} at {datetime.fromtimestamp(at, UTC):%H:%M} UTC")
     moved = bet_status(members[-1][1], now) != "in"  # against the latest buyer's price, the closest to now
-    lines += [f"Now {_cents(now)}{', price already moved' if moved else ''}.", _links(("Buy on Polymarket", t.url)), DATA_DELAY]
+    lines += [f"Now {_cents(now)}{', price already moved' if moved else ''}.", _links(("Buy on Polymarket", t.url), aid=aid), DATA_DELAY]
     return "\n".join(lines)
 
 
@@ -1422,7 +1443,7 @@ class NewBuy:
 
     def text(self, aid: str) -> str:
         if self._text is None:
-            self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.size, self.usd)
+            self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.size, self.usd, ALERT_ID_MARK)
         return self._text.replace(ALERT_ID_MARK, aid)
 
 
@@ -1470,13 +1491,13 @@ def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
     if group:
         if group[2] is not None:
             try:
-                tg("editMessageText", chat_id=group[1], message_id=group[2], text=_group_text(first, b.t, b.now),
+                tg("editMessageText", chat_id=group[1], message_id=group[2], text=_group_text(first, b.t, b.now, group[0]),
                    parse_mode="HTML", disable_web_page_preview=True, reply_markup=_keyboard(group[0]))  # fmt: skip
             except RuntimeError:
                 pass  # deleted, or Telegram is down: nothing new to ping about either way
         return 0
     if len(first) >= 2:
-        aid = _send(uid, chat, "group", lambda _aid: _group_text(first, b.t, b.now), outcome=b.outcome,
+        aid = _send(uid, chat, "group", lambda aid: _group_text(first, b.t, b.now, aid), outcome=b.outcome,
                     trade_at=first[0][2], trigger_at=b.at)  # fmt: skip
         return 1 if aid else 0
     aid = _send(uid, chat, "buy", b.text, trader=b.wallet, outcome=b.outcome, trade_at=b.at, stop=b.wallet)
@@ -1563,7 +1584,7 @@ _whale: dict[str, Any] = {"started": False, "seen": set()}
 _whale_alerted: dict[tuple[str, str, str], float] = {}  # (account, trader, market) -> when
 
 
-def _whale_text(t: WhaleTrade, now: float, category: str | None) -> str:
+def _whale_text(t: WhaleTrade, now: float, category: str | None, aid: str | None = None) -> str:
     """A big trade in your markets: who (their Signals page when we've scored them, else "Trader 0x91…76"),
     the price they paid and now, "Check your price", "Buy on Polymarket" and the delay. Neutral unless copying is
     offered for that trader and the price is still in range."""
@@ -1577,7 +1598,7 @@ def _whale_text(t: WhaleTrade, now: float, category: str | None) -> str:
     where = f" in {e(category)}" if category else ""
     head = f"<b>Big trade{where}:</b> {who} bought <b>{e(t.outcome or 'Yes')}</b> (${t.usd:,.0f}) on {e(t.title or 'a Polymarket market')}"
     return "\n".join([head, price,
-                      _links(("Check your price", f"{SITE}/#/check/{w}/{t.market}"), ("Buy on Polymarket", t.url)),
+                      _links(("Check your price", f"{SITE}/#/check/{w}/{t.market}"), ("Buy on Polymarket", t.url), aid=aid),
                       DATA_DELAY])  # fmt: skip
 
 
@@ -1619,7 +1640,7 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
             continue
         if price_now is None or _settled(price_now):
             continue
-        text = _whale_text(t, price_now, cat)  # once for everyone it goes to
+        text = _whale_text(t, price_now, cat, ALERT_ID_MARK)  # once for everyone it goes to
         for uid in to:
             if _sent_today(uid, ("whale",)) >= WHALE_DAILY or _recently(uid, w, outcome, now):
                 continue
@@ -1637,6 +1658,143 @@ def _alert_loop() -> None:
         except Exception as e:  # keep alerting through a bad round
             _tg["error"] = f"{type(e).__name__}: {e}"
         _follow_stop.wait(ALERT_EVERY_S)
+
+
+# ---- counting: is any of this useful? ----
+# Per alert and per follow, kept in the store's alerts.db with nothing personal beyond the signed-in account (its
+# Clerk id): no IPs, no user agents. Minutes from their trade to the alert (alerts: trade_at, sent_at), taps on an
+# alert's links (/go), "Stop alerts" taps and unfollows, votes (votes), follows, interests picked and Telegram
+# connected (events). /api/metrics sums them up for the owner: locally, or with SIGNALS_METRICS_KEY.
+
+METRICS_KEY = os.environ.get("SIGNALS_METRICS_KEY", "")
+EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "picked")
+_ALERT_ID = re.compile(r"[A-Za-z0-9_-]{4,16}")
+
+
+def count(kind: str, *, uid: str | None = None, alert_id: str | None = None, target: str | None = None,
+          trader: str | None = None) -> None:  # fmt: skip
+    """Append one event. Never in the way: counting that fails is dropped, whatever was being done goes ahead."""
+    try:
+        with _db() as con:
+            con.execute("INSERT INTO events VALUES (?, ?, ?, ?, ?, ?)", (time.time(), kind, uid, alert_id, target, trader))
+    except (sqlite3.Error, OSError):
+        pass
+
+
+def _alert_of(chat: str, message_id: Any) -> str | None:
+    """The alert a Telegram message is (its id), from the chat and message id."""
+    if message_id is None:
+        return None
+    try:
+        with _db() as con:
+            row = con.execute("SELECT id FROM alerts WHERE chat = ? AND message_id = ?", (chat, message_id)).fetchone()
+    except (sqlite3.Error, OSError):
+        return None
+    return row[0] if row else None
+
+
+def _alert_known(alert_id: str) -> bool:
+    """Only taps on alerts we sent are counted: a made-up /go link redirects, but isn't a tap."""
+    try:
+        with _db() as con:
+            return con.execute("SELECT 1 FROM alerts WHERE id = ?", (alert_id,)).fetchone() is not None
+    except (sqlite3.Error, OSError):
+        return False
+
+
+def _allowed(url: str) -> bool:
+    """Where a /go link may send someone: Polymarket, or Signals itself. Nowhere else (no open redirect)."""
+    try:
+        u = urllib.parse.urlsplit(url)
+        site = urllib.parse.urlsplit(SITE)
+        host = u.hostname
+    except ValueError:  # a malformed link (a bad port, a broken IPv6 host): Signals itself, never a 500
+        return False
+    return u.scheme == "https" and (host == "polymarket.com" or (u.scheme, u.netloc) == (site.scheme, site.netloc))
+
+
+@app.get("/go/{alert_id}/{target}")
+def go(alert_id: str, target: str, to: str = "") -> RedirectResponse:
+    """A tap on an alert's link: counted (alert id, target, time), then on to the link. The redirect happens
+    whether or not the count is kept, so the market link always works."""
+    dest = to if _allowed(to) else SITE
+    if _ALERT_ID.fullmatch(alert_id) and target in set(LINK_TARGETS.values()) and _alert_known(alert_id):
+        count("tap", alert_id=alert_id, target=target)
+    return RedirectResponse(dest, status_code=302, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/count/picked")
+def picked() -> dict[str, bool]:
+    """Someone answered onboarding's one question (which markets). Anonymous: no id of any kind, a time only,
+    so follows per visitor who picks interests can be worked out."""
+    count("picked")
+    return {"ok": True}
+
+
+def _owner(request: Request) -> None:
+    """The metrics are the owner's: this machine when running locally, else the owner's key (SIGNALS_METRICS_KEY,
+    from the environment) as a Bearer token. Anyone else gets a 404, as if there were nothing here."""
+    auth = request.headers.get("authorization", "")
+    key = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
+    if METRICS_KEY and key and secrets.compare_digest(key.encode(), METRICS_KEY.encode()):  # bytes: any text is a 404
+        return
+    local = request.client is not None and request.client.host in ("127.0.0.1", "::1")
+    if not HOSTED and local and not request.headers.get("x-forwarded-for"):
+        return
+    raise HTTPException(404, detail="Not Found")
+
+
+def _pct(xs: list[float], q: float) -> float | None:
+    xs = sorted(xs)
+    return round(xs[min(len(xs) - 1, int(q * len(xs)))], 1) if xs else None
+
+
+@app.get("/api/metrics")
+def metrics(request: Request, response: Response, days: int = 30) -> dict[str, Any]:
+    """A read-only summary of the counts over the last ``days`` (see "Counting" in the README)."""
+    _owner(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    since = time.time() - max(1, days) * 86400
+    week = 7 * 86400
+    with _db() as con:
+        sent = dict(con.execute("SELECT kind, COUNT(*) FROM alerts WHERE sent_at >= ? GROUP BY kind", (since,)).fetchall())
+        # from the buy that sent the alert (trigger_at; a group's is its latest buyer's, not its first)
+        lags = [r[0] / 60 for r in con.execute("SELECT sent_at - COALESCE(trigger_at, trade_at) FROM alerts WHERE sent_at >= ?"
+                                                " AND COALESCE(trigger_at, trade_at) IS NOT NULL AND kind != 'cap'", (since,))]  # fmt: skip
+        taps = dict(con.execute("SELECT target, COUNT(*) FROM events WHERE kind = 'tap' AND at >= ? GROUP BY target", (since,)).fetchall())
+        tapped = con.execute("SELECT COUNT(DISTINCT e.alert_id) FROM events e JOIN alerts a ON a.id = e.alert_id"
+                             " WHERE e.kind = 'tap' AND e.at >= ?", (since,)).fetchone()[0]  # fmt: skip
+        n = dict(con.execute("SELECT kind, COUNT(*) FROM events WHERE at >= ? GROUP BY kind", (since,)).fetchall())
+        # A stop or unfollow "after an alert": that account had an alert about that trader in the 7 days before.
+        after = dict(con.execute(
+            "SELECT e.kind, COUNT(DISTINCT e.rowid) FROM events e JOIN alerts a ON a.uid = e.uid AND a.trader = e.trader"
+            " AND a.sent_at <= e.at AND a.sent_at >= e.at - ? WHERE e.kind IN ('stop', 'unfollow') AND e.at >= ?"
+            " GROUP BY e.kind", (week, since)).fetchall())  # fmt: skip
+        votes = dict(con.execute("SELECT useful, COUNT(*) FROM votes WHERE at >= ? GROUP BY useful", (since,)).fetchall())
+        voted = con.execute("SELECT COUNT(DISTINCT alert_id) FROM votes WHERE at >= ?", (since,)).fetchone()[0]
+    users = _load_follows()["users"].values()
+    followers = [u for u in users if u.get("follows")]
+    with_interests = [u for u in users if u.get("interests") is not None]
+    counted = sum(v for k, v in sent.items() if k in COUNTED)
+    def ratio(a: float, b: float) -> float | None:
+        return round(a / b, 3) if b else None
+
+    return {
+        "days": days,
+        "alerts": {"sent": counted, "by_kind": sent, "minutes_from_trade_to_alert": {
+            "median": _pct(lags, 0.5), "p90": _pct(lags, 0.9), "n": len(lags)}},
+        "taps": {"by_target": taps, "alerts_tapped": tapped, "share_of_alerts_tapped": ratio(tapped, counted)},
+        "stops": {"stop_taps": n.get("stop", 0), "stop_taps_within_7_days_of_an_alert": after.get("stop", 0),
+                  "unfollows": n.get("unfollow", 0), "unfollows_within_7_days_of_an_alert": after.get("unfollow", 0)},
+        "votes": {"useful": votes.get(1, 0), "not_useful": votes.get(0, 0), "alerts_voted_on": voted},
+        "follows": {"interest_picks": n.get("picked", 0), "follows": n.get("follow", 0),
+                    "follows_per_interest_pick": ratio(n.get("follow", 0), n.get("picked", 0)),
+                    "accounts_with_saved_interests": len(with_interests),
+                    "follows_per_account_with_saved_interests": ratio(sum(len(u.get("follows") or []) for u in with_interests), len(with_interests))},
+        "telegram": {"followers": len(followers), "followers_with_telegram": sum(1 for u in followers if u.get("chat")),
+                     "share": ratio(sum(1 for u in followers if u.get("chat")), len(followers)),
+                     "connected_in_period": n.get("telegram", 0)},
+    }  # fmt: skip
 
 
 @app.get("/")
