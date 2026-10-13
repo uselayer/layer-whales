@@ -1,8 +1,9 @@
 # This repo
 
 Signals, on the uselayer SDK: top traders on Polymarket (Kalshi too when switched on, see below), a page per
-trader, cross-venue links (with Kalshi on) and sandbox copy trading. It runs on the user's machine (`uv run signals`) and is hosted at usesignals.app: the same
-engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting").
+trader, cross-venue links (with Kalshi on) and what copying a trade would really cost. It runs on the user's
+machine (`uv run signals`) and is hosted at usesignals.app: the same engine with `SIGNALS_HOSTED=1` on Railway,
+behind Vercel (see README, "Hosting").
 
 - All venue reads, links and copies go through `client.whales` in the SDK. Don't add venue calls or matching
   logic here; put it in the SDK.
@@ -13,15 +14,21 @@ engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting")
   "Same person on the other venue?") while it's off.
 - Keys come from the environment (hosted: Railway's service variables), are never logged, returned by the
   engine or written to disk.
-- Paper mode only, hosted or not. Never run live mode or place a real-money order.
-- Hosted, there is no signup: each browser has its own sandbox, found by an anonymous cookie. Never let one
-  browser see or change another's sandbox, and never let a response that sets the cookie be cached.
+- No sandbox: Signals never simulates copies. Copying a trade is a real order that the user signs in their own
+  wallet; the app never signs an order, never holds keys or funds, and never places an order on its own (no
+  automatic copying). Until in-app signing is built, the cost preview links out to Polymarket to buy. A session
+  never places a real-money order itself, not even a test one.
+- Hosted, browsing needs no account. Signing up (wallet sign-in) is asked for only to follow a trader and get
+  alerts, and the button says so ("Follow · get an alert when they buy"). Alerts only while you can still get
+  in. Never let one account see or change another's follows or trades, and never let a response that sets a
+  session cookie be cached.
 - Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.
 - Never say a link *is* someone: show the tier ("likely" / "possible") and the evidence.
 - The page is a consumer app, not an analyst's spreadsheet. It helps people find traders worth following and
-  understand why: who they are, how they trade, and what the evidence does and doesn't show. Sandbox copying is
-  optional, a way to test a trader; nothing on the page may imply that copying makes money. Three tabs (Feed,
-  Traders, My trades) and a "Sandbox" pill.
+  understand why: who they are, how they trade, and what the evidence does and doesn't show. Before anyone
+  copies a trade, show what it would really cost them: the price now against theirs, what their amount fills
+  at, the fee. Nothing on the page may imply that copying makes money. Two tabs (Feed, Traders); My trades
+  comes back with real, signed trades.
   - Onboarding (first visit, once per browser) asks one question: which markets interest you (Politics, Sports,
     Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
     localStorage, every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
@@ -38,9 +45,9 @@ engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting")
   - Never a made-up number for a real trader on the hosted app. A figure the data doesn't have yet shows "—";
     sample values (`SIGNALS_MOCK=1`) are for reviewing the page locally only. "Copyable" is plain text: green
     stays for "you can still get in". The SDK's per-dollar figure is a return per dollar traded, never "ROI".
-  - Words: say "trade", never "bet"; say "sandbox", never "paper money" or "paper" (real prices and fees, no real
-    money). The copy button says "Copy trader" / "Copying trader ✓": copying copies a trader's next trades.
-    Copying a trade they already placed is not built, so no label may imply it.
+  - Words: say "trade", never "bet"; never "sandbox" or "paper". A trade you can still get into has "Check your
+    price", which opens what copying it costs; there is no "Copy trader". Following a trader (alerts) is how you
+    hear about their next trades.
   - One idea per card. The market title is the biggest text; status is one line with a dot.
   - Color means something: green = you can still get in, grey = moved away, neutral = settled. Nothing else is
     colored.

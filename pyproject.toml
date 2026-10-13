@@ -1,7 +1,7 @@
 [project]
 name = "signals"
 version = "0.1.0"
-description = "Signals: top traders and sandbox copy trading across Kalshi and Polymarket, on the uselayer SDK. Runs on your machine."
+description = "Signals: top traders on Polymarket (and Kalshi) and what copying their trades really costs, on the uselayer SDK. Runs on your machine."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",

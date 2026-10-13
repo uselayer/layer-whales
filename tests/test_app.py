@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -31,12 +29,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
     )
     monkeypatch.setattr(w, "links", lambda *a, **k: [])
     monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
-    monkeypatch.setattr(engine, "_boxes", {})
     return TestClient(engine.app)
-
-
-def local() -> engine.Sandbox:
-    return engine.sandbox(engine.LOCAL)
 
 
 def with_kalshi(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -56,46 +49,6 @@ def test_pages_and_reads(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
     d = api.get("/api/trader/kalshi/amy").json()
     assert d["visibility"] == "visible" and d["trades"][0]["market"] == "KX-A"
     assert api.get("/api/links/kalshi/amy").json()["links"] == []
-
-
-def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
-    api: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with_kalshi(monkeypatch)
-    monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
-    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
-    r = api.put("/api/copy/rules", json={"size": 3, "max_above": 0.02}).json()
-    assert r["rules"]["size"] == 3 and r["rules"]["traders"] == []
-    r = api.post("/api/copy/traders", json={"venue": "polymarket", "id": "0xabc", "name": "sharpie", "categories": ["Sports"]}).json()
-    r = api.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"}).json()
-    assert [t["id"] for t in r["rules"]["traders"]] == ["0xabc", "amy"]
-    cp = local().copiers["polymarket:0xabc"]  # copied where they bet: Polymarket
-    assert (cp.size, cp.venue, cp.max_slippage, cp.copy_sells) == (3, "polymarket", 0.02, False)
-    assert cp.categories == () and "categories" not in r["rules"]["traders"][0]  # always everything: no picking
-    assert local().copiers["kalshi:amy"].venue == "kalshi"
-    assert local().load_rules()["size"] == 3  # saved to disk
-    assert [t["id"] for t in api.delete("/api/copy/traders/kalshi/amy").json()["rules"]["traders"]] == ["0xabc"]
-    # a rule saved with categories, from before copying was always everything, keeps working as saved
-    local().save_rules(local().load_rules() | {"traders": [{"venue": "polymarket", "id": "0xabc", "categories": ["Sports"]}]})
-    local().apply_rules()
-    assert local().copiers["polymarket:0xabc"].categories == ("Sports",)
-
-    event = {"at": "2026-10-07T00:00:00+00:00", "status": "copied", "order_id": "o1", "venue": "kalshi",
-             "market": "KX-A", "side": "yes", "source": {"title": "A game"}}  # fmt: skip
-    local().copied_file().write_text(json.dumps(event | {"trader": {"name": "sharpie"}}) + "\n")
-
-    class Result:
-        def to_dict(self) -> dict[str, Any]:
-            return {"status": "won", "pnl": 2.5}
-
-    monkeypatch.setattr(Whales, "copy_results", lambda self, ids: {i: Result() for i in ids})
-    out = api.get("/api/copied").json()
-    assert out["total"] == {"net": 2.5, "trades": 1, "open": 0, "won": 1, "lost": 0, "void": 0}
-    assert out["rows"][0]["trader"]["name"] == "sharpie" and out["rows"][0]["result"]["status"] == "won"
-    api.post("/api/paper/reset")
-    assert api.get("/api/copied").json()["rows"] == []
-    assert local().load_rules()["traders"] == [] and local().copiers == {}  # nobody copied any more
-    assert local().load_rules()["size"] == 3  # the size and price limits stay
 
 
 SCORE = {"wallet": "0xabc", "name": "sharpie", "segment": "quiet", "action": "follow", "sample": [{"market": "m"}]}
@@ -266,22 +219,17 @@ def test_signals_reads_polymarket_only_unless_kalshi_is_switched_on(
     assert api.get("/api/trader/kalshi/amy").status_code == 404
     assert api.get("/api/links/polymarket/0xabc").status_code == 404  # there's no other venue to check
     assert asked == [("big", ("polymarket",)), ("top", "polymarket")]  # Kalshi was never asked for
-    r = api.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"})
-    assert r.status_code == 400 and "Polymarket" in r.json()["detail"]
-
-    # A Kalshi copy rule saved before stays saved but doesn't run, and My trades says why.
-    monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
-    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
-    local().save_rules({"size": 5, "max_above": 0.03, "traders": [{"venue": "kalshi", "id": "amy"}]})
-    local().apply_rules()
-    assert local().copiers == {}
-    rule = api.get("/api/copy").json()["rules"]["traders"][0]
-    assert rule["id"] == "amy" and rule["error"].startswith("Paused")
-    with_kalshi(monkeypatch)  # SIGNALS_VENUES=polymarket,kalshi: it runs again, nothing to bring back
-    local().apply_rules()
-    assert list(local().copiers) == ["kalshi:amy"]
+    with_kalshi(monkeypatch)  # SIGNALS_VENUES=polymarket,kalshi
     assert api.get("/api/config").json() == {"venues": ["polymarket", "kalshi"]}
-    api.post("/api/paper/reset")
+
+
+def test_the_sandbox_is_gone(api: TestClient) -> None:
+    # Signals places no orders and keeps no sandbox: the copy, My trades and reset routes are gone, and the
+    # page sets no browser cookie (there's nothing of yours to find).
+    for method, path in (("get", "/api/copy"), ("post", "/api/copy/traders"), ("post", "/api/trade/copy"),
+                         ("get", "/api/copied"), ("get", "/api/paper"), ("post", "/api/paper/reset")):  # fmt: skip
+        assert getattr(api, method)(path).status_code in (404, 405), path
+    assert "set-cookie" not in api.get("/").headers
 
 
 def test_the_feed_follows_recommended_traders_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -305,8 +253,7 @@ def test_market_links_go_to_the_event_on_polymarket() -> None:
     assert s["recent"][0]["url"] == "https://polymarket.com/event/ita-isr" and s["sample"][0]["url"] is None
 
 
-def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
+def test_what_copying_one_feed_trade_costs_now(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[Any] = []
 
     class Preview:
@@ -315,43 +262,29 @@ def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeyp
         def to_dict(self) -> dict[str, Any]:
             return {"ok": True, "price": 0.53, "total": 2.71, "payout": 5.0, "profit_if_win": 2.29}
 
-    class Event:
-        status = "copied"
-
-        def to_dict(self) -> dict[str, Any]:
-            return {"status": "copied", "order_id": "pm-1", "venue": "polymarket", "market": "0xcid:1",
-                    "side": "yes", "at": "2026-10-09T00:00:00+00:00", "source": {"title": "Ducks vs. Jets"}}  # fmt: skip
-
     def preview(self: Any, trade: Any, **kw: Any) -> Preview:
-        seen.append((trade, kw))
+        seen.append((self, trade, kw))
         return Preview()
 
     monkeypatch.setattr(Whales, "preview_copy", preview)
-    monkeypatch.setattr(Whales, "copy_trade", lambda self, trade, **kw: Event())
     body = {"wallet": "0xabc", "name": "ThorinCSGO", "market": "0xcid:1", "price": 0.52, "title": "Ducks vs. Jets",
             "outcome": "Jets", "at": "2026-10-09T20:00:00+00:00", "token": "tok-jets"}  # fmt: skip
     assert api.post("/api/trade/preview", json=body).json()["total"] == 2.71
-    trade, kw = seen[0]
+    whales, trade, kw = seen[0]
+    assert whales is engine.reads.whales  # a read: no sandbox, no store of yours
     assert (trade.venue, trade.market, trade.side, trade.action, trade.price) == ("polymarket", "0xcid:1", "yes", "buy", 0.52)
-    assert kw == {"size": 5.0, "max_slippage": 0.03}  # the copy rules
+    assert kw == {"size": 5.0, "max_slippage": 0.03}  # no amount: 5 contracts, at most 3¢ above their price
     assert trade.token == "tok-jets"  # the exact outcome token reaches the SDK
     api.post("/api/trade/preview", json=body | {"spend": 50})
-    assert seen[1][1] == {"spend": 50.0, "max_slippage": 0.03}  # an amount from the page, fee included
+    assert seen[1][2] == {"spend": 50.0, "max_slippage": 0.03}  # an amount from the page, fee included
     assert api.post("/api/trade/preview", json=body | {"spend": 0}).status_code == 400
-    out = api.post("/api/trade/copy", json=body).json()
-    assert out["order_id"] == "pm-1" and out["trader"]["name"] == "ThorinCSGO"
-    assert json.loads(local().copied_file().read_text().splitlines()[-1])["order_id"] == "pm-1"  # in My trades
-    api.post("/api/paper/reset")
+    assert not list(engine.STORE_DIR.iterdir())  # nothing kept
 
 
-def test_copying_one_trade_refuses_prices_you_cant_still_get_in_at(
-    api: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_preview_refuses_prices_you_cant_still_get_in_at(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # The SDK only refuses a price more than 3¢ above theirs. The engine also refuses a settled market (2¢ or
     # less, 98¢ or more) and one more than 5¢ below what they paid, by the Feed's own rule (bet_status).
-    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
     now = {"price": 0.5}
-    copies: list[Any] = []
 
     class Preview:
         ok = True
@@ -363,139 +296,22 @@ def test_copying_one_trade_refuses_prices_you_cant_still_get_in_at(
         def to_dict(self) -> dict[str, Any]:
             return {"ok": True, "price": now["price"]}
 
-    class Event:
-        status = "copied"
-
-        def to_dict(self) -> dict[str, Any]:
-            return {"status": "copied", "order_id": "pm-2", "venue": "polymarket", "market": "0xcid:1",
-                    "side": "yes", "at": "2026-10-12T00:00:00+00:00", "source": {}}  # fmt: skip
-
     monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: Preview())
-    monkeypatch.setattr(Whales, "copy_trade", lambda self, trade, **kw: copies.append(trade) or Event())
     body = {"wallet": "0xabc", "market": "0xcid:1", "price": 0.60}
     for price, words in ((0.985, "98¢ or more"), (0.02, "2¢ or less"), (0.54, "6¢ below"), (0.64, "4¢ above")):
         now["price"] = price
-        for path in ("/api/trade/preview", "/api/trade/copy"):
-            r = api.post(path, json=body)
-            assert r.status_code == 400 and words in r.json()["detail"], (price, path, r.text)
-    assert copies == []  # nothing was bought
+        r = api.post("/api/trade/preview", json=body)
+        assert r.status_code == 400 and words in r.json()["detail"], (price, r.text)
     assert engine.why_not_copy(0.97, 0.99) is not None  # their price was fine, the market's isn't any more
     now["price"] = 0.56  # 4¢ below: you can still get in
     assert api.post("/api/trade/preview", json=body).json()["price"] == 0.56
-    assert api.post("/api/trade/copy", json=body).json()["order_id"] == "pm-2" and len(copies) == 1
-    api.post("/api/paper/reset")
 
 
 def test_why_not_copy_is_bet_status() -> None:
-    # One rule: whatever the Feed calls "You can still get in", the engine copies, and nothing else.
+    # One rule: whatever the Feed calls "You can still get in", the engine prices, and nothing else.
     for paid in (0.05, 0.3, 0.6, 0.95):
         for now in [x / 200 for x in range(0, 201)]:
             assert (engine.why_not_copy(paid, now) is None) == (engine.bet_status(paid, now) == "in"), (paid, now)
     assert engine.why_not_copy(0.5, None) is not None
 
 
-def test_my_trades_has_a_copy_right_after_it_is_made(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    class Event:
-        status = "copied"
-
-        def __init__(self, order_id: str) -> None:
-            self.order_id = order_id
-
-        def to_dict(self) -> dict[str, Any]:
-            return {"status": "copied", "order_id": self.order_id}
-
-    def rows(box: engine.Sandbox) -> dict[str, Any]:
-        lines = box.copied_file().read_text().splitlines() if box.copied_file().exists() else []
-        return {"rows": [json.loads(x)["order_id"] for x in lines]}
-
-    monkeypatch.setattr(engine, "_copied_now", rows)
-    who = {"venue": "polymarket", "id": "0xabc", "name": "sharpie"}
-    assert api.get("/api/copied").json()["rows"] == []  # kept for 30 s from here
-    local().record(Event("o1"), who)
-    assert api.get("/api/copied").json()["rows"] == ["o1"]  # not the answer from before the copy
-
-    def copy_while_reading(box: engine.Sandbox) -> dict[str, Any]:
-        out = rows(box)
-        box.record(Event("o2"), who)  # lands after this answer read the file
-        return out
-
-    monkeypatch.setattr(engine, "_copied_now", copy_while_reading)
-    engine._copied_refresh(local())  # e.g. the background refresh, racing a copy
-    monkeypatch.setattr(engine, "_copied_now", rows)
-    assert api.get("/api/copied").json()["rows"] == ["o1", "o2"]
-
-
-def test_my_trades_groups_repeat_copies_and_compares_with_theirs() -> None:
-    def copy(at: str, size: float, usd: float, pnl: float | None, status: str = "won") -> dict[str, Any]:
-        return {"at": at, "trader": {"id": "0xabc", "name": "ThorinCSGO"}, "venue": "polymarket", "market": "0xcid:1",
-                "side": "yes", "source": {"title": "Ducks vs. Jets", "outcome": "Jets", "price": usd / size, "size": size, "usd": usd},
-                "result": {"status": status, "contracts": 5.0, "avg_price": 0.53, "cost": 2.65, "fees": 0.06,
-                           "payout": 1.0 if status == "won" else None, "mark": None, "pnl": pnl}}  # fmt: skip
-
-    rows = [copy("2026-10-09T02:00:00+00:00", 800, 416, 2.29), copy("2026-10-09T01:00:00+00:00", 500, 260, 2.29)]
-    (g,) = engine._compare(rows)  # two copies of the same outcome from the same trader: one group
-    assert len(g["copies"]) == 2 and g["at"] == "2026-10-09T02:00:00+00:00"
-    assert g["you"] == {"contracts": 10.0, "avg_price": 0.53, "fees": 0.12, "put_in": 5.42, "pnl": 4.58,
-                        "return": pytest.approx(4.58 / 5.42, abs=1e-4), "status": "won", "value": 1.0}  # fmt: skip
-    th = g["theirs"]
-    assert th["price"] == pytest.approx(0.52) and th["contracts"] == 1300 and th["put_in"] == 676
-    assert th["pnl"] == 624 and th["return"] == pytest.approx(1 / 0.52 - 1, abs=1e-4)
-    assert th["at_their_price"] == pytest.approx(4.8)  # your 10 contracts at their 52¢
-
-    feed_copy = copy("2026-10-09T03:00:00+00:00", 1, 0.25, None, status="open")  # sizes unknown, no bid yet
-    feed_copy["source"] |= {"size": 0.0, "usd": 0.0, "price": 0.25}
-    feed_copy["market"] = "0xother:0"
-    g2 = engine._compare([feed_copy])[0]
-    assert g2["theirs"]["price"] == 0.25 and g2["theirs"]["put_in"] is None and g2["theirs"]["return"] is None
-
-
-def test_hosted_each_browser_gets_its_own_sandbox(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    with_kalshi(monkeypatch)
-    monkeypatch.setattr(engine, "HOSTED", True)
-    monkeypatch.setattr(engine.Copier, "poll", lambda self: [])
-    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
-    monkeypatch.setattr(engine, "MAX_TRADERS", 2)
-    visitors = engine.STORE_DIR / "visitors"
-    amy, bo = (TestClient(engine.app, base_url="https://testserver") for _ in range(2))
-
-    assert amy.get("/").headers["cache-control"] == "private, no-store"  # a cached page would share one id
-    sid = amy.cookies[engine.SID_COOKIE]
-    assert engine._SID.fullmatch(sid)
-    assert amy.get("/api/paper").json()["net"] == 0.0 and not visitors.exists()  # looking makes no folder
-    amy.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"})
-    assert [t["id"] for t in amy.get("/api/copy").json()["rules"]["traders"]] == ["amy"]
-    assert (visitors / sid / "copy-rules.json").exists()
-
-    assert bo.get("/api/copy").json()["rules"]["traders"] == []  # bo's own sandbox, from his first call
-    assert bo.cookies[engine.SID_COOKIE] != sid
-    amy.post("/api/copy/traders", json={"venue": "kalshi", "id": "cy"})
-    r = amy.post("/api/copy/traders", json={"venue": "kalshi", "id": "di"})
-    assert r.status_code == 400 and "up to 2 traders" in r.json()["detail"]
-    bo.post("/api/paper/reset")
-    assert len(amy.get("/api/copy").json()["rules"]["traders"]) == 2  # bo's reset leaves amy's alone
-
-    sneaky = TestClient(engine.app, base_url="https://testserver", cookies={engine.SID_COOKIE: "../../etc"})
-    sneaky.get("/api/copy")
-    assert all(s == engine.LOCAL or engine._SID.fullmatch(s) for s in engine._boxes)  # a made-up id gets a new one
-
-    # A restart resumes copying for browsers here in the last two weeks, not for ones away longer.
-    away = visitors / ("b" * 32) / "copy-rules.json"
-    away.parent.mkdir()
-    away.write_text(json.dumps({"size": 5, "max_above": 0.03, "traders": [{"venue": "kalshi", "id": "amy"}]}))
-    os.utime(away, (time.time() - 15 * 86400,) * 2)
-    engine._boxes.clear()
-    engine.resume_copying()
-    assert set(engine._boxes[sid].copiers) == {"kalshi:amy", "kalshi:cy"} and "b" * 32 not in engine._boxes
-    engine._boxes[sid].seen -= 15 * 86400
-    engine._tidy(time.time())
-    assert sid not in engine._boxes  # away two weeks: copying stops until they're back
-
-
-def test_copiers_of_one_trader_share_one_read(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[str] = []
-    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, id, limit=50: calls.append(id) or [TRADE])
-    a, b = engine.Sandbox("a" * 32), engine.Sandbox("b" * 32)
-    assert a.paper().whales.trades("kalshi", "amy") == b.paper().whales.trades("kalshi", "amy") == [TRADE]
-    assert calls == ["amy"]
-    a.close()
-    b.close()
