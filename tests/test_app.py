@@ -201,6 +201,23 @@ def test_live_bets_carry_status_and_category(api: TestClient, monkeypatch: pytes
     assert api.get("/static/fonts/HostGrotesk-latin-var.woff2").status_code == 200
 
 
+def test_big_trades_carry_their_market_category(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The Feed's Big trades filter by your markets, like the rest of the Feed.
+    poly = WhaleTrade("polymarket", "0xabc", None, "c1:0", "yes", "buy", 0.4, 1000, 400.0, datetime(2026, 10, 7, tzinfo=UTC), "p1")
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [poly, TRADE])
+
+    class Book:
+        def get(self, ids: Any) -> dict[str, Any]:
+            return {c: {"tags": [{"label": "Sports"}]} for c in ids}
+
+    class Scorer:
+        markets = Book()
+
+    monkeypatch.setattr(engine.reads.whales, "scorer", lambda *a, **k: Scorer())
+    rows = api.get("/api/trading-now").json()
+    assert [(t["venue"], t["category"]) for t in rows] == [("polymarket", "Sports"), ("kalshi", None)]
+
+
 def test_the_feed_follows_recommended_traders_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # uselayer 0.6.0: a sharp who stopped buying is "inactive", and the feed doesn't follow them.
     scores = [

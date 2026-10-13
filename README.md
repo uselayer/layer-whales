@@ -37,18 +37,24 @@ evidence does and doesn't show. Copying a trader in the sandbox is optional, a w
 promise of profit.
 
 The first visit asks one question, which markets interest you (Politics, Sports, Crypto, Esports, or Skip for all
-markets), then opens Traders. The choice is kept in your browser; the market chips on Traders change it. Then
-three tabs:
+markets), then opens Traders. The choice is kept in your browser; the market chips on Feed and Traders change it,
+so the two always agree. Then three tabs:
 
-- **Feed**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp or Rising, one
-  card per trade: the market, their pick, what they paid, the price now, how much they put in, and one status
-  line. **You can still get in** means the price is between 5¢ below and 3¢ above what they paid (3¢ is the
-  same limit copying uses); **Price moved away** means further either way. A bigger drop means the market has
-  turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or less, 98¢ or more, or one they no longer hold is
-  **Won**, **Lost** or **Closed**, and drops out of the default feed. Filter by category, or turn off "Only
-  trades I can still get into" to see them all. Tap a card for the details, the trader and a link to Polymarket.
-  **Copy trader** copies that trader's next trades in the sandbox; a trade they already made isn't copied.
-  It updates every 30 seconds; Polymarket shows trades a few minutes late.
+- **Feed**: one switch at the top, **Traders we follow** (the default) or **Big trades**. Both open filtered to
+  your markets: the chips are All, the four markets, and any other category with trades (with how many).
+  - **Traders we follow**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp
+    or Rising, one card per trade: the market, their pick, what they paid, the price now, how much they put in,
+    and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
+    paid (3¢ is the same limit copying uses); **Price moved away** means further either way. A bigger drop means
+    the market has turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or
+    less, 98¢ or more, or one they no longer hold is **Won**, **Lost** or **Closed**, and drops out of the default
+    feed. Turn off "Only trades I can still get into" to see them all. Tap a card for the details, the trader
+    and a link to Polymarket. **Copy trader** copies that trader's next trades in the sandbox; a trade they
+    already made isn't copied. It updates every 30 seconds; Polymarket shows trades a few minutes late.
+  - **Big trades** (`#/big`; the old `#/traders/big` link still works): trades of $250 or more right now on Kalshi
+    and Polymarket, one card per trade, with the trader's name when the venue shows it ("Anonymous trader"
+    when it doesn't). A named trader's card opens their page. Only Polymarket trades say which market they're
+    in, so with markets picked, Kalshi trades show under All only.
 - **Traders**: a leaderboard of the Polymarket traders we recommend: Proven sharp, Quiet sharp, Rising, and
   Too fast to copy (the price moves within minutes of their buys, so a copy usually comes too late).
   - One bar: on the left the market chips (your onboarding choice) and **Copyable only**; on the right
@@ -64,8 +70,7 @@ three tabs:
     own. An empty result says so and offers **Show all markets**; the checks are never loosened to fill it.
   - The footer counts who's left out (Lucky traders, market makers, arbitrage, no clear edge) and **See all
     checked traders** shows everyone but market makers and arbitrage, each marked. It also links to **Top
-    profit** (both venues' leaderboards) and **Big trades** (trades of $250 or more right now). "How we pick
-    traders" explains the checks in plain words.
+    profit** (both venues' leaderboards). "How we pick traders" explains the checks in plain words.
   - Wallets come from the leaderboards and from busy markets' trades. The first check takes 20–30 minutes and
     is kept in the store dir, so later launches show the last result at once while a new check runs in the
     background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
@@ -78,7 +83,7 @@ three tabs:
     closed), **Activity** (their recent buys and sells) and **Stats** (consistency, risk, style, execution), with
     the evidence (each check, how the price moved after their buys, by category, the trades checked) under **How
     we measure this**. Wallet, exits and their usual price range show "—" until the SDK provides them.
-  - **A leaderboard trader's page** (Top profit, Big trades) also asks **Same person on the other venue?**: accounts that may
+  - **A leaderboard trader's page** (Top profit, Feed → Big trades) also asks **Same person on the other venue?**: accounts that may
     be the same person, each with the evidence (the same name or X handle on an account that really trades,
     and trades in the same market, the same way, within 5 minutes). It's an inference, never a confirmed
     identity.
@@ -111,7 +116,7 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
 - Kalshi's trader data comes from the public endpoints behind kalshi.com's Leaderboard and profile pages.
   Kalshi doesn't document them, so they can change.
 - Kalshi traders choose whether to show their trades. Most leaderboard whales hide them: their page says
-  so, and they can't be copied directly. Traders under **Traders → Big trades** usually show theirs.
+  so, and they can't be copied directly. Traders under **Feed → Big trades** usually show theirs.
 - Polymarket's data comes from its public data API; every wallet is public.
 
 ## License
