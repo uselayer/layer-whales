@@ -111,6 +111,41 @@ def test_worth_lists_the_last_check_without_bets_and_scores_new_wallets_on_deman
     assert api.get("/api/worth/0xnew").json()["wallet"] == "0xnew"
 
 
+def test_worth_adds_the_leaderboard_columns_from_what_the_check_kept(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kept = SCORE | {
+        "decisions": 60, "window": ["2026-09-07T00:00:00+00:00", "2026-10-07T00:00:00+00:00"],
+        "copy": {"mean": 0.01, "margin": 0.02, "n": 40, "z": 1.0},
+        "recent": [{"at": "2026-10-06T12:00:00+00:00"}],
+        "sample": [{"usd": 10.0, "price": 0.4, "at": "2026-10-01T00:00:00+00:00"},
+                   {"usd": 30.0, "price": 0.6, "at": "2026-10-02T00:00:00+00:00"},
+                   {"usd": 500.0, "price": 0.5, "at": "2026-10-03T00:00:00+00:00"}],
+    }  # fmt: skip
+    monkeypatch.setattr(engine, "_worth_data", {"finished": "2026-10-07T00:00:00+00:00", "scores": [kept]})
+    s = api.get("/api/worth").json()["result"]["scores"][0]
+    assert s["typical_usd"] == 30.0  # the median buy: one big bet doesn't set it
+    assert s["trades_per_day"] == 2.0  # 60 decisions over 30 days
+    assert s["last_buy"] == "2026-10-06T12:00:00+00:00"
+    assert s["copy_return"] == pytest.approx(0.02)  # 1¢ kept on a 50¢ buy
+    assert "pnl_weeks" not in s and "sample_data" not in s  # profit history only from the SDK
+    # the SDK's own figures win once it has them (uselayer 0.6)
+    monkeypatch.setattr(engine, "_worth_data", {"finished": "2026-10-07T00:00:00+00:00",
+                                                "scores": [kept | {"typical_usd": 99.0, "last_buy": "2026-10-07T00:00:00+00:00"}]})  # fmt: skip
+    s = api.get("/api/worth").json()["result"]["scores"][0]
+    assert (s["typical_usd"], s["last_buy"]) == (99.0, "2026-10-07T00:00:00+00:00")
+
+
+def test_sample_profit_history_is_local_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "_worth_data", {"finished": "2026-10-07T00:00:00+00:00", "scores": [SCORE | {"pnl_window": 500.0}]})
+    monkeypatch.setenv("SIGNALS_MOCK", "1")
+    s = api.get("/api/worth").json()["result"]["scores"][0]
+    assert s["sample_data"] and len(s["pnl_weeks"]) == 12 and len(s["pnl_daily"]) == 90
+    monkeypatch.setattr(engine, "HOSTED", True)  # usesignals.app: never made-up numbers for real traders
+    s = api.get("/api/worth").json()["result"]["scores"][0]
+    assert "sample_data" not in s and "pnl_weeks" not in s
+
+
 def test_bet_status_marks_settled_bets_instead_of_calling_them_bargains() -> None:
     s = engine.bet_status
     assert s(0.52, 0.525) == "in"  # half a cent above
