@@ -115,10 +115,11 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   the volume, unread, until the owner decides to delete them.
 - **Alerts** on Telegram (off until `TELEGRAM_BOT_TOKEN` is set): "Connect Telegram" on a trader's page gives a
   one-time link to the bot; Start there connects the chat. Every 30 seconds the engine reads followed traders'
-  trades (once per trader) and messages each connected follower about every new buy of $100 or more (split buys
-  within 30 minutes add up), with how
-  far the price has moved (and what $10 buys now when copying is offered and the price is still in range),
-  "Useful / Not useful" and a "Stop alerts from …" button. Two or more followed traders buying the same outcome
+  trades (once per trader) and messages each connected follower about every new buy, whatever the amount and
+  whoever the trader (split buys within 30 minutes add up): who bought what, at what price, the market, the price
+  now, and when they traded with how long before the alert that was. A trader copying is offered for gets one more
+  line while the price is still near theirs; costs stay on the trade's page, which "Check current price" opens.
+  Every alert has "Useful / Not useful" and a "Stop alerts from …" button. Two or more followed traders buying the same outcome
   make one grouped message, edited in place as more buy. Big trades ($10,000 or more, from the SDK's big trades)
   in the markets someone picked (onboarding or the Feed's Change, saved to their account; Skip means none) alert them too. At most 20 alerts per person per UTC day. What
   was sent, the buys behind grouped alerts and the votes are kept in `/data/alerts.db` (SQLite). In the chat,

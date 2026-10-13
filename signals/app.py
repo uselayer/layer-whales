@@ -919,7 +919,7 @@ def _bets_of(d: Any, who: dict[str, Any], since: datetime | None = None) -> list
 @app.get("/api/bet/{wallet}/{market}")
 def one_bet(wallet: str, market: str) -> dict[str, Any]:
     """One trader's buy of one outcome, as a Feed card has it (status, price now, copy_ok): what an alert's
-    "Check your price" opens. From their last 100 trades; 404 when it isn't among them."""
+    "Check current price" opens. From their last 100 trades; 404 when it isn't among them."""
     w = wallet.lower()
     if not _WALLET.fullmatch(w):
         raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
@@ -1057,9 +1057,9 @@ def _best_price(req: OneTrade, p: Any) -> float | None:
 # Google, or Telegram as a custom OpenID Connect provider, both set up in Clerk's dashboard. The page sends
 # Clerk's short-lived session token as a Bearer header and the engine checks it against Clerk's public keys,
 # so no Clerk secret lives here. Alerts go to Telegram: "Connect Telegram" gives a one-time link to our bot,
-# Start there connects that chat, and it gets a message when someone you follow buys $100 or more (alert_pass:
-# with how far the price moved, grouped when several buy the same outcome, at most DAILY_CAP a day), and for big
-# trades in the markets you saved (whale_pass). Sign-in is off unless CLERK_PUBLISHABLE_KEY is set, alerts unless
+# Start there connects that chat, and it gets a message when someone you follow buys, whatever the amount and
+# whoever they are (alert_pass: what they bought, the price now and when they traded, grouped when several buy the
+# same outcome, at most DAILY_CAP a day), and for big trades in the markets you saved (whale_pass). Sign-in is off unless CLERK_PUBLISHABLE_KEY is set, alerts unless
 # TELEGRAM_BOT_TOKEN is. Nothing here places an order.
 
 CLERK_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
@@ -1070,9 +1070,7 @@ CODE_TTL_S = 15 * 60  # a "Connect Telegram" link works this long, once
 ALERT_EVERY_S = 30
 ALERT_MAX_AGE_S = 30 * 60  # a buy first seen later than this isn't alerted (Polymarket shows trades minutes late)
 ALERT_AGAIN_S = 6 * 3600  # one alert per trader and market in this long, however many fills
-ALERT_SPEND = 10.0  # an alert prices this many dollars, for a trader copying is offered for
 DATA_DELAY = "Polymarket's public data runs 3–5 minutes behind."  # said on every alert, and on the Feed
-ALERT_MIN_USD = 100.0  # a buy under this isn't alerted, or counted towards a group: noise
 DAILY_CAP = 20  # alerts per person per UTC day (a group counts once); then one "limit reached" message
 CAP_TEXT = "You've reached today's alert limit; more tomorrow."
 GROUP_S = 6 * 3600  # 2+ traders you follow buying the same outcome within this long make one grouped alert
@@ -1316,8 +1314,9 @@ def _who(wallet: str) -> str:
 
 
 CONNECTED = (
-    f"Connected. You'll get a message here when a trader you follow buys ${ALERT_MIN_USD:,.0f} or more, with what "
-    "they paid and the price now. When two or more of them buy the same thing, one message lists them all, and it's "
+    "Connected. You'll get a message here a few minutes after a trader you follow buys, whatever the amount: what "
+    "they bought, what they paid, the price now and when they traded. Polymarket's public data runs a few minutes "
+    "behind, so alerts are never instant. When two or more of them buy the same thing, one message lists them all, and it's "
     f"updated as more buy. If you've picked markets on Signals, trades of ${WHALE_USD:,.0f} or more there come too. "
     f"At most {DAILY_CAP} alerts a day.\n\nFollowing: {{names}}\n/list: who you follow · /stop: turn alerts off"
 )
@@ -1388,7 +1387,7 @@ def _on_update(u: dict[str, Any]) -> None:
         elif arg:
             _say(chat, f"That link has expired. Tap Connect Telegram on {SITE} again.")
         else:
-            _say(chat, f"Follow traders on {SITE}, then tap Connect Telegram there to get an alert when they buy.")
+            _say(chat, f"Follow traders on {SITE}, then tap Connect Telegram there to get an alert after they buy.")
     elif cmd == "/list":
         mine = next((x for x in _load_follows()["users"].values() if x.get("chat") == chat), None)
         names = [_who(w) for w in (mine or {}).get("follows", [])]
@@ -1435,7 +1434,7 @@ def _chat_owner(chat: str) -> str | None:
 # alerts: every alert sent (and the day's "limit reached" message), per account, with its Telegram message, so
 # the daily cap can count them, a grouped alert can be edited in place and a vote names its alert.
 # buys: the buys each person was told about, per outcome, so the second trader's buy can make a grouped alert.
-# pending: a trader's fills not alerted yet, over the last ALERT_MAX_AGE_S, so split buys add up to ALERT_MIN_USD
+# pending: a trader's fills not alerted yet, over the last ALERT_MAX_AGE_S, so split buys add up into one alert
 # across rounds and restarts.
 # votes: "Useful" / "Not useful", one per alert and account, changeable.
 
@@ -1543,26 +1542,7 @@ def _copy_offered(wallet: str) -> bool:
     return s is not None and copy_offer(s)[0]
 
 
-def _alert_cost(wallet: str, t: WhaleTrade, paid: float, size: float, usd: float) -> str | None:
-    """What ALERT_SPEND dollars would buy now, for a trader the page offers copying for; None otherwise."""
-    if not _copy_offered(wallet):
-        return None
-    trade = WhaleTrade(
-        venue="polymarket", trader=wallet, name=None, market=t.market, side="yes", action="buy", price=paid,
-        size=size, usd=usd, at=t.at, trade_id=f"alert:{t.trade_id}", title=t.title, outcome=t.outcome, url=t.url,
-        token=t.token,
-    )  # fmt: skip
-    try:
-        p = reads.whales.preview_copy(trade, spend=ALERT_SPEND, max_slippage=GET_IN)
-    except VenueError:
-        return None
-    if not p.ok or why_not_copy(paid, p.price):
-        return None
-    return f"${ALERT_SPEND:.0f} gets you {p.contracts:g} contracts at {_cents(p.price)}, plus a ${p.fee:.2f} fee."
-
-
-LINK_TARGETS = {"Buy on Polymarket": "market", "Their record": "record", "Their record on Signals": "record",
-                "Check your price": "check"}  # fmt: skip
+LINK_TARGETS = {"Buy on Polymarket": "market", "Their record": "record", "Check current price": "check"}
 
 
 def _go(aid: str, target: str, url: str) -> str:
@@ -1577,44 +1557,60 @@ def _links(*pairs: tuple[str, str | None], aid: str | None = None) -> str:
                       for label, url in pairs if url)  # fmt: skip
 
 
-def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, size: float, usd: float, aid: str | None = None) -> str:
-    """The Telegram message for one new buy by a trader you follow, showing how far the price has moved.
+# Said only for a trader copying is offered for, while the price is still near theirs: secondary to what happened,
+# and no cost (that's "Check current price"'s, with the fee, the fill and what's for sale).
+COPY_LINE = "<i>Copying is offered for this trader, and you can still get in near their price. Based on past copies, not a promise.</i>"
 
-    Price moved out of the "can still get in" range (``bet_status`` isn't ``in``): "Paid 49¢ · now 60¢, price
-    already moved", for every trader, never "get in". Still in range: for a trader the page offers copying for,
-    "you can still get in" and what $10 buys; for anyone else, following is keeping an eye on them, so what they
-    bought and the price now, neutrally. Every alert has "Buy on Polymarket" (it only opens the market: Signals
-    places no orders) and says Polymarket's public data runs behind."""
+
+def _lag(at: float, seen: float) -> str:
+    """How long before this alert the trade was made, measured: "6 min", or "under a minute"."""
+    mins = round((seen - at) / 60)
+    return "under a minute" if mins < 1 else f"{mins} min"
+
+
+def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, at: float, seen: float,
+                record: bool, aid: str | None) -> str:  # fmt: skip
+    """What happened, the same for every trader: ``head`` (who bought which outcome, at what price, for how much),
+    the market, the price now (", price already moved" outside the "can still get in" range, ``bet_status``), and
+    when they traded, measured against this alert (Polymarket shows trades minutes late). Then COPY_LINE, only when
+    copying is offered for them and the price is still in range. Links: "Check current price" (the trade's own page
+    on Signals, neutral for every trader), their record, "Buy on Polymarket" (it only opens the market: Signals
+    places no orders); then the delay line."""
     e = html.escape
-    title = e(t.title or "A Polymarket market")
-    who, pick = e(_who(wallet)), e(t.outcome or "Yes")
-    record = f"{SITE}/#/worth/{wallet}"
-    if bet_status(paid, now) != "in":
-        return "\n".join([f"<b>{who}</b> bought <b>{pick}</b> (${usd:,.0f}) on {title}",
-                          f"Paid {_cents(paid)} · now {_cents(now)}, price already moved.",
-                          _links(("Their record", record), ("Buy on Polymarket", t.url), aid=aid), DATA_DELAY])  # fmt: skip
-    if not _copy_offered(wallet):
-        return "\n".join([
-            f"<b>{who}</b> bought <b>{pick}</b> at {_cents(paid)} (${usd:,.0f}) on {title} · now {_cents(now)}",
-            _links(("Their record on Signals", record), ("Buy on Polymarket", t.url), aid=aid), DATA_DELAY,
-        ])  # fmt: skip
-    lines = [f"<b>{who}</b> bought <b>{pick}</b> at {_cents(paid)} (${usd:,.0f})", title,
-             f"Now {_cents(now)}: you can still get in."]  # fmt: skip
-    cost = _alert_cost(wallet, t, paid, size, usd)
-    if cost:
-        lines.append(cost)
-    return "\n".join([*lines, _links(("Their record", record), ("Buy on Polymarket", t.url), aid=aid), DATA_DELAY])
+    status = bet_status(paid, now)
+    lines = [head, e(t.title or "A Polymarket market"), f"Now {_cents(now)}{', price already moved' if status != 'in' else ''}.",
+             f"Traded {datetime.fromtimestamp(at, UTC):%H:%M} UTC, {_lag(at, seen)} before this alert."]  # fmt: skip
+    if status == "in" and _copy_offered(wallet):
+        lines.append(COPY_LINE)
+    links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}"),
+                   ("Their record", f"{SITE}/#/worth/{wallet}" if record else None), ("Buy on Polymarket", t.url), aid=aid)  # fmt: skip
+    return "\n".join([*lines, links, DATA_DELAY])
 
 
-def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: float, aid: str | None = None) -> str:
+def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, usd: float, at: float, seen: float,
+                aid: str | None = None) -> str:  # fmt: skip
+    """The Telegram message for one new buy by a trader you follow, whoever they are: following is research
+    first, so every trader's buy gets the same facts (``_trade_text``). ``paid`` is their average across the fills,
+    ``at`` their first fill, ``seen`` when this alert was made."""
+    e = html.escape
+    head = f"<b>{e(_who(wallet))}</b> bought <b>{e(t.outcome or 'Yes')}</b> at {_cents(paid)} (${usd:,.0f})"
+    return _trade_text(head, wallet, t, paid, now, at, seen, True, aid)
+
+
+def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: float, seen: float,
+                aid: str | None = None) -> str:  # fmt: skip
     """One message for 2+ traders you follow buying the same outcome: each one's price and buy time, in the
-    order they bought (so you see who went first), and the price now. Neutral for everyone: no "get in"."""
+    order they bought (so you see who went first), the price now, how long before this alert the latest buy was
+    made, and "Check current price" for the latest buy. Neutral for everyone: no "get in"."""
     e = html.escape
     lines = [f"<b>{len(members)} traders you follow bought {e(t.outcome or 'Yes')}</b> on {e(t.title or 'a Polymarket market')}"]
     for w, price, at in members:
         lines.append(f"· {e(_who(w))} paid {_cents(price)} at {datetime.fromtimestamp(at, UTC):%H:%M} UTC")
-    moved = bet_status(members[-1][1], now) != "in"  # against the latest buyer's price, the closest to now
-    lines += [f"Now {_cents(now)}{', price already moved' if moved else ''}.", _links(("Buy on Polymarket", t.url), aid=aid), DATA_DELAY]
+    last, _, last_at = members[-1]  # the latest buyer: their price is the closest to now
+    moved = bet_status(members[-1][1], now) != "in"
+    lines += [f"Now {_cents(now)}{', price already moved' if moved else ''}.", f"Latest buy {_lag(last_at, seen)} before this alert.",
+              _links(("Check current price", f"{SITE}/#/check/{last}/{t.market}"), ("Buy on Polymarket", t.url), aid=aid),
+              DATA_DELAY]  # fmt: skip
     return "\n".join(lines)
 
 
@@ -1628,10 +1624,10 @@ def _settled(now: float) -> bool:
 
 class NewBuy:
     """One trader's new buy of one outcome, fills merged: what they paid on average and the price now. Its alert
-    text (and the copy-cost preview in it) is built once, however many people follow the trader."""
+    text is built once, however many people follow the trader. ``seen``: when the round that found it ran."""
 
     def __init__(self, wallet: str, fills: list[WhaleTrade], now: float,
-                 totals: tuple[float, float, float] | None = None) -> None:  # fmt: skip
+                 totals: tuple[float, float, float] | None = None, seen: float | None = None) -> None:  # fmt: skip
         self.wallet, self.t = wallet, max(fills, key=lambda f: f.at)
         self.size, self.usd = sum(f.size for f in fills), sum(f.usd for f in fills)
         self.at = min(f.at for f in fills).timestamp()  # when they bought: their first fill
@@ -1639,11 +1635,12 @@ class NewBuy:
             self.size, self.usd, self.at = totals
         self.paid, self.now = self.usd / self.size, now  # what they paid on average, across those buys
         self.outcome = self.t.token or self.t.market  # the exact outcome token; the outcome index is sometimes junk
+        self.seen = time.time() if seen is None else seen
         self._text: str | None = None
 
     def text(self, aid: str) -> str:
         if self._text is None:
-            self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.size, self.usd, ALERT_ID_MARK)
+            self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.usd, self.at, self.seen, ALERT_ID_MARK)
         return self._text.replace(ALERT_ID_MARK, aid)
 
 
@@ -1691,13 +1688,13 @@ def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
     if group:
         if group[2] is not None:
             try:
-                tg("editMessageText", chat_id=group[1], message_id=group[2], text=_group_text(first, b.t, b.now, group[0]),
+                tg("editMessageText", chat_id=group[1], message_id=group[2], text=_group_text(first, b.t, b.now, b.seen, group[0]),
                    parse_mode="HTML", disable_web_page_preview=True, reply_markup=_keyboard(group[0]))  # fmt: skip
             except RuntimeError:
                 pass  # deleted, or Telegram is down: nothing new to ping about either way
         return 0
     if len(first) >= 2:
-        aid = _send(uid, chat, "group", lambda aid: _group_text(first, b.t, b.now, aid), outcome=b.outcome,
+        aid = _send(uid, chat, "group", lambda aid: _group_text(first, b.t, b.now, b.seen, aid), outcome=b.outcome,
                     trade_at=first[0][2], trigger_at=b.at)  # fmt: skip
         return 1 if aid else 0
     aid = _send(uid, chat, "buy", b.text, trader=b.wallet, outcome=b.outcome, trade_at=b.at, stop=b.wallet)
@@ -1725,7 +1722,7 @@ def _added_up(w: str, market: str) -> None:
 
 def alert_pass(now: float | None = None) -> int:
     """One round: each followed trader's trades, read once however many people follow them, and for each new
-    buy of ALERT_MIN_USD or more, a message to every connected follower (grouped when 2+ traders they follow
+    buy, whatever the amount and whoever the trader, a message to every connected follower (grouped when 2+ traders they follow
     bought the same outcome), then big trades in people's chosen markets. A trader's trades from before their
     first round are only noted, never alerted. No alert for a buy with no price now (no open position to read it
     from: there's no saying how far the price moved), nor when the price now is settled (2¢ or less, 98¢ or more).
@@ -1761,8 +1758,8 @@ def alert_pass(now: float | None = None) -> int:
             price = prices.get(market)
             if now - _alerted.get((w, market), 0) < ALERT_AGAIN_S or price is None or _settled(price):
                 continue
-            b = NewBuy(w, ts, price, totals.get(market))
-            if b.usd < ALERT_MIN_USD or _recently(None, w, b.outcome, now):
+            b = NewBuy(w, ts, price, totals.get(market), seen=now)
+            if _recently(None, w, b.outcome, now):
                 continue
             _alerted[(w, market)] = now
             _added_up(w, market)
@@ -1784,22 +1781,17 @@ _whale: dict[str, Any] = {"started": False, "seen": set()}
 _whale_alerted: dict[tuple[str, str, str], float] = {}  # (account, trader, market) -> when
 
 
-def _whale_text(t: WhaleTrade, now: float, category: str | None, aid: str | None = None) -> str:
-    """A big trade in your markets: who (their Signals page when we've scored them, else "Trader 0x91…76"),
-    the price they paid and now, "Check your price", "Buy on Polymarket" and the delay. Neutral unless copying is
-    offered for that trader and the price is still in range."""
+def _whale_text(t: WhaleTrade, now: float, category: str | None, seen: float, aid: str | None = None) -> str:
+    """A big trade in your markets, with the same facts as a followed trader's buy (``_trade_text``): who (linked
+    to their Signals page when we've scored them, else "Trader 0x91…76"), what they bought at what price, the
+    market, the price now and when they traded. COPY_LINE only when copying is offered for them and the price is
+    still in range."""
     e = html.escape
     w = (t.trader or "").lower()
     who = f'<a href="{e(SITE)}/#/worth/{w}">{e(_who(w))}</a>' if _scored(w) else e(_who(w))
-    status = bet_status(t.price, now)
-    price = (f"Paid {_cents(t.price)} · now {_cents(now)}, price already moved." if status != "in"
-             else f"Paid {_cents(t.price)} · now {_cents(now)}: you can still get in." if _copy_offered(w)
-             else f"Paid {_cents(t.price)} · now {_cents(now)}.")  # fmt: skip
     where = f" in {e(category)}" if category else ""
-    head = f"<b>Big trade{where}:</b> {who} bought <b>{e(t.outcome or 'Yes')}</b> (${t.usd:,.0f}) on {e(t.title or 'a Polymarket market')}"
-    return "\n".join([head, price,
-                      _links(("Check your price", f"{SITE}/#/check/{w}/{t.market}"), ("Buy on Polymarket", t.url), aid=aid),
-                      DATA_DELAY])  # fmt: skip
+    head = f"<b>Big trade{where}:</b> {who} bought <b>{e(t.outcome or 'Yes')}</b> at {_cents(t.price)} (${t.usd:,.0f})"
+    return _trade_text(head, w, t, t.price, now, t.at.timestamp(), seen, False, aid)
 
 
 def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
@@ -1840,7 +1832,7 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
             continue
         if price_now is None or _settled(price_now):
             continue
-        text = _whale_text(t, price_now, cat, ALERT_ID_MARK)  # once for everyone it goes to
+        text = _whale_text(t, price_now, cat, now, ALERT_ID_MARK)  # once for everyone it goes to
         for uid in to:
             if _sent_today(uid, ("whale",)) >= WHALE_DAILY or _recently(uid, w, outcome, now):
                 continue

@@ -139,8 +139,8 @@ def test_every_new_buy_alerts_with_how_far_the_price_moved(api: TestClient, monk
         Trader(venue="polymarket", id=SHARP, name="Sharp"), "visible", {},
         [WhalePosition(m, None, "Yes", 100, 0.4, p, None, None) for m, p in now_price.items()], list(trades))  # fmt: skip
     monkeypatch.setattr(engine.reads.whales, "trader", detail)
-    monkeypatch.setattr(engine, "copy_offer", lambda s: (False, "Not offered."))  # alerted, but no $10 line
-    monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: pytest.fail("priced a trader copying isn't offered for"))
+    monkeypatch.setattr(engine, "copy_offer", lambda s: (False, "Not offered."))  # alerted all the same, neutrally
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: pytest.fail("an alert never prices a copy"))
     engine.tg.sent.clear()
     assert engine.alert_pass() == 0  # the first round only notes what they've done already
     fresh = datetime.now(UTC)
@@ -148,11 +148,11 @@ def test_every_new_buy_alerts_with_how_far_the_price_moved(api: TestClient, monk
     engine._cache.clear()
     assert engine.alert_pass() == 2  # one message for the two fills on 0xcid:0, and one for the moved market
     text, moved = engine.tg.sent[-2]["text"], engine.tg.sent[-1]["text"]
-    assert "Paid 40¢ · now 60¢, price already moved." in moved and "get in" not in moved
+    assert "bought <b>Yes</b> at 40¢ ($400)" in moved and "Now 60¢, price already moved." in moved and "get in" not in moved
     assert "Buy on Polymarket" in moved and moved.endswith("Polymarket's public data runs 3–5 minutes behind.")
-    # Copying isn't offered for them: following is keeping an eye on them, so the alert reads neutrally.
-    assert "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 41¢ ($820) on Will it &lt;rain&gt;? · now 41¢" in text
-    assert "you can still get in" not in text and "$10 gets you" not in text
+    # Copying isn't offered for them: following is research too, so the alert gives the same facts, neutrally.
+    assert text.splitlines()[:3] == ["<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 41¢ ($820)", "Will it &lt;rain&gt;?", "Now 41¢."]
+    assert "before this alert." in text and "you can still get in" not in text and engine.COPY_LINE not in text
     assert "Buy on Polymarket" in text and SHARP in text  # the link only opens the market
     assert text.endswith("Polymarket's public data runs 3–5 minutes behind.")
     keys = engine.tg.sent[-1]["reply_markup"]["inline_keyboard"]
@@ -166,46 +166,22 @@ def test_every_new_buy_alerts_with_how_far_the_price_moved(api: TestClient, monk
     assert api.get("/api/me", headers=auth()).json()["follows"] == []
 
 
-def test_an_alert_prices_ten_dollars_for_a_trader_copying_is_offered_for(
+def test_an_alert_gives_the_same_facts_for_every_trader_and_a_copy_line_only_where_copying_is_offered(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: pytest.fail("an alert never prices a copy"))
+    at = datetime(2026, 10, 13, 14, 2, tzinfo=UTC).timestamp()
+    links = (f'<a href="{engine.SITE}/#/check/{SHARP}/0xcid:0">Check current price</a> · '
+             f'<a href="{engine.SITE}/#/worth/{SHARP}">Their record</a> · <a href="https://polymarket.com/event/rain">Buy on Polymarket</a>')  # fmt: skip
+    facts = ["<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 40¢ ($40)", "Will it &lt;rain&gt;?", "Now 41¢.",
+             "Traded 14:02 UTC, 6 min before this alert."]  # fmt: skip
     monkeypatch.setattr(engine, "copy_offer", lambda s: (True, None))
-
-    class Preview:
-        ok, price, contracts, fee = True, 0.41, 24.0, 0.15
-
-    monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: Preview())
-    line = engine._alert_cost(SHARP, buy(1, datetime.now(UTC)), 0.40, 100, 40)
-    assert line == "$10 gets you 24 contracts at 41¢, plus a $0.15 fee."
+    text = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 40, at, at + 6 * 60 + 10)
+    assert text.splitlines() == [*facts, engine.COPY_LINE, links, "Polymarket's public data runs 3–5 minutes behind."]
+    assert "not a promise" in engine.COPY_LINE and "$" not in engine.COPY_LINE  # secondary, no cost: that's the preview's
     monkeypatch.setattr(engine, "copy_offer", lambda s: (False, "No."))
-    assert engine._alert_cost(SHARP, buy(1, datetime.now(UTC)), 0.40, 100, 40) is None
-
-
-def test_an_alert_for_a_trader_copying_is_offered_for_says_you_can_still_get_in(
-    api: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(engine, "copy_offer", lambda s: (True, None))
-
-    class Preview:
-        ok, price, contracts, fee = True, 0.41, 24.0, 0.15
-
-    monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: Preview())
-    text = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 100, 40)
-    assert text.splitlines() == [
-        "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 40¢ ($40)",
-        "Will it &lt;rain&gt;?",
-        "Now 41¢: you can still get in.",
-        "$10 gets you 24 contracts at 41¢, plus a $0.15 fee.",
-        f'<a href="{engine.SITE}/#/worth/{SHARP}">Their record</a> · <a href="https://polymarket.com/event/rain">Buy on Polymarket</a>',
-        "Polymarket's public data runs 3–5 minutes behind.",
-    ]
-    monkeypatch.setattr(engine, "copy_offer", lambda s: (False, "No."))
-    neutral = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 100, 40)
-    assert neutral.splitlines() == [
-        "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 40¢ ($40) on Will it &lt;rain&gt;? · now 41¢",
-        f'<a href="{engine.SITE}/#/worth/{SHARP}">Their record on Signals</a> · <a href="https://polymarket.com/event/rain">Buy on Polymarket</a>',
-        "Polymarket's public data runs 3–5 minutes behind.",
-    ]
+    neutral = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 40, at, at + 6 * 60 + 10)
+    assert neutral.splitlines() == [*facts, links, "Polymarket's public data runs 3–5 minutes behind."]
 
 
 def test_clerk_frontend_api_comes_from_the_publishable_key() -> None:

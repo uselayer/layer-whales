@@ -32,22 +32,30 @@ behind Vercel (see README, "Hosting").
   trade means the cost preview, then "Buy on Polymarket ↗", where the user buys it themselves. A session never
   places a real-money order, not even a test one.
 - Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
-  asked for only to follow a trader, and the button says so ("Follow · get an alert when they buy"). Alerts go
-  to Telegram (`alert_pass` in `app.py`), for every buy of $100 or more by a trader you follow (their buys of one
-  outcome within 30 minutes add up, across rounds and restarts, shown as the total at the average price), with how far the
-  price has moved: outside the "can still get in" range it says "paid 49¢ · now 60¢, price already moved", never
-  "get in", whoever the trader. No alert at all when the price now is settled (2¢ or less, 98¢ or more). At most
+  asked for only to follow a trader, and the button says so ("Follow · get an alert after they buy"). Alerts go
+  to Telegram (`alert_pass` in `app.py`). Signals is trader discovery and trading intelligence first, copying
+  second: following is research, so every buy by a trader you follow alerts you, whatever the amount and whoever
+  the trader (their buys of one outcome within 30 minutes add up, across rounds and restarts, shown as the total
+  at the average price). Every alert gives the same facts for every trader (`_trade_text`): who bought which
+  outcome at what price and for how much, the market, the price now, and when they traded with how long before
+  the alert that was, measured ("Traded 14:02 UTC, 6 min before this alert."), never "just now" or "live".
+  Outside the "can still get in" range it says "Now 60¢, price already moved.", whoever the trader. Copying comes
+  after the facts, in one italic line (`COPY_LINE`), only for a trader copying is offered for (`copy_ok`) and
+  only while the price is still in range; never a cost in the alert: costs, the fill, liquidity and risks are the
+  trade page's. Every alert links "Check current price" (`#/check/<wallet>/<market>`, the trade's own page,
+  neutral for every trader), and "Buy on Polymarket", which only opens the market. No alert at all when the price
+  now is settled (2¢ or less, 98¢ or more). At most
   20 alerts per person per UTC day, then one "You've reached today's alert limit; more tomorrow" and nothing until
   the next day. When 2+ traders you follow buy the same outcome, each within 6 hours of the one before (1 hour in
-  Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the price now) and
-  later buys edit it in place; it counts once. Every alert has "Useful / Not useful" (one vote per alert and
-  account, changeable). Big trades ($10,000 or more) in your chosen markets alert you whoever the trader, at most 5
+  Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the price now, how
+  long before the alert the latest buy was) and later buys edit it in place; it counts once. Every alert has
+  "Useful / Not useful" (one vote per alert and account, changeable). Big trades ($10,000 or more) in your chosen
+  markets alert you whoever the trader, with the same facts, at most 5
   a day within the 20. Only a choice made where the page asks (onboarding, or the Feed's "Your markets · Change")
   is kept on the account (per account like follows); Traders' chips only filter the view, and nothing saved or []
-  (Skip, all markets) means no big-trade alerts. Following is also keeping an eye on a trader, not only copying:
-  for a trader copying isn't offered for, the alert reads neutrally (what they bought and the price now, their
-  record, and "Buy on Polymarket", which only opens the market), never "you can still get in" and never green.
-  Every alert and trade card keeps that link to the market, whoever the trader. Every alert, and the Feed, says
+  (Skip, all markets) means no big-trade alerts. For a trader copying isn't offered for, an alert is never
+  "you can still get in" and never green.
+  Every alert and trade card keeps the link to the market, whoever the trader. Every alert, and the Feed, says
   Polymarket's public data runs 3–5 minutes behind. The engine checks Clerk's session token itself (public keys,
   no Clerk secret). Never let one account see or change another's follows, and never let an answer about a
   signed-in person be cached.
