@@ -29,7 +29,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from uselayer import Client, Copier, Trader, VenueError, WhaleTrade
-from uselayer.whale_scores import category_of
+from uselayer.whale_scores import COPY_BETS, SEGMENTS, Stat, category_of, copyable_verdict
 
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
@@ -184,7 +184,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
-WORTH_FORMAT = 5  # bump when the kept result gains fields; an older one is re-checked on launch (5: uselayer 0.7.0 scores)
+WORTH_FORMAT = 6  # bump when the kept result gains fields; an older one is re-checked on launch (6: uselayer 0.8.0 scores)
 WORTH_MIN_AGE_HOSTED_S = 3600  # hosted: "Check again" only starts a new check once the last is this old
 WORTH_ONE_KEEP = 500  # wallets scored on demand, kept until the next check
 _worth_stop = threading.Event()
@@ -201,10 +201,27 @@ def _worth_load() -> dict[str, Any] | None:
     global _worth_data
     if _worth_data is None and worth_file().exists():
         try:
-            _worth_data = json.loads(worth_file().read_text())
+            _worth_data = _worth_upgrade(json.loads(worth_file().read_text()))
         except ValueError:
             _worth_data = None
     return _worth_data
+
+
+def _worth_upgrade(data: dict[str, Any]) -> dict[str, Any]:
+    """A result kept before uselayer 0.8.0, shown while the new check runs, judged by today's copy rule: its
+    copy range widened to Student's t, ``copyable`` only when that range's bottom is above zero, and a proven or
+    quiet sharp whose copies aren't reliably positive shown as the SDK now would (too fast to copy). Never
+    looser than the kept verdicts: nothing is promoted."""
+    if (data.get("format") or 0) >= 6:
+        return data
+    for s in data.get("scores", []):
+        copy = Stat.from_dict(s["copy"]) if s.get("copy") else None
+        s["copy"] = copy.to_dict() if copy else None
+        if s.get("copyable") == "yes" and copyable_verdict(copy) != "yes":
+            s["copyable"] = copyable_verdict(copy)
+        if s.get("segment") in ("proven", "quiet") and s.get("copyable") != "yes":
+            s["segment"], s["label"], s["action"] = "too_fast", SEGMENTS["too_fast"][0], SEGMENTS["too_fast"][1]
+    return data
 
 
 def _worth_run() -> None:
@@ -297,12 +314,67 @@ def _board(s: dict[str, Any]) -> dict[str, Any]:
         days = max(1.0, (_iso_ts(window[1]) - _iso_ts(window[0])) / 86400)
         out["trades_per_day"] = round(s["decisions"] / days, 2)
     price = s.get("avg_price") or _median([b.get("price") for b in bets])
-    copy = s.get("copy") or {}
-    # what a copier a few minutes late kept after the fee, per dollar they paid
-    out["copy_return"] = copy["mean"] / price if copy.get("mean") is not None and price else None
+    copy = Stat.from_dict(s["copy"]) if s.get("copy") else None
+    # What a copier a few minutes late kept after the fee, per dollar they paid: an estimate with its 95% range.
+    # Only the range's bottom ranks a trader ("Copy estimate" sort), and only over COPY_BETS bets or more.
+    per = (lambda x: x / price) if copy and price else None
+    out["copy_return"] = per(copy.mean) if per else None
+    out["copy_return_low"] = per(copy.low) if per else None
+    out["copy_return_high"] = per(copy.high) if per else None
+    out["copy_rank"] = out["copy_return_low"] if copy and copy.n >= COPY_BETS else None
+    out["copy_ok"], out["copy_why"] = copy_offer(s)
     if _mock() and s.get("pnl_weeks") is None:
         out |= _mock_history(s)
+    out |= _consistency(out.get("pnl_weeks", s.get("pnl_weeks")))
+    won, settled = out.get("won", s.get("won")), out.get("settled", s.get("settled"))
+    # Win rate ranks by the bottom of its 95% range, and only from WIN_MIN settled trades: 1 of 1 isn't 100%.
+    out["win_low"] = wilson_low(won, settled) if won is not None and settled and settled >= WIN_MIN else None
     return out
+
+
+WIN_MIN = 10  # settled trades before a win rate can rank a trader
+WEEKS_MIN = 4  # weeks of history before consistency can rank a trader
+
+
+def wilson_low(k: int, n: int, z: float = 1.96) -> float:
+    """The bottom of the 95% range of a rate of ``k`` in ``n`` (Wilson's): small samples rank low, not first."""
+    p = k / n
+    centre, spread = p + z * z / (2 * n), z * (p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5
+    return max(0.0, (centre - spread) / (1 + z * z / n))  # never below 0 by rounding
+
+
+def _consistency(weeks: list[float | None] | None) -> dict[str, Any]:
+    """Weeks in profit out of the weeks they have history for: a week before their first trade (None, from
+    uselayer 0.8) is left out, never counted as a losing week. Ranks by the bottom of the 95% range, from
+    WEEKS_MIN weeks."""
+    if not isinstance(weeks, list):
+        return {"weeks_up": None, "weeks_known": None, "consistency_low": None}
+    known = [w for w in weeks if w is not None]
+    up = sum(1 for w in known if w > 0)
+    low = wilson_low(up, len(known)) if len(known) >= WEEKS_MIN else None
+    return {"weeks_up": up, "weeks_known": len(known), "consistency_low": low}
+
+
+COPY_TIERS = ("proven", "quiet", "rising")  # the recommended tiers copying can be offered for
+
+
+def copy_offer(s: dict[str, Any]) -> tuple[bool, str | None]:
+    """Whether Signals offers copying this trader, and if not, why, in a plain sentence. One rule for Traders, a
+    trader's page, the Feed and the copy routes: a recommended tier (Proven sharp, Quiet sharp, Rising), and
+    copies a few minutes late reliably above zero after fees (the SDK's ``copyable``: the bottom of the 95%
+    range above zero). Never Sharp but too fast, Lucky, No clear edge, market makers or traders away."""
+    seg = s.get("segment")
+    if seg == "too_fast":
+        return False, "No proven copy advantage: what copies kept after fees isn't reliably above zero, so copying isn't offered."
+    if seg == "inactive":
+        return False, "They haven't traded in the last 7 days, so copying isn't offered while they're away."
+    if seg not in COPY_TIERS:
+        return False, "Not a trader we recommend, so copying isn't offered."
+    if s.get("copyable") == "unknown":
+        return False, "Too few of their trades had prices after the buy to tell whether copies gain, so copying isn't offered yet."
+    if s.get("copyable") != "yes":
+        return False, "What copies a few minutes late kept after fees isn't reliably above zero, so copying isn't offered."
+    return True, None
 
 
 def _mock_history(s: dict[str, Any]) -> dict[str, Any]:
@@ -351,6 +423,16 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
     for s in (data or {}).get("scores", []):
         if s["wallet"] == w:
             return with_links(s) | _board(s)
+    s = _score_of(w)
+    return with_links(s) | _board(s)
+
+
+def _score_of(wallet: str) -> dict[str, Any]:
+    """A wallet's score: from the last check, or scored now (5–30 s) and kept until the next check."""
+    w = wallet.lower()
+    for s in (_worth_load() or {}).get("scores", []):
+        if s["wallet"] == w:
+            return s  # type: ignore[no-any-return]
     if w not in _worth_one:
         try:
             _worth_one[w] = reads.whales.score(w).to_dict()
@@ -358,7 +440,31 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
             raise venue_error(e) from e
         if len(_worth_one) > WORTH_ONE_KEEP:
             del _worth_one[next(iter(_worth_one))]  # the oldest
-    return with_links(_worth_one[w]) | _board(_worth_one[w])
+    return _worth_one[w]
+
+
+def refuse_unless_copy_offered(venue: str, wallet: str) -> None:
+    """The copy routes' check (400, a plain sentence): a Polymarket trader is copied only when ``copy_offer``
+    says so, the same rule the page shows. Kalshi traders have no score, so nothing to check them against."""
+    if venue != "polymarket":
+        return
+    ok, why = copy_offer(_score_of(wallet))
+    if not ok:
+        raise HTTPException(400, detail=why)
+
+
+ACCOUNT_TTL_S = 60
+_WALLET = re.compile(r"0x[0-9a-f]{40}")
+
+
+@app.get("/api/account/{wallet}")
+def account(wallet: str) -> dict[str, Any]:
+    """A Polymarket wallet's account now: open positions and cash, with when they were read. ``total_usd`` only
+    when both parts were read (``complete``); ``missing`` names a part that couldn't be. Kept for a minute."""
+    w = wallet.lower()
+    if not _WALLET.fullmatch(w):
+        raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
+    return cached(f"account:{w}", ACCOUNT_TTL_S, lambda: reads.whales.account(w).to_dict())  # type: ignore[no-any-return]
 
 
 def with_links(s: dict[str, Any]) -> dict[str, Any]:
@@ -428,6 +534,7 @@ def live() -> dict[str, Any]:
     since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
     bets: list[dict[str, Any]] = []
     failed = 0
+    offers = {s["wallet"]: copy_offer(s)[0] for s in follow}
     for s in follow:
         try:
             d = cached(
@@ -444,7 +551,7 @@ def live() -> dict[str, Any]:
             b = one.setdefault(
                 t.market,
                 {"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
-                 "market": t.market, "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at,
+                 "copy_ok": offers[s["wallet"]], "market": t.market, "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at,
                  "usd": 0.0, "size": 0.0, "price_now": now.get(t.market), "token": t.token},
             )  # fmt: skip
             b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
@@ -453,8 +560,8 @@ def live() -> dict[str, Any]:
     cats = _categories([b["market"] for b in bets]) if bets else {}
     for b in bets:
         b["status"], b["category"] = bet_status(b["price"], b["price_now"]), cats.get(b["market"])
-    return {"traders": [{"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"]}
-                        for s in follow],
+    return {"traders": [{"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
+                         "copy_ok": offers[s["wallet"]]} for s in follow],
             "failed": failed, "hours": FEED_HOURS, "bets": bets}  # fmt: skip
 
 
@@ -737,6 +844,8 @@ def add_trader(req: CopyTrader, box: Sandbox = Depends(me)) -> dict[str, Any]:
         raise HTTPException(400, detail=f"Signals covers {' and '.join(VENUE_NAMES[v] for v in VENUES)} traders only right now.")
     rules = box.load_rules()
     others = [t for t in rules["traders"] if _key(t["venue"], t["id"]) != _key(req.venue, req.id)]
+    if len(others) == len(rules["traders"]):  # someone new: only a trader the page offers copying for
+        refuse_unless_copy_offered(req.venue, req.id)
     if HOSTED and len(others) >= MAX_TRADERS:
         raise HTTPException(400, detail=f"You can copy up to {MAX_TRADERS} traders at a time. Stop one to add another.")
     if HOSTED and not box.copiers and sum(1 for b in list(_boxes.values()) if b.copiers) >= MAX_COPYING:
@@ -797,6 +906,7 @@ def _checked_preview(req: OneTrade, box: Sandbox) -> Any:
     itself only refuses a price above theirs plus ``max_slippage``."""
     if req.spend is not None and req.spend <= 0:
         raise HTTPException(400, detail="Enter an amount above $0.")
+    refuse_unless_copy_offered("polymarket", req.wallet)
     try:
         p = box.paper().whales.preview_copy(_their_trade(req), **_sized(req, box.load_rules()))
     except VenueError as e:

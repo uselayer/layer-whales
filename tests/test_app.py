@@ -32,6 +32,9 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
     monkeypatch.setattr(w, "links", lambda *a, **k: [])
     monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
     monkeypatch.setattr(engine, "_boxes", {})
+    # The last check found 0xabc copyable: the copy routes only take a trader the page offers copying for.
+    monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [COPYABLE]})
+    monkeypatch.setattr(engine, "_worth_one", {})
     return TestClient(engine.app)
 
 
@@ -99,6 +102,7 @@ def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
 
 
 SCORE = {"wallet": "0xabc", "name": "sharpie", "segment": "quiet", "action": "follow", "sample": [{"market": "m"}]}
+COPYABLE = SCORE | {"label": "Quiet sharps", "copyable": "yes", "copy": {"mean": 0.02, "margin": 0.01, "n": 30, "z": 4.0, "low": 0.01, "high": 0.03}}
 
 
 class _Score:
@@ -499,3 +503,154 @@ def test_copiers_of_one_trader_share_one_read(api: TestClient, monkeypatch: pyte
     assert calls == ["amy"]
     a.close()
     b.close()
+
+
+# ---- copying: one rule (copy_offer) for Traders, a trader's page, the Feed and the copy routes ----
+
+
+def _scored(segment: str, copyable: str, wallet: str = "0xabc") -> dict[str, Any]:
+    return SCORE | {"wallet": wallet, "segment": segment, "label": segment, "copyable": copyable}
+
+
+def test_copying_is_offered_only_for_recommended_tiers_with_copies_reliably_above_zero() -> None:
+    def offer(seg: str, cp: str) -> tuple[bool, str | None]:
+        return engine.copy_offer(_scored(seg, cp))
+
+    assert offer("proven", "yes") == (True, None) and offer("quiet", "yes")[0] and offer("rising", "yes")[0]
+    for seg in ("too_fast", "lucky", "no_edge", "no_view", "inactive"):
+        ok, why = offer(seg, "yes")  # a good copy result never rescues another tier
+        assert not ok and why
+    assert "reliably above zero" in (offer("too_fast", "no")[1] or "")
+    assert not offer("rising", "no")[0] and "reliably above zero" in (offer("rising", "no")[1] or "")
+    assert not offer("rising", "unknown")[0] and "Too few" in (offer("rising", "unknown")[1] or "")
+    assert not engine.copy_offer(SCORE)[0]  # no copyable verdict at all: not offered
+
+
+def test_the_copy_routes_refuse_a_trader_the_page_doesnt_offer_copying_for(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(engine, "_copy_loop", lambda: None)
+    monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [
+        COPYABLE, _scored("too_fast", "no", "0xfast"), _scored("no_edge", "yes", "0xmeh")]})  # fmt: skip
+    bought: list[Any] = []
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: pytest.fail("previewed"))
+    monkeypatch.setattr(Whales, "copy_trade", lambda self, trade, **kw: bought.append(trade))
+    for wallet, words in (("0xfast", "No proven copy advantage"), ("0xmeh", "Not a trader we recommend")):
+        r = api.post("/api/copy/traders", json={"venue": "polymarket", "id": wallet})
+        assert r.status_code == 400 and words in r.json()["detail"]
+        for path in ("/api/trade/preview", "/api/trade/copy"):
+            r = api.post(path, json={"wallet": wallet, "market": "0xcid:1", "price": 0.5})
+            assert r.status_code == 400 and words in r.json()["detail"], path
+    assert bought == [] and local().load_rules()["traders"] == []
+
+    class Lucky:
+        def __init__(self, w: str) -> None:
+            self.w = w
+
+        def to_dict(self) -> dict[str, Any]:
+            return _scored("lucky", "yes", self.w)
+
+    # A wallet nobody has scored yet is scored first, then judged by the same rule.
+    monkeypatch.setattr(engine.reads.whales, "score", Lucky)
+    assert api.post("/api/copy/traders", json={"venue": "polymarket", "id": "0xNEW"}).status_code == 400
+    # A copyable trader is taken, and one copied before a check demoted them can still be saved and stopped.
+    assert api.post("/api/copy/traders", json={"venue": "polymarket", "id": "0xabc"}).status_code == 200
+    monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [_scored("too_fast", "no")]})
+    assert api.post("/api/copy/traders", json={"venue": "polymarket", "id": "0xabc"}).status_code == 200
+    assert api.delete("/api/copy/traders/polymarket/0xabc").json()["rules"]["traders"] == []
+
+
+def test_traders_and_the_feed_carry_the_same_copy_verdict(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    scores = [COPYABLE, _scored("rising", "no", "0xr")]
+    monkeypatch.setattr(engine, "_worth_data",
+                        {"finished": "2026-10-07T00:00:00+00:00", "format": engine.WORTH_FORMAT, "scores": scores})  # fmt: skip
+    board = {s["wallet"]: s for s in api.get("/api/worth").json()["result"]["scores"]}
+    assert board["0xabc"]["copy_ok"] is True and board["0xr"]["copy_ok"] is False and board["0xr"]["copy_why"]
+    assert api.get("/api/worth/0xr").json()["copy_ok"] is False  # a trader's page
+    buy = WhaleTrade("polymarket", "x", "x", "0xc:0", "yes", "buy", 0.4, 10, 4.0, datetime.now(UTC), "t9", title="A")
+    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(AMY, "visible", {}, [], [buy]))
+    monkeypatch.setattr(engine, "_categories", lambda markets: {})
+    live = api.get("/api/live").json()
+    assert {t["wallet"]: t["copy_ok"] for t in live["traders"]} == {"0xabc": True, "0xr": False}
+    assert {b["wallet"]: b["copy_ok"] for b in live["bets"]} == {"0xabc": True, "0xr": False}  # the Feed's buttons
+
+
+def test_a_result_kept_before_uselayer_0_8_is_judged_by_todays_copy_rule() -> None:
+    old = {"format": 5, "scores": [
+        # copies +1¢ ± 1.3¢ on 9 bets (z 1.5): copyable by the old rule, not by today's
+        SCORE | {"wallet": "0xa", "segment": "quiet", "copyable": "yes",
+                 "copy": {"mean": 0.01, "margin": 0.01307, "n": 9, "z": 1.5}},
+        # copies +2¢ ± 0.5¢ on 40 bets: still reliably above zero with Student's t
+        SCORE | {"wallet": "0xb", "segment": "proven", "copyable": "yes",
+                 "copy": {"mean": 0.02, "margin": 0.005, "n": 40, "z": 7.8}},
+        # not copyable before: never promoted
+        SCORE | {"wallet": "0xc", "segment": "too_fast", "copyable": "no",
+                 "copy": {"mean": 0.03, "margin": 0.01, "n": 40, "z": 5.9}},
+    ]}  # fmt: skip
+    a, b, c = engine._worth_upgrade(json.loads(json.dumps(old)))["scores"]
+    assert (a["segment"], a["label"], a["copyable"]) == ("too_fast", "Sharp but too fast", "no")
+    assert a["copy"]["margin"] > 0.01307 and a["copy"]["low"] < 0  # widened to t for 8 degrees of freedom
+    assert (b["segment"], b["copyable"]) == ("proven", "yes") and b["copy"]["low"] > 0
+    assert (c["segment"], c["copyable"]) == ("too_fast", "no")
+    new = {"format": 6, "scores": [dict(old["scores"][0])]}
+    assert engine._worth_upgrade(new)["scores"][0]["segment"] == "quiet"  # a current result is left as the SDK gave it
+
+
+# ---- ranking: small samples don't top a sort, and missing weeks aren't losing weeks ----
+
+
+def test_win_rate_ranks_by_the_bottom_of_its_range_and_needs_ten_settled_trades() -> None:
+    def win(won: int, settled: int) -> float | None:
+        return engine._board(SCORE | {"won": won, "settled": settled})["win_low"]  # type: ignore[no-any-return]
+
+    assert win(1, 1) is None and win(9, 9) is None  # 100% on a handful doesn't rank
+    assert win(45, 50) > win(10, 10) > win(6, 10)  # type: ignore[operator]  # 90% of 50 beats 100% of 10
+    assert engine.wilson_low(0, 10) == 0.0 and 0 < engine.wilson_low(10, 10) < 1
+
+
+def test_consistency_counts_only_weeks_with_history() -> None:
+    young: list[float | None] = [None] * 9 + [120.0, -40.0, 300.0]  # their first trade was three weeks ago
+    c = engine._consistency(young)
+    assert (c["weeks_up"], c["weeks_known"]) == (2, 3)  # 2 of 3, not 2 of 12
+    assert c["consistency_low"] is None  # 3 weeks: too few to rank on
+    flat = engine._consistency([0.0] * 8 + [10.0] * 4)
+    assert (flat["weeks_up"], flat["weeks_known"]) == (4, 12)  # a flat week they traded through isn't a profit
+    assert engine._consistency([10.0] * 4)["consistency_low"] > engine._consistency([10.0] * 3 + [-1.0])["consistency_low"]
+    assert engine._consistency(None) == {"weeks_up": None, "weeks_known": None, "consistency_low": None}
+    s = engine._board(COPYABLE | {"pnl_weeks": young})
+    assert (s["weeks_up"], s["weeks_known"]) == (2, 3)
+
+
+def test_the_copy_estimate_comes_with_its_range_and_ranks_by_its_bottom() -> None:
+    s = engine._board(COPYABLE | {"avg_price": 0.5})
+    assert (s["copy_return"], s["copy_return_low"], s["copy_return_high"]) == pytest.approx((0.04, 0.02, 0.06))
+    assert s["copy_rank"] == pytest.approx(0.02)
+    few = engine._board(COPYABLE | {"avg_price": 0.5,
+                                    "copy": {"mean": 0.05, "margin": 0.01, "n": 5, "z": 9, "low": 0.04, "high": 0.06}})  # fmt: skip
+    assert few["copy_rank"] is None  # 5 bets: shown, but not ranked
+    assert engine._board(SCORE)["copy_return"] is None and engine._board(SCORE)["copy_rank"] is None
+
+
+# ---- a wallet's account: when it was read, and never part of it shown as all of it ----
+
+
+def test_a_wallets_account_says_when_it_was_read_and_which_part_is_missing(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from uselayer import Account
+
+    seen: list[str] = []
+
+    def account(w: str) -> Account:
+        seen.append(w)
+        return Account(wallet=w, positions_usd=1234.57, cash_usd=None, read_at=datetime(2026, 10, 13, 3, tzinfo=UTC))
+
+    monkeypatch.setattr(engine.reads.whales, "account", account)
+    wallet = "0x" + "ab" * 20
+    a = api.get("/api/account/0x" + "AB" * 20).json()
+    assert (a["positions_usd"], a["cash_usd"], a["total_usd"], a["complete"], a["missing"]) == (
+        1234.57, None, None, False, ["cash"])  # fmt: skip
+    assert a["read_at"] == "2026-10-13T03:00:00+00:00"
+    api.get(f"/api/account/{wallet}")
+    assert seen == [wallet]  # kept for a minute: one read
+    assert api.get("/api/account/0x123").status_code == 400
