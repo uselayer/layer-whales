@@ -33,18 +33,19 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
 def test_why_theyre_here_says_what_how_why_listed_and_copying_in_plain_lines() -> None:
     s = COPYABLE | {
         "categories": [{"category": "Politics", "bets": 85}, {"category": "Economy", "bets": 7},
-                       {"category": "Sports", "bets": 2}, {"category": "Crypto", "bets": 6}],
+                       {"category": "Crypto", "bets": 4}, {"category": "Sports", "bets": 2}, {"category": "Weather", "bets": 2}],  # as the SDK sorts them
         "price_band": [0.55, 0.84], "typical_usd": 855.0, "held_share": 0.56, "decisions": 60,
         "window": ["2026-09-07T00:00:00+00:00", "2026-10-07T00:00:00+00:00"],
         "edge": {"mean": 0.02, "margin": 0.01, "n": 43, "z": 3},
         "periods": {"30d": {"trading_pnl": 12345.0}}, "pnl_weeks": [10.0] * 8 + [-5.0] * 4,
     }  # fmt: skip
     why = engine.why_lines(s | engine._board(s))
-    assert why["trades"] == "Politics 85%, Economy 7%"  # the top three by share; a 2% sideline isn't listed
-    assert why["how"] == "Buys around 55–84¢, usually $855, 2 new markets a day, holds 56% until the market settles."
-    assert why["listed"] == ("The price tends to move their way within minutes after they buy (over 43 trades), and it"
-                             " was still moving when a copy a few minutes late got in. Trading profit +$12.3K in the"
-                             " last 30 days; up in 8 of the last 12 weeks.")  # fmt: skip
+    assert why["trades"] == "Politics 85%, Economy 7%"  # the top three by share; a 4% sideline isn't listed
+    assert why["how"] == ("Buys around 55–84¢, usually $855, 2 new markets a day, holds 56% of closed positions until"
+                          " the market settles.")  # fmt: skip
+    assert why["listed"] == ("The price tended to move their way within minutes after they bought (over 43 trades), and"
+                             " in the trades we checked it was still moving when a copy a few minutes late got in."
+                             " Trading profit +$12.3K in the last 30 days; up in 8 of the last 12 weeks.")  # fmt: skip
     assert why["copying"].startswith("Offered, because") and "not a promise" in why["copying"]
 
     fast = s | {"segment": "too_fast", "copyable": "no"}
@@ -119,3 +120,63 @@ def test_the_check_says_how_much_the_book_holds_near_their_price(api: TestClient
     monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: short)
     r = api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.52, "spend": 5000}).json()
     assert (r["ok"], r["max_spend"], r["depth_checked"], r["best_price"]) == (False, 340.0, True, None)
+
+
+def test_rising_stays_hedged_even_when_copying_is_offered() -> None:
+    rising = COPYABLE | {"segment": "rising", "edge": {"mean": 0.02, "margin": 0.03, "n": 12, "z": 1}}
+    b = engine._board(rising)
+    assert b["section"] == "copy"  # listed in Worth copying
+    assert engine.why_lines(rising | b)["listed"].startswith("Early signs: the price has tended to move their way after they buy, over 12 trades so far")
+
+
+def test_why_lines_take_trading_profit_as_the_page_does() -> None:
+    # periods without a 30-day figure: the window's trading profit, as the page's profitOf, never Polymarket's own
+    s = SCORE | {"periods": {"30d": {"trading_pnl": None}}, "trading_pnl_window": -420.0, "pnl_window": 9999.0}
+    assert "Trading profit −$420 in the last 30 days." in engine.why_lines(s | engine._board(s))["listed"]
+
+
+def test_dollars_and_markets_a_week_are_never_made_up() -> None:
+    assert [engine._usd(x) for x in (855, 999.6, 1000, 1234, 99_960, 999_600, 1_250_000, 3.5)] == [
+        "$855", "$1,000", "$1K", "$1.2K", "$100K", "$1M", "$1.2M", "$3.50"]  # fmt: skip
+    assert engine._per_day(0) == "fewer than one new market a week" and engine._per_day(0.05) == "fewer than one new market a week"
+    assert engine._per_day(0.3) == "2 new markets a week" and engine._per_day(1) == "1 new market a day"
+
+
+def test_the_page_formats_the_same_way(run_js: Any) -> None:
+    got = run_js(("plural", "usd", "perDayText"), "[[999.6, 999600, 1000].map((x) => usd(x)), [0, 0.3, 2].map(perDayText)]")
+    assert got == [["$1,000", "$1M", "$1K"], ["fewer than one market a week", "2 markets a week", "2 markets a day"]]
+
+
+def test_only_an_amount_above_what_the_book_holds_says_only_x_is_available(run_js: Any) -> None:
+    deps = ("sdkText", "money", "availableLine", "notPriced")
+    cases = {
+        # $2 typed, under Polymarket's smallest order: the SDK's own reason, no "Use $340 instead"
+        "small": ({"ok": False, "depth_checked": True, "max_spend": 340, "reason": "$2.00 doesn't buy Polymarket's smallest order here: 5 contracts at 0.52 cost $2.65 with the fee."}, 2),
+        "short": ({"ok": False, "depth_checked": True, "max_spend": 340.55, "reason": "Only $340.55 is for sale"}, 5000),
+        "crumbs": ({"ok": False, "depth_checked": True, "max_spend": 0.4, "reason": "Only $0.40 is for sale"}, 50),
+        "none": ({"ok": False, "depth_checked": True, "max_spend": 0, "reason": "Nothing to buy at 0.55 or better right now."}, 50),
+        "nobook": ({"ok": False, "depth_checked": False, "max_spend": None, "reason": "Polymarket isn't taking orders on this market now."}, 50),
+    }  # fmt: skip
+    import json
+
+    got = run_js(deps, "Object.fromEntries(Object.entries(" + json.dumps(cases) + ").map(([k, [p, spend]]) => [k, notPriced(p, spend)]))")
+    assert got["small"] == {"status": None, "line": cases["small"][0]["reason"], "room": 0}
+    assert got["short"] == {"status": "Not enough for sale for this amount", "line": "Only $340.55 is available within 3¢ of their price.", "room": 340.55}
+    assert got["crumbs"] == {"status": "Not enough for sale for this amount", "line": "Only $0.40 is available within 3¢ of their price.", "room": 0.4}
+    assert got["none"]["status"] == "Price moved away" and got["none"]["room"] == 0
+    assert got["nobook"] == {"status": None, "line": cases["nobook"][0]["reason"], "room": 0}
+
+
+def test_lately_tops_up_from_the_checks_buys_to_three(run_js: Any) -> None:
+    deps = ("esc", "tenths", "cents", "ago", "latelyLine")
+    d = {"trades": [{"action": "buy", "market": "m1", "title": "One", "outcome": "Yes", "price": 0.5, "usd": 50, "size": 100, "at": "2026-10-13T10:00:00Z"},
+                    {"action": "sell", "market": "m9", "title": "Sold", "price": 0.5, "usd": 5, "size": 10, "at": "2026-10-13T11:00:00Z"}]}
+    s = {"recent": [{"market": "m1", "title": "One", "outcome": "Yes", "price": 0.4, "at": "2026-10-01T00:00:00Z"},
+                    {"market": "m2", "title": "Two", "outcome": "No", "price": 0.3, "at": "2026-10-05T00:00:00Z"},
+                    {"market": "m3", "title": "Three", "outcome": "Yes", "price": 0.7, "at": "2026-10-04T00:00:00Z"},
+                    {"market": "m4", "title": "Four", "outcome": "Yes", "price": 0.7, "at": "2026-10-03T00:00:00Z"}]}  # fmt: skip
+    import json
+
+    line = run_js(deps, f"latelyLine({json.dumps(s)}, {json.dumps(d)})")
+    assert "Yes on One at 50¢; No on Two at 30¢; Yes on Three at 70¢." in line  # m1 once, from the fresh read
+    assert run_js(deps, "latelyLine({recent: []}, {trades: []})") == "No recent buys."

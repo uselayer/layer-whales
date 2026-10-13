@@ -596,8 +596,9 @@ const centsSigned = (x) => x == null ? "—" : `${x > 0 ? "+" : x < 0 ? "−" : 
 function usd(x, signed = false) {
   if (x == null) return "—";
   const a = Math.abs(x);
-  const s = a >= 1e9 ? `${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(a >= 1e8 ? 0 : 1)}M`
-    : a >= 1e3 ? `${(a / 1e3).toFixed(a >= 1e5 ? 0 : 1)}K` : a >= 10 ? `${Math.round(a)}` : a.toFixed(2);
+  // never "$1000K" or "$1000": they round up to $1M and $1,000
+  const s = a >= 1e9 ? `${(a / 1e9).toFixed(1)}B` : a >= 999500 ? `${(a / 1e6).toFixed(a >= 1e8 ? 0 : 1)}M`
+    : a >= 1e3 ? `${(a / 1e3).toFixed(a >= 1e5 ? 0 : 1)}K` : a >= 10 ? Math.round(a).toLocaleString("en-US") : a.toFixed(2);
   return `${x < 0 ? "−" : signed && x > 0 ? "+" : ""}$${s.replace(/\.0([KMB])$/, "$1")}`;
 }
 function ago(t) {
@@ -794,12 +795,22 @@ function fillExplain(p, b, spend) {
 // The order book holds less than the amount near their price (the SDK's max_spend: everything for sale up to
 // 3¢ above what they paid, fee included): "Only $340 is available within 3¢ of their price".
 const availableLine = (room) => `Only ${money(room).replace(/\.00$/, "")} is available within 3¢ of their price.`;
+// When the amount can't be priced (p.ok false). Only when it's MORE than the book holds within 3¢ of their price
+// (the SDK's max_spend) is it "Only $340 is available…", with "Use $340 instead" from $1; an amount too small for
+// Polymarket's smallest order, or anything else, gets the SDK's own reason. `status` is for the sheet's top line.
+function notPriced(p, spend) {
+  const short = !!p.depth_checked && p.max_spend != null && spend > p.max_spend + 0.01;
+  if (!short) return { status: null, line: sdkText(p.reason), room: 0 };
+  const room = Math.floor(p.max_spend * 100) / 100;
+  return room > 0 ? { status: "Not enough for sale for this amount", line: availableLine(room), room }
+    : { status: "Price moved away", line: "Nothing is for sale within 3¢ of their price right now.", room: 0 };
+}
 // Slippage, named: your average fill against the best price for sale now (best_price, from the engine).
 function slippageLine(p) {
   if (p.best_price == null || p.price == null) return "";
   const c = (x) => `${Math.round(x * 1000) / 10}¢`, slip = p.price - p.best_price;
   return slip > 0.0005
-    ? `<p>Slippage: your average fill, ${c(p.price)}, is ${c(slip)} above the best price for sale, ${c(p.best_price)}, because this amount buys into dearer offers.</p>`
+    ? `<p>Slippage: your average fill, ${c(p.price)}, is ${c(slip)} above the best price for sale, ${c(p.best_price)}, because this amount buys into pricier offers.</p>`
     : `<p>Slippage: none. It all fills at the best price for sale, ${c(p.best_price)}.</p>`;
 }
 // Money you put in or get back, to the cent: "$49.91", "+$42.09".
@@ -828,14 +839,13 @@ async function costBox(box, b, amount = 10) {
     catch (e) { if (my === seq) pv.innerHTML = `<p class="inline-err">${esc(e.message)}</p>`; return; }
     if (my !== seq || !box.isConnected) return; // a newer amount is on its way
     if (!p.ok) {
-      const room = p.depth_checked && p.max_spend > 0 ? Math.floor(p.max_spend * 100) / 100 : 0;
-      // The order book can't fill the amount near their price: say how much it can, in one plain line.
-      if (p.depth_checked) setTop(room ? "Not enough for sale for this amount" : "Price moved away", room ? availableLine(room) : "Nothing is for sale within 3¢ of their price right now.");
-      pv.innerHTML = p.depth_checked
-        ? (room >= 1 ? `<p>${availableLine(room)}</p><p><button type="button" class="btn ghost small" id="useroom">Use ${money(room)} instead</button></p>` : `<p>Nothing is for sale within 3¢ of their price right now.</p>`)
-        : `<p>${esc(sdkText(p.reason))}</p>`;
+      const np = notPriced(p, spend);
+      // Said once: in the status line at the top when the sheet has one, else here.
+      if (np.status && top) { setTop(np.status, np.line); pv.innerHTML = ""; }
+      else { resetTop(); pv.innerHTML = `<p>${esc(np.line)}</p>`; }
+      if (np.room >= 1) pv.innerHTML += `<p><button type="button" class="btn ghost small" id="useroom">Use ${money(np.room)} instead</button></p>`;
       const use = $("#useroom", pv);
-      if (use) use.onclick = () => { input.value = room.toFixed(2); clearTimeout(timer); show(); };
+      if (use) use.onclick = () => { input.value = np.room.toFixed(2); clearTimeout(timer); show(); };
       return;
     }
     if (p.depth_checked) setTop("in", fillExplain(p, b, spend));
@@ -1165,7 +1175,8 @@ const perDollarOf = (s, p) => s.periods?.[p]?.return_per_dollar ?? (p === "30d" 
 // rest null, at the bottom): 1 of 1 settled isn't the best win rate, 2 of 2 weeks isn't the most consistent.
 const winRateOf = (s) => s.win_low ?? null;
 // New markets they bought into (adding to a trade they already have isn't a new one), from the SDK's decisions.
-const perDayText = (n) => n == null ? "" : n >= 1 ? `${plural(Math.round(n), "market")} a day` : `${plural(Math.max(1, Math.round(n * 7)), "market")} a week`;
+const perDayText = (n) => n == null ? "" : n >= 1 ? `${plural(Math.round(n), "market")} a day`
+  : Math.round(n * 7) ? `${plural(Math.round(n * 7), "market")} a week` : "fewer than one market a week"; // never a made-up one
 // The days their win record, usual trade and markets a day cover: 30, or fewer for a busy trader whose last
 // 5,000 fills (all the SDK reads) start later than that (covered_days, from the engine).
 const readDays = (s) => s.covered_days != null && s.covered_days < 29 ? s.covered_days : 30;
@@ -1401,18 +1412,21 @@ function pfChart(s, n) {
 // From their trades read now (the Activity tab's), else the buys the check kept, while those load.
 function latelyLine(s, d) {
   const fresh = d && !d.error && Array.isArray(d.trades);
-  const buys = fresh ? d.trades.filter((x) => x.action === "buy") : s.recent || [];
+  // their trades read now, topped up from the buys the check kept when those give fewer than three markets
+  const buys = [...(fresh ? d.trades.filter((x) => x.action === "buy") : []), ...(s.recent || [])];
   const by = new Map(); // one per market, newest first; their price there is the average of the buys read
   for (const b of buys) {
-    const k = b.token || b.market;
-    const g = by.get(k) || { ...b, usd: 0, size: 0, n: 0, sum: 0 };
+    const k = b.market; // both sources name the market the same way (the check's buys have no token)
+    if (!by.has(k) && by.size >= 3) continue;
+    const g = by.get(k) || { ...b, usd: 0, size: 0, n: 0, sum: 0, src: b.size ? "fresh" : "check" };
     if (!by.has(k)) by.set(k, g);
+    if (g.src !== (b.size ? "fresh" : "check")) continue; // one source per market: the fresh read wins
     if (b.size) { g.usd += b.usd || 0; g.size += b.size; } else { g.sum += b.price || 0; g.n += 1; }
     if (String(b.at) > String(g.at)) g.at = b.at;
   }
   const last = [...by.values()].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 3);
   const when = last[0]?.at || s.last_buy;
-  if (!last.length) return when ? `Last bought ${ago(when)}.` : "No buys in the last 30 days.";
+  if (!last.length) return when ? `Last bought ${ago(when)}.` : "No recent buys.";
   const price = (g) => g.size ? g.usd / g.size : g.n ? g.sum / g.n : g.price;
   const one = (g) => `${g.outcome ? `${esc(g.outcome)} on ` : ""}${g.url ? `<a class="link" href="${esc(g.url)}" target="_blank" rel="noopener">${esc(g.title || "a market")}</a>` : esc(g.title || "a market")} at ${cents(price(g))}`;
   return `Last bought ${ago(when)}: ${last.map(one).join("; ")}.`;

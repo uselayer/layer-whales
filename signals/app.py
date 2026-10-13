@@ -461,21 +461,23 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
 
 
 def _usd(x: float, signed: bool = False) -> str:
-    """Dollars as the page shows them: $855, $1.2K, $3.4M."""
+    """Dollars as the page shows them: $855, $1,000, $1.2K, $3.4M; never "$1000K" (that's $1M)."""
     a = abs(x)
-    if a >= 1e6:
+    if a >= 999_500:  # would round to 1000K
         s = f"{a / 1e6:.{0 if a >= 1e8 else 1}f}M"
     elif a >= 1e3:
         s = f"{a / 1e3:.{0 if a >= 1e5 else 1}f}K"
     else:
-        s = f"{round(a)}" if a >= 10 else f"{a:.2f}"
+        s = f"{round(a):,}" if a >= 10 else f"{a:.2f}"
     s = re.sub(r"\.0([KM])$", r"\1", s)
     return f"{'−' if x < 0 else '+' if signed and x > 0 else ''}${s}"
 
 
 def _per_day(n: float) -> str:
-    """New markets a day, or a week when it's under one a day (the page's perDayText)."""
-    k, unit = (round(n), "day") if n >= 1 else (max(1, round(n * 7)), "week")
+    """New markets a day, or a week when it's under one a day (the page's perDayText); never a made-up one."""
+    k, unit = (round(n), "day") if n >= 1 else (round(n * 7), "week")
+    if not k:
+        return "fewer than one new market a week"
     return f"{k} new market{'' if k == 1 else 's'} a {unit}"
 
 
@@ -498,22 +500,25 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
            else f"pays {_cents(s['avg_price'])} on average" if s.get("avg_price") is not None else None,
            f"usually {_usd(s['typical_usd'])}" if s.get("typical_usd") is not None else None,
            _per_day(s["trades_per_day"]) if s.get("trades_per_day") is not None else None,
-           f"holds {round(s['held_share'] * 100)}% until the market settles" if s.get("held_share") is not None else None]  # fmt: skip
+           f"holds {round(s['held_share'] * 100)}% of closed positions until the market settles" if s.get("held_share") is not None else None]  # fmt: skip
     how_line = ", ".join(x for x in how if x)
 
     edge_n = (s.get("edge") or {}).get("n")
     over = f" (over {edge_n} trades)" if edge_n else ""
     section = s.get("section")
-    if section == "copy":
-        listed = f"The price tends to move their way within minutes after they buy{over}, and it was still moving when a copy a few minutes late got in."
-    elif section == "rising":
+    if s.get("segment") == "rising" or section == "rising":  # hedged, even when copying is offered: few trades yet
         listed = f"Early signs: the price has tended to move their way after they buy{f', over {edge_n} trades so far' if edge_n else ''}, too few to be sure yet."
+    elif section == "copy":
+        listed = (f"The price tended to move their way within minutes after they bought{over}, and in the trades we"
+                  " checked it was still moving when a copy a few minutes late got in.")  # fmt: skip
     elif section == "watch":
         listed = f"The price tends to move their way within minutes after they buy{over}, though usually before a copy could get in."
     else:
         listed = f"Not on our list: {_trade_words(s['reason'])}" if s.get("reason") else "Not on our list."
     record = []
-    profit = ((s.get("periods") or {}).get("30d") or {}).get("trading_pnl", s.get("trading_pnl_window"))
+    profit = ((s.get("periods") or {}).get("30d") or {}).get("trading_pnl")
+    if profit is None:
+        profit = s.get("trading_pnl_window")  # as the page's profitOf: trading profit only, never Polymarket's figure
     if profit is not None:
         record.append(f"trading profit {_usd(profit, True)} in the last 30 days")
     if s.get("weeks_known"):
