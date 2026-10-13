@@ -845,16 +845,16 @@ def copy_status(s: dict[str, Any]) -> tuple[str, str | None]:
     copy = Stat.from_dict(s["copy"]) if s.get("copy") else None
     if copy is not None and copy.n >= COPY_BETS and copy.high < 0:
         return LABEL_COSTLY, (
-            f"{LABEL_COSTLY}: copies a few minutes late lost money after fees in the trades we checked (the whole"
-            " 95% range is below zero). A reading of the past, not a promise."
+            f"{LABEL_COSTLY}: buying after them lost money in the trades we checked, even at the best end of our"
+            " range. Usually the price had already moved by the time you could buy. This is about the past, not a promise."
         )
     if s.get("copyable") == "unknown":
-        return LABEL_NOT_PROVEN, f"{LABEL_NOT_PROVEN}: too few of their trades had prices after the buy to tell whether copies gain."
+        return LABEL_NOT_PROVEN, f"{LABEL_NOT_PROVEN}: we had too few of their trades to check whether buying after them makes money."
     if s.get("copyable") != "yes":
-        return LABEL_NOT_PROVEN, f"{LABEL_NOT_PROVEN}: what copies a few minutes late kept after fees isn't reliably above zero."
+        return LABEL_NOT_PROVEN, f"{LABEL_NOT_PROVEN}: buying after them sometimes made money and sometimes lost it, so we can't tell."
     if s.get("segment") == "inactive":
         return LABEL_NOT_OFFERED, f"{LABEL_NOT_OFFERED}: they haven't traded in the last 7 days."
-    return LABEL_NOT_OFFERED, f"{LABEL_NOT_OFFERED}: copies kept money after fees, but their own record doesn't pass our checks."
+    return LABEL_NOT_OFFERED, f"{LABEL_NOT_OFFERED}: buying after them made money, but the trader doesn't pass our skill checks."
 
 
 def copy_offer(s: dict[str, Any]) -> tuple[bool, str | None]:
@@ -993,7 +993,7 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
         listed += " " + "; ".join(record)[0].upper() + "; ".join(record)[1:] + "."
 
     ok, why = s.get("copy_ok"), s.get("copy_why")
-    copying = (f"{LABEL_COPYABLE}: copies a few minutes late were reliably above zero after fees in the trades we checked; a reading of the past, not a promise."
+    copying = (f"{LABEL_COPYABLE}: buying a few minutes after them made money in the trades we checked, often enough that it isn't just luck. This is about the past, not a promise."
                if ok else why or f"{LABEL_NOT_PROVEN}.")  # fmt: skip
     return {"trades": trades, "how": how_line[:1].upper() + how_line[1:] + "." if how_line else None,
             "listed": listed, "copying": copying}  # fmt: skip
@@ -1838,7 +1838,7 @@ def _links(*pairs: tuple[str, str | None], aid: str | None = None) -> str:
 
 # Said only for a trader copying is offered for, while the price is still near theirs: secondary to what happened,
 # and no cost (that's "Check current price"'s, with the fee, the fill and what's for sale).
-COPY_LINE = "<i>Copying is offered for this trader, and you can still get in near their price. Based on past copies, not a promise.</i>"
+COPY_LINE = "<i>Buying after this trader has made money before, and you can still get in near their price. That's the past, not a promise.</i>"
 
 
 def _lag(at: float, seen: float) -> str:
