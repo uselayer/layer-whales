@@ -519,8 +519,7 @@ function whenSignedIn(f) {
 function followHtml(wallet) {
   if (!auth.on) return "";
   const w = esc(wallet);
-  if (!auth.me?.follows.includes(wallet)) return `<button class="btn" data-follow="${w}">Follow · get an alert when they buy</button>
-    <small>${signedIn() ? "" : "Sign in with Google or Telegram. "}Alerts come on Telegram, only while you can still get in.</small>`;
+  if (!auth.me?.follows.includes(wallet)) return `<button class="btn" data-follow="${w}">Follow · get an alert when they buy</button>`;
   const alerts = !auth.alerts ? `<small>Alerts aren't switched on yet.</small>`
     : auth.me.telegram ? `<small>Alerts on Telegram · <button class="link" data-unfollow="${w}">Unfollow</button></small>`
     : `<button class="btn small" data-tg>Connect Telegram to get alerts</button><small><button class="link" data-unfollow="${w}">Unfollow</button></small>`;
