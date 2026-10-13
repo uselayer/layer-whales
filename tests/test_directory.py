@@ -130,10 +130,10 @@ def test_the_sweep_keeps_followed_wallets_then_everything_the_sdk_finds(api: Tes
         yield in_market(BEN)
         yield board(BEN, "PNL MONTH SPORTS", 4)
 
-    monkeypatch.setattr(engine.reads.whales, "find_wallets", find_wallets, raising=False)
+    monkeypatch.setattr(engine, "background", lambda: SimpleNamespace(find_wallets=find_wallets))
     monkeypatch.setattr(engine, "DIRECTORY_BATCH", 2)
-    assert engine.directory_sweep() == {"sightings": 4, "new": 3, "held_s": 0.0, "error": None}
-    assert asked == {"per_second": engine.DIRECTORY_RATE}  # held below what the SDK allows, so the site keeps reads
+    assert engine.directory_sweep() == {"sightings": 4, "new": 3, "error": None}
+    assert asked == {}  # no pace of its own: the background's budget holds it
     s = api.get("/api/directory").json()
     assert s["wallets"] == 3 and s["by_source"]["follow"] == 1 and s["by_source"]["market"] == 1
     assert s["sweeps_finished"] == 1 and s["last_sweep"]["sightings"] == 4 and s["last_error"] is None
@@ -144,7 +144,7 @@ def test_a_sweep_that_fails_keeps_what_it_found_and_says_why(api: TestClient, mo
         yield board(AMY)
         raise VenueError("venue_unavailable", "Polymarket is down.", venue="polymarket")
 
-    monkeypatch.setattr(engine.reads.whales, "find_wallets", find_wallets, raising=False)
+    monkeypatch.setattr(engine, "background", lambda: SimpleNamespace(find_wallets=find_wallets))
     r = engine.directory_sweep()
     assert r["sightings"] == 1 and "Polymarket is down" in r["error"]
     assert engine.directory().wallet(AMY) is not None
@@ -159,7 +159,7 @@ def test_a_sweep_stops_when_the_app_shuts_down(api: TestClient, monkeypatch: pyt
         stop.set()
         yield board(BEN)
 
-    monkeypatch.setattr(engine.reads.whales, "find_wallets", find_wallets, raising=False)
+    monkeypatch.setattr(engine, "background", lambda: SimpleNamespace(find_wallets=find_wallets))
     r = engine.directory_sweep(stop)
     assert r["sightings"] == 1 and r["error"] is not None and engine.directory().wallet(BEN) is None
 
@@ -206,23 +206,6 @@ def test_the_directorys_counts_are_the_owners_only(api: TestClient, monkeypatch:
     assert api.get("/api/directory").status_code == 404  # hosted: only with the owner's key, as /api/metrics
 
 
-def test_the_sweep_reads_nothing_while_the_worth_following_check_runs(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(engine._worth, "running", False)
-    monkeypatch.setattr(engine, "DIRECTORY_HOLD_S", 0.01)
-    checking_at_read: list[bool] = []
-
-    def find_wallets(**kw: Any) -> Any:
-        engine._worth["running"] = True  # the check starts during the sweep, and ends a moment later
-        threading.Timer(0.1, lambda: engine._worth.update(running=False)).start()
-        yield board(AMY)
-        checking_at_read.append(engine._worth["running"])  # the SDK reads again only when asked for more
-        yield board(BEN)
-
-    monkeypatch.setattr(engine.reads.whales, "find_wallets", find_wallets, raising=False)
-    r = engine.directory_sweep()
-    assert checking_at_read == [False] and r["held_s"] > 0 and r["sightings"] == 2
-
-
 def test_the_feed_doesnt_wait_for_the_directory(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     import time
 
@@ -241,6 +224,6 @@ def test_the_feed_doesnt_wait_for_the_directory(api: TestClient, monkeypatch: py
     flush()
 
 
-def test_the_sweeps_rate_leaves_the_feeds_poller_its_reads() -> None:
+def test_the_backgrounds_rate_leaves_the_feeds_poller_its_reads() -> None:
     # The SDK allows 8 reads a second per Polymarket host; the poller reads one trader (4 reads, ~1.2 s) at a time.
-    assert engine.DIRECTORY_RATE + 4 / 1.2 < 8
+    assert engine.BACKGROUND_RATE + 4 / 1.2 < 8
