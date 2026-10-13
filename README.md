@@ -60,12 +60,13 @@ so the two always agree. Then three tabs:
     Kalshi doesn't name them), not filtered by your markets: the SDK has no categories for Kalshi markets, and
     almost all big trades are Kalshi's.
 - **Traders**: a leaderboard of the Polymarket traders we recommend: Proven sharp, Quiet sharp, Rising, and
-  Too fast to copy (the price moves within minutes of their buys, so a copy usually comes too late).
+  No proven copy advantage (the price moves within minutes of their buys, so a copy usually comes too late; a
+  small positive copy estimate is shown as not reliably above zero, never as a gain).
   - One bar: on the left the market chips (your onboarding choice) and **Copyable only**; on the right
     **Search name or wallet**, the period (7D / 30D / 90D, once the SDK provides it) and the sort: Recommended
     (the checks' order), Most consistent, Profit, Win rate, Most active, Copy result.
-  - Columns, grouped: **Track record** (weeks in profit out of the last 12, profit, trend, won X of Y settled),
-    **Style** (their usual trade and how often they trade), **Copying** (what a copy a few minutes late made
+  - Columns, grouped: **Track record** (12-week consistency, profit, trend, won X of Y settled in the last 30
+    days), **Style** (their usual trade over the last 30 days and how often they trade), **Copying** (what a copy a few minutes late made
     after fees, as a share of what it paid). On a phone each trader is one card.
   - Weeks in profit, trend, 7D/90D and the "per $ traded" return come from the SDK's profit history (uselayer
     0.6). Until then they show "—" and **Most consistent** says "coming soon"; nothing is made up.
@@ -81,7 +82,8 @@ so the two always agree. Then three tabs:
     `client.whales.discover()` / `score()` in the SDK.
   - **A trader's profile** (from the leaderboard or a wallet search): their market and last trade, a link to their
     Polymarket profile, and **Copy trader** when they're copyable. A stat strip (profit and per $ traded for the
-    period, weeks in profit, won X of Y, usual trade, wallet), a profit chart for 7D / 30D / 90D with the stretches
+    period, 12-week consistency, win record and usual trade over the last 30 days, wallet; a note says the period
+    switch changes only profit), a profit chart for 7D / 30D / 90D with the stretches
     below their previous high shaded, and **Why they're here** in three plain lines (consistent, how they trade,
     can you copy them) plus the SDK's own warnings. Tabs: **Positions** (open, with "You can still get in", and
     closed), **Activity** (their recent buys and sells) and **Stats** (consistency, risk, style, execution), with
