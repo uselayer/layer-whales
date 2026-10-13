@@ -26,7 +26,10 @@ engine with `SIGNALS_HOSTED=1` on Railway, behind Vercel (see README, "Hosting")
     Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
     localStorage, every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
     ever stuck on that screen.
-  - Traders is one leaderboard of the traders we recommend (Proven sharp, Quiet sharp, Rising, Too fast to copy).
+  - Traders is one leaderboard of the traders we recommend (Proven sharp, Quiet sharp, Rising, No proven copy advantage; its pill says "Copy not proven" to fit at 390px).
+    Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
+    win record and usual trade the last 30 days. A positive copy estimate that isn't reliably above zero says so
+    ("Estimated copy return: +0.7% after fees, but results aren't reliably above zero"), never shown as a gain.
     One bar: filters on the left (market chips = the onboarding choice, Copyable only), how you view the list on
     the right (search name or wallet, period, sort). Columns are grouped as Track record, Style and Copying.
     Recommendations never include Lucky, No clear edge or No view traders, and the checks are never loosened to

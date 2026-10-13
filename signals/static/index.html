@@ -311,6 +311,7 @@
   .pf-stat > span { display: block; font-size: 12px; color: var(--muted); }
   .pf-stat b { display: block; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin-top: 2px; }
   .pf-stat small { font-size: 12px; color: var(--muted); }
+  .pf-statnote { margin: 8px 2px 0; font-size: 13px; color: var(--muted); }
   .pf-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-top: 16px; }
   .pf-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
   .pf-card h2 { font-size: 16px; margin: 0; }
@@ -545,7 +546,7 @@ function avatar(seed, size = 36) {
 }
 const TIER = {
   proven: ["Proven sharp", "s-proven"], quiet: ["Quiet sharp", "s-quiet"], rising: ["Rising", "s-rising"],
-  too_fast: ["Too fast to copy", "s-fast"], lucky: ["Lucky", "t3"], no_edge: ["No clear edge", "t3"], no_view: ["No view", "t3"],
+  too_fast: ["Copy not proven", "s-fast"], // short for "No proven copy advantage": the pill must fit beside a name at 390px lucky: ["Lucky", "t3"], no_edge: ["No clear edge", "t3"], no_view: ["No view", "t3"],
   inactive: ["Not trading lately", "t3"], // uselayer 0.6: would be recommended, but no buy in 7 days
 };
 // A trader's page: the scored page for a Polymarket wallet, else the venue leaderboard page.
@@ -958,7 +959,7 @@ function howSheet() {
       <li><b>Proven sharp:</b> a long record that passes every check.</li>
       <li><b>Quiet sharp:</b> the same, on a small account no leaderboard lists.</li>
       <li><b>Rising:</b> good early signs, too few trades to be sure yet.</li>
-      <li><b>Too fast to copy:</b> real skill, but the price has moved by the time you'd get in. Copying isn't offered.</li>
+      <li><b>No proven copy advantage</b> (marked "Copy not proven"): real skill, but by the time you'd get in the price has moved, so copies make little or nothing after fees. A small positive estimate can still show; it isn't reliably above zero. Copying isn't offered.</li>
       <li><b>Lucky:</b> big profit, but the price doesn't move their way after they buy. Left out of recommendations.</li>
     </ul>
     <p class="explain"><b>Beats the odds</b> means their trades won more often than the prices they paid said they would. A reading of the past, not a promise. Copying runs in the sandbox only.</p>`);
@@ -1046,6 +1047,10 @@ async function worthView() {
 }
 
 const isCopyable = (s) => s.copyable ? s.copyable === "yes" : ["proven", "quiet", "rising"].includes(s.segment);
+// A too_fast trader's copy result: the SDK only calls copying proven when it's clearly above zero, so a small
+// positive estimate is said to be unreliable rather than shown as a gain.
+const copyEstimate = (s) => s.copy_return == null ? null : `Estimated copy return: ${lbPct(s.copy_return)} after fees${s.copy_return > 0
+  ? ", but results aren't reliably above zero." : "; the price moves before a copy gets in."}`;
 const weeksUp = (s) => Array.isArray(s.pnl_weeks) ? s.pnl_weeks.filter((x) => x > 0).length : null;
 const profitOf = (s, p) => s.periods?.[p]?.trading_pnl ?? (p === "30d" ? s.trading_pnl_window ?? s.pnl_window : null) ?? null;
 const perDollarOf = (s, p) => s.periods?.[p]?.return_per_dollar ?? (p === "30d" ? s.return_per_dollar : null) ?? null;
@@ -1108,18 +1113,18 @@ function renderWorth() {
     const notRec = !SEG_ORDER.includes(s.segment) ? ` · ${esc(TIER[s.segment]?.[0] || "Not recommended")}` : "";
     const cat = s.categories?.[0]?.category;
     const copyMain = copy == null ? `<span class="lb-none">—</span>` : `<span class="lb-main ${isCopyable(s) ? "" : "lb-muted"}">${isCopyable(s) ? pl(copy, lbPct(copy)) : lbPct(copy)}</span>`;
-    const copySub = isCopyable(s) ? "after fees" : s.segment === "too_fast" ? "too fast to copy" : "not recommended";
+    const copySub = isCopyable(s) ? "after fees" : s.segment !== "too_fast" ? "not recommended" : copy > 0 ? "not proven" : "no copy advantage";
     return `<a class="lb-cols lb-row" href="#/worth/${esc(s.wallet)}" ${i >= RANKED && !lb.more ? "hidden" : ""}>
       <span class="lb-rank">${i + 1}</span>
       <span class="lb-who">${avatar(s.wallet, 40)}<span style="min-width:0"><span class="nm">${esc(displayName(s.name, s.wallet))}</span><span class="lb-sub">${[cat, s.last_buy ? `active ${ago(s.last_buy)}` : ""].filter(Boolean).map(esc).join(" · ")}${notRec}</span></span></span>
-      <span class="lb-cons">${up == null ? `<span class="lb-none">—</span>` : `<span class="lb-weeks" aria-hidden="true">${s.pnl_weeks.map((w) => `<i class="${w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span><span class="lb-sub">In profit ${up} of 12 weeks</span>`}</span>
+      <span class="lb-cons">${up == null ? `<span class="lb-none">—</span>` : `<span class="lb-weeks" aria-hidden="true">${s.pnl_weeks.map((w) => `<i class="${w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span><span class="lb-sub">${up} of 12 weeks profitable</span>`}</span>
       <span class="lb-pnl">${profit == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(profit, usd(profit, true))}</span><span class="lb-sub">${perDollar != null ? `${lbPct(perDollar)} per $ traded` : "30 days"}</span>`}</span>
       <span class="lb-trend">${lbSpark(s, days)}</span>
       <span class="lb-won">${s.settled ? `<span class="lb-main">${s.won} of ${s.settled}</span><span class="lb-sub">settled</span>` : `<span class="lb-none">—</span>`}</span>
       <span class="lb-usual">${s.typical_usd != null ? `<span class="lb-main">${usd(s.typical_usd)}</span><span class="lb-sub">${perDayText(s.trades_per_day)}</span>` : `<span class="lb-none">—</span>`}</span>
       <span class="lb-copy">${copyMain}<span class="lb-sub">${copySub}</span></span>
-      <span class="lb-meta">${[s.settled ? `Won ${s.won} of ${s.settled}` : "", s.typical_usd != null ? `usually ${usd(s.typical_usd)}` : "", perDayText(s.trades_per_day)].filter(Boolean).join(" · ")}</span>
-      <span class="lb-copyline">${copy == null ? "" : isCopyable(s) ? `Copies made <b>${pl(copy, lbPct(copy))}</b> after fees` : `<span class="lb-muted">${s.segment === "too_fast" ? "Too fast to copy" : "Not recommended"}: copies made ${lbPct(copy)}</span>`}</span>
+      <span class="lb-meta">${[s.settled ? `Last 30 days: won ${s.won} of ${s.settled}` : "", s.typical_usd != null ? `usually ${usd(s.typical_usd)}` : "", perDayText(s.trades_per_day)].filter(Boolean).join(" · ")}</span>
+      <span class="lb-copyline">${copy == null ? "" : isCopyable(s) ? `Copies made <b>${pl(copy, lbPct(copy))}</b> after fees` : `<span class="lb-muted">${s.segment === "too_fast" ? copyEstimate(s) : `Not recommended: copies made ${lbPct(copy)}`}</span>`}</span>
     </a>`;
   };
 
@@ -1127,7 +1132,7 @@ function renderWorth() {
   if (shown.length) {
     body = `<div class="lb-board ${history ? "" : "lb-nohist"}">
       <div class="lb-cols lb-groups" aria-hidden="true"><span style="grid-column:3 / span 4">Track record</span><span style="grid-column:7">Style</span><span style="grid-column:8">Copying</span></div>
-      <div class="lb-cols lb-head"><span>#</span><span>Trader</span>${head("consistent", "Weeks in profit")}${head("profit", "Profit")}<span>Trend</span>${head("won", "Won")}${head("active", "Usual trade")}${head("copying", "If you'd copied")}</div>
+      <div class="lb-cols lb-head"><span>#</span><span>Trader</span>${head("consistent", "12-week consistency")}${head("profit", "Profit")}<span>Trend</span>${head("won", "Won, 30 days")}${head("active", "Usual trade, 30 days")}${head("copying", "If you'd copied")}</div>
       ${shown.map(row).join("")}
       ${shown.length > RANKED && !lb.more ? `<button type="button" class="lb-more" id="lbmore">Show ${shown.length - RANKED} more</button>` : ""}</div>`;
   } else if (q && isWalletQuery(q)) {
@@ -1162,6 +1167,7 @@ function renderWorth() {
     <p class="lb-foot">${st.running ? `Checking again${st.total ? ` (${st.done} of ${st.total})` : ""}…` : `Checked ${plural(scores.length, "trader")} ${ago(res.finished)} · <button class="link" id="wrefresh">Check again</button>`}
       · <button class="link" id="how">How we pick traders</button>
       ${sort === "consistent" ? " · Most consistent ranks by weeks in profit out of the last 12, then 30-day profit" : ""}
+      ${periods ? " · 7D/30D/90D changes profit and trend only: consistency always covers the last 12 weeks, wins and usual trade the last 30 days" : ""}
       ${history ? "" : " · Weeks in profit, trend and 7D/90D arrive with the next data update"}
       <br>${lb.all ? `Showing every checked trader except market makers and arbitrage · <button class="link" id="lbrec">Recommended only</button>` : `${left ? `${left} left out: big profit without skill, market makers, arbitrage and traders with no clear edge · <button class="link" id="lbrec">See all checked traders</button>` : ""}`}
       · <a class="link" href="#/traders/top">Top profit</a>
@@ -1274,7 +1280,7 @@ function renderProfile() {
   const chart = pfChart(s, n);
   const copied = isCopied(t.venue, t.id), can = isCopyable(s);
   const cta = copied || can ? copyButton(t) : `<button class="btn" disabled>Copying isn't offered</button>`;
-  const ctaNote = copied ? "" : can ? "Copyable: copies get similar prices" : s.segment === "too_fast" ? "Too fast to copy: the price moves before a copy gets in" : "Not recommended";
+  const ctaNote = copied ? "" : can ? "Copyable: copies get similar prices" : s.segment === "too_fast" ? `No proven copy advantage. ${copyEstimate(s) || "The price moves before a copy gets in."}` : "Not recommended";
   const period = (cls) => s.periods ? `<div class="lb-period ${cls}" role="group" aria-label="Period">${Object.keys(PF_PERIOD).map((p) => `<button type="button" data-pfperiod="${p}" aria-pressed="${n === p}">${p.toUpperCase()}</button>`).join("")}</div>` : "";
 
   // why they're here: three plain sentences, plus the SDK's own warnings
@@ -1283,7 +1289,7 @@ function renderProfile() {
   const how = [cats.slice(0, 2).map((c) => c.category).join(" and ") || null, band ? `buys around ${band}` : s.avg_price != null ? `pays ${cents(s.avg_price)} on average` : null,
     s.typical_usd != null ? `usually ${usd(s.typical_usd)}${share != null ? ` (${lbPct(share).replace("+", "")} of their wallet)` : ""}` : null,
     s.trades_per_day != null ? perDayText(s.trades_per_day) : null, s.held_share != null ? `holds ${Math.round(s.held_share * 100)}% to settlement` : null].filter(Boolean).join(", ");
-  const copyWhy = `${can ? "Yes" : s.segment === "too_fast" ? "Not really" : "Not recommended"}: ${gap != null ? `a copy a few minutes late paid about ${centsSigned(gap).replace("+", "")} more than they did` : "we couldn't measure the price a copy would get"}${s.copy_return != null ? `, and copies made ${lbPct(s.copy_return)} after fees` : ""}.`;
+  const copyWhy = `${can ? "Yes" : s.segment === "too_fast" ? "Not proven" : "Not recommended"}: ${gap != null ? `a copy a few minutes late paid about ${centsSigned(gap).replace("+", "")} more than they did` : "we couldn't measure the price a copy would get"}${s.copy_return != null ? `, and copies made ${lbPct(s.copy_return)} after fees${!can && s.copy_return > 0 ? ", not reliably above zero" : ""}` : ""}.`;
   const risks = (s.risks || []).map(sdkText);
 
   // the tabs
@@ -1318,10 +1324,10 @@ function renderProfile() {
     const worst90 = pfChart(s, "90d")?.worst;
     const dash = `<span class="lb-none">—</span>`;
     body = `<div class="pf-group"><h3>Consistency</h3><div class="pf-kv">
-        <div><span>Weeks in profit</span><b>${up != null ? `${up} of 12` : dash}</b></div><div><span>Won</span><b>${s.settled ? `${s.won} of ${s.settled} settled` : dash}</b></div>
+        <div><span>12-week consistency</span><b>${up != null ? `${up} of 12 weeks profitable` : dash}</b></div><div><span>Win record, last 30 days</span><b>${s.settled ? `${s.won} of ${s.settled} settled` : dash}</b></div>
         <div><span>All time without their biggest win</span><b>${without != null ? pl(without, usd(without, true)) : dash}</b></div><div><span>Longest run of losing weeks</span><b>${weeks.length ? longest : dash}</b></div></div></div>
       <div class="pf-group"><h3>Risk</h3><div class="pf-kv">
-        <div><span>Usual trade</span><b>${s.typical_usd != null ? usd(s.typical_usd) : dash}</b></div><div><span>Of their wallet</span><b>${share != null ? lbPct(share).replace("+", "") : dash}</b></div>
+        <div><span>Usual trade, last 30 days</span><b>${s.typical_usd != null ? usd(s.typical_usd) : dash}</b></div><div><span>Of their wallet</span><b>${share != null ? lbPct(share).replace("+", "") : dash}</b></div>
         <div><span>Biggest win</span><b>${s.biggest_win != null ? usd(s.biggest_win) : dash}</b></div><div><span>Worst drop from a high, 90 days</span><b>${worst90 != null ? usd(-worst90) : dash}</b></div></div></div>
       <div class="pf-group"><h3>Style</h3>
         ${total ? `<div class="pf-mix" aria-hidden="true">${cats.slice(0, 4).map((c) => `<i style="flex:${c.bets}"></i>`).join("")}</div>` : ""}
@@ -1339,11 +1345,12 @@ function renderProfile() {
       <div class="pf-cta">${cta}${ctaNote ? `<small>${ctaNote}</small>` : ""}<small id="made" hidden></small></div></div>
     <div class="pf-stats">
       <div class="pf-stat"><span>Profit, ${PF_PERIOD[n]}</span><b>${profit != null ? pl(profit, usd(profit, true)) : "—"}</b><small>${perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit"}</small></div>
-      <div class="pf-stat"><span>Weeks in profit</span><b>${up != null ? `${up} of 12` : "—"}</b><small>last 12 weeks</small></div>
-      <div class="pf-stat"><span>Won</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>settled trades</small></div>
-      <div class="pf-stat"><span>Usual trade</span><b>${s.typical_usd != null ? usd(s.typical_usd) : "—"}</b><small>${share != null ? `${lbPct(share).replace("+", "")} of their wallet` : s.trades_per_day != null ? perDayText(s.trades_per_day) : ""}</small></div>
+      <div class="pf-stat"><span>12-week consistency</span><b>${up != null ? `${up} of 12` : "—"}</b><small>weeks profitable</small></div>
+      <div class="pf-stat"><span>Win record, last 30 days</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>settled trades</small></div>
+      <div class="pf-stat"><span>Usual trade, last 30 days</span><b>${s.typical_usd != null ? usd(s.typical_usd) : "—"}</b><small>${share != null ? `${lbPct(share).replace("+", "")} of their wallet` : s.trades_per_day != null ? perDayText(s.trades_per_day) : ""}</small></div>
       <div class="pf-stat"><span>Wallet</span><b>${walletTile[0]}</b><small>${walletTile[1]}</small></div>
     </div>
+    ${s.periods ? `<p class="pf-statnote">7D/30D/90D changes the profit figure and chart. Consistency, win record and usual trade are for the fixed periods shown.</p>` : ""}
     <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Profit</h2>${period("")}</div>
       ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
         : `<p class="pf-empty">Their profit history isn't available yet.</p>`}</section>
