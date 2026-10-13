@@ -36,6 +36,11 @@ def feed_trade(wallet: str, trade_id: str, market: str = "0xm9:0", usd: float = 
                       datetime(2026, 10, 13, tzinfo=UTC), trade_id, title="Will it rain?")  # fmt: skip
 
 
+def flush() -> None:
+    """Waits for the directory's writer thread: pages hand it their sightings and answer at once."""
+    engine._directory_writer.submit(lambda: None).result()
+
+
 @pytest.fixture
 def d(tmp_path: Any) -> Directory:
     return Directory(tmp_path / "directory.db")
@@ -127,7 +132,7 @@ def test_the_sweep_keeps_followed_wallets_then_everything_the_sdk_finds(api: Tes
 
     monkeypatch.setattr(engine.reads.whales, "find_wallets", find_wallets, raising=False)
     monkeypatch.setattr(engine, "DIRECTORY_BATCH", 2)
-    assert engine.directory_sweep() == {"sightings": 4, "new": 3, "error": None}
+    assert engine.directory_sweep() == {"sightings": 4, "new": 3, "held_s": 0.0, "error": None}
     assert asked == {"per_second": engine.DIRECTORY_RATE}  # held below what the SDK allows, so the site keeps reads
     s = api.get("/api/directory").json()
     assert s["wallets"] == 3 and s["by_source"]["follow"] == 1 and s["by_source"]["market"] == 1
@@ -164,6 +169,7 @@ def test_traders_in_the_feeds_big_trades_are_kept_once_by_their_markets_category
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: list(trades))
     assert len(api.get("/api/trading-now").json()) == 2
     api.get("/api/trading-now")  # the same trades again: not kept twice
+    flush()
     s = engine.directory().sources_of(AMY)
     assert [(x["source"], x["place"], x["category"], x["times"], x["example"], x["example_title"], x["usd"]) for x in s] == [
         ("feed", "Weather", "Weather", 1, "0xm9", "Will it rain?", 500.0)]  # fmt: skip
@@ -185,8 +191,10 @@ def test_a_wallet_opened_that_the_last_check_didnt_have_is_kept_as_a_search(api:
     score = {"wallet": BEN, "name": None, "segment": "no_edge", "copyable": "unknown", "copy": None, "sample": []}
     monkeypatch.setattr(engine.reads.whales, "score", lambda w, **k: SimpleNamespace(to_dict=lambda: score | {"wallet": w}))
     assert api.get(f"/api/worth/{BEN.upper().replace('0X', '0x')}").status_code == 200
+    flush()
     assert [x["source"] for x in engine.directory().sources_of(BEN)] == ["search"]
     api.get(f"/api/worth/{AMY}")  # in the last check: opened from Traders, not a search
+    flush()
     assert engine.directory().wallet(AMY) is None
 
 
@@ -196,3 +204,43 @@ def test_the_directorys_counts_are_the_owners_only(api: TestClient, monkeypatch:
     assert TestClient(engine.app, client=("203.0.113.9", 4000)).get("/api/directory").status_code == 404
     monkeypatch.setattr(engine, "HOSTED", True)
     assert api.get("/api/directory").status_code == 404  # hosted: only with the owner's key, as /api/metrics
+
+
+def test_the_sweep_reads_nothing_while_the_worth_following_check_runs(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(engine._worth, "running", False)
+    monkeypatch.setattr(engine, "DIRECTORY_HOLD_S", 0.01)
+    checking_at_read: list[bool] = []
+
+    def find_wallets(**kw: Any) -> Any:
+        engine._worth["running"] = True  # the check starts during the sweep, and ends a moment later
+        threading.Timer(0.1, lambda: engine._worth.update(running=False)).start()
+        yield board(AMY)
+        checking_at_read.append(engine._worth["running"])  # the SDK reads again only when asked for more
+        yield board(BEN)
+
+    monkeypatch.setattr(engine.reads.whales, "find_wallets", find_wallets, raising=False)
+    r = engine.directory_sweep()
+    assert checking_at_read == [False] and r["held_s"] > 0 and r["sightings"] == 2
+
+
+def test_the_feed_doesnt_wait_for_the_directory(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [feed_trade(AMY, "t1")])
+    slow = threading.Event()
+
+    def busy(self: Directory, seen: Any, at: float | None = None) -> int:  # a sweep's batch holding the directory
+        slow.wait(2)
+        return 0
+
+    monkeypatch.setattr(Directory, "add", busy)
+    t = time.monotonic()
+    assert api.get("/api/trading-now").status_code == 200
+    assert time.monotonic() - t < 1
+    slow.set()
+    flush()
+
+
+def test_the_sweeps_rate_leaves_the_feeds_poller_its_reads() -> None:
+    # The SDK allows 8 reads a second per Polymarket host; the poller reads one trader (4 reads, ~1.2 s) at a time.
+    assert engine.DIRECTORY_RATE + 4 / 1.2 < 8

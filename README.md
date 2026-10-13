@@ -125,10 +125,12 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
 - **Trader directory** (phase 1: finding only): every Polymarket wallet Signals finds, and where, kept across
   runs in `/data/directory.db` (SQLite). Once a day the engine sweeps every Polymarket leaderboard (88: profit and
   volume, four periods, overall and each category, to rank ~10,050) and open markets at every level of activity
-  (the SDK's `find_wallets`, uselayer 0.9), held to 4 reads a second so the site keeps the rest: about 18,000
-  reads, roughly 2.5 hours. Traders in the Feed's big trades, wallets opened that the last check didn't have
-  (pasted into search, mostly) and followed wallets are kept too, at no extra reads; a follow keeps the wallet,
-  never who follows it. Nothing is scored or shown from it yet: the Worth following check still picks its own 200
+  (the SDK's `find_wallets`, uselayer 0.9): about 18,000 reads, roughly 2.5 hours. It stays out of the Feed's way:
+  at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one trader at a time, needs
+  at most ~3.3), and none while the Worth following check runs, which can use all 8. Traders in the Feed's big
+  trades, wallets opened that the last check didn't have (pasted into search, mostly) and followed wallets are kept
+  too, at no extra reads, by a writer thread so no page waits for the directory; a follow keeps the wallet, never
+  who follows it. At full size the file is roughly 300 MB (the volume holds 5 GB). Nothing is scored or shown from it yet: the Worth following check still picks its own 200
   wallets. `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps) to the
   owner only, as `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off.
 - **Counting** (is any of this useful?): per alert and per follow, in `/data/alerts.db`, with nothing personal
