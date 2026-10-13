@@ -1,6 +1,8 @@
-"""The analysis in frequency-preregistered.md: select on A30 / A90, measure on B, three outcomes kept apart.
+"""The analysis in frequency-preregistered.md (with amendment 1): select on A, measure on B, three outcomes kept
+apart. Part 1 (A30 / A90 before 2026-08-14) or Part 2 (A30 before 2026-09-13), from the file given.
 
     uv run python research/frequency_analyze.py research/frequency-scores.jsonl.gz
+    uv run python research/frequency_analyze.py research/frequency-scores-2.jsonl.gz
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ opener = gzip.open if sys.argv[1].endswith(".gz") else open
 with opener(sys.argv[1], "rt") as fh:
     lines = [json.loads(line) for line in fh if line.strip()]
 errors = [r for r in lines if "error" in r]
-R = [r for r in lines if all(k in r for k in ("A30", "A90", "B"))]
+R = [r for r in lines if "A30" in r and "B" in r]
 Row = dict[str, Any]
 Pooled = tuple[float, float, int] | None
 
@@ -110,14 +112,43 @@ def skill(a: Row) -> bool:
     return a.get("skill") in ("yes", "early")
 
 
-RULES: dict[str, Callable[[Row], bool]] = {
-    "all": lambda r: True,
-    "R30-rec": lambda r: r["A30"]["segment"] in RECOMMENDED,
-    "R30-skill": lambda r: skill(r["A30"]),
-    "R90-rec": lambda r: r["A90"]["segment"] in (*RECOMMENDED, "inactive"),
-    "R90-skill": lambda r: skill(r["A90"]),
-    "R90-profit": lambda r: (r["A90"].get("trading_pnl_window") or 0) > 0,
-}
+def own_settle(a: Row) -> Pooled:
+    """The trader's own hold-to-settlement return per contract over a window's settled checked bets, per event.
+    Needs no short-horizon prices, so it can be judged as far back as Polymarket keeps trades."""
+    return per_event([{"B": a}], trader_settle)
+
+
+def settle_ok(a: Row) -> bool:
+    p = own_settle(a)
+    return p is not None and p[2] >= 8 and passes(p)
+
+
+def made_money(a: Row) -> bool:
+    return (a.get("trading_pnl_window") or 0) > 0
+
+
+# Amendment 1: Part 1 selects on what stays available 30 and 90 days back; the SDK's verdicts there are invalid
+# (no 5-minute prices past ~60 days) and are printed apart. Part 2 is today's method where its tests can run.
+PART = 2 if "A90" not in next(iter(R), {}) else 1
+RULES: dict[str, Callable[[Row], bool]] = {"all": lambda r: True}
+if PART == 1:
+    RULES |= {
+        "R30-settle": lambda r: settle_ok(r["A30"]), "R90-settle": lambda r: settle_ok(r["A90"]),
+        "R30-profit": lambda r: made_money(r["A30"]), "R90-profit": lambda r: made_money(r["A90"]),
+        "R30-both": lambda r: settle_ok(r["A30"]) and made_money(r["A30"]),
+        "R90-both": lambda r: settle_ok(r["A90"]) and made_money(r["A90"]),
+    }  # fmt: skip
+    INVALID = {
+        "R30-rec*": lambda r: r["A30"]["segment"] in RECOMMENDED, "R30-skill*": lambda r: skill(r["A30"]),
+        "R90-rec*": lambda r: r["A90"]["segment"] in (*RECOMMENDED, "inactive"), "R90-skill*": lambda r: skill(r["A90"]),
+    }  # fmt: skip
+else:
+    RULES |= {
+        "R30-rec": lambda r: r["A30"]["segment"] in RECOMMENDED, "R30-skill": lambda r: skill(r["A30"]),
+        "R30-settle": lambda r: settle_ok(r["A30"]), "R30-profit": lambda r: made_money(r["A30"]),
+    }  # fmt: skip
+    INVALID = {}
+WINDOWS = ("A30", "A90") if PART == 1 else ("A30",)
 
 
 def corr(pairs: list[tuple[float, float]]) -> float:
@@ -128,50 +159,67 @@ def corr(pairs: list[tuple[float, float]]) -> float:
     return sum((x - mx) * (y - my) for x, y in pairs) / len(pairs) / (sx * sy) if sx and sy else float("nan")
 
 
-print(f"wallets scored in all three windows: {len(R)}  (errors: {len(errors)})")
+def rank_corr(pairs: list[tuple[float, float]]) -> float:
+    ra = {i: k for k, i in enumerate(sorted(range(len(pairs)), key=lambda i: pairs[i][0]))}
+    rb = {i: k for k, i in enumerate(sorted(range(len(pairs)), key=lambda i: pairs[i][1]))}
+    return corr([(ra[i], rb[i]) for i in range(len(pairs))])
+
+
+def priced(rows: list[Row], win: str) -> str:
+    bets = [b for r in rows for b in r[win].get("sample") or []]
+    return f"{sum(1 for b in bets if '300' in (b.get('moved') or {})) / len(bets):.0%}" if bets else "—"
+
+
+def report(name: str, S: list[Row], base: dict[str, Any]) -> None:
+    if not S:
+        print(f"  {name:11} picks   0")
+        return
+    p = profit(S)
+    z = two_prop_z(p["up"], p["n"], base["up"], base["n"]) if name != "all" else float("nan")
+    prof_ok = name != "all" and z >= 2 and (p["median"] or 0) > 0
+    edge, tset = pooled(S, "edge"), per_event(S, trader_settle)
+    copy, cset = pooled(S, "copy"), per_event(S, copier_settle)
+    lo, hi = p["range"]
+    print(f"  {name:11} picks {len(S):3} | 1 PROFIT {p['share'] or 0:4.0%} up [{lo:.0%}–{hi:.0%}] vs all z {z:+.1f}, "
+          f"median ${p['median'] or 0:,.0f}, {(p['per_dollar'] or 0) * 100:+.2f}¢/$, still trading {p['trading']}/{len(S)}"
+          f"{'  PASS' if prof_ok else ''}")  # fmt: skip
+    print(f"  {'':11}           | 2 SKILL  edge {fmt(edge)}{'  PASS' if passes(edge) else ''} | own settle {fmt(tset)}")
+    print(f"  {'':11}           | 3 COPY   copy {fmt(copy)}{'  PASS' if passes(copy) else ''} | copier settle {fmt(cset)}")
+
+
+print(f"Part {PART}: wallets scored in every window: {len(R)}  (errors: {len(errors)})")
 for grp in ("frequent", "selective", "sparse"):
     G = [r for r in R if r["group"] == grp]
     if not G:
         continue
     base = profit(G)
     print(f"\n=== {grp}: {len(G)} wallets")
-    print("  A30 segments:", dict(Counter(r["A30"]["segment"] for r in G)))
-    print("  A90 segments:", dict(Counter(r["A90"]["segment"] for r in G)))
-    print("  B   segments:", dict(Counter(r["B"]["segment"] for r in G)))
+    for win in (*WINDOWS, "B"):
+        print(f"  {win:3} segments: {dict(Counter(r[win]['segment'] for r in G))}  (bets with a 5-min price: {priced(G, win)})")
     for name, rule in RULES.items():
-        S = [r for r in G if rule(r)]
-        if not S:
-            print(f"  {name:10} picks   0")
-            continue
-        p = profit(S)
-        z = two_prop_z(p["up"], p["n"], base["up"], base["n"]) if name != "all" else float("nan")
-        prof_ok = name != "all" and z >= 2 and (p["median"] or 0) > 0
-        edge, tset = pooled(S, "edge"), per_event(S, trader_settle)
-        copy, cset = pooled(S, "copy"), per_event(S, copier_settle)
-        lo, hi = p["range"]
-        print(f"  {name:10} picks {len(S):3} | 1 PROFIT {p['share'] or 0:4.0%} up [{lo:.0%}–{hi:.0%}] vs all z {z:+.1f}, "
-              f"median ${p['median'] or 0:,.0f}, {(p['per_dollar'] or 0) * 100:+.2f}¢/$, still trading {p['trading']}/{len(S)}"
-              f"{'  PASS' if prof_ok else ''}")  # fmt: skip
-        print(f"  {'':10}           | 2 SKILL  edge {fmt(edge)}{'  PASS' if passes(edge) else ''} | own settle {fmt(tset)}")
-        print(f"  {'':10}           | 3 COPY   copy {fmt(copy)}{'  PASS' if passes(copy) else ''} | copier settle {fmt(cset)}")
-    for win in ("A30", "A90"):
-        pairs = [(r[win]["edge"]["mean"], r["B"]["edge"]["mean"]) for r in G
-                 if r[win].get("edge") and r["B"].get("edge") and r[win]["bets"] >= 8 and r["B"]["bets"] >= 8]  # fmt: skip
-        print(f"  persistence {win}→B edge across wallets (8+ bets both): {corr(pairs):+.2f}  n={len(pairs)}")
+        report(name, [r for r in G if rule(r)], base)
+    if INVALID:
+        print("  (* SDK verdicts on windows past Polymarket's 5-minute price history: not valid, shown for the record)")
+        for name, rule in INVALID.items():
+            print(f"  {name:11} picks {sum(1 for r in G if rule(r)):3}")
+    for win in WINDOWS:
+        st_pairs = [(own_settle(r[win])[0], own_settle(r["B"])[0]) for r in G  # type: ignore[index]
+                    if own_settle(r[win]) and own_settle(r["B"]) and own_settle(r[win])[2] >= 8 and own_settle(r["B"])[2] >= 8]  # type: ignore[index]  # fmt: skip
+        print(f"  persistence {win}→B own settle return across wallets (8+ events both): {corr(st_pairs):+.2f}  n={len(st_pairs)}")
         pp = [(r[win]["trading_pnl_window"], r["B"]["trading_pnl_window"]) for r in G
               if r[win].get("trading_pnl_window") is not None and r["B"].get("trading_pnl_window") is not None]  # fmt: skip
-        ranks = {i: k for k, i in enumerate(sorted(range(len(pp)), key=lambda i: pp[i][0]))}
-        ranks_b = {i: k for k, i in enumerate(sorted(range(len(pp)), key=lambda i: pp[i][1]))}
-        print(f"  persistence {win}→B trading P&L, rank correlation: {corr([(ranks[i], ranks_b[i]) for i in range(len(pp))]):+.2f}  n={len(pp)}")
+        print(f"  persistence {win}→B trading P&L, rank correlation: {rank_corr(pp):+.2f}  n={len(pp)}")
+        if PART == 2:
+            pairs = [(r[win]["edge"]["mean"], r["B"]["edge"]["mean"]) for r in G
+                     if r[win].get("edge") and r["B"].get("edge") and r[win]["bets"] >= 8 and r["B"]["bets"] >= 8]  # fmt: skip
+            print(f"  persistence {win}→B 5-min edge across wallets (8+ bets both): {corr(pairs):+.2f}  n={len(pairs)}")
 
-print("\nSelective traders picked by R90-skill, A90 then B:")
-for r in R:
-    if r["group"] != "selective" or not skill(r["A90"]):
-        continue
-    a, b = r["A90"], r["B"]
-
-    def e(s: Row) -> str:
-        return "—" if not s.get("edge") else f"{s['edge']['mean'] * 100:+.2f}¢ z{s['edge']['z']:+.1f}"
-
-    print(f"  {str(a.get('name'))[:20]:20} A90 {a['segment']:9} n={a['bets']:2} edge {e(a)} P&L ${a.get('trading_pnl_window') or 0:>10,.0f}"
-          f"  →  B {b['segment']:9} n={b['bets']:2} edge {e(b)} P&L ${b.get('trading_pnl_window') or 0:>10,.0f}")  # fmt: skip
+if PART == 1:
+    print("\nSelective traders picked by R90-both, A90 then B:")
+    for r in R:
+        if r["group"] != "selective" or not RULES["R90-both"](r):
+            continue
+        a, b = r["A90"], r["B"]
+        sa, sb = own_settle(a), own_settle(b)
+        print(f"  {str(a.get('name'))[:20]:20} A90 settle {fmt(sa)} P&L ${a.get('trading_pnl_window') or 0:>10,.0f}"
+              f"  →  B settle {fmt(sb)} P&L ${b.get('trading_pnl_window') or 0:>10,.0f} edge {fmt(pooled([r], 'edge'))}")  # fmt: skip
