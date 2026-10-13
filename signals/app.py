@@ -104,7 +104,7 @@ def trading_now(min_usd: float = 250) -> list[dict[str, Any]]:
 @app.get("/api/trader/{venue}/{trader_id}")
 def trader(venue: str, trader_id: str) -> dict[str, Any]:
     try:
-        d = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40))  # type: ignore[arg-type]
+        d = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40, closed=50))  # type: ignore[arg-type]
     except VenueError as e:
         raise venue_error(e) from e
     out = d.to_dict()
@@ -143,7 +143,7 @@ def position_links(wallet: str) -> dict[str, str | None]:
 def links(venue: str, trader_id: str) -> dict[str, Any]:
     """Accounts on the other venue that may be the same person. Takes 5–30 s: it reads both venues."""
     try:
-        t = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40))  # type: ignore[arg-type]
+        t = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40, closed=50))  # type: ignore[arg-type]
         found = cached(f"links:{venue}:{trader_id}", 600, lambda: reads.whales.links(t.trader))
     except VenueError as e:
         raise venue_error(e) from e
@@ -158,7 +158,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
-WORTH_FORMAT = 4  # bump when the kept result gains fields; an older one is re-checked on launch (4: uselayer 0.6.0 scores)
+WORTH_FORMAT = 5  # bump when the kept result gains fields; an older one is re-checked on launch (5: uselayer 0.7.0 scores)
 WORTH_MIN_AGE_HOSTED_S = 3600  # hosted: "Check again" only starts a new check once the last is this old
 WORTH_ONE_KEEP = 500  # wallets scored on demand, kept until the next check
 _worth_stop = threading.Event()
@@ -385,7 +385,7 @@ def live() -> dict[str, Any]:
     for s in follow:
         try:
             d = cached(
-                f"live:{s['wallet']}", 25, lambda w=s["wallet"]: reads.whales.trader("polymarket", w, trades=100)
+                f"live:{s['wallet']}", 25, lambda w=s["wallet"]: reads.whales.trader("polymarket", w, trades=100, closed=0)
             )
         except VenueError:
             failed += 1
@@ -437,10 +437,12 @@ class CopyRules(BaseModel):
 
 
 class CopyTrader(BaseModel):
+    """Copy all of a trader's next trades, in every market. There is no "only some categories": a rule saved
+    with ``categories`` before keeps working as saved (see ``_make_copier``), but no new one gets them."""
+
     venue: str
     id: str
     name: str | None = None
-    categories: list[str] = []
 
 
 def _key(venue: str, id: str) -> str:

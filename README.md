@@ -82,7 +82,7 @@ so the two always agree. Then three tabs:
     can you copy them) plus the SDK's own warnings. Tabs: **Positions** (open, with "You can still get in", and
     closed), **Activity** (their recent buys and sells) and **Stats** (consistency, risk, style, execution), with
     the evidence (each check, how the price moved after their buys, by category, the trades checked) under **How
-    we measure this**. Wallet, exits and their usual price range show "—" until the SDK provides them.
+    we measure this**. The wallet is their cash (read on-chain) plus open positions; anything that can't be read shows "—", never $0.
   - **A leaderboard trader's page** (Top profit, Feed → Big trades) also asks **Same person on the other venue?**: accounts that may
     be the same person, each with the evidence (the same name or X handle on an account that really trades,
     and trades in the same market, the same way, within 5 minutes). It's an inference, never a confirmed

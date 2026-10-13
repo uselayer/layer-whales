@@ -63,10 +63,15 @@ def test_copy_rules_are_saved_and_each_copied_trade_is_listed_with_its_result(
     r = api.post("/api/copy/traders", json={"venue": "kalshi", "id": "amy"}).json()
     assert [t["id"] for t in r["rules"]["traders"]] == ["0xabc", "amy"]
     cp = local().copiers["polymarket:0xabc"]  # copied where they bet: Polymarket
-    assert (cp.size, cp.venue, cp.max_slippage, cp.categories, cp.copy_sells) == (3, "polymarket", 0.02, ("Sports",), False)
+    assert (cp.size, cp.venue, cp.max_slippage, cp.copy_sells) == (3, "polymarket", 0.02, False)
+    assert cp.categories == () and "categories" not in r["rules"]["traders"][0]  # always everything: no picking
     assert local().copiers["kalshi:amy"].venue == "kalshi"
     assert local().load_rules()["size"] == 3  # saved to disk
     assert [t["id"] for t in api.delete("/api/copy/traders/kalshi/amy").json()["rules"]["traders"]] == ["0xabc"]
+    # a rule saved with categories, from before copying was always everything, keeps working as saved
+    local().save_rules(local().load_rules() | {"traders": [{"venue": "polymarket", "id": "0xabc", "categories": ["Sports"]}]})
+    local().apply_rules()
+    assert local().copiers["polymarket:0xabc"].categories == ("Sports",)
 
     event = {"at": "2026-10-07T00:00:00+00:00", "status": "copied", "order_id": "o1", "venue": "kalshi",
              "market": "KX-A", "side": "yes", "source": {"title": "A game"}}  # fmt: skip
@@ -137,6 +142,24 @@ def test_worth_adds_the_leaderboard_columns_from_what_the_check_kept(
                                                 "scores": [kept | {"typical_usd": 99.0, "last_buy": "2026-10-07T00:00:00+00:00"}]})  # fmt: skip
     s = api.get("/api/worth").json()["result"]["scores"][0]
     assert (s["typical_usd"], s["last_buy"]) == (99.0, "2026-10-07T00:00:00+00:00")
+
+
+def test_trader_pages_ask_for_closed_positions_and_the_feed_does_not(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[dict[str, Any]] = []
+
+    def trader(*a: Any, **k: Any) -> TraderDetail:
+        asked.append(k)
+        return TraderDetail(AMY, "visible", {"pnl": 1000.0}, [], [TRADE])
+
+    monkeypatch.setattr(engine.reads.whales, "trader", trader)
+    api.get("/api/trader/polymarket/0xabc")
+    assert asked[-1]["closed"] == 50  # the profile's Closed positions (uselayer 0.7)
+    monkeypatch.setattr(engine, "_worth_data", {"scores": [SCORE | {"segment": "proven", "label": "Proven sharps"}]})
+    monkeypatch.setattr(engine, "_categories", lambda markets: {})
+    api.get("/api/live")
+    assert asked[-1]["closed"] == 0  # the feed polls every 25 s: no closed-positions read
 
 
 def test_sample_profit_history_is_local_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
