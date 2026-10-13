@@ -477,6 +477,7 @@ function avatar(seed, size = 36) {
 const TIER = {
   proven: ["Proven sharp", "t1"], quiet: ["Quiet sharp", "t1"], rising: ["Rising", "t2"],
   too_fast: ["Too fast to copy", "t3"], lucky: ["Lucky", "t3"], no_edge: ["No clear edge", "t3"], no_view: ["No view", "t3"],
+  inactive: ["Not trading lately", "t3"], // uselayer 0.6: would be recommended, but no buy in 7 days
 };
 // A trader's page: the scored page for a Polymarket wallet, else the venue leaderboard page.
 const traderHref = (venue, id) => venue === "polymarket" ? `#/worth/${esc(id)}` : `#/t/${venue}/${encodeURIComponent(id)}`;
