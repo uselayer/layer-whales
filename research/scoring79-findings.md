@@ -188,3 +188,73 @@ Until it reports, the only way the current test can see more of a selective trad
 
 Nothing in Signals or the SDK was changed. The SDK-side changes (7: none; 9: the pre-filter and the reason
 text) build on uselayer `main` 5a77fc5 (0.10.0) or later.
+
+## Decisions (owner, 13 Oct)
+
+- **Fixes 7 and 8: unchanged, pending stronger evidence.** Sharps still need a profitable 30 days, and one
+  window.
+- **Profit and edge are kept apart in the evidence and on the page.**
+  - uselayer 0.11 (uselayer-sdk #21) adds `edge_verdict`: the price test alone.
+  - It also adds the tier "Edge, but lost money lately", for a measured edge with a losing window.
+  - So a losing trader with an edge is never called edge-less.
+- **Fix 9: parlays are left out before sampling** (#21).
+  - Parlay-only traders get "Parlays: skill unmeasured" and stay visible with their profit (Signals draft #72).
+- **Thresholds are revisited only after** the 13 Nov validation and the frequency study.
+
+## Limitations
+
+**Small samples.**
+
+- Per pool, every rule group had 5–15 wallets: under the pre-registered 10, so formally "too few to judge".
+- The headline numbers pool both pools (11–20 wallets per group). That pooling was not pre-registered, so it is
+  exploratory.
+- Ranges come from a bootstrap over wallets. With 15 wallets, one wallet moves a pooled mean noticeably.
+- Of the volume-board draw, only 65 of 200 wallets had 25+ checked events in a window.
+  - Most volume-board wallets are dormant.
+  - So the "big account" evidence rests on a few dozen traders.
+
+**One step ahead, one period.**
+
+- Each test judges the month after selection, with one selection month (mid-Aug to mid-Sep). Market
+  conditions in that period (NFL start, Fed, elections) may not repeat.
+- "Kept an edge next month" is not "kept it for a year".
+
+**Selection bias.**
+
+- **Volume board.** It ranks on lifetime activity, so it leans to large, long-lived accounts. It can't see
+  traders who are good and small.
+- **Overlooked pool.** It required activity in currently open markets, i.e. activity in B (not profit).
+- **Survivors only.** Neither pool contains wallets that stopped trading before selection.
+- **Leaderboards today aren't usable.** Today's profit boards overlap the outcome window, so they could not be
+  used as a pool without hindsight.
+- **Frequent traders dominate both pools.** Wallets are found through recent trades, and the tests need 25+
+  checked events. These results say little about selective traders; see the frequency study and the discovery
+  proposal.
+
+**Price history.**
+
+- **Retention.**
+  - Polymarket keeps 5-minute prices for only about 60 days: 98–100% of bets under 60 days old, 22% at 60–69
+    days, ~0% after.
+  - So the skill test can't look back further than ~2 months.
+  - That's why the true two-month test (fix 8) has to wait for November.
+- **The history is the mid price.**
+  - It is the middle of the book in 5-minute steps, not what anyone could buy.
+  - In thin markets a large "edge" is often an artifact. 9 of the 20 wallets fix 7 would have added had
+    edges > 5¢, and all lost money the next month.
+- **Copy returns are estimates.** The ask is inferred from the mid. Settled returns use only bets that had
+  settled.
+- **Parlays have no price history at all.** The settled-parlay return is a lower bound from redemptions
+  (losers are never redeemed), not a price test.
+
+**Measurement.**
+
+- **The edge statistic.**
+  - It pools per independent event (bets on one event count once).
+  - The z treats events as independent, which correlated markets (one game's spread and total) partly
+    aren't.
+  - Calibration was close to nominal (4–8% against 2.3% for wallets with no signal), not exact.
+- **Profit.**
+  - The 30-day trading profit comes from Polymarket's hourly P&L history, including unrealized marks, which
+    are noisy for big accounts.
+  - The overlooked pool kept only Polymarket's total figure (rewards in).
