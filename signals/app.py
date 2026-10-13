@@ -1048,6 +1048,8 @@ def _chat_owner(chat: str) -> str | None:
 # alerts: every alert sent (and the day's "limit reached" message), per account, with its Telegram message, so
 # the daily cap can count them, a grouped alert can be edited in place and a vote names its alert.
 # buys: the buys each person was told about, per outcome, so the second trader's buy can make a grouped alert.
+# pending: a trader's fills not alerted yet, over the last ALERT_MAX_AGE_S, so split buys add up to ALERT_MIN_USD
+# across rounds and restarts.
 # votes: "Useful" / "Not useful", one per alert and account, changeable.
 
 _db_lock = threading.Lock()
@@ -1060,6 +1062,8 @@ CREATE INDEX IF NOT EXISTS alerts_by_day ON alerts (uid, day);
 CREATE TABLE IF NOT EXISTS buys (uid TEXT NOT NULL, outcome TEXT NOT NULL, trader TEXT NOT NULL, price REAL,
   usd REAL, at REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS buys_by_outcome ON buys (uid, outcome, at);
+CREATE TABLE IF NOT EXISTS pending (trade_id TEXT PRIMARY KEY, trader TEXT NOT NULL, market TEXT NOT NULL,
+  price REAL, size REAL NOT NULL, usd REAL NOT NULL, at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS votes (alert_id TEXT NOT NULL, uid TEXT NOT NULL, useful INTEGER NOT NULL,
   at REAL NOT NULL, PRIMARY KEY (alert_id, uid));
 """
@@ -1226,11 +1230,14 @@ class NewBuy:
     """One trader's new buy of one outcome, fills merged: what they paid on average and the price now. Its alert
     text (and the copy-cost preview in it) is built once, however many people follow the trader."""
 
-    def __init__(self, wallet: str, fills: list[WhaleTrade], now: float) -> None:
+    def __init__(self, wallet: str, fills: list[WhaleTrade], now: float,
+                 totals: tuple[float, float, float] | None = None) -> None:  # fmt: skip
         self.wallet, self.t = wallet, max(fills, key=lambda f: f.at)
         self.size, self.usd = sum(f.size for f in fills), sum(f.usd for f in fills)
-        self.paid, self.now = self.usd / self.size, now
         self.at = min(f.at for f in fills).timestamp()  # when they bought: their first fill
+        if totals:  # (contracts, dollars, first fill) over every fill not alerted yet, earlier rounds' included
+            self.size, self.usd, self.at = totals
+        self.paid, self.now = self.usd / self.size, now  # what they paid on average, across those buys
         self.outcome = self.t.token or self.t.market  # the exact outcome token; the outcome index is sometimes junk
         self._text: str | None = None
 
@@ -1297,7 +1304,26 @@ def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
     return 1 if aid else 0
 
 
-def alert_pass() -> int:
+def _add_up(w: str, fills: list[WhaleTrade], now: float) -> dict[str, tuple[float, float, float]]:
+    """Keep these new fills (alerts.db: pending) and return, per market, the running total of this trader's fills
+    not alerted yet over the last ALERT_MAX_AGE_S, this round's and earlier rounds' (and before a restart):
+    (contracts, dollars, first fill's time). So a $60 buy and another $60 a minute later add up to $120."""
+    with _db() as con:
+        con.execute("DELETE FROM pending WHERE at < ?", (now - ALERT_MAX_AGE_S,))
+        con.executemany("INSERT OR IGNORE INTO pending VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        [(f.trade_id, w, f.market, f.price, f.size, f.usd, f.at.timestamp()) for f in fills])  # fmt: skip
+        rows = con.execute("SELECT market, SUM(size), SUM(usd), MIN(at) FROM pending WHERE trader = ? AND at >= ?"
+                           " GROUP BY market", (w, now - ALERT_MAX_AGE_S)).fetchall()  # fmt: skip
+    return {m: (size, usd, at) for m, size, usd, at in rows if size}
+
+
+def _added_up(w: str, market: str) -> None:
+    """These fills have been alerted: they start no new total."""
+    with _db() as con:
+        con.execute("DELETE FROM pending WHERE trader = ? AND market = ?", (w, market))
+
+
+def alert_pass(now: float | None = None) -> int:
     """One round: each followed trader's trades, read once however many people follow them, and for each new
     buy of ALERT_MIN_USD or more, a message to every connected follower (grouped when 2+ traders they follow
     bought the same outcome), then big trades in people's chosen markets. A trader's trades from before their
@@ -1311,7 +1337,7 @@ def alert_pass() -> int:
             to.setdefault(w, []).append(uid)
     for w in [w for w in _seen if w not in to]:
         del _seen[w]
-    now = time.time()
+    now = time.time() if now is None else now
     new_buys: list[NewBuy] = []
     for w in to:
         try:
@@ -1330,14 +1356,16 @@ def alert_pass() -> int:
         for t in new:
             if t.action == "buy" and t.size and now - t.at.timestamp() <= ALERT_MAX_AGE_S:
                 fills.setdefault(t.market, []).append(t)
+        totals = _add_up(w, [f for ts in fills.values() for f in ts], now) if fills else {}
         for market, ts in fills.items():
             price = prices.get(market)
             if now - _alerted.get((w, market), 0) < ALERT_AGAIN_S or price is None or _settled(price):
                 continue
-            b = NewBuy(w, ts, price)
+            b = NewBuy(w, ts, price, totals.get(market))
             if b.usd < ALERT_MIN_USD or _recently(None, w, b.outcome, now):
                 continue
             _alerted[(w, market)] = now
+            _added_up(w, market)
             new_buys.append(b)
     try:
         cats = _categories([b.t.market for b in new_buys]) if new_buys else {}

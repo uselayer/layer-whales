@@ -111,7 +111,8 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   the volume, unread, until the owner decides to delete them.
 - **Alerts** on Telegram (off until `TELEGRAM_BOT_TOKEN` is set): "Connect Telegram" on a trader's page gives a
   one-time link to the bot; Start there connects the chat. Every 30 seconds the engine reads followed traders'
-  trades (once per trader) and messages each connected follower about every new buy of $100 or more, with how
+  trades (once per trader) and messages each connected follower about every new buy of $100 or more (split buys
+  within 30 minutes add up), with how
   far the price has moved (and what $10 buys now when copying is offered and the price is still in range),
   "Useful / Not useful" and a "Stop alerts from …" button. Two or more followed traders buying the same outcome
   make one grouped message, edited in place as more buy. Big trades ($10,000 or more, from the SDK's big trades)

@@ -20,7 +20,8 @@ behind Vercel (see README, "Hosting").
   places a real-money order, not even a test one.
 - Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
   asked for only to follow a trader, and the button says so ("Follow · get an alert when they buy"). Alerts go
-  to Telegram (`alert_pass` in `app.py`), for every buy of $100 or more by a trader you follow, with how far the
+  to Telegram (`alert_pass` in `app.py`), for every buy of $100 or more by a trader you follow (their buys of one
+  outcome within 30 minutes add up, across rounds and restarts, shown as the total at the average price), with how far the
   price has moved: outside the "can still get in" range it says "paid 49¢ · now 60¢, price already moved", never
   "get in", whoever the trader. No alert at all when the price now is settled (2¢ or less, 98¢ or more). At most
   20 alerts per person per UTC day, then one "You've reached today's alert limit; more tomorrow" and nothing until

@@ -496,3 +496,53 @@ def test_an_alerts_db_from_before_trigger_at_gets_the_column(api: TestClient) ->
     con.close()
     engine._db_ready.discard(str(engine.alerts_db()))
     assert engine._send("user_1", "555", "buy", lambda aid: "x", trade_at=1.0) is not None
+
+
+# ---- split buys add up ----
+
+
+def _split(monkeypatch: pytest.MonkeyPatch, gaps_min: list[float], usd: float = 60) -> tuple[int, list[str]]:
+    """A trader's buys of one outcome, each seen in its own round, ``gaps_min`` minutes after the first."""
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.50}))
+    t0 = datetime.now(UTC) - timedelta(hours=1)
+    engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
+    sent = 0
+    for i, gap in enumerate(gaps_min):
+        at = t0 + timedelta(minutes=gap)
+        trades.append(trade(SAM, at, 0.48 + 0.02 * i, usd, "0xcid:0", str(i)))
+        engine._cache.clear()
+        sent += engine.alert_pass(now=at.timestamp() + 30)
+    return sent, [m["text"] for m in engine.tg.sent]
+
+
+def test_two_60_dollar_buys_in_two_rounds_make_one_alert_for_120(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    sent, texts = _split(monkeypatch, [0, 0.5])
+    assert sent == 1
+    assert "bought <b>Yes</b> at 49¢ ($120)" in texts[-1]  # the total, at the average price across both buys
+
+
+def test_one_60_dollar_buy_alone_doesnt_alert(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _split(monkeypatch, [0])[0] == 0
+
+
+def test_buys_more_than_30_minutes_apart_dont_add_up(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _split(monkeypatch, [0, 31])[0] == 0
+
+
+def test_split_buys_add_up_across_a_restart(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.50}))
+    t0 = datetime.now(UTC) - timedelta(minutes=5)
+    engine.alert_pass(now=t0.timestamp() - 60)
+    trades.append(trade(SAM, t0, 0.50, 60, "0xcid:0", "a"))
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 10) == 0
+    engine._seen.clear()  # a restart
+    engine._cache.clear()
+    engine.alert_pass(now=t0.timestamp() + 20)  # first round after it: noted only
+    trades.append(trade(SAM, t0 + timedelta(minutes=1), 0.50, 60, "0xcid:0", "b"))
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 90) == 1 and "($120)" in engine.tg.sent[-1]["text"]
