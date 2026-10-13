@@ -775,8 +775,8 @@ function tradeCard(b, i, { who = true } = {}) {
   const name = displayName(b.name, b.wallet);
   const top = who ? `<div class="trade-top">${avatar(b.wallet, 28)}<span class="who"><span class="name">${esc(name)}</span>${tier(b.segment, true)}</span>
       <span class="when">${[b.category, b.at ? ago(b.at) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>` : "";
-  // the engine's copy rule (copy_ok), as on Traders and the trader's page: only then is copying priced
-  const act = who && b.copy_ok === true && b.status === "in" && b.wallet && b.market ? `<button class="btn small" data-open-trade="${i}">Check your price</button>` : "";
+  // Any trade can be priced, whoever made it: the engine reads whether Polymarket is still taking orders
+  const act = b.wallet && b.market ? `<button class="btn small" data-open-trade="${i}">Check your price</button>` : "";
   return `<article class="card trade${who ? "" : " compact"}" data-trade="${i}" tabindex="0">
     ${top}
     <h3 class="trade-title">${esc(b.title || "Untitled market")}</h3>
@@ -809,64 +809,67 @@ function tradeSheet(b) {
     </div>
     ${b.wallet ? `<a class="sheet-who" href="#/worth/${esc(b.wallet)}">${avatar(b.wallet, 36)}<span class="grow"><span class="name">${esc(name)}</span><span class="muted" style="font-size:13px">See their record</span></span>${tier(b.segment)}</a>` : ""}
     ${b.copy_ok === false && b.wallet ? `<p class="fine">${copyLabel(b)}. <a class="link" href="#/worth/${esc(b.wallet)}">See their record</a></p>` : ""}
-    ${b.copy_ok === true && b.wallet && b.status === "in" && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>`
+    ${b.wallet && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>`
       : b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">${OPEN.has(b.status) ? "Buy on Polymarket ↗" : "Open on Polymarket ↗"}</a></p>` : ""}`);
   bindActions(panel);
   const box = $("#copynow", panel);
   if (box) costBox(box, b);
 }
 
-// "What copying it costs": what buying the trade on the card would cost you now, priced from Polymarket's
-// order book. Signals places no orders: the button opens the market on Polymarket, where you buy it yourself.
+// "What buying now costs": what buying the outcome on the card would cost you now, whoever the trader, priced
+// from Polymarket's order book by the engine (market status and price read there, not taken from the card). An
+// estimate, never a promised fill. Signals places no orders: the button opens the market on Polymarket.
 const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at, size: b.size, usd: b.usd, token: b.token });
 // The two ways it can end, in the outcome's own words: "If it ends No" / "If it ends Yes", or "If Jets wins" / "If not".
 const yesNo = (o) => /^(yes|no)$/i.test(o || "");
 const ifWins = (o) => !o ? "If it wins" : yesNo(o) ? `If it ends ${esc(o)}` : `If ${esc(o)} wins`;
 const ifLoses = (o) => yesNo(o) ? `If it ends ${/^yes$/i.test(o) ? "No" : "Yes"}` : "If not";
 const PICKS = [10, 50, 100];
-// "Your $50 fills at 34.2¢ on average, 0.5¢ above what they paid. With the fee, 35.3¢ a contract against their 33.7¢."
-function fillExplain(p, b, spend) {
-  const c = (x) => `${Math.round(x * 1000) / 10}¢`;
-  const d = p.price - b.price, gap = Math.abs(d) < 0.0005 ? "about what they paid" : `${c(Math.abs(d))} ${d > 0 ? "above" : "below"} what they paid`;
-  const allIn = p.total / p.contracts;
-  return `Your ${money(spend)} fills at ${c(p.price)}${p.worst_price > p.price + 0.0005 ? " on average" : ""}, ${gap}. With the fee, ${c(allIn)} a contract against their ${c(b.price)}.`;
-}
-// The order book holds less than the amount near their price (the SDK's max_spend: everything for sale up to
-// 3¢ above what they paid, fee included): "Only $340 is available within 3¢ of their price".
-const availableLine = (room) => `Only ${money(room).replace(/\.00$/, "")} is available within 3¢ of their price.`;
-// When the amount can't be priced (p.ok false). Only when it's MORE than the book holds within 3¢ of their price
-// (the SDK's max_spend) is it "Only $340 is available…", with "Use $340 instead" from $1; an amount too small for
-// Polymarket's smallest order, or anything else, gets the SDK's own reason. `status` is for the sheet's top line.
+const c1 = (x) => `${Math.round(x * 1000) / 10}¢`; // a price to a tenth of a cent: "34.2¢"
+// "Your $50 fills at 34.2¢ on average. With the fee, 35.3¢ a contract." Their price is context, said apart.
+const fillExplain = (p, spend) =>
+  `Your ${money(spend)} fills at ${c1(p.price)}${p.worst_price > p.price + 0.0005 ? " on average" : ""}. With the fee, ${c1(p.total / p.contracts)} a contract.`;
+// The disclosed limit: "Priced up to 3¢ above the cheapest price for sale, 36.5¢: at most 39¢ a contract."
+const limitLine = (p) => p.best_price == null || p.limit == null ? ""
+  : `<p>Priced up to 3¢ above the cheapest price for sale, ${c1(p.best_price)}: at most ${c1(p.limit)} a contract. Offers above that aren't counted.</p>`;
+// Liquidity: everything for sale within the limit, fee included (the SDK's max_spend).
+const forSaleLine = (p) => p.depth_checked && p.max_spend != null ? `<p>For sale within that limit: ${money(p.max_spend)}, fee included.</p>` : "";
+// When the amount can't be priced (p.ok false). Only when it's MORE than the book holds within the limit is it
+// "Only $340 is for sale…", with "Use $340 instead" from $1; a closed market, an amount too small for Polymarket's
+// smallest order, or anything else gets the SDK's own reason.
 function notPriced(p, spend) {
   const short = !!p.depth_checked && p.max_spend != null && spend > p.max_spend + 0.01;
-  if (!short) return { status: null, line: sdkText(p.reason), room: 0 };
+  if (!short) return { line: sdkText(p.reason), room: 0 };
   const room = Math.floor(p.max_spend * 100) / 100;
-  return room > 0 ? { status: "Not enough for sale for this amount", line: availableLine(room), room }
-    : { status: "Price moved away", line: "Nothing is for sale within 3¢ of their price right now.", room: 0 };
+  return room > 0 ? { line: `Only ${money(room).replace(/\.00$/, "")} is for sale within 3¢ of the cheapest price, fee included: not enough for this amount.`, room }
+    : { line: "Nothing is for sale near the price right now.", room: 0 };
 }
 // Slippage, named: your average fill against the best price for sale now (best_price, from the engine).
 function slippageLine(p) {
   if (p.best_price == null || p.price == null) return "";
-  const c = (x) => `${Math.round(x * 1000) / 10}¢`, slip = p.price - p.best_price;
+  const slip = p.price - p.best_price;
   return slip > 0.0005
-    ? `<p>Slippage: your average fill, ${c(p.price)}, is ${c(slip)} above the best price for sale, ${c(p.best_price)}, because this amount buys into pricier offers.</p>`
-    : `<p>Slippage: none. It all fills at the best price for sale, ${c(p.best_price)}.</p>`;
+    ? `<p>Estimated slippage: your average fill, ${c1(p.price)}, is ${c1(slip)} above the best price for sale, ${c1(p.best_price)}, because this amount buys into pricier offers.</p>`
+    : `<p>Estimated slippage: none. It all fills at the best price for sale, ${c1(p.best_price)}.</p>`;
+}
+// Data freshness: when the engine read the book and the market's status; their trade itself runs 3–5 minutes behind.
+function freshLine(p) {
+  const at = p.priced_at ? new Date(p.priced_at) : null;
+  const when = at && !isNaN(at) ? `Order book and market status read at ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}. ` : "";
+  return `<p class="fine">${when}Their trade comes from Polymarket's public data, which runs 3–5 minutes behind.</p>`;
 }
 // Money you put in or get back, to the cent: "$49.91", "+$42.09".
 const money = (x, signed = false) => x == null ? "—" : `${x < 0 ? "−" : signed && x > 0 ? "+" : ""}$${Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 async function costBox(box, b, amount = 10) {
-  box.innerHTML = `<div class="head">What copying it costs</div>
-    <p>${b.at ? `They bought ${ago(b.at)}${b.price != null ? ` at ${cents(b.price)}` : ""}. ` : ""}How much would you put in, fee included? Priced from what's for sale on Polymarket right now.</p>
+  box.innerHTML = `<div class="head">What buying now costs</div>
+    <p>How much would you put in, fee included? Estimated from what's for sale on Polymarket right now.${b.price != null ? ` They paid ${cents(b.price)}${b.at ? ` ${ago(b.at)}` : ""}, for context.` : ""}</p>
     <div class="amount"><label class="box"><span class="muted">$</span><input id="amt" inputmode="decimal" autocomplete="off" aria-label="Amount in dollars" value="${amount}"></label>
       ${PICKS.map((v) => `<button type="button" data-amt="${v}" aria-pressed="${v === amount}">$${v}</button>`).join("")}</div>
     <div id="pv"><div class="skel" style="width:70%;height:14px"></div></div>
-    <p>Prices can change before you buy on Polymarket.</p>
+    <p>An estimate, not a guaranteed fill: the order book can change before your order reaches Polymarket, so it may fill higher, only in part, or not at all.</p>
     ${b.url ? `<a class="btn wide" id="buyon" href="${esc(b.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">Buy on Polymarket ↗</a>
       <p class="fine">Signals places no orders: you buy on Polymarket yourself.</p>` : ""}`;
   const input = $("#amt", box), pv = $("#pv", box);
-  const top = document.getElementById("sheetstatus"), before = top ? top.innerHTML : "";
-  const setTop = (st, why) => { if (top) top.innerHTML = `${STATUS[st] ? statusLine(st) : `<span class="status moved"><i></i>${esc(st)}</span>`}<p class="explain">${esc(why)}</p>`; };
-  const resetTop = () => { if (top) top.innerHTML = before; };
   let seq = 0, timer = null;
   const spendNow = () => { const v = parseFloat(String(input.value).replace(/[$,\s]/g, "")); return Number.isFinite(v) ? Math.round(v * 100) / 100 : null; };
   const show = async () => {
@@ -879,28 +882,24 @@ async function costBox(box, b, amount = 10) {
     if (my !== seq || !box.isConnected) return; // a newer amount is on its way
     if (!p.ok) {
       const np = notPriced(p, spend);
-      // Said once: in the status line at the top when the sheet has one, else here.
-      if (np.status && top) { setTop(np.status, np.line); pv.innerHTML = ""; }
-      else { resetTop(); pv.innerHTML = `<p>${esc(np.line)}</p>`; }
+      pv.innerHTML = `<p>${esc(np.line)}</p>${limitLine(p)}${freshLine(p)}`;
       if (np.room >= 1) pv.innerHTML += `<p><button type="button" class="btn ghost small" id="useroom">Use ${money(np.room)} instead</button></p>`;
       const use = $("#useroom", pv);
       if (use) use.onclick = () => { input.value = np.room.toFixed(2); clearTimeout(timer); show(); };
       return;
     }
-    if (p.depth_checked) setTop("in", fillExplain(p, b, spend));
-    else resetTop();
     const avg = Math.round(p.price * 1000) / 10, worst = p.worst_price != null ? Math.round(p.worst_price * 1000) / 10 : avg;
-    pv.innerHTML = `<p>${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} on Polymarket, ${p.depth_checked ? "priced from what's for sale right now" : "at the cheapest price for sale now"}.</p>
+    pv.innerHTML = `<p>${plural(p.contracts, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} on Polymarket, ${p.depth_checked ? `estimated from what's for sale right now. ${fillExplain(p, spend)}` : "at the cheapest price for sale now."}</p>
       <div class="receipt">
         <div><span>${plural(p.contracts, "contract")} × ${worst > avg ? `${avg}¢ average` : `${avg}¢`}</span><b>${money(p.cost)}</b></div>
         <div><span>Polymarket fee</span><b>${p.fee > 0 ? money(p.fee) : "No fee"}</b></div>
-        <div class="total"><span>Total</span><b>${money(p.total)}</b></div>
+        <div class="total"><span>Estimated total</span><b>${money(p.total)}</b></div>
       </div>
       <div class="kv" style="margin:0 0 14px">
         <div><span>${ifWins(b.outcome)}</span><b>You get ${money(p.payout)}</b></div><div><span>${ifLoses(b.outcome)}</span><b>You lose ${money(p.total)}</b></div>
       </div>
-      <p style="margin-top:-6px">That's ${pl(p.profit_if_win, money(p.profit_if_win, true))} if it wins. Each contract pays $1 if it wins and nothing if it loses.${!p.depth_checked ? " Polymarket's order book couldn't be read just now, so an order this size might fill higher." : ""}</p>
-      ${slippageLine(p)}`;
+      <p style="margin-top:-6px">Each contract pays $1 if it wins and nothing if it loses.${!p.depth_checked ? " Polymarket's order book couldn't be read just now, so an order this size might fill higher." : ""}</p>
+      ${slippageLine(p)}${limitLine(p)}${forSaleLine(p)}${freshLine(p)}`;
   };
   input.oninput = () => { clearTimeout(timer); timer = setTimeout(show, 350); };
   $$("[data-amt]", box).forEach((x) => (x.onclick = () => { input.value = x.dataset.amt; clearTimeout(timer); show(); }));

@@ -1,7 +1,8 @@
 # This repo
 
-Signals, on the uselayer SDK: top traders on Polymarket (Kalshi too when switched on, see below), a page per
-trader, cross-venue links (with Kalshi on) and what copying a trade would really cost. It runs on the user's
+Signals, on the uselayer SDK: signal discovery and trading intelligence, not a copy-trading app. Top traders on
+Polymarket (Kalshi too when switched on, see below), a page per trader, cross-venue links (with Kalshi on), and
+for every open trade what buying it now would really cost. It runs on the user's
 machine (`uv run signals`) and is hosted at usesignals.app: the same engine with `SIGNALS_HOSTED=1` on Railway,
 behind Vercel (see README, "Hosting").
 
@@ -28,9 +29,19 @@ behind Vercel (see README, "Hosting").
   links go through `/go/<alert id>/<target>`, which redirects to Polymarket or Signals only, and still redirects
   when counting fails. `/api/metrics` is the owner's: locally, or with `SIGNALS_METRICS_KEY`; never public.
 - Signals is a consumer website (usesignals.app); running it locally is for development. It places no orders:
-  no sandbox, no in-app trading, no automatic copying, and it never holds anyone's keys or funds. Copying a
-  trade means the cost preview, then "Buy on Polymarket ↗", where the user buys it themselves. A session never
+  no sandbox, no in-app trading, no automatic copying, and it never holds anyone's keys or funds. Buying means
+  "What buying now costs", then "Buy on Polymarket ↗", where the user buys it themselves. A session never
   places a real-money order, not even a test one.
+- "What buying now costs" (`/api/trade/preview`, the page's `costBox`) is on every trade with a market,
+  whoever made it: a quote only, never an order. Whether copying a trader is offered (`copy_offer`) is a separate
+  record shown beside it, never a gate on it, and pricing a trade reads no score. The engine reads everything it
+  shows, never trusting a price from the page: whether the market is closed or not taking orders comes from
+  Polymarket's market status (the SDK's `preview_copy`), never from the price, and the amount is priced from
+  the cheapest price for sale now, up to `BUY_LIMIT` (3¢) above it, a limit the page discloses. It shows the
+  estimated cost, what's for sale within the limit, the fee, the estimated slippage and when the book was read
+  (plus the 3–5 minute lag of their trade). Their price is context ("They paid 37¢, 12m ago, for context"),
+  never a target. It's always an estimate: never imply a guaranteed fill (it may fill higher, in part, or not
+  at all), and no green or "you can still get in" in it.
 - Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
   asked for only to follow a trader, and the button says so ("Follow · get an alert when they buy"). Alerts go
   to Telegram (`alert_pass` in `app.py`), for every buy of $100 or more by a trader you follow (their buys of one
@@ -54,9 +65,9 @@ behind Vercel (see README, "Hosting").
 - Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.
 - Never say a link *is* someone: show the tier ("likely" / "possible") and the evidence.
 - The page is a consumer app, not an analyst's spreadsheet. It helps people find traders worth following and
-  understand why: who they are, how they trade, and what the evidence does and doesn't show. Before anyone
-  copies a trade, show what it would really cost them: the price now against theirs, what their amount fills
-  at, the fee. Nothing on the page may imply that copying makes money. Two tabs (Feed, Traders).
+  understand why: who they are, how they trade, and what the evidence does and doesn't show. Before anyone buys,
+  show what it would really cost them now (above): what their amount fills at, the fee, the slippage, what's for
+  sale. Nothing on the page may imply that copying makes money. Two tabs (Feed, Traders).
   - Onboarding (first visit, once per browser) asks one question: which markets interest you (Politics, Sports,
     Crypto, Esports; Skip means all markets). Nothing else: no budget, goals or signup. The choice is kept in
     localStorage (and, when picked here or with the Feed's Change, on the account for big-trade alerts), every read and write in try/catch; if storage is blocked it holds for the visit, and no one is
@@ -72,7 +83,8 @@ behind Vercel (see README, "Hosting").
     reads "Copy not proven: …". A trader who isn't Copyable gets no copy
     cue anywhere: their status in grey in the Copying column, and an open trade of theirs (their page, a Feed
     card, a trader page) says only "Now 52¢ · they paid 49¢", never green or "you can still get in". The
-    "Buy on Polymarket" link, which only opens the market, stays for everyone. Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
+    "Buy on Polymarket" link, which only opens the market, "Check your price" and "What buying now costs" stay
+    for everyone: neutral market data, not a copy cue. Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
     win record and usual trade the last 30 days. Consistency is "X of N weeks up", where a week counts profit
     taken plus the change in value of trades still open. A copy estimate prices the copy at the ask (uselayer
     0.8.1's `copy_entry`), never the middle price. A positive copy estimate that isn't reliably above zero says so
@@ -85,8 +97,8 @@ behind Vercel (see README, "Hosting").
   - Never a made-up number for a real trader on the hosted app. A figure the data doesn't have yet shows "—";
     sample values (`SIGNALS_MOCK=1`) are for reviewing the page locally only. "Copyable" is plain text: green
     stays for "you can still get in". The SDK's per-dollar figure is a return per dollar traded, never "ROI".
-  - Words: say "trade", never "bet"; never "sandbox" or "paper". A trade you can still get into has "Check your
-    price", which opens what copying it costs; there is no "Copy trader". Following a trader (alerts) is how you
+  - Words: say "trade", never "bet"; never "sandbox" or "paper". Every trade with a market has "Check your
+    price", which opens what buying now costs; there is no "Copy trader". Following a trader (alerts) is how you
     hear about their next trades.
   - One idea per card. The market title is the biggest text; status is one line with a dot.
   - Color means something: green = you can still get in, grey = moved away, neutral = settled. Nothing else is

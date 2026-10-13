@@ -1,7 +1,7 @@
 # Signals
 
-See the best traders on Polymarket, open one to see their trades, and see what copying a trade would really
-cost you before you buy it on Polymarket.
+See the best traders on Polymarket, open one to see their trades, and see what buying any open trade would
+really cost you now before you buy it on Polymarket.
 Signals is Polymarket-only for now; the SDK also covers Kalshi, which `SIGNALS_VENUES=polymarket,kalshi` turns
 back on (Kalshi traders, both venues' leaderboards, and whether a trader trades on the other venue too).
 
@@ -53,10 +53,13 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     the market has turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or
     less, 98¢ or more, or one they no longer hold is **Won**, **Lost** or **Closed**, and drops out of the default
     feed. Turn off "Only trades I can still get into" to see them all. Tap a card for the details and the
-    trader. A trade you can still get into has **Check your price**: pick an amount and it's priced from
-    Polymarket's order book right now (at most 3¢ above their price), with the fee, your price per contract
-    against theirs, and what you get if it wins. **Buy on Polymarket ↗** opens the market there; Signals places
-    no orders. It updates every 30 seconds; Polymarket shows trades a few minutes late.
+    trader. Every trade has **Check your price** (**What buying now costs**), whoever the trader and whether or
+    not copying them is offered: pick an amount and the engine prices it from Polymarket's order book right now,
+    up to 3¢ above the cheapest price for sale (said on the page), with the fee, the estimated slippage, what's
+    for sale within that limit, when the book was read, and what you get if it wins. Their price is shown for
+    context only. The engine reads the price and whether the market is still taking orders itself (Polymarket's
+    market status, not the price). It's an estimate, not a guaranteed fill. **Buy on Polymarket ↗** opens the
+    market there; Signals places no orders. It updates every 30 seconds; Polymarket shows trades a few minutes late.
   - **Big trades** (`#/big`, linked from the foot of Recommended; the old `#/traders/big` link still works): trades of $250 or more right now on
     Polymarket, one card per trade, opened on your markets like the rest of the Feed. A named trader's card
     opens their page. With Kalshi on, it shows every big trade on both venues instead ("Anonymous trader" when

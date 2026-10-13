@@ -762,16 +762,6 @@ def _score_of(wallet: str) -> dict[str, Any]:
     return _worth_one[w]
 
 
-def refuse_unless_copy_offered(venue: str, wallet: str) -> None:
-    """The cost preview's check (400, a plain sentence): a Polymarket trader's trade is priced for copying only
-    when ``copy_offer`` says so, the same rule the page shows. Kalshi traders have no score, so nothing to check them against."""
-    if venue != "polymarket":
-        return
-    ok, why = copy_offer(_score_of(wallet))
-    if not ok:
-        raise HTTPException(400, detail=why)
-
-
 ACCOUNT_TTL_S = 60
 _WALLET = re.compile(r"0x[0-9a-f]{40}")
 
@@ -798,7 +788,7 @@ def with_links(s: dict[str, Any]) -> dict[str, Any]:
 FEED_SEGMENTS = RECOMMENDED  # Traders' three sections: Worth copying, Rising, Worth watching ("inactive" isn't in it)
 RECOMMENDED_MIN_USD = 1000.0  # the Feed's Recommended shows only trades this big: fewer, bigger trades
 FEED_HOURS = 24
-GET_IN = 0.03  # at most this far above their price you can still get in: the cost preview's limit too
+GET_IN = 0.03  # at most this far above their price you can still get in: an alert's "$10 gets you" limit too
 FELL_BY = 0.05  # at most this far below: a bigger drop means the market turned against them, a different trade
 SETTLED_LOW, SETTLED_HIGH = 0.02, 0.98  # at or past these the market has settled, or as good as
 
@@ -981,11 +971,13 @@ def _iso_ts(s: str) -> float:
     return datetime.fromisoformat(s).timestamp()
 
 
-# ---- what copying one trade would cost now (a Feed trade the trader already made) ----
-# A preview only: it reads Polymarket's order book and sends nothing. Signals places no orders and keeps no
-# sandbox: you buy on Polymarket yourself.
+# ---- what buying a trade's outcome now would cost (a Feed trade the trader already made) ----
+# A quote only, for every trade whoever made it: it reads Polymarket's market and order book and sends nothing.
+# Whether copying a trader is offered (copy_offer) is a separate record, never a gate on this. Signals places no
+# orders and keeps no sandbox: you buy on Polymarket yourself.
 
 PREVIEW_SIZE = 5  # contracts, when the page sends no amount
+BUY_LIMIT = 0.03  # a quote walks the book up to this far above the cheapest price for sale now, and no further
 
 
 class OneTrade(BaseModel):
@@ -1005,51 +997,44 @@ class OneTrade(BaseModel):
     spend: float | None = None  # dollars to put in, fee included; None: PREVIEW_SIZE contracts
 
 
-def _their_trade(req: OneTrade) -> WhaleTrade:
+def _their_trade(req: OneTrade, price: float | None = None) -> WhaleTrade:
+    """Their trade as the SDK takes it; ``price`` stands in for theirs to set where the book walk stops."""
     at = datetime.fromisoformat(req.at) if req.at else datetime.now(UTC)
     return WhaleTrade(
         venue="polymarket", trader=req.wallet, name=req.name, market=req.market, side="yes", action="buy",
-        price=req.price, size=req.size or 0.0, usd=req.usd or 0.0, at=at, trade_id=f"feed:{req.wallet}:{req.market}:{req.at}",
-        title=req.title, outcome=req.outcome, url=req.url, token=req.token,
+        price=req.price if price is None else price, size=req.size or 0.0, usd=req.usd or 0.0, at=at,
+        trade_id=f"feed:{req.wallet}:{req.market}:{req.at}", title=req.title, outcome=req.outcome, url=req.url,
+        token=req.token,
     )  # fmt: skip
 
 
 @app.post("/api/trade/preview")
 def trade_preview(req: OneTrade) -> dict[str, Any]:
-    """What buying this trade now would cost and pay, on the same Polymarket market, priced from the order
-    book up to 3¢ above their price. Refused (400, a plain sentence) when the price is one you can't still get
-    in at: settled, more than 5¢ below theirs or more than 3¢ above (``why_not_copy``); the SDK itself only
-    refuses a price above theirs plus ``max_slippage``. Sends nothing."""
+    """What buying this outcome now would cost and pay on Polymarket, for anyone's trade: an estimate, never an
+    order or a promised fill. Read here, never taken from the page: the market's status (the SDK says, in
+    ``reason``, when Polymarket lists it closed or isn't taking orders) and the order book, priced up to
+    ``BUY_LIMIT`` above the cheapest price for sale now (``best_price``; ``limit`` is the most a contract is
+    priced at). Their price (``their_price``) is context only. ``priced_at``: when it was read. Sends nothing."""
     if req.spend is not None and req.spend <= 0:
         raise HTTPException(400, detail="Enter an amount above $0.")
     size: dict[str, Any] = {"spend": req.spend} if req.spend else {"size": float(PREVIEW_SIZE)}
-    refuse_unless_copy_offered("polymarket", req.wallet)
     try:
-        p = reads.whales.preview_copy(_their_trade(req), **size, max_slippage=GET_IN)
+        p = _buy_now(req, size)
     except VenueError as e:
         raise venue_error(e) from e
-    if p.ok and (why := why_not_copy(req.price, p.price)):
-        raise HTTPException(400, detail=why)
-    return p.to_dict() | {"best_price": _best_price(req, p)}  # type: ignore[no-any-return]
+    return p.to_dict() | {"their_price": req.price, "priced_at": datetime.now(UTC).isoformat()}  # type: ignore[no-any-return]
 
 
-def _best_price(req: OneTrade, p: Any) -> float | None:
-    """The cheapest price for sale now, to name the slippage (your average fill against it). A uselayer release
-    whose CopyPreview has ``best_price`` (the best ask, before the fee) gives it; uselayer 0.8.1's doesn't, so then:
-    when every contract filled at one level, the average is the best price; when the walk went deeper, a
-    one-contract preview's price is the best ask (the SDK returns it even when one contract is under the market's
-    smallest order). None when the order book couldn't be read."""
-    if not p.ok or not getattr(p, "depth_checked", False) or p.price is None:
-        return None
-    if getattr(p, "best_price", None) is not None:  # the SDK says it: no second read
-        return float(p.best_price)
-    if getattr(p, "worst_price", None) is None or p.worst_price <= p.price + 1e-9:
-        return float(p.price)
-    try:
-        q = reads.whales.preview_copy(_their_trade(req), size=1.0, max_slippage=GET_IN)
-    except VenueError:
-        return None
-    return float(q.price) if q.depth_checked and q.price is not None and q.price <= p.price + 1e-9 else None
+def _buy_now(req: OneTrade, size: dict[str, Any]) -> Any:
+    """The SDK prices a buy up to a trade's price plus ``max_slippage``. The first read gets the market's status
+    and the cheapest price for sale now (``best_price``, set whether or not this amount fills); when that isn't
+    their price, a second read prices the amount from it. A market that's closed, not taking orders or has no
+    book to read comes back from the first read as it is."""
+    p = reads.whales.preview_copy(_their_trade(req), **size, max_slippage=BUY_LIMIT)
+    best = p.best_price if p.depth_checked else p.price  # no book read: Gamma's best price for sale
+    if best is None or abs(best - req.price) < 1e-9:
+        return p
+    return reads.whales.preview_copy(_their_trade(req, price=best), **size, max_slippage=BUY_LIMIT)
 
 
 # ---- following traders: sign in with Clerk (Google or Telegram), alerts on Telegram ----
