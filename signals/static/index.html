@@ -278,6 +278,12 @@
   .lb-muted { color: var(--faint); }
   .lb-meta, .lb-copyline { display: none; }
   .lb-more { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; padding: 12px; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; }
+  .lb-sec { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; padding: 18px 18px 10px; border-top: 1px solid var(--line); }
+  .lb-sec h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .lb-sec p { margin: 0; font-size: 13px; color: var(--muted); min-width: 0; }
+  .lb-head + .lb-section .lb-sec { border-top: 0; }
+  .lb-sec + .lb-row { border-top: 0; }
+  .lb-secnone { margin: 0; padding: 0 18px 18px; font-size: 14px; color: var(--muted); }
   .lb-foot { margin-top: 12px; font-size: 13px; color: var(--faint); line-height: 1.7; }
   .lb-foot .link { font-size: 13px; }
   /* A trader's profile: header, stat strip, profit chart, why they're here, then Positions / Activity / Stats */
@@ -636,6 +642,15 @@ const STATUS = {
   won: ["Won", "won"], lost: ["Lost", "lost"], closed: ["Closed", "done"],
 };
 const statusLine = (st) => STATUS[st] ? `<span class="status ${STATUS[st][1]}"><i></i>${STATUS[st][0]}</span>` : `<span class="status"><i></i>Price unknown</span>`;
+// For a trader copying isn't offered for, an open trade says only where the price is: no colour, nothing that
+// reads as a cue to buy. Settled trades say how they ended, as for anyone.
+const OPEN = new Set(["in", "moved"]);
+const neutralStatus = (paid, now) => {
+  if (now == null || paid == null) return `<span class="status"><i></i>Price unknown</span>`;
+  const [p, n] = centsPair(paid, now);
+  return `<span class="status"><i></i>Now ${n} · they paid ${p}</span>`;
+};
+const tradeStatus = (b, offered) => offered || !OPEN.has(b.status) ? statusLine(b.status) : neutralStatus(b.price, b.price_now);
 const SETTLED = new Set(["won", "lost", "closed"]);
 const GET_IN = 0.03; // at most 3¢ above (GET_IN in app.py), and at most 5¢ below (FELL_BY)
 function statusExplain(b) {
@@ -688,6 +703,9 @@ let shown = []; // the trades on screen, so a card can open its sheet
 const moveOf = (b) => b.price != null && b.price_now != null && Math.abs(b.price_now - b.price) >= 0.0005 ? b.price_now - b.price : 0;
 function tradeCard(b, i, { who = true } = {}) {
   const [paid, now] = centsPair(b.price, b.price_now);
+  // Copying offered (copy_ok): the price window in colour. Anyone else, including a trader page's open trades
+  // (no copy_ok there): where the price is, no colour, no "you can still get in". The market link stays for all.
+  const offered = b.copy_ok === true;
   const name = displayName(b.name, b.wallet);
   const top = who ? `<div class="trade-top">${avatar(b.wallet, 28)}<span class="who"><span class="name">${esc(name)}</span>${tier(b.segment)}</span>
       <span class="when">${[b.category, b.at ? ago(b.at) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>` : "";
@@ -696,10 +714,10 @@ function tradeCard(b, i, { who = true } = {}) {
   return `<article class="card trade${who ? "" : " compact"}" data-trade="${i}" tabindex="0">
     ${top}
     <h3 class="trade-title">${esc(b.title || "Untitled market")}</h3>
-    ${b.outcome || b.url ? `<div class="trade-tags">${b.outcome ? `<span class="chip">${esc(b.outcome)}</span>` : ""}${marketLink(b.url)}</div>` : ""}
-    <div class="trade-nums"><span>Bought at <b>${paid}</b><span class="sep">·</span>Now <b>${pl(moveOf(b), now)}</b></span><span class="amt">${usd(b.usd)} in</span></div>
+    ${b.outcome || b.url ? `<div class="trade-tags">${b.outcome ? `<span class="chip">${esc(b.outcome)}</span>` : ""}${marketLink(b.url, OPEN.has(b.status) ? "Buy on Polymarket ↗" : "Polymarket ↗")}</div>` : ""}
+    <div class="trade-nums"><span>Bought at <b>${paid}</b><span class="sep">·</span>Now <b>${offered ? pl(moveOf(b), now) : now}</b></span><span class="amt">${usd(b.usd)} in</span></div>
     ${alsoBought(b)}
-    <div class="trade-foot">${statusLine(b.status)}${act}</div>
+    <div class="trade-foot">${tradeStatus(b, offered)}${act}</div>
   </article>`;
 }
 // Other traders we follow who bought the same thing (one card per trade): names only, never "the same person".
@@ -711,21 +729,22 @@ function alsoBought(b) {
 }
 function tradeSheet(b) {
   const [paid, now] = centsPair(b.price, b.price_now);
+  const offered = b.copy_ok === true; // as on the card
   const name = displayName(b.name, b.wallet);
   const panel = sheet(`
     <h2>${esc(b.title || "Untitled market")}</h2>
     ${b.outcome ? `<div style="margin-top:10px"><span class="chip">${esc(b.outcome)}</span></div>` : ""}
-    <div style="margin-top:18px" id="sheetstatus">${statusLine(b.status)}<p class="explain">${statusExplain(b)}</p></div>
+    <div style="margin-top:18px" id="sheetstatus">${!offered && OPEN.has(b.status) ? tradeStatus(b, false) : `${statusLine(b.status)}<p class="explain">${statusExplain(b)}</p>`}</div>
     ${alsoBought(b)}
     <div class="kv">
-      <div><span>Bought at</span><b>${paid}</b></div><div><span>Price now</span><b>${pl(moveOf(b), now)}</b></div>
+      <div><span>Bought at</span><b>${paid}</b></div><div><span>Price now</span><b>${offered ? pl(moveOf(b), now) : now}</b></div>
       <div><span>They put in</span><b>${usd(b.usd)}</b></div><div><span>Contracts</span><b>${b.size != null ? Math.round(b.size).toLocaleString() : "—"}</b></div>
       ${b.at || b.category ? `<div><span>When</span><b>${b.at ? ago(b.at) : "—"}</b></div><div><span>Category</span><b>${esc(b.category || "—")}</b></div>` : ""}
     </div>
     ${b.wallet ? `<a class="sheet-who" href="#/worth/${esc(b.wallet)}">${avatar(b.wallet, 36)}<span class="grow"><span class="name">${esc(name)}</span><span class="muted" style="font-size:13px">See their record</span></span>${tier(b.segment)}</a>` : ""}
     ${b.copy_ok === false && b.wallet ? `<p class="fine">Copying isn't offered for this trader. <a class="link" href="#/worth/${esc(b.wallet)}">See their record</a></p>` : ""}
     ${b.copy_ok === true && b.wallet && b.status === "in" && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>`
-      : b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">Open on Polymarket ↗</a></p>` : ""}`);
+      : b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">${OPEN.has(b.status) ? "Buy on Polymarket ↗" : "Open on Polymarket ↗"}</a></p>` : ""}`);
   bindActions(panel);
   const box = $("#copynow", panel);
   if (box) costBox(box, b);
@@ -884,6 +903,7 @@ function renderFeed() {
       <label class="switch"><input type="checkbox" id="onlyin" ${feed.onlyIn ? "checked" : ""}><span class="track"></span>Only trades I can still get into</label>
     </div>
     ${feed.err ? `<p class="inline-err">Couldn't refresh: ${esc(feed.err)}. Showing the last update.</p>` : ""}
+    <p class="foot-note" style="margin:0 0 12px">Polymarket's public data runs 3–5 minutes behind, so trades show up here a few minutes after they're made.</p>
     ${r.traders.some((t) => t.copy_ok) ? "" : `<p class="foot-note" style="margin:0 0 12px">No trader's copies have been reliably profitable after fees yet, so copying is paused. Their trades still show here.</p>`}
     ${r.failed ? `<p class="foot-note" style="margin:0 0 12px">${plural(r.failed, "trader")} couldn't be read just now; retrying.</p>` : ""}`;
   $("#onlyin").onchange = (e) => { feed.onlyIn = e.target.checked; renderFeed(); };
@@ -979,10 +999,11 @@ function howSheet() {
       <li><b>Enough trades to trust it.</b> One good week isn't a record. Trades on the same game count once.</li>
       <li><b>Not one lucky win.</b> Their edge has to hold without their best trades, and their profit without their biggest win.</li>
       <li><b>Profitable from trading.</b> They made money from trading over the last 30 days. Rewards and rebates don't count.</li>
-      <li><b>You can copy it.</b> Buying the same thing a minute or more after them, and paying the fee, still has to pay off an hour later, and not by luck: even the low end of our estimate has to be above zero, over at least 8 trades.</li>
+      <li><b>You can copy it.</b> Buying the same thing a minute or more after them, and paying the fee, still has to pay off an hour later, and not by luck: even the low end of our estimate has to be above zero, over at least 8 trades. We price each copy at the ask, what a buyer pays: at least half a cent above the middle price Polymarket's history shows.</li>
       <li><b>They take a side.</b> Market makers and arbitrage traders have no view to follow, so they're left out.</li>
       <li><b>Still trading.</b> Nobody who hasn't bought anything in a week is recommended.</li>
     </ol>
+    <p class="explain"><b>Weeks up</b> (12-week consistency): ${WEEK_COUNTS}</p>
     <h3 style="font-size:15px;margin:18px 0 6px">The tiers</h3>
     <ul>
       <li><b>Proven sharp:</b> passes every check over at least 40 separate trades, on an account the leaderboards list or a big one.</li>
@@ -990,6 +1011,7 @@ function howSheet() {
       <li><b>Rising:</b> good early signs, too few trades to be sure yet.</li>
       <li><b>No proven copy advantage</b> (marked "Copy not proven"): real skill, but by the time you'd get in the price has moved, so copies make little or nothing after fees. A small positive estimate can still show; it isn't reliably above zero. Copying isn't offered.</li>
     </ul>
+    <p class="explain">Traders lists them in three parts: <b>Worth copying</b> (copies have been reliably profitable after fees), <b>Rising</b>, and <b>Worth watching</b> (No proven copy advantage: skilled traders worth keeping an eye on, and following for alerts, but not copying).</p>
     <p class="explain">Left out of recommendations: <b>Lucky</b> (over $50K profit from trading, but it rests on one win, or the price doesn't move their way after they buy), <b>No clear edge</b> (the price doesn't clearly move their way, or too few trades to tell), <b>Not trading lately</b>, and market makers and arbitrage (<b>No view</b>).</p>
     <p class="explain">A reading of the past, not a promise. Signals places no orders: you buy on Polymarket yourself.</p>`);
 }
@@ -1054,7 +1076,13 @@ const SEG_ORDER = ["proven", "quiet", "rising", "too_fast"]; // the tiers we rec
 const RANKED = 25;
 let worthTimer = null, worthLast = null;
 const topOpts = { venue: "all", by: "pnl" };
-const lb = { copyOnly: false, q: "", sort: null, period: "30d", all: false, more: false };
+const lb = { copyOnly: false, q: "", sort: null, period: "30d", all: false, more: {} }; // more: "Show more" pressed, per section
+// Traders' sections, from the engine's section_of: one rule, so the list and its tests agree.
+const SECTIONS = [
+  ["copy", "Worth copying", "Copies a few minutes late have been reliably profitable after fees."],
+  ["rising", "Rising", "Good early signs, too few trades to be sure yet. Copying isn't offered yet."],
+  ["watch", "Worth watching", "Skilled traders worth keeping an eye on. Copying isn't offered: the price moves before you'd get in."],
+];
 
 async function tradersPage(view) {
   const app = $("#app");
@@ -1086,6 +1114,8 @@ const copyEstimate = (s) => s.copy_return == null ? null : `Estimated copy retur
   ? "." : s.copy_return > 0 ? ", but results aren't reliably above zero." : "; the price moves before a copy gets in."}`;
 // Weeks in profit out of the weeks they have history for: a week before their first trade isn't a losing week.
 const weeksUp = (s) => s.weeks_up ?? null;
+// What "up" means for a week: trading profit, so open trades count at their value that week.
+const WEEK_COUNTS = "A week counts profit taken plus the change in value of trades still open.";
 const weeksOf = (s) => s.weeks_known ?? null;
 // Trading profit only: never Polymarket's own figure (rewards and rebates in) when it's missing.
 const profitOf = (s, p) => s.periods?.[p]?.trading_pnl ?? (p === "30d" ? s.trading_pnl_window : null) ?? null;
@@ -1151,33 +1181,49 @@ function renderWorth() {
     .sort(LB_SORTS[sort][1]);
 
   const head = (key, label) => `<button type="button" data-lbsort="${key}" aria-pressed="${sort === key}" ${key === "consistent" && !history ? "disabled" : ""}>${label}</button>`;
-  const row = (s, i) => {
+  const row = (s, i, open) => {
     const up = weeksUp(s), known = weeksOf(s), profit = profitOf(s, n), perDollar = perDollarOf(s, n), copy = s.copy_return;
     const notRec = !SEG_ORDER.includes(s.segment) ? ` · ${esc(TIER[s.segment]?.[0] || "Not recommended")}` : "";
     const cat = s.categories?.[0]?.category;
-    const copyMain = copy == null ? `<span class="lb-none">—</span>` : `<span class="lb-main ${isCopyable(s) ? "" : "lb-muted"}">${isCopyable(s) ? pl(copy, lbPct(copy)) : lbPct(copy)}</span>`;
-    const copySub = isCopyable(s) ? (copyRange(s) ? `range ${copyRange(s)}` : "estimate, after fees") : !SEG_ORDER.includes(s.segment) ? "not recommended" : copy > 0 ? "not proven" : "no copy advantage";
-    return `<a class="lb-cols lb-row" href="#/worth/${esc(s.wallet)}" ${i >= RANKED && !lb.more ? "hidden" : ""}>
+    // Copying is offered or it isn't: a trader it isn't offered for never gets a figure that reads as a gain.
+    const copyMain = isCopyable(s) ? (copy == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(copy, lbPct(copy))}</span>`)
+      : `<span class="lb-main lb-muted">Not offered</span>`;
+    const copySub = isCopyable(s) ? (copyRange(s) ? `range ${copyRange(s)}` : "estimate, after fees")
+      : !SEG_ORDER.includes(s.segment) ? "not recommended" : copy != null ? `estimate ${lbPct(copy)}` : "";
+    return `<a class="lb-cols lb-row" href="#/worth/${esc(s.wallet)}" ${i >= RANKED && !open ? "hidden" : ""}>
       <span class="lb-rank">${i + 1}</span>
       <span class="lb-who">${avatar(s.wallet, 40)}<span style="min-width:0"><span class="nm">${esc(displayName(s.name, s.wallet))}</span><span class="lb-sub">${[cat, s.last_buy ? `active ${ago(s.last_buy)}` : ""].filter(Boolean).map(esc).join(" · ")}${notRec}</span></span></span>
-      <span class="lb-cons">${up == null || !known ? `<span class="lb-none">—</span>` : `<span class="lb-weeks" aria-hidden="true">${s.pnl_weeks.map((w) => `<i class="${w == null ? "none" : w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span><span class="lb-sub">${up} of ${known} weeks profitable</span>`}</span>
+      <span class="lb-cons">${up == null || !known ? `<span class="lb-none">—</span>` : `<span class="lb-weeks" aria-hidden="true">${s.pnl_weeks.map((w) => `<i class="${w == null ? "none" : w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span><span class="lb-sub">${up} of ${known} weeks up</span>`}</span>
       <span class="lb-pnl">${profit == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(profit, usd(profit, true))}</span><span class="lb-sub">${perDollar != null ? `${lbPct(perDollar)} per $ traded` : `${days} days`}</span>`}</span>
       <span class="lb-trend">${lbSpark(s, days)}</span>
       <span class="lb-won">${s.settled ? `<span class="lb-main">${s.won} of ${s.settled}</span><span class="lb-sub">${readDays(s) < 30 ? `settled · ${readDays(s)} days` : "settled"}</span>` : `<span class="lb-none">—</span>`}</span>
       <span class="lb-usual">${s.typical_usd != null ? `<span class="lb-main">${usd(s.typical_usd)}</span><span class="lb-sub">${perDayText(s.trades_per_day)}</span>` : `<span class="lb-none">—</span>`}</span>
       <span class="lb-copy">${copyMain}<span class="lb-sub">${copySub}</span></span>
       <span class="lb-meta">${[s.settled ? `${readPeriod(s).replace("l", "L")}: won ${s.won} of ${s.settled}` : "", s.typical_usd != null ? `usually ${usd(s.typical_usd)}` : "", perDayText(s.trades_per_day)].filter(Boolean).join(" · ")}</span>
-      <span class="lb-copyline">${copy == null ? "" : isCopyable(s) ? copyEstimate(s) : `<span class="lb-muted">${SEG_ORDER.includes(s.segment) ? copyEstimate(s) : `Not recommended: estimated copy return ${lbPct(copy)}`}</span>`}</span>
+      <span class="lb-copyline">${isCopyable(s) ? copyEstimate(s) || "" : `<span class="lb-muted">${SEG_ORDER.includes(s.segment) ? `Copying not offered.${copy != null ? ` ${copyEstimate(s)}` : ""}` : `Not recommended${copy != null ? `: estimated copy return ${lbPct(copy)}` : ""}`}</span>`}</span>
     </a>`;
   };
+
+  // One list of rows, with its own ranks and "Show more": a section, or every checked trader.
+  const rows = (list, key) => `${list.map((s, i) => row(s, i, lb.more[key])).join("")}
+      ${list.length > RANKED && !lb.more[key] ? `<button type="button" class="lb-more" data-lbmore="${key}">Show ${list.length - RANKED} more</button>` : ""}`;
+  // Recommended traders come in sections: Worth copying (always shown, with a line when nobody is), then Rising
+  // and Worth watching when they have anyone. "See all checked traders" stays one marked list.
+  const sections = lb.all ? null : SECTIONS.map(([key, title, sub]) => {
+    const list = shown.filter((s) => s.section === key);
+    if (!list.length && key !== "copy") return "";
+    const none = !scores.some(isCopyable) ? "No trader's copies have been reliably profitable after fees lately."
+      : "No trader you can copy matches what you've picked.";
+    return `<section class="lb-section" aria-label="${title}"><div class="lb-sec"><h2>${title}</h2><p>${sub}</p></div>
+      ${list.length ? rows(list, key) : `<p class="lb-secnone">${none}</p>`}</section>`;
+  }).join("");
 
   let body;
   if (shown.length) {
     body = `<div class="lb-board ${history ? "" : "lb-nohist"}">
       <div class="lb-cols lb-groups" aria-hidden="true"><span style="grid-column:3 / span 4">Track record</span><span style="grid-column:7">Style</span><span style="grid-column:8">Copying</span></div>
       <div class="lb-cols lb-head"><span>#</span><span>Trader</span>${head("consistent", "12-week consistency")}${head("profit", "Profit")}<span>Trend</span>${head("won", "Won, 30 days")}${head("active", "Usual trade, 30 days")}${head("copying", "Copy estimate")}</div>
-      ${shown.map(row).join("")}
-      ${shown.length > RANKED && !lb.more ? `<button type="button" class="lb-more" id="lbmore">Show ${shown.length - RANKED} more</button>` : ""}</div>`;
+      ${sections ?? rows(shown, "all")}</div>`;
   } else if (q && isWalletQuery(q)) {
     body = emptyState("That wallet isn't in this list", "We can still check its trades, including your own wallet. It takes up to a minute.", `<a class="btn" href="#/worth/${esc(q)}">Check this wallet</a>`);
   } else if (q) {
@@ -1211,7 +1257,7 @@ function renderWorth() {
     ${body}
     <p class="lb-foot">${st.running ? `Checking again${st.total ? ` (${st.done} of ${st.total})` : ""}…` : `Checked ${plural(scores.length, "trader")} ${ago(res.finished)} · <button class="link" id="wrefresh">Check again</button>`}
       · <button class="link" id="how">How we pick traders</button>
-      ${sort === "consistent" ? " · Most consistent ranks by weeks in profit out of the weeks they've traded (of the last 12), from 4 weeks" : ""}
+      ${sort === "consistent" ? " · Most consistent ranks by weeks up out of the weeks they've traded (of the last 12), from 4 weeks" : ""}
       ${sort === "won" ? " · Win rate ranks from 10 settled trades, so a few lucky wins don't top it" : ""}
       ${sort === "copying" ? " · Copy estimate ranks by the bottom of its range, from 8 trades" : ""}
       ${periods ? " · 7D/30D/90D changes profit and trend only: consistency always covers the last 12 weeks, wins and usual trade the last 30 days" : ""}
@@ -1229,7 +1275,7 @@ function renderWorth() {
   $$("[data-lbsort]", box).forEach((b) => (b.onclick = () => { lb.sort = b.dataset.lbsort; renderWorth(); }));
   $$("[data-lbperiod]", box).forEach((b) => (b.onclick = () => { lb.period = b.dataset.lbperiod; renderWorth(); }));
   const off = $("#lbcopyoff"); if (off) off.onclick = () => { lb.copyOnly = false; renderWorth(); };
-  const more = $("#lbmore"); if (more) more.onclick = () => { lb.more = true; renderWorth(); };
+  $$("[data-lbmore]", box).forEach((b) => (b.onclick = () => { lb.more[b.dataset.lbmore] = true; renderWorth(); }));
   const clear = $("#lbclear"); if (clear) clear.onclick = () => { lb.q = ""; renderWorth(); };
   const all = $("#lball"); if (all) all.onclick = () => { setInterests([]); renderWorth(); };
   const rec = $("#lbrec"); if (rec) rec.onclick = () => { lb.all = !lb.all; renderWorth(); };
@@ -1339,7 +1385,7 @@ function renderProfile() {
   const period = (cls) => s.periods ? `<div class="lb-period ${cls}" role="group" aria-label="Period">${Object.keys(PF_PERIOD).map((p) => `<button type="button" data-pfperiod="${p}" aria-pressed="${n === p}">${p.toUpperCase()}</button>`).join("")}</div>` : "";
 
   // why they're here: three plain sentences, plus the SDK's own warnings
-  const consistent = [up != null && weeksOf(s) ? `In profit ${up} of ${weeksOf(s) < 12 ? `the ${weeksOf(s)} weeks since their first trade` : "the last 12 weeks"}` : null, s.settled ? `${s.won} of the ${s.settled} trades we checked that settled went their way` : null].filter(Boolean).join("; ");
+  const consistent = [up != null && weeksOf(s) ? `Up in ${up} of ${weeksOf(s) < 12 ? `the ${weeksOf(s)} weeks since their first trade` : "the last 12 weeks"}` : null, s.settled ? `${s.won} of the ${s.settled} trades we checked that settled went their way` : null].filter(Boolean).join("; ");
   const steady = without == null ? "" : without > 0 ? " Still in profit without their biggest win." : ` Most of their profit is one win (${usd(s.biggest_win)}).`;
   const how = [cats.slice(0, 2).map((c) => c.category).join(" and ") || null, band ? `buys around ${band}` : s.avg_price != null ? `pays ${cents(s.avg_price)} on average` : null,
     s.typical_usd != null ? `usually ${usd(s.typical_usd)}${share != null ? ` (${lbPct(share).replace("+", "")} of their wallet)` : ""}` : null,
@@ -1354,7 +1400,7 @@ function renderProfile() {
       .filter((p) => !["won", "lost", "closed"].includes(p.status)) : null;
     const closedSdk = d && Array.isArray(d.closed) ? d.closed : null;
     const settled = (s.sample || []).filter((b) => b.payout != null).slice(0, 10);
-    const openRow = (p) => `<div class="pf-li"><div><div class="t">${esc(p.title)}</div><div class="s">${p.outcome ? `<span class="pf-oc">${esc(p.outcome)}</span>` : ""}${p.size != null ? `${Math.round(p.size).toLocaleString()} at ${cents(p.price)} · ${usd((p.price ?? 0) * p.size)}` : ""}${p.now != null ? ` · now ${cents(p.now)}` : ""}${p.url ? ` · ${marketLink(p.url)}` : ""}</div></div><div class="r">${statusLine(p.status)}</div></div>`;
+    const openRow = (p) => `<div class="pf-li"><div><div class="t">${esc(p.title)}</div><div class="s">${p.outcome ? `<span class="pf-oc">${esc(p.outcome)}</span>` : ""}${p.size != null ? `${Math.round(p.size).toLocaleString()} at ${cents(p.price)} · ${usd((p.price ?? 0) * p.size)}` : ""}${p.now != null ? ` · now ${cents(p.now)}` : ""}${p.url ? ` · ${marketLink(p.url)}` : ""}</div></div><div class="r">${tradeStatus({ status: p.status, price: p.price, price_now: p.now }, can)}</div></div>`;
     const closedRow = (c) => {
       const sdk = "result" in c, when = c.closed_at || c.at;
       const bought = sdk ? `${c.size != null ? `${Math.round(c.size).toLocaleString()} ` : ""}${c.avg_price != null ? `at ${cents(c.avg_price)}` : "bought"}` : `bought at ${cents(c.price)}`;
@@ -1384,7 +1430,7 @@ function renderProfile() {
     const ended = (k) => closedKnown.filter((c) => c.result === k).length;
     const closedRecord = closedKnown.length ? `${ended("won")} won · ${ended("lost")} lost · ${ended("sold")} sold` : "";
     body = `<div class="pf-group"><h3>Consistency</h3><div class="pf-kv">
-        <div><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)} weeks profitable` : dash}</b></div><div><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled} settled` : dash}</b></div>
+        <div><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)} weeks up` : dash}</b></div><div><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled} settled` : dash}</b></div>
         <div><span>Last ${closedN || 50} closed positions</span><b>${closedRecord || dash}</b></div>
         <div><span>All time without their biggest win</span><b>${without != null ? pl(without, usd(without, true)) : dash}</b></div><div><span>Longest run of losing weeks</span><b>${weeks.length ? longest : dash}</b></div></div></div>
       <div class="pf-group"><h3>Risk</h3><div class="pf-kv">
@@ -1406,7 +1452,7 @@ function renderProfile() {
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div><small>${ctaNote}</small></div></div>
     <div class="pf-stats">
       <div class="pf-stat"><span>Profit, ${PF_PERIOD[n]}</span><b>${profit != null ? pl(profit, usd(profit, true)) : "—"}</b><small>${started ? `since their first trade, ${ago(started)}` : perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit"}</small></div>
-      <div class="pf-stat"><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)}` : "—"}</b><small>${weeksOf(s) && weeksOf(s) < 12 ? "weeks profitable, since their first trade" : "weeks profitable"}</small></div>
+      <div class="pf-stat"><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)}` : "—"}</b><small>${weeksOf(s) && weeksOf(s) < 12 ? "weeks up, since their first trade. " : "weeks up. "}${WEEK_COUNTS}</small></div>
       <div class="pf-stat"><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>checked trades that settled</small></div>
       <div class="pf-stat"><span>Usual trade, ${readPeriod(s)}</span><b>${s.typical_usd != null ? usd(s.typical_usd) : "—"}</b><small>${share != null ? `${lbPct(share).replace("+", "")} of their wallet` : s.trades_per_day != null ? perDayText(s.trades_per_day) : ""}</small></div>
       <div class="pf-stat"><span>Wallet</span><b>${walletTile[0]}</b><small>${walletTile[1]}</small></div>

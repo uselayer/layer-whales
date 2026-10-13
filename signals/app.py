@@ -34,7 +34,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from uselayer import Client, VenueError, WhaleTrade
-from uselayer.whale_scores import COPY_BETS, SEGMENTS, Stat, category_of, copyable_verdict
+from uselayer.whale_scores import COPY_BETS, RECOMMENDED, SEGMENTS, Stat, category_of, copyable_verdict
 
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
@@ -328,7 +328,9 @@ def _board(s: dict[str, Any]) -> dict[str, Any]:
         out["covered_days"] = round(days)
         if s.get("decisions") is not None:
             out["trades_per_day"] = round(s["decisions"] / days, 2)
-    price = s.get("avg_price") or _median([b.get("price") for b in bets])
+    # What a copier paid a contract on the checked bets (uselayer 0.8.1: at the ask, the same bets as the copy
+    # result). Before 0.8.1 there's only their own average price, over every buy in the window.
+    price = s.get("copy_entry") or s.get("avg_price") or _median([b.get("price") for b in bets])
     copy = Stat.from_dict(s["copy"]) if s.get("copy") else None
     # What a copier a few minutes late kept after the fee, per dollar they paid: an estimate with its 95% range.
     # Only the range's bottom ranks a trader ("Copy estimate" sort), and only over COPY_BETS bets or more.
@@ -338,6 +340,7 @@ def _board(s: dict[str, Any]) -> dict[str, Any]:
     out["copy_return_high"] = per(copy.high) if per else None
     out["copy_rank"] = out["copy_return_low"] if copy and copy.n >= COPY_BETS else None
     out["copy_ok"], out["copy_why"] = copy_offer(s)
+    out["section"] = section_of(s.get("segment"), out["copy_ok"])
     if _mock() and s.get("pnl_weeks") is None:
         out |= _mock_history(s)
     out |= _consistency(out.get("pnl_weeks", s.get("pnl_weeks")))
@@ -371,6 +374,19 @@ def _consistency(weeks: list[float | None] | None) -> dict[str, Any]:
 
 
 COPY_TIERS = ("proven", "quiet", "rising")  # the recommended tiers copying can be offered for
+SECTIONS = ("copy", "rising", "watch")  # Traders' sections, in order: Worth copying, Rising, Worth watching
+
+
+def section_of(segment: str | None, copy_ok: bool) -> str | None:
+    """Which section of Traders a recommended trader is listed in: ``"copy"`` (Worth copying) when copying is
+    offered (``copy_offer``), else ``"rising"`` for Rising and ``"watch"`` (Worth watching) for No proven copy
+    advantage: skilled traders worth keeping an eye on, whose copies don't reliably pay. None for a trader we
+    don't recommend, who is only in "See all checked traders"."""
+    if segment not in RECOMMENDED:
+        return None
+    if copy_ok:
+        return "copy"
+    return "rising" if segment == "rising" else "watch"
 
 
 def copy_offer(s: dict[str, Any]) -> tuple[bool, str | None]:
@@ -654,6 +670,7 @@ ALERT_EVERY_S = 30
 ALERT_MAX_AGE_S = 30 * 60  # a buy first seen later than this isn't alerted (Polymarket shows trades minutes late)
 ALERT_AGAIN_S = 6 * 3600  # one alert per trader and market in this long, however many fills
 ALERT_SPEND = 10.0  # an alert prices this many dollars, for a trader copying is offered for
+DATA_DELAY = "Polymarket's public data runs 3–5 minutes behind."  # said on every alert, and on the Feed
 _follow_lock = threading.Lock()  # one change to follows.json at a time
 _follow_stop = threading.Event()
 _codes: dict[str, tuple[str, float]] = {}  # one-time "Connect Telegram" codes: code -> (Clerk user id, made at)
@@ -928,10 +945,15 @@ def _cents(p: float) -> str:
     return f"{c:.1f}¢" if c < 1 or 99 < c < 100 else f"{round(c)}¢"
 
 
+def _copy_offered(wallet: str) -> bool:
+    """Whether the page offers copying this trader (``copy_offer`` on the last check)."""
+    s = next((x for x in (_worth_load() or {}).get("scores", []) if x["wallet"] == wallet), None)
+    return s is not None and copy_offer(s)[0]
+
+
 def _alert_cost(wallet: str, t: WhaleTrade, paid: float, size: float, usd: float) -> str | None:
     """What ALERT_SPEND dollars would buy now, for a trader the page offers copying for; None otherwise."""
-    s = next((x for x in (_worth_load() or {}).get("scores", []) if x["wallet"] == wallet), None)
-    if not s or not copy_offer(s)[0]:
+    if not _copy_offered(wallet):
         return None
     trade = WhaleTrade(
         venue="polymarket", trader=wallet, name=None, market=t.market, side="yes", action="buy", price=paid,
@@ -948,16 +970,31 @@ def _alert_cost(wallet: str, t: WhaleTrade, paid: float, size: float, usd: float
 
 
 def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, size: float, usd: float) -> str:
+    """The Telegram message for one new buy. For a trader the page offers copying for: you can still get in,
+    what $10 buys and a link to buy it on Polymarket. For anyone else, following is keeping an eye on them, not
+    copying: what they bought and the price now, their record and "Buy on Polymarket" (it only opens the
+    market: Signals places no orders), never "you can still get in". Every alert says Polymarket's public data
+    runs behind."""
     e = html.escape
+    title = e(t.title or "A Polymarket market")
+    if not _copy_offered(wallet):
+        links = [f'<a href="{e(SITE)}/#/worth/{wallet}">Their record on Signals</a>']
+        if t.url:
+            links.append(f'<a href="{e(t.url)}">Buy on Polymarket</a>')
+        return "\n".join([
+            f"<b>{e(_who(wallet))}</b> bought <b>{e(t.outcome or 'Yes')}</b> at {_cents(paid)} (${usd:,.0f})"
+            f" on {title} · now {_cents(now)}",
+            " · ".join(links), DATA_DELAY,
+        ])  # fmt: skip
     lines = [f"<b>{e(_who(wallet))}</b> bought <b>{e(t.outcome or 'Yes')}</b> at {_cents(paid)} (${usd:,.0f})",
-             e(t.title or "A Polymarket market"), f"Now {_cents(now)}: you can still get in."]  # fmt: skip
+             title, f"Now {_cents(now)}: you can still get in."]  # fmt: skip
     cost = _alert_cost(wallet, t, paid, size, usd)
     if cost:
         lines.append(cost)
     links = [f'<a href="{e(SITE)}/#/worth/{wallet}">Their record</a>']
     if t.url:
         links.append(f'<a href="{e(t.url)}">Buy on Polymarket</a>')
-    lines.append(" · ".join(links))
+    lines += [" · ".join(links), DATA_DELAY]
     return "\n".join(lines)
 
 
