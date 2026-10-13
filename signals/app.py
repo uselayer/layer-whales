@@ -41,7 +41,14 @@ from uselayer.whale_scores import CATEGORY_TAGS, COPY_BETS, RECOMMENDED, SEGMENT
 
 from signals.budget import BackgroundHttp, Budget
 from signals.directory import (
-    CHECK_BOARDS, LISTED_FRESH_S, QUICK_TRADES, Directory, QuickLook, Seen, from_sighting, quick_look,
+    CHECK_BOARDS,
+    LISTED_FRESH_S,
+    QUICK_TRADES,
+    Directory,
+    QuickLook,
+    Seen,
+    from_sighting,
+    quick_look,
 )  # fmt: skip
 
 HERE = Path(__file__).parent
