@@ -85,12 +85,20 @@ def top(venue: str = "all", by: str = "pnl", limit: int = 25) -> list[dict[str, 
 
 @app.get("/api/trading-now")
 def trading_now(min_usd: float = 250) -> list[dict[str, Any]]:
-    """Recent large trades, newest first. Named Kalshi traders here usually show their trades."""
+    """Recent large trades, newest first (the Feed's Big trades). Named Kalshi traders here usually show their
+    trades. A Polymarket trade carries its market's category, so the page can filter by your markets; the SDK
+    has no categories for Kalshi markets, so theirs is None."""
     try:
         rows = cached(f"now:{min_usd}", 20, lambda: reads.whales.big_trades(min_usd, kalshi_pages=5))
     except VenueError as e:
         raise venue_error(e) from e
-    return [t.to_dict() for t in rows[:100]]
+    out = [t.to_dict() for t in rows[:100]]
+    poly = [t["market"] for t in out if t["venue"] == "polymarket"]
+    try:
+        cats = _categories(poly) if poly else {}
+    except VenueError:
+        cats = {}  # the trades still show, under All
+    return [t | {"category": cats.get(t["market"]) if t["venue"] == "polymarket" else None} for t in out]
 
 
 @app.get("/api/trader/{venue}/{trader_id}")

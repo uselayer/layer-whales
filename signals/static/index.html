@@ -766,7 +766,10 @@ function bindActions(root) {
   $$("[data-open-trade]", root).forEach((btn) => (btn.onclick = (e) => { e.stopPropagation(); tradeSheet(shown[+btn.dataset.openTrade]); }));
   $$("[data-goto]", root).forEach((btn) => (btn.onclick = (e) => { e.stopPropagation(); closeSheet(); location.hash = btn.dataset.goto; }));
   $$("[data-retry]", root).forEach((btn) => (btn.onclick = () => route()));
-  $$("[data-href]", root).forEach((el) => (el.onclick = (e) => { if (!e.target.closest("a")) location.hash = el.dataset.href; }));
+  $$("[data-href]", root).forEach((el) => {
+    el.onclick = (e) => { if (!e.target.closest("a")) location.hash = el.dataset.href; };
+    el.onkeydown = (e) => { if (e.key === "Enter" && e.target === el) location.hash = el.dataset.href; };
+  });
 }
 function refreshCopyButtons() {
   $$("[data-copy], [data-goto='#/mine']").forEach((btn) => {
@@ -779,24 +782,49 @@ function refreshCopyButtons() {
 }
 
 // ---- feed ----
-const feed = { data: null, at: 0, err: null, cat: "All", onlyIn: true };
-const BASE_CATS = ["All", "Sports", "Politics", "Crypto", "Esports"];
+// One switch at the top: the traders we follow (#/, the default) or Big trades (#/big: $250 or more right now,
+// both venues, every one of them). Traders we follow opens filtered to your markets, with the same chips, and
+// the same interests, as Traders.
+const feed = { data: null, at: 0, err: null, onlyIn: true, big: null, bigAt: 0, bigErr: null };
 let feedTimer = null;
-const onFeed = () => routeName() === "feed";
+const onFeed = () => routeName().startsWith("feed");
+const feedView = () => routeName() === "feed:big" ? "big" : "follow";
 
-async function feedPage() {
-  $("#app").innerHTML = `<div id="fbar"></div><div id="flist">${skelCards(3)}</div>`;
-  if (feed.data) renderFeed();
+async function feedPage(view) {
+  $("#app").innerHTML = `<nav class="seg" aria-label="Feed">${[["follow", "#/", "Traders we follow"], ["big", "#/big", "Big trades"]]
+    .map(([k, href, l]) => `<a href="${href}" class="${view === k ? "on" : ""}"${view === k ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</nav>
+    <div id="fbar"></div><div id="flist">${skelCards(3)}</div>`;
+  if (view === "big" ? feed.big : feed.data) renderFeed();
   await loadFeed();
 }
 async function loadFeed() {
   clearTimeout(feedTimer);
-  try { feed.data = await api("/api/live"); feed.at = Date.now(); feed.err = null; } catch (e) { feed.err = e.message; }
-  if (!onFeed()) return;
+  const big = feedView() === "big";
+  try {
+    if (big) { feed.big = await api("/api/trading-now?min_usd=250"); feed.bigAt = Date.now(); feed.bigErr = null; }
+    else { feed.data = await api("/api/live"); feed.at = Date.now(); feed.err = null; }
+  } catch (e) { if (big) feed.bigErr = e.message; else feed.err = e.message; }
+  if (!onFeed() || (feedView() === "big") !== big) return; // the other view, or another page, since
   feedTimer = setTimeout(() => { if (onFeed()) loadFeed(); }, 30000);
   renderFeed();
 }
+
+// The market chips, as on Traders: All, the four markets, then any other category with trades here (with
+// how many). Tapping one changes your interests, so Feed and Traders always agree.
+function marketChips(counts = {}) {
+  const picked = interests || [];
+  const extra = [...new Set([...Object.keys(counts), ...picked])].filter((c) => !INTERESTS.includes(c)).sort();
+  const chip = (c, label, on) => `<button type="button" data-mkt="${esc(c)}" class="${on ? "on" : ""}" aria-pressed="${on}">${esc(label)}${c && counts[c] ? `<span class="n">${counts[c]}</span>` : ""}</button>`;
+  return `<div class="cats" role="group" aria-label="Markets">${chip("", "All", !picked.length)}${[...INTERESTS, ...extra].map((c) => chip(c, c, picked.includes(c))).join("")}</div>`;
+}
+const inMarkets = (cat) => !(interests || []).length || interests.includes(cat);
+function bindFeedChips(root) {
+  $$("[data-mkt]", root).forEach((b) => (b.onclick = () => { toggleInterest(b.dataset.mkt); renderFeed(); }));
+  const all = $("#feedall"); if (all) all.onclick = () => { toggleInterest(""); renderFeed(); };
+}
+
 function renderFeed() {
+  if (feedView() === "big") return renderBig();
   const r = feed.data;
   if (!r) { $("#flist").innerHTML = errorState(feed.err || "No answer from the app."); bindActions($("#flist")); return; }
   if (!r.traders.length) {
@@ -808,10 +836,10 @@ function renderFeed() {
   }
   const n = r.traders.length;
   const counts = {};
-  const pool = oneCardPerTrade(r.bets).filter((b) => !feed.onlyIn || b.status === "in");
+  const cards = oneCardPerTrade(r.bets);
+  const pool = cards.filter((b) => !feed.onlyIn || b.status === "in");
   pool.forEach((b) => { if (b.category) counts[b.category] = (counts[b.category] || 0) + 1; });
-  const cats = [...BASE_CATS, ...Object.keys(counts).filter((c) => !BASE_CATS.includes(c)).sort()];
-  if (!cats.includes(feed.cat)) feed.cat = "All";
+  const names = interestNames(interests || []);
   $("#fbar").innerHTML = `
     <div class="feedtop">
       <button class="follow" id="following">${`<span class="stack">${r.traders.slice(0, 5).map((t) => avatar(t.wallet, 28)).join("")}</span>`}
@@ -819,28 +847,58 @@ function renderFeed() {
       <span class="updated" id="updated">${updatedAgo(feed.at)}</span>
     </div>
     <div class="filters">
-      <div class="cats" role="tablist">${cats.map((c) => `<button data-cat="${esc(c)}" class="${c === feed.cat ? "on" : ""}">${esc(c)}${c !== "All" && counts[c] ? `<span class="n">${counts[c]}</span>` : ""}</button>`).join("")}</div>
+      ${marketChips(counts)}
       <label class="switch"><input type="checkbox" id="onlyin" ${feed.onlyIn ? "checked" : ""}><span class="track"></span>Only trades I can still get into</label>
     </div>
     ${feed.err ? `<p class="inline-err">Couldn't refresh: ${esc(feed.err)}. Showing the last update.</p>` : ""}
     ${r.failed ? `<p class="foot-note" style="margin:0 0 12px">${plural(r.failed, "trader")} couldn't be read just now; retrying.</p>` : ""}`;
-  $$("[data-cat]").forEach((b) => (b.onclick = () => { feed.cat = b.dataset.cat; renderFeed(); }));
   $("#onlyin").onchange = (e) => { feed.onlyIn = e.target.checked; renderFeed(); };
   $("#following").onclick = () => followingSheet(r.traders);
 
-  shown = pool.filter((b) => feed.cat === "All" || b.category === feed.cat);
+  shown = pool.filter((b) => inMarkets(b.category));
+  const anyHere = cards.some((b) => inMarkets(b.category)); // before "Only trades I can still get into"
   let html;
   if (!r.bets.length) html = emptyState(`None of your traders traded in the last ${r.hours} hours`, "New trades show up here within a few minutes of being made. Polymarket shows trades a few minutes late.");
-  else if (!shown.length) html = emptyState(feed.onlyIn ? "Nothing you can still get into" : `No ${esc(feed.cat)} trades`,
-    feed.onlyIn ? `Every ${feed.cat === "All" ? "" : esc(feed.cat) + " "}trade from the last ${r.hours} hours has moved away or settled.` : `Nothing in ${esc(feed.cat)} in the last ${r.hours} hours.`,
-    feed.onlyIn ? `<button class="btn ghost" id="showall">Show all trades</button>` : "");
+  else if (!shown.length && anyHere) html = emptyState("Nothing you can still get into",
+    `Every ${names ? esc(names) + " " : ""}trade from the last ${r.hours} hours has moved away or settled.`, `<button class="btn ghost" id="showall">Show all trades</button>`);
+  else if (!shown.length) html = emptyState(`No ${esc(names)} trades`, `Nothing in ${esc(names)} in the last ${r.hours} hours.`, `<button class="btn ghost" id="feedall">Show all markets</button>`);
   else html = `<div class="cards">${shown.map((b, i) => tradeCard(b, i)).join("")}</div>`;
   $("#flist").innerHTML = html;
   const all = $("#showall");
   if (all) all.onclick = () => { feed.onlyIn = false; renderFeed(); };
+  bindFeedChips(document);
   bindActions($("#flist"));
 }
-setInterval(() => { const u = $("#updated"); if (u && feed.at) u.innerHTML = updatedAgo(feed.at); }, 5000);
+
+// Big trades: every trade of $250 or more, one card each, in the Feed's card style. Not filtered by your
+// markets: the SDK only knows Polymarket markets' categories, and almost all big trades are Kalshi's, so a
+// filter would mostly hide them. The SDK's big trades have no price now, so there is no "You can still get in"
+// here; a named trader's card opens their page.
+function renderBig() {
+  const rows = feed.big;
+  if (!rows) { $("#fbar").innerHTML = ""; $("#flist").innerHTML = errorState(feed.bigErr || "No answer from the app."); bindActions($("#flist")); return; }
+  $("#fbar").innerHTML = `
+    <div class="feedtop"><span class="muted" style="font-size:14px">Every trade of $250 or more right now, on Kalshi and Polymarket.</span>
+      <span class="updated" id="updated">${updatedAgo(feed.bigAt)}</span></div>
+    ${feed.bigErr ? `<p class="inline-err">Couldn't refresh: ${esc(feed.bigErr)}. Showing the last update.</p>` : ""}`;
+  $("#flist").innerHTML = rows.length
+    ? `<div class="cards">${rows.map(bigCard).join("")}</div><p class="foot-note">Kalshi names only traders who turned on their social profile.</p>`
+    : emptyState("No big trades right now", "Trades of $250 or more show up here as they happen.");
+  bindActions($("#flist"));
+}
+function bigCard(t) {
+  const href = t.trader ? `#/t/${t.venue}/${encodeURIComponent(t.trader)}` : "";
+  const pick = t.outcome && t.venue === "polymarket" ? t.outcome : t.outcome ? `${t.side.toUpperCase()} · ${t.outcome}` : t.side.toUpperCase();
+  return `<article class="card${href ? " trade" : ""}"${href ? ` data-href="${href}" tabindex="0"` : ""}>
+    <div class="trade-top">${avatar(t.trader ? `${t.venue}:${t.trader}` : "anon", 28)}<span class="who"><span class="name">${t.trader ? esc(displayName(t.name, t.trader)) : "Anonymous trader"}</span></span>
+      <span class="when">${[t.category, VENUE[t.venue], ago(t.at)].filter(Boolean).map(esc).join(" · ")}</span></div>
+    <h3 class="trade-title">${esc(t.title || t.market)}</h3>
+    <div class="trade-tags"><span class="chip">${esc(pick)}</span>${marketLink(t.url, `${VENUE[t.venue]} ↗`)}</div>
+    <div class="trade-nums"><span>${t.action === "buy" ? "Bought" : "Sold"} at <b>${cents(t.price)}</b></span><span class="amt">${usd(t.usd)}</span></div>
+    ${t.trader ? "" : `<div class="trade-foot"><span class="muted" style="font-size:14px">Anonymous: ${VENUE[t.venue] || "the venue"} doesn't name this trader.</span></div>`}
+  </article>`;
+}
+setInterval(() => { const u = $("#updated"), at = feedView() === "big" ? feed.bigAt : feed.at; if (u && at) u.innerHTML = updatedAgo(at); }, 5000);
 
 // Traders we follow often buy the same thing, minutes apart: one card per outcome they bought. It shows the
 // buy you can best still follow (you can still get in, then whoever bought first) and lists the others;
@@ -892,19 +950,26 @@ function howSheet() {
 
 // ---- interests: asked once per browser ----
 // Kept in localStorage; [] means all markets, null not asked yet. Storage can be blocked (private windows),
-// so the choice then holds for this visit only and onboarding never traps anyone.
+// so the choice then holds for this visit only and onboarding never traps anyone. Onboarding offers the four
+// markets; the Feed's chips can add another category it has trades in (Economy, Weather…), kept the same way.
 const INTERESTS = ["Politics", "Sports", "Crypto", "Esports"];
 const INTERESTS_KEY = "signals.interests";
 let interests = (() => {
   try {
     const v = JSON.parse(localStorage.getItem(INTERESTS_KEY));
-    if (Array.isArray(v)) return v.filter((c) => INTERESTS.includes(c));
+    if (Array.isArray(v)) return v.filter((c) => typeof c === "string" && c && c.length <= 40);
   } catch {}
   return null;
 })();
 function setInterests(v) {
   interests = v;
   try { localStorage.setItem(INTERESTS_KEY, JSON.stringify(v)); } catch {}
+}
+// A market chip, on Feed or Traders: "" (All) clears them; any other turns that market on or off.
+function toggleInterest(c) {
+  const now = new Set(interests || []);
+  if (!c) now.clear(); else now.has(c) ? now.delete(c) : now.add(c);
+  setInterests([...INTERESTS.filter((x) => now.has(x)), ...[...now].filter((x) => !INTERESTS.includes(x)).sort()]);
 }
 const interestNames = (cs) => cs.length < 2 ? cs.join("") : `${cs.slice(0, -1).join(", ")} or ${cs[cs.length - 1]}`;
 // A trader matches when an interest is their most-traded category or one they're strong in.
@@ -948,9 +1013,9 @@ const lb = { copyOnly: false, q: "", sort: null, period: "30d", all: false, more
 async function tradersPage(view) {
   const app = $("#app");
   if (view === "worth") { app.innerHTML = `<div id="tview">${skelRows(7)}</div>`; return worthView(); }
-  app.innerHTML = `<a class="back" href="#/traders">← Traders</a><nav class="seg"><a href="#/traders/top" class="${view === "top" ? "on" : ""}">Top profit</a><a href="#/traders/big" class="${view === "big" ? "on" : ""}">Big trades</a></nav>
+  app.innerHTML = `<a class="back" href="#/traders">← Traders</a><h2 class="h2" style="margin-top:0">Top profit</h2>
     <div id="tview">${skelRows(7)}</div>`;
-  return view === "big" ? bigView() : topView();
+  return topView(); // Big trades moved to the Feed (#/big)
 }
 
 async function worthView() {
@@ -1065,7 +1130,7 @@ function renderWorth() {
     <div class="lb-toolbar">
       <div class="lb-filters" role="group" aria-label="Filter traders">
         <button type="button" class="lb-chip" data-lbmkt="" aria-pressed="${!picked.length}">All</button>
-        ${INTERESTS.map((c) => `<button type="button" class="lb-chip" data-lbmkt="${c}" aria-pressed="${picked.includes(c)}">${c}</button>`).join("")}
+        ${[...INTERESTS, ...picked.filter((c) => !INTERESTS.includes(c))].map((c) => `<button type="button" class="lb-chip" data-lbmkt="${esc(c)}" aria-pressed="${picked.includes(c)}">${esc(c)}</button>`).join("")}
         <span class="lb-divider" aria-hidden="true"></span>
         <button type="button" class="lb-chip" id="lbcopy" aria-pressed="${lb.copyOnly}">Copyable only</button>
       </div>
@@ -1083,13 +1148,10 @@ function renderWorth() {
       ${sort === "consistent" ? " · Most consistent ranks by weeks in profit out of the last 12, then 30-day profit" : ""}
       ${history ? "" : " · Weeks in profit, trend and 7D/90D arrive with the next data update"}
       <br>${lb.all ? `Showing every checked trader except market makers and arbitrage · <button class="link" id="lbrec">Recommended only</button>` : `${left ? `${left} left out: big profit without skill, market makers, arbitrage and traders with no clear edge · <button class="link" id="lbrec">See all checked traders</button>` : ""}`}
-      · <a class="link" href="#/traders/top">Top profit</a> · <a class="link" href="#/traders/big">Big trades</a>
+      · <a class="link" href="#/traders/top">Top profit</a>
       ${st.error ? ` · <span style="color:var(--danger)">Last check failed: ${esc(st.error)}</span>` : ""}</p>`;
 
-  $$("[data-lbmkt]", box).forEach((b) => (b.onclick = () => {
-    const c = b.dataset.lbmkt, now = new Set(interests || []);
-    if (!c) now.clear(); else now.has(c) ? now.delete(c) : now.add(c);
-    setInterests(INTERESTS.filter((x) => now.has(x))); renderWorth(); }));
+  $$("[data-lbmkt]", box).forEach((b) => (b.onclick = () => { toggleInterest(b.dataset.lbmkt); renderWorth(); }));
   $("#lbcopy").onclick = () => { lb.copyOnly = !lb.copyOnly; renderWorth(); };
   $("#lbq").oninput = (e) => {
     lb.q = e.target.value; const at = e.target.selectionStart; renderWorth();
@@ -1126,22 +1188,6 @@ async function topView() {
       <span class="tnum"><b>${pl(t.pnl, usd(t.pnl, true))}</b><small>all time</small></span></a>`).join("")}</div>
     <p class="foot-note">The venues' own leaderboards. Big profit isn't the same as skill: see Worth following.</p>` : emptyState("No traders"));
   bindOpts();
-}
-
-async function bigView() {
-  const box = $("#tview");
-  let rows;
-  try { rows = await api("/api/trading-now?min_usd=250"); } catch (e) { box.innerHTML = errorState(e.message); bindActions(box); return; }
-  if (routeName() !== "traders:big") return;
-  box.innerHTML = `<p class="lede">Trades of $250 or more, right now, on Kalshi and Polymarket.</p>` + (rows.length ? `<div class="list">${rows.map((t) => `
-    <div class="trow norank" ${t.trader ? `data-href="#/t/${t.venue}/${encodeURIComponent(t.trader)}"` : 'style="cursor:default"'}>
-      ${avatar(t.trader ? `${t.venue}:${t.trader}` : "anon", 36)}
-      <span class="tmain"><span class="line"><span class="name">${t.trader ? esc(displayName(t.name, t.trader)) : "Anonymous"}</span><span class="muted" style="font-size:13px">${VENUE[t.venue]} · ${ago(t.at)}</span></span>
-        <span class="sub" style="color:var(--fg);font-size:14px">${esc(t.title || t.market)}</span>
-        <span class="sub">${t.action === "buy" ? "Bought" : "Sold"} ${esc(t.outcome || t.side.toUpperCase())} at ${cents(t.price)}${t.url ? ` · ${marketLink(t.url, `${VENUE[t.venue]} ↗`)}` : ""}</span></span>
-      <span class="tnum"><b>${usd(t.usd)}</b></span></div>`).join("")}</div>
-    <p class="foot-note">Kalshi only names traders who turned on their social profile.</p>` : emptyState("No big trades right now", "Trades of $250 or more show up here as they happen."));
-  bindActions(box);
 }
 
 // ---- a Polymarket trader we've scored: their profile ----
@@ -1496,14 +1542,15 @@ async function minePage() {
 }
 
 // ---- routing ----
-// #/ feed · #/traders[/top|/big] · #/mine · #/worth/<wallet> · #/t/<venue>/<id>. Old links still work.
-const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/mine" };
+// #/ feed · #/big the feed's Big trades · #/traders[/top] · #/mine · #/worth/<wallet> · #/t/<venue>/<id>.
+// Old links still work: Big trades used to be #/traders/big.
+const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/mine", "#/traders/big": "#/big" };
 function routeName() {
   const h = location.hash || "#/";
   if (h === "#/" || h === "#") return "feed";
+  if (h === "#/big") return "feed:big";
   if (h === "#/traders") return "traders:worth";
   if (h === "#/traders/top") return "traders:top";
-  if (h === "#/traders/big") return "traders:big";
   if (h === "#/mine") return "mine";
   return h;
 }
@@ -1513,13 +1560,13 @@ function route() {
   const name = routeName();
   const w = location.hash.match(/^#\/worth\/(0x[0-9a-fA-F]{40})$/);
   const t = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
-  const tab = name === "mine" ? "mine" : name === "feed" ? "feed" : "traders";
+  const tab = name === "mine" ? "mine" : name.startsWith("feed") ? "feed" : "traders";
   $$("[data-tab]").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   const wide = (name === "traders:worth" && interests !== null) || location.hash.startsWith("#/worth/"); // the leaderboard and profiles need the room
   $$(".wrap").forEach((el) => el.classList.toggle("wide", wide));
   window.scrollTo(0, 0);
-  if (interests === null && (name === "feed" || name === "traders:worth")) onboardingPage(); // first run; links to a trader skip it
-  else if (name === "feed") feedPage();
+  if (interests === null && (name.startsWith("feed") || name === "traders:worth")) onboardingPage(); // first run; links to a trader skip it
+  else if (name.startsWith("feed")) feedPage(feedView());
   else if (name.startsWith("traders:")) tradersPage(name.split(":")[1]);
   else if (name === "mine") minePage();
   else if (w) worthTraderPage(w[1].toLowerCase());
