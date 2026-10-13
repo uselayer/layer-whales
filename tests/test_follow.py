@@ -94,6 +94,8 @@ def test_follow_and_unfollow_a_trader(api: TestClient, monkeypatch: pytest.Monke
     r = api.post("/api/me/follows", json={"wallet": SHARP.upper().replace("0X", "0x")}, headers=auth())
     assert r.json()["follows"] == [SHARP]
     assert api.post("/api/me/follows", json={"wallet": SHARP}, headers=auth()).json()["follows"] == [SHARP]  # once
+    found = engine.directory().sources_of(SHARP)  # the trader directory keeps the wallet, never who follows it
+    assert [(s["source"], s["times"]) for s in found] == [("follow", 1)] and "user_1" not in repr(found)
     assert api.get("/api/me", headers=auth(token("user_2"))).json()["follows"] == []  # someone else's
     assert api.post("/api/me/follows", json={"wallet": "0x12"}, headers=auth()).status_code == 400
     monkeypatch.setattr(engine, "MAX_FOLLOWS", 1)

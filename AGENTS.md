@@ -14,6 +14,10 @@ behind Vercel (see README, "Hosting").
   "Same person on the other venue?") while it's off.
 - Keys come from the environment (hosted: Railway's service variables), are never logged, returned by the
   engine or written to disk.
+- Trader directory (README, "Trader directory"): wallets found, and where, in the store's `directory.db`. Found
+  is not checked and not recommended: nothing from it is scored or shown until a later phase, and never say a
+  found wallet is any good. It keeps wallets only (a follow keeps the wallet, never who follows). Its sweep reads
+  through the SDK (`find_wallets`) at `DIRECTORY_RATE`, below the per-host limit, so the site keeps its reads.
 - Counting (README, "Counting"): per alert and per follow, in the store's `alerts.db`, never anything personal
   beyond the signed-in account (no IPs, no user agents; an interest pick is counted with no id at all). Alert
   links go through `/go/<alert id>/<target>`, which redirects to Polymarket or Signals only, and still redirects

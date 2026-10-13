@@ -122,6 +122,15 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   in the markets someone picked (onboarding or the Feed's Change, saved to their account; Skip means none) alert them too. At most 20 alerts per person per UTC day. What
   was sent, the buys behind grouped alerts and the votes are kept in `/data/alerts.db` (SQLite). In the chat,
   `/list` shows who you follow and `/stop` turns alerts off. The bot uses long polling: no webhook to set up.
+- **Trader directory** (phase 1: finding only): every Polymarket wallet Signals finds, and where, kept across
+  runs in `/data/directory.db` (SQLite). Once a day the engine sweeps every Polymarket leaderboard (88: profit and
+  volume, four periods, overall and each category, to rank ~10,050) and open markets at every level of activity
+  (the SDK's `find_wallets`, uselayer 0.9), held to 4 reads a second so the site keeps the rest: about 18,000
+  reads, roughly 2.5 hours. Traders in the Feed's big trades, wallets opened that the last check didn't have
+  (pasted into search, mostly) and followed wallets are kept too, at no extra reads; a follow keeps the wallet,
+  never who follows it. Nothing is scored or shown from it yet: the Worth following check still picks its own 200
+  wallets. `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps) to the
+  owner only, as `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off.
 - **Counting** (is any of this useful?): per alert and per follow, in `/data/alerts.db`, with nothing personal
   beyond the signed-in account (no IPs, no user agents): minutes from their trade to the alert, taps on an
   alert's links (each goes through `/go/<alert id>/<target>`, which counts the tap and redirects: to Polymarket
