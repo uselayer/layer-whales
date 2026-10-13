@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -454,6 +455,28 @@ def test_a_result_kept_by_an_older_uselayer_is_judged_by_todays_rules() -> None:
     assert kept["scores"][0]["label"] == "Big profit, edge unproven"
     current = {"format": engine.WORTH_FORMAT, "scores": [dict(old["scores"][2])]}
     assert engine._worth_upgrade(current)["scores"][0]["segment"] == "too_fast"  # a current result is left as given
+
+
+def test_a_losing_trader_with_an_edge_and_a_parlay_trader_are_never_called_edge_less() -> None:
+    # A 0.10 result: a measured edge (z 4 over 30 bets, steady) with a losing 30 days was "Edge not proven", and a
+    # wallet whose 60 bets picked were all parlays was "Not enough data".
+    losing = SHARP | {"segment": "no_edge", "skill": "no",
+                      "checks": [{"rule": "steady", "passed": True}, {"rule": "profitable", "passed": False}]}
+    parlays = SCORE | {"segment": "too_few", "skill": "unknown", "style": "takes_a_side", "edge": None,
+                       "decisions": 2672, "coverage": {"bets": 0, "combos": 60}}  # fmt: skip
+    a, b = engine._worth_upgrade({"format": 8, "scores": [losing, parlays]})["scores"]
+    assert (a["segment"], a["label"]) == ("edge_losing", "Edge, but lost money lately")  # still not a sharp
+    assert (b["segment"], b["label"]) == ("parlays", "Parlays: skill unmeasured")
+    assert engine.section_of(a["segment"]) is None and engine.section_of(b["segment"]) is None  # not recommended
+
+
+def test_the_page_names_every_tier_the_sdk_gives() -> None:
+    from uselayer.whale_scores import SEGMENTS
+
+    page = (Path(engine.__file__).parent / "static" / "index.html").read_text()
+    tiers = page[page.index("const TIER = {") : page.index("};", page.index("const TIER = {"))]
+    for seg in set(SEGMENTS) - {"too_fast"}:  # too_fast: never given since uselayer 0.10
+        assert f"{seg}: [" in tiers, seg
 
 
 # ---- ranking: small samples don't top a sort, and missing weeks aren't losing weeks ----
