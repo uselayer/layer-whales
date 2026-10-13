@@ -76,10 +76,12 @@ def test_the_profile_card_and_the_price_check_have_the_new_lines(api: TestClient
     page = api.get("/").text
     for words in ('class="pf-verdict"', 'id="pfcopy"', 'class="pf-warn"', 'class="pf-facts"', '"Markets"', '"Buys at"',
                   '"Last bought"', "See activity", 'id="whycopy"', "Why?", "How we measure this",
-                  "Prices can change before you buy on Polymarket.", "is available within 3¢ of their price.",
-                  "Slippage: your average fill", "They bought "):  # fmt: skip
+                  "What buying now costs", "An estimate, not a guaranteed fill", "is for sale within 3¢ of the cheapest price",
+                  "Priced up to 3¢ above the cheapest price for sale", "Estimated slippage: your average fill",
+                  "Order book and market status read at", "for context."):  # fmt: skip
         assert words in page, words
-    for gone in ("<b>Lately</b>", "<b>Worth knowing</b>", "<b>Consistent</b>", "<b>Can you copy them</b>"):  # the old lines
+    for gone in ("<b>Lately</b>", "<b>Worth knowing</b>", "<b>Consistent</b>", "<b>Can you copy them</b>",
+                 "What copying it costs", "within 3¢ of their price"):  # the old lines
         assert gone not in page, gone
 
 
@@ -95,27 +97,27 @@ def _preview(**kw: Any) -> CopyPreview:
 
 
 def test_the_check_names_the_slippage_against_the_best_price(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The SDK's best_price (the cheapest ask, from the same book read as the amount) names the slippage.
+    from dataclasses import replace
+
+    main = {"p": replace(_preview(price=0.534, worst_price=0.55), best_price=0.52)}
     asked: list[dict[str, Any]] = []
-    main = {"p": _preview()}
 
     def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
         asked.append(kw)
-        return main["p"] if "spend" in kw else _preview(contracts=1.0, price=0.51, worst_price=0.51)
+        return main["p"]
 
     monkeypatch.setattr(Whales, "preview_copy", preview)
     body = {"wallet": "0xabc", "market": "0xcid:1", "price": 0.52, "spend": 50}
-    assert api.post("/api/trade/preview", json=body).json()["best_price"] == 0.53  # one level: the average is the best
-    assert len(asked) == 1  # and nothing more is read
-    main["p"] = _preview(price=0.534, worst_price=0.55)  # the walk went deeper into the book
-    assert api.post("/api/trade/preview", json=body).json()["best_price"] == 0.51
-    assert asked[-1] == {"size": 1.0, "max_slippage": 0.03}  # one contract: the best ask
-    main["p"] = _preview(depth_checked=False, worst_price=None)
+    assert api.post("/api/trade/preview", json=body).json()["best_price"] == 0.52
+    assert len(asked) == 1  # the best price is their price: nothing more is read
+    main["p"] = _preview(depth_checked=False, worst_price=None, price=0.52)
     assert api.post("/api/trade/preview", json=body).json()["best_price"] is None  # no book read: no slippage claimed
 
 
 def test_the_check_says_how_much_the_book_holds_near_their_price(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    # The SDK's max_spend is everything for sale up to 3¢ above their price, fee included; the page turns it into
-    # "Only $340 is available within 3¢ of their price."
+    # The SDK's max_spend is everything for sale up to 3¢ above the cheapest price, fee included; the page turns it
+    # into "Only $340 is for sale within 3¢ of the cheapest price".
     short = _preview(ok=False, reason="Only $340.00 is for sale at 0.55 or better right now", price=0.52,
                      max_spend=340.0, contracts=None, worst_price=None)  # fmt: skip
     monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: short)
@@ -149,7 +151,7 @@ def test_the_page_formats_the_same_way(run_js: Any) -> None:
 
 
 def test_only_an_amount_above_what_the_book_holds_says_only_x_is_available(run_js: Any) -> None:
-    deps = ("sdkText", "money", "availableLine", "notPriced")
+    deps = ("sdkText", "money", "notPriced")
     cases = {
         # $2 typed, under Polymarket's smallest order: the SDK's own reason, no "Use $340 instead"
         "small": ({"ok": False, "depth_checked": True, "max_spend": 340, "reason": "$2.00 doesn't buy Polymarket's smallest order here: 5 contracts at 0.52 cost $2.65 with the fee."}, 2),
@@ -161,11 +163,12 @@ def test_only_an_amount_above_what_the_book_holds_says_only_x_is_available(run_j
     import json
 
     got = run_js(deps, "Object.fromEntries(Object.entries(" + json.dumps(cases) + ").map(([k, [p, spend]]) => [k, notPriced(p, spend)]))")
-    assert got["small"] == {"status": None, "line": cases["small"][0]["reason"], "room": 0}
-    assert got["short"] == {"status": "Not enough for sale for this amount", "line": "Only $340.55 is available within 3¢ of their price.", "room": 340.55}
-    assert got["crumbs"] == {"status": "Not enough for sale for this amount", "line": "Only $0.40 is available within 3¢ of their price.", "room": 0.4}
-    assert got["none"]["status"] == "Price moved away" and got["none"]["room"] == 0
-    assert got["nobook"] == {"status": None, "line": cases["nobook"][0]["reason"], "room": 0}
+    short = "is for sale within 3¢ of the cheapest price, fee included: not enough for this amount."
+    assert got["small"] == {"line": cases["small"][0]["reason"], "room": 0}
+    assert got["short"] == {"line": f"Only $340.55 {short}", "room": 340.55}
+    assert got["crumbs"] == {"line": f"Only $0.40 {short}", "room": 0.4}
+    assert got["none"] == {"line": "Nothing is for sale near the price right now.", "room": 0}
+    assert got["nobook"] == {"line": cases["nobook"][0]["reason"], "room": 0}  # a closed market: Polymarket's status
 
 
 def test_last_bought_is_their_newest_buy_from_any_source(run_js: Any) -> None:
@@ -189,21 +192,3 @@ def test_a_copy_status_is_one_of_three_words_everywhere(run_js: Any) -> None:
         label = run_js(deps, f"copyLabel({{copy_ok: false, segment: '{seg}'}})")
         assert why.startswith(f"{label}: "), (seg, why)
         assert run_js(deps, f"boldStatus({why!r})").startswith(f"<b>{label}</b>: ")
-
-
-def test_the_sdks_best_price_is_used_when_it_has_one(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    # uselayer 0.8.2's CopyPreview carries best_price (the best ask, before the fee): no one-contract read then.
-    from dataclasses import replace
-
-    newer = replace(_preview(price=0.534, worst_price=0.55), best_price=0.52)
-    asked: list[dict[str, Any]] = []
-
-    def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
-        asked.append(kw)
-        return newer
-
-    monkeypatch.setattr(Whales, "preview_copy", preview)
-    body = {"wallet": "0xabc", "market": "0xcid:1", "price": 0.52, "spend": 50}
-    assert api.post("/api/trade/preview", json=body).json()["best_price"] == 0.52
-    assert len(asked) == 1  # the SDK said it: no one-contract read
-    assert _preview().best_price is None  # a preview without it (no book read): the one-contract fallback (above) stays
