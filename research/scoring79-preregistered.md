@@ -117,3 +117,20 @@ wallets.
 
 Outcomes and bars as above, on C. This is the test fix 8 actually asks for; this run's S2/S3 are its
 within-window stand-in.
+
+## Amendment 1 (2026-10-13, after the replication pool's results, before any primary-pool outcome)
+
+**What had been seen:** `scoring79_analyze.py` run on the overlooked pool (replication) only.
+
+- 7 of the 15 E− wallets there show a 5-minute "edge" of +24¢ to +35¢ on tiny trades, and each lost about
+  $20K in B.
+- These are the thin-market artifact FINDINGS.md already describes, not traders the gate wrongly excludes.
+- No outcome of the primary pool (`scoring79-scores.jsonl`, still being scored) had been computed.
+
+**Added split, on both pools:**
+
+- **E−plaus** = E− with A edge mean ≤ 5¢ (a move a liquid market can plausibly make in 5 minutes).
+- **E+plaus** = the same cut on E+.
+
+The fix 7 bar is unchanged and applies to E−plaus as well: its pooled B edge must have a bootstrap lower bound
+> 0. Labelled exploratory in the results, because the cut was suggested by the replication data.
