@@ -1,0 +1,16 @@
+holders read: 1179; on the monthly profit top 1,000: 109; off it: 1070
+  all holders                        n=1179  frequent (8+ in 30d)  78%  selective (<8 in 30d, 8+ in 365d)  14%  under 8 in a year   8%
+  off the leaderboard                n=1070  frequent (8+ in 30d)  76%  selective (<8 in 30d, 8+ in 365d)  15%  under 8 in a year   8%
+  off the board, position >= 10K contracts n= 168  frequent (8+ in 30d)  43%  selective (<8 in 30d, 8+ in 365d)  24%  under 8 in a year  33%
+  off the board, market band 0 (0 = busiest) n= 298  frequent (8+ in 30d)  84%  selective (<8 in 30d, 8+ in 365d)  12%  under 8 in a year   4%
+  off the board, market band 1 (0 = busiest) n= 284  frequent (8+ in 30d)  77%  selective (<8 in 30d, 8+ in 365d)  12%  under 8 in a year  11%
+  off the board, market band 2 (0 = busiest) n= 291  frequent (8+ in 30d)  70%  selective (<8 in 30d, 8+ in 365d)  18%  under 8 in a year  11%
+  off the board, market band 3 (0 = busiest) n= 197  frequent (8+ in 30d)  73%  selective (<8 in 30d, 8+ in 365d)  20%  under 8 in a year   7%
+
+selective holders off the board: single-market buys over 12 months
+  median 37, 25th 16, 75th 109
+  20+ markets in 12 months: 113/163
+  40+ markets in 12 months: 81/163
+  80+ markets in 12 months: 47/163
+  180+ markets in 12 months: 29/163
+  median markets in 30 days: 2, in 90 days: 5
