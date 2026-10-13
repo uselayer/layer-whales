@@ -451,11 +451,87 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
     """One wallet's score with its checked bets: from the last refresh, or scored now (5–30 s)."""
     w = wallet.lower()
     data = _worth_load()
-    for s in (data or {}).get("scores", []):
-        if s["wallet"] == w:
-            return with_links(s) | _board(s)
-    s = _score_of(w)
-    return with_links(s) | _board(s)
+    s = next((x for x in (data or {}).get("scores", []) if x["wallet"] == w), None) or _score_of(w)
+    b = _board(s)
+    return with_links(s) | b | {"why": why_lines(s | b)}
+
+
+# ---- "Why they're here" on a trader's page: plain lines, from what the check kept ----
+# The page adds "Lately" (their last buys, read fresh); the numbers and method stay in "How we measure this".
+
+
+def _usd(x: float, signed: bool = False) -> str:
+    """Dollars as the page shows them: $855, $1,000, $1.2K, $3.4M; never "$1000K" (that's $1M)."""
+    a = abs(x)
+    if a >= 999_500:  # would round to 1000K
+        s = f"{a / 1e6:.{0 if a >= 1e8 else 1}f}M"
+    elif a >= 1e3:
+        s = f"{a / 1e3:.{0 if a >= 1e5 else 1}f}K"
+    else:
+        s = f"{round(a):,}" if a >= 10 else f"{a:.2f}"
+    s = re.sub(r"\.0([KM])$", r"\1", s)
+    return f"{'−' if x < 0 else '+' if signed and x > 0 else ''}${s}"
+
+
+def _per_day(n: float) -> str:
+    """New markets a day, or a week when it's under one a day (the page's perDayText); never a made-up one."""
+    k, unit = (round(n), "day") if n >= 1 else (round(n * 7), "week")
+    if not k:
+        return "fewer than one new market a week"
+    return f"{k} new market{'' if k == 1 else 's'} a {unit}"
+
+
+def _trade_words(t: str) -> str:
+    """Sentences the SDK writes say "bet"; Signals says "trade"."""
+    return re.sub(r"\b([Bb])et(s?)\b", lambda m: ("Trade" if m.group(1) == "B" else "trade") + m.group(2), t)
+
+
+def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
+    """Four of the five lines of "Why they're here" (the page adds Lately), each a short plain sentence, or
+    None when the data doesn't say. ``s`` is a score with its leaderboard fields (``_board``)."""
+    cats = [c for c in s.get("categories") or [] if c.get("bets")]
+    total = sum(c["bets"] for c in cats)
+    shares = [(c["category"], round(100 * c["bets"] / total)) for c in cats[:3]] if total else []
+    shares = [x for i, x in enumerate(shares) if i == 0 or x[1] >= 5]  # a 2% sideline isn't what they trade
+    trades = ", ".join(f"{c} {p}%" for c, p in shares) or None
+
+    band = s.get("price_band")
+    how = [f"buys around {_cents(band[0]).rstrip('¢')}–{_cents(band[1])}" if isinstance(band, list) and len(band) == 2
+           else f"pays {_cents(s['avg_price'])} on average" if s.get("avg_price") is not None else None,
+           f"usually {_usd(s['typical_usd'])}" if s.get("typical_usd") is not None else None,
+           _per_day(s["trades_per_day"]) if s.get("trades_per_day") is not None else None,
+           f"holds {round(s['held_share'] * 100)}% of closed positions until the market settles" if s.get("held_share") is not None else None]  # fmt: skip
+    how_line = ", ".join(x for x in how if x)
+
+    edge_n = (s.get("edge") or {}).get("n")
+    over = f" (over {edge_n} trades)" if edge_n else ""
+    section = s.get("section")
+    if s.get("segment") == "rising" or section == "rising":  # hedged, even when copying is offered: few trades yet
+        listed = f"Early signs: the price has tended to move their way after they buy{f', over {edge_n} trades so far' if edge_n else ''}, too few to be sure yet."
+    elif section == "copy":
+        listed = (f"The price tended to move their way within minutes after they bought{over}, and in the trades we"
+                  " checked it was still moving when a copy a few minutes late got in.")  # fmt: skip
+    elif section == "watch":
+        listed = f"The price tends to move their way within minutes after they buy{over}, though usually before a copy could get in."
+    else:
+        listed = f"Not on our list: {_trade_words(s['reason'])}" if s.get("reason") else "Not on our list."
+    record = []
+    profit = ((s.get("periods") or {}).get("30d") or {}).get("trading_pnl")
+    if profit is None:
+        profit = s.get("trading_pnl_window")  # as the page's profitOf: trading profit only, never Polymarket's figure
+    if profit is not None:
+        record.append(f"trading profit {_usd(profit, True)} in the last 30 days")
+    if s.get("weeks_known"):
+        weeks = "the last 12 weeks" if s["weeks_known"] >= 12 else f"the {s['weeks_known']} weeks since their first trade"
+        record.append(f"up in {s['weeks_up']} of {weeks}")
+    if record:
+        listed += " " + "; ".join(record)[0].upper() + "; ".join(record)[1:] + "."
+
+    ok, why = s.get("copy_ok"), s.get("copy_why")
+    copying = ("Offered, because copies a few minutes late were reliably above zero after fees in the trades we checked; a reading of the past, not a promise."
+               if ok else why or "Not offered.")  # fmt: skip
+    return {"trades": trades, "how": how_line[:1].upper() + how_line[1:] + "." if how_line else None,
+            "listed": listed, "copying": copying}  # fmt: skip
 
 
 def _score_of(wallet: str) -> dict[str, Any]:
@@ -649,7 +725,26 @@ def trade_preview(req: OneTrade) -> dict[str, Any]:
         raise venue_error(e) from e
     if p.ok and (why := why_not_copy(req.price, p.price)):
         raise HTTPException(400, detail=why)
-    return p.to_dict()  # type: ignore[no-any-return]
+    return p.to_dict() | {"best_price": _best_price(req, p)}  # type: ignore[no-any-return]
+
+
+def _best_price(req: OneTrade, p: Any) -> float | None:
+    """The cheapest price for sale now, to name the slippage (your average fill against it). A uselayer release
+    whose CopyPreview has ``best_price`` (the best ask, before the fee) gives it; uselayer 0.8.1's doesn't, so then:
+    when every contract filled at one level, the average is the best price; when the walk went deeper, a
+    one-contract preview's price is the best ask (the SDK returns it even when one contract is under the market's
+    smallest order). None when the order book couldn't be read."""
+    if not p.ok or not getattr(p, "depth_checked", False) or p.price is None:
+        return None
+    if getattr(p, "best_price", None) is not None:  # the SDK says it: no second read
+        return float(p.best_price)
+    if getattr(p, "worst_price", None) is None or p.worst_price <= p.price + 1e-9:
+        return float(p.price)
+    try:
+        q = reads.whales.preview_copy(_their_trade(req), size=1.0, max_slippage=GET_IN)
+    except VenueError:
+        return None
+    return float(q.price) if q.depth_checked and q.price is not None and q.price <= p.price + 1e-9 else None
 
 
 # ---- following traders: sign in with Clerk (Google or Telegram), alerts on Telegram ----
