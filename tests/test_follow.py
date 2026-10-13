@@ -37,20 +37,28 @@ class Telegram:
 
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
+        self.edits: list[dict[str, Any]] = []
+        self.answers: list[dict[str, Any]] = []
 
     def __call__(self, method: str, **params: Any) -> Any:
         if method == "getMe":
             return {"username": "SignalsAlertsBot"}
         if method == "sendMessage":
             self.sent.append(params)
+            return {"message_id": len(self.sent), "chat": {"id": params["chat_id"]}}
+        if method == "editMessageText":
+            self.edits.append(params)
+        if method == "answerCallbackQuery":
+            self.answers.append(params)
         return True
 
 
 @pytest.fixture
 def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
     engine._cache.clear()
-    for d in (engine._codes, engine._seen, engine._alerted):
+    for d in (engine._codes, engine._seen, engine._alerted, engine._whale_alerted):
         d.clear()
+    monkeypatch.setattr(engine, "_whale", {"started": False, "seen": set()})
     monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
     monkeypatch.setattr(engine, "CLERK_KEY", "pk_test_" + base64.b64encode(f"{FAPI}$".encode()).decode().rstrip("="))
     monkeypatch.setattr(engine, "_signing_key", lambda t: KEY.public_key())
@@ -78,7 +86,7 @@ def test_following_needs_a_valid_clerk_session(api: TestClient) -> None:
     assert api.get("/api/me", headers=auth(token(iss="https://evil.test"))).status_code == 401
     assert api.get("/api/me", headers=auth(token(azp="https://evil.test"))).status_code == 401  # another site's
     r = api.get("/api/me", headers=auth())
-    assert r.status_code == 200 and r.json() == {"follows": [], "telegram": False, "alerts": True}
+    assert r.status_code == 200 and r.json() == {"follows": [], "telegram": False, "alerts": True, "interests": None}
     assert r.headers["cache-control"] == "private, no-store"
 
 
@@ -111,15 +119,15 @@ def test_connecting_telegram_takes_a_one_time_link(api: TestClient) -> None:
     engine._on_update({"message": {"chat": {"id": 777}, "text": f"/start {code}"}})  # used already
     assert "expired" in engine.tg.sent[-1]["text"]
     engine._on_update({"message": {"chat": {"id": 555}, "text": "/stop"}})
-    assert api.get("/api/me", headers=auth()).json() == {"follows": [SHARP], "telegram": False, "alerts": True}
+    assert api.get("/api/me", headers=auth()).json() == {"follows": [SHARP], "telegram": False, "alerts": True, "interests": None}
 
 
-def buy(i: int, at: datetime, price: float = 0.40, market: str = "0xcid:0") -> WhaleTrade:
-    return WhaleTrade("polymarket", SHARP, "Sharp", market, "yes", "buy", price, 100, 100 * price, at, f"t{i}",
+def buy(i: int, at: datetime, price: float = 0.40, market: str = "0xcid:0", size: float = 1000) -> WhaleTrade:
+    return WhaleTrade("polymarket", SHARP, "Sharp", market, "yes", "buy", price, size, size * price, at, f"t{i}",
                       title="Will it <rain>?", outcome="Yes", url="https://polymarket.com/event/rain")  # fmt: skip
 
 
-def test_alerts_go_out_for_new_buys_you_can_still_get_into(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_every_new_buy_alerts_with_how_far_the_price_moved(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     api.post("/api/me/follows", json={"wallet": SHARP}, headers=auth())
     connect(api)
     now_price = {"0xcid:0": 0.41, "0xcid:1": 0.60}
@@ -135,14 +143,17 @@ def test_alerts_go_out_for_new_buys_you_can_still_get_into(api: TestClient, monk
     fresh = datetime.now(UTC)
     trades[:0] = [buy(2, fresh), buy(3, fresh, 0.42), buy(4, fresh, 0.40, "0xcid:1")]  # 0xcid:1 moved to 60¢
     engine._cache.clear()
-    assert engine.alert_pass() == 1  # one message for the two fills on 0xcid:0; none for the moved market
-    text = engine.tg.sent[-1]["text"]
+    assert engine.alert_pass() == 2  # one message for the two fills on 0xcid:0, and one for the moved market
+    text, moved = engine.tg.sent[-2]["text"], engine.tg.sent[-1]["text"]
+    assert "Paid 40¢ · now 60¢, price already moved." in moved and "get in" not in moved
+    assert "Buy on Polymarket" in moved and moved.endswith("Polymarket's public data runs 3–5 minutes behind.")
     # Copying isn't offered for them: following is keeping an eye on them, so the alert reads neutrally.
-    assert "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 41¢ ($82) on Will it &lt;rain&gt;? · now 41¢" in text
+    assert "<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 41¢ ($820) on Will it &lt;rain&gt;? · now 41¢" in text
     assert "you can still get in" not in text and "$10 gets you" not in text
     assert "Buy on Polymarket" in text and SHARP in text  # the link only opens the market
     assert text.endswith("Polymarket's public data runs 3–5 minutes behind.")
-    assert engine.tg.sent[-1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == f"unf:{SHARP}"
+    keys = engine.tg.sent[-1]["reply_markup"]["inline_keyboard"]
+    assert [b["text"] for b in keys[0]] == ["Useful", "Not useful"] and keys[1][0]["callback_data"] == f"unf:{SHARP}"
     trades.insert(0, buy(5, fresh))
     engine._cache.clear()
     assert engine.alert_pass() == 0  # the same market again within ALERT_AGAIN_S: no second message

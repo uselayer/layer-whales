@@ -111,9 +111,13 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   the volume, unread, until the owner decides to delete them.
 - **Alerts** on Telegram (off until `TELEGRAM_BOT_TOKEN` is set): "Connect Telegram" on a trader's page gives a
   one-time link to the bot; Start there connects the chat. Every 30 seconds the engine reads followed traders'
-  trades (once per trader) and messages each connected follower about a new buy they can still get into, with
-  what $10 buys now when copying is offered, and a "Stop alerts from …" button. In the chat, `/list` shows who
-  you follow and `/stop` turns alerts off. The bot uses long polling: no webhook to set up.
+  trades (once per trader) and messages each connected follower about every new buy of $100 or more, with how
+  far the price has moved (and what $10 buys now when copying is offered and the price is still in range),
+  "Useful / Not useful" and a "Stop alerts from …" button. Two or more followed traders buying the same outcome
+  make one grouped message, edited in place as more buy. Big trades ($10,000 or more, from the SDK's big trades)
+  in the markets someone saved to their account alert them too. At most 20 alerts per person per UTC day. What
+  was sent, the buys behind grouped alerts and the votes are kept in `/data/alerts.db` (SQLite). In the chat,
+  `/list` shows who you follow and `/stop` turns alerts off. The bot uses long polling: no webhook to set up.
 - **Limits**: "Check again" on Worth following only starts a new check when the last one is over an hour old.
   Someone can follow up to 20 traders.
 
