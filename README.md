@@ -97,7 +97,8 @@ so the two always agree. Then three tabs:
   the same market where they made it: a Polymarket trader's on Polymarket, a Kalshi trader's on Kalshi (5
   contracts, at most 3¢ above their price), held until the market settles. A Polymarket copy fills at
   Polymarket's best price, with its taker fee, from its public market data. One row per copied trade with its
-  status (open / won / lost) and profit after fees, with the total at the top. Trades that can't fill near
+  status (open / won / lost) and profit after fees, and what you paid (with the fee, when there is one)
+  against what came back ("You paid $9.49 · got back $10.00"; open: what it's worth now), with the total at the top. Trades that can't fill near
   their price are skipped with the reason.
 
 Traders without a name show as "Trader 0x91…76" with a generated avatar: the page never shows wallet addresses.
