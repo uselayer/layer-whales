@@ -106,7 +106,7 @@ def test_worth_lists_the_last_check_without_bets_and_scores_new_wallets_on_deman
     )
     r = api.get("/api/worth").json()["result"]
     assert r["counts"] == {"quiet": 1} and r["scores"][0]["name"] == "sharpie" and "sample" not in r["scores"][0]
-    assert api.get("/api/worth/0xABC").json()["sample"] == [{"market": "m"}]
+    assert api.get("/api/worth/0xABC").json()["sample"] == [{"market": "m", "url": None}]
     monkeypatch.setattr(engine.reads.whales, "score", lambda w: _Score())
     assert api.get("/api/worth/0xnew").json()["wallet"] == "0xnew"
 
@@ -190,8 +190,22 @@ def test_live_bets_carry_status_and_category(api: TestClient, monkeypatch: pytes
     assert (by["c1:0"]["status"], by["c1:0"]["category"]) == ("in", "Sports")
     assert (by["c2:0"]["status"], by["c2:0"]["category"]) == ("lost", None)
     assert r["traders"][0]["segment"] == "proven"
-    assert api.get("/api/trader/polymarket/0xabc").json()["positions"][1]["status"] == "lost"
+    raw = [{"conditionId": "c1", "outcomeIndex": 0, "eventSlug": "ita-isr", "slug": "will-italy-win"}]
+    monkeypatch.setattr(engine.reads.whales._poly, "positions", lambda *a, **k: raw)
+    open_ = api.get("/api/trader/polymarket/0xabc").json()["positions"]
+    assert open_[1]["status"] == "lost"
+    assert [p["url"] for p in open_] == ["https://polymarket.com/event/ita-isr/will-italy-win", None]
     assert api.get("/static/fonts/HostGrotesk-latin-var.woff2").status_code == 200
+
+
+def test_market_links_go_to_the_event_on_polymarket() -> None:
+    u = engine.polymarket_url
+    assert u("nfl-lar-sea") == "https://polymarket.com/event/nfl-lar-sea"
+    assert u("nfl-lar-sea", "nfl-lar-sea") == "https://polymarket.com/event/nfl-lar-sea"  # a one-market event
+    assert u("nfl-lar-sea", "spread-rams-3pt5") == "https://polymarket.com/event/nfl-lar-sea/spread-rams-3pt5"
+    assert u(None) is None and u("0xabc123") is None  # no event, or a condition id standing in for one
+    s = engine.with_links({"recent": [{"event": "ita-isr"}], "sample": [{"event": "0xdead"}]})
+    assert s["recent"][0]["url"] == "https://polymarket.com/event/ita-isr" and s["sample"][0]["url"] is None
 
 
 def test_copy_one_feed_trade_now_after_a_payout_preview(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

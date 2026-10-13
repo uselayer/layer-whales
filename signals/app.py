@@ -100,8 +100,35 @@ def trader(venue: str, trader_id: str) -> dict[str, Any]:
     except VenueError as e:
         raise venue_error(e) from e
     out = d.to_dict()
-    out["positions"] = [p | {"status": bet_status(p["avg_price"], p["current_price"])} for p in out["positions"]]
+    links = position_links(d.trader.id) if venue == "polymarket" and d.positions else {}
+    out["positions"] = [
+        p | {"status": bet_status(p["avg_price"], p["current_price"]), "url": links.get(p["market"])}
+        for p in out["positions"]
+    ]
     return out
+
+
+POLYMARKET_EVENT = "https://polymarket.com/event/"
+
+
+def polymarket_url(event: str | None, market: str | None = None) -> str | None:
+    """The market's page on polymarket.com: its event, opened on the market when it's one of several."""
+    if not event or event.startswith("0x"):  # a condition id stands in when the event is unknown
+        return None
+    return POLYMARKET_EVENT + event + (f"/{market}" if market and market != event else "")
+
+
+def position_links(wallet: str) -> dict[str, str | None]:
+    """Each open position's page on polymarket.com, by market id. uselayer's positions leave the slugs out,
+    so this reads Polymarket's positions again; drop it once ``WhalePosition`` carries a url."""
+    try:
+        rows = cached(f"poslinks:{wallet}", 15, lambda: reads.whales._poly.positions(wallet, 50))
+    except VenueError:
+        return {}  # the trades still show, just without links
+    return {
+        f"{p.get('conditionId')}:{int(p.get('outcomeIndex') or 0)}": polymarket_url(p.get("eventSlug"), p.get("slug"))
+        for p in rows
+    }
 
 
 @app.get("/api/links/{venue}/{trader_id}")
@@ -285,7 +312,7 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
     data = _worth_load()
     for s in (data or {}).get("scores", []):
         if s["wallet"] == w:
-            return s | _board(s)
+            return with_links(s) | _board(s)
     if w not in _worth_one:
         try:
             _worth_one[w] = reads.whales.score(w).to_dict()
@@ -293,7 +320,12 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
             raise venue_error(e) from e
         if len(_worth_one) > WORTH_ONE_KEEP:
             del _worth_one[next(iter(_worth_one))]  # the oldest
-    return _worth_one[w] | _board(_worth_one[w])
+    return with_links(_worth_one[w]) | _board(_worth_one[w])
+
+
+def with_links(s: dict[str, Any]) -> dict[str, Any]:
+    """A score whose checked bets each link to their event on polymarket.com."""
+    return s | {k: [b | {"url": polymarket_url(b.get("event"))} for b in s.get(k) or []] for k in ("recent", "sample")}
 
 
 # ---- live bets from traders worth following ----
