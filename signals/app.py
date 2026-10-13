@@ -191,7 +191,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
-WORTH_FORMAT = 6  # bump when the kept result gains fields; an older one is re-checked on launch (6: uselayer 0.8.0 scores)
+WORTH_FORMAT = 7  # bump when the kept result gains fields; an older one is re-checked on launch (7: uselayer 0.8.1, copy_entry)
 WORTH_MIN_AGE_HOSTED_S = 3600  # hosted: "Check again" only starts a new check once the last is this old
 WORTH_ONE_KEEP = 500  # wallets scored on demand, kept until the next check
 _worth_stop = threading.Event()
