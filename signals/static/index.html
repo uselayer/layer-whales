@@ -1200,8 +1200,12 @@ function renderProfile() {
   const name = displayName(s.name, s.wallet);
   const cats = s.categories || [], total = cats.reduce((a, c) => a + (c.bets || 0), 0);
   const profit = profitOf(s, n), perDollar = perDollarOf(s, n), up = weeksUp(s);
-  const wallet = s.cash_usd ?? s.positions_value ?? null;
+  // their wallet: cash (read on-chain) plus open positions; either may be unknown (None), never taken as $0
+  const cash = s.cash_usd ?? null, inPositions = s.positions_usd ?? null;
+  const wallet = cash != null && inPositions != null ? cash + inPositions : null;
   const share = wallet && s.typical_usd != null ? s.typical_usd / wallet : null;
+  const walletTile = wallet != null ? [usd(wallet), "cash + open positions"] : cash != null ? [usd(cash), "cash on Polymarket"]
+    : inPositions != null ? [usd(inPositions), "in open positions"] : ["—", "on Polymarket"];
   const allTime = s.trading_pnl ?? s.pnl;
   const without = allTime != null && s.biggest_win != null ? allTime - s.biggest_win : null;
   const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way by the time a copy gets in
@@ -1217,7 +1221,7 @@ function renderProfile() {
   const steady = without == null ? "" : without > 0 ? " Still in profit without their biggest win." : ` Most of their profit is one win (${usd(s.biggest_win)}).`;
   const how = [cats.slice(0, 2).map((c) => c.category).join(" and ") || null, band ? `buys around ${band}` : s.avg_price != null ? `pays ${cents(s.avg_price)} on average` : null,
     s.typical_usd != null ? `usually ${usd(s.typical_usd)}${share != null ? ` (${lbPct(share).replace("+", "")} of their wallet)` : ""}` : null,
-    s.trades_per_day != null ? perDayText(s.trades_per_day) : null, s.held_to_settlement != null ? `holds ${Math.round(s.held_to_settlement * 100)}% to settlement` : null].filter(Boolean).join(", ");
+    s.trades_per_day != null ? perDayText(s.trades_per_day) : null, s.held_share != null ? `holds ${Math.round(s.held_share * 100)}% to settlement` : null].filter(Boolean).join(", ");
   const copyWhy = `${can ? "Yes" : s.segment === "too_fast" ? "Not really" : "Not recommended"}: ${gap != null ? `a copy a few minutes late paid about ${centsSigned(gap).replace("+", "")} more than they did` : "we couldn't measure the price a copy would get"}${s.copy_return != null ? `, and copies made ${lbPct(s.copy_return)} after fees` : ""}.`;
   const risks = (s.risks || []).map(sdkText);
 
@@ -1229,8 +1233,13 @@ function renderProfile() {
     const closedSdk = d && Array.isArray(d.closed) ? d.closed : null;
     const settled = (s.sample || []).filter((b) => b.payout != null).slice(0, 10);
     const openRow = (p) => `<div class="pf-li"><div><div class="t">${esc(p.title)}</div><div class="s">${p.outcome ? `<span class="pf-oc">${esc(p.outcome)}</span>` : ""}${p.size != null ? `${Math.round(p.size).toLocaleString()} at ${cents(p.price)} · ${usd((p.price ?? 0) * p.size)}` : ""}${p.now != null ? ` · now ${cents(p.now)}` : ""}${p.url ? ` · ${marketLink(p.url)}` : ""}</div></div><div class="r">${statusLine(p.status)}</div></div>`;
-    const closedRow = (c) => `<div class="pf-li"><div><div class="t">${esc(c.title || c.market)}</div><div class="s">${c.outcome ? `<span class="pf-oc">${esc(c.outcome)}</span>` : ""}${c.size != null ? `${Math.round(c.size).toLocaleString()} at ${cents(c.avg_price)}` : `bought at ${cents(c.price)}`}${c.exit_price != null && c.result === "sold" ? ` · sold at ${cents(c.exit_price)}` : ""}${c.pnl != null ? ` · ${pl(c.pnl, usd(c.pnl, true))}` : ""} · ${ago(c.closed_at || c.at)}${c.url ? ` · ${marketLink(c.url)}` : ""}</div></div>
-      <div class="r">${statusLine(c.result === "sold" ? "closed" : c.result || (c.payout === 1 ? "won" : "lost"))}</div></div>`;
+    const closedRow = (c) => {
+      const sdk = "result" in c, when = c.closed_at || c.at;
+      const bought = sdk ? `${c.size != null ? `${Math.round(c.size).toLocaleString()} ` : ""}${c.avg_price != null ? `at ${cents(c.avg_price)}` : "bought"}` : `bought at ${cents(c.price)}`;
+      const status = sdk ? { won: "won", lost: "lost", sold: "closed" }[c.result] : c.payout === 1 ? "won" : "lost"; // null: not settled yet
+      return `<div class="pf-li"><div><div class="t">${esc(c.title || c.market)}</div><div class="s">${c.outcome ? `<span class="pf-oc">${esc(c.outcome)}</span>` : ""}${bought}${c.result === "sold" && c.exit_price != null ? ` · sold at ${cents(c.exit_price)}` : ""}${c.pnl != null ? ` · ${pl(c.pnl, usd(c.pnl, true))}` : ""}${when ? ` · ${ago(when)}` : ""}${c.url ? ` · ${marketLink(c.url)}` : ""}</div></div>
+      <div class="r">${status ? statusLine(status) : ""}</div></div>`;
+    };
     body = `<p class="pf-sec">Open</p>${open == null ? (d?.error ? `<p class="inline-err">${esc(d.error)}</p>` : `<div class="skel" style="width:60%;height:14px;margin:16px 0"></div>`)
         : open.length ? `<div>${open.slice(0, 12).map(openRow).join("")}</div>` : `<p class="pf-empty">No open trades.</p>`}
       <p class="pf-sec">Closed${closedSdk ? "" : " · settled trades we checked"}</p>
@@ -1257,7 +1266,7 @@ function renderProfile() {
         ${total ? `<div class="pf-mix" aria-hidden="true">${cats.slice(0, 4).map((c) => `<i style="flex:${c.bets}"></i>`).join("")}</div>` : ""}
         <div class="pf-kv"><div><span>Markets</span><b>${total ? cats.slice(0, 3).map((c) => `${esc(c.category)} ${Math.round((100 * c.bets) / total)}%`).join(" · ") : dash}</b></div>
         <div><span>Usual price</span><b>${band || (s.avg_price != null ? `${cents(s.avg_price)} on average` : dash)}</b></div>
-        <div><span>Trades</span><b>${s.trades_per_day != null ? perDayText(s.trades_per_day) : dash}</b></div><div><span>Held until the market settles</span><b>${s.held_to_settlement != null ? `${Math.round(s.held_to_settlement * 100)}%` : dash}</b></div></div></div>
+        <div><span>Trades</span><b>${s.trades_per_day != null ? perDayText(s.trades_per_day) : dash}</b></div><div><span>Held until the market settles</span><b>${s.held_share != null ? `${Math.round(s.held_share * 100)}%` : dash}</b></div></div></div>
       <div class="pf-group"><h3>Execution</h3><div class="pf-kv">
         <div><span>Resting orders (maker)</span><b>${s.maker_share != null ? `${Math.round(s.maker_share * 100)}%` : dash}</b></div><div><span>Price gap for a copy a few minutes late</span><b>${gap != null ? centsSigned(gap).replace("+", "") : dash}</b></div></div></div>
       <details class="fold"><summary>How we measure this</summary>${worthDetails(s)}</details>`;
@@ -1272,7 +1281,7 @@ function renderProfile() {
       <div class="pf-stat"><span>Weeks in profit</span><b>${up != null ? `${up} of 12` : "—"}</b><small>last 12 weeks</small></div>
       <div class="pf-stat"><span>Won</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>settled trades</small></div>
       <div class="pf-stat"><span>Usual trade</span><b>${s.typical_usd != null ? usd(s.typical_usd) : "—"}</b><small>${share != null ? `${lbPct(share).replace("+", "")} of their wallet` : s.trades_per_day != null ? perDayText(s.trades_per_day) : ""}</small></div>
-      <div class="pf-stat"><span>Wallet</span><b>${wallet != null ? usd(wallet) : "—"}</b><small>on Polymarket</small></div>
+      <div class="pf-stat"><span>Wallet</span><b>${walletTile[0]}</b><small>${walletTile[1]}</small></div>
     </div>
     <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Profit</h2>${period("")}</div>
       ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
