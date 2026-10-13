@@ -36,11 +36,21 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from uselayer import Client, VenueError, WhaleTrade
+from uselayer import Client, VenueError, Whales, WhaleTrade
 from uselayer.whale_finder import all_boards
 from uselayer.whale_scores import CATEGORY_TAGS, COPY_BETS, RECOMMENDED, SEGMENTS, Stat, category_of, copyable_verdict
 
-from signals.directory import Directory, Seen, from_sighting
+from signals.budget import BackgroundHttp, Budget
+from signals.directory import (
+    CHECK_BOARDS,
+    LISTED_FRESH_S,
+    QUICK_TRADES,
+    Directory,
+    QuickLook,
+    Seen,
+    from_sighting,
+    quick_look,
+)  # fmt: skip
 
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
@@ -66,6 +76,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _directory_later(_directory_import)  # the scores kept before the directory had them (once: then a no-op)
     if DIRECTORY_ON:  # finds wallets for the trader directory, once a day, at a rate that leaves the site its reads
         threading.Thread(target=_directory_loop, daemon=True).start()
+    if EVALUATE_ON:  # looks at every wallet in the directory, in turn, on the same background budget as the sweep
+        threading.Thread(target=_evaluate_loop, daemon=True).start()
     if TG_TOKEN:  # alerts: the bot's messages (connecting a chat, /list, /stop), and new buys of followed traders
         threading.Thread(target=_bot_loop, daemon=True).start()
         threading.Thread(target=_alert_loop, daemon=True).start()
@@ -210,7 +222,8 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 # ---- worth following (Polymarket) ----
 # Finding and scoring ~200 wallets takes 20-30 minutes, so it runs in the background: on launch when the
 # kept result is older than WORTH_MAX_AGE_S, then again each time it gets that old. The page shows the last
-# result meanwhile. A wallet that isn't in it is scored when its page is opened.
+# result meanwhile. A wallet that isn't in it is scored when its page is opened. Its reads come out of the
+# background's budget (BACKGROUND_RATE), shared with the directory's sweep and evaluation.
 
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
@@ -258,18 +271,15 @@ def _worth_upgrade(data: dict[str, Any]) -> dict[str, Any]:
 def _worth_run() -> None:
     global _worth_data
     try:
-        reads.whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
+        reads.whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))  # a trader page's scores
 
         def progress(done: int, total: int, _s: Any) -> None:
             _worth.update(done=done, total=total)
 
-        d = reads.whales.discover(wallets=WORTH_WALLETS, on_progress=progress)
+        d = background().discover(wallets=WORTH_WALLETS, on_progress=progress)
         data = d.to_dict(sample=True) | {"format": WORTH_FORMAT}
         for s in data["scores"]:
-            settled = [b for b in s["sample"] if b.get("payout") is not None]  # before the sample is cut
-            s["won"], s["settled"] = sum(1 for b in settled if b["payout"] == 1), len(settled)
-            # the price paid is the market's chance they'd win, so this is the win rate the odds expected
-            s["odds"] = sum(b["price"] for b in settled) / len(settled) if settled else None
+            _with_odds(s)
             s["sample"] = s["sample"][:30]
         STORE_DIR.mkdir(parents=True, exist_ok=True)
         worth_file().write_text(json.dumps(data))
@@ -281,6 +291,16 @@ def _worth_run() -> None:
         _worth["error"] = str(e)
     finally:
         _worth["running"] = False
+
+
+def _with_odds(s: dict[str, Any]) -> dict[str, Any]:
+    """A score as the check keeps it: of its checked bets (all of them: before the sample is cut), how many
+    settled and won, and the win rate their prices expected."""
+    settled = [b for b in s.get("sample") or [] if b.get("payout") is not None]
+    s["won"], s["settled"] = sum(1 for b in settled if b["payout"] == 1), len(settled)
+    # the price paid is the market's chance they'd win, so this is the win rate the odds expected
+    s["odds"] = sum(b["price"] for b in settled) / len(settled) if settled else None
+    return s
 
 
 def worth_refresh() -> None:
@@ -310,22 +330,24 @@ def _worth_loop() -> None:
         _worth_stop.wait(60)
 
 
-# ---- the trader directory (phase 1: finding wallets; phase 2: keeping their scores; see directory.py) ----
+# ---- the trader directory (1: finding wallets; 2: keeping their scores; 3: evaluating them; see directory.py) ----
 # Every wallet Signals finds, and where, kept across runs: the SDK's sweep of every leaderboard and of markets
 # at every level of activity, once a day, plus traders in the Feed's big trades, wallets opened that the last
 # check didn't have, and followed wallets. Every score worked out is kept there too (the Worth following check's,
 # a trader page's, a failed try, and on launch the last check's from worth-following.json), at no extra reads.
 # Nothing is shown from it yet: the Worth following check still picks its own wallets and the page reads its file.
 # /api/directory gives counts only. SIGNALS_DIRECTORY=0 turns the sweep off; scores are kept either way.
+# What the check, the sweep and the evaluation (below) read from Polymarket comes out of one budget, BACKGROUND_RATE.
 
 DIRECTORY_ON = os.environ.get("SIGNALS_DIRECTORY", "1") != "0"
 DIRECTORY_SWEEP_S = 24 * 3600  # a new sweep once the last finished one is this old
 DIRECTORY_RETRY_S = 3600  # after a sweep that failed
-# The sweep's reads a second at most. The SDK allows 8 a second per Polymarket host, for everything the engine reads.
-# The Feed's poller reads one trader at a time (4 reads, ~1.2 s), so it never needs more than ~3.3 a second; 3 here
-# leaves room for pages too. The sweep runs at ~2 a second anyway: each read waits for its answer.
-DIRECTORY_RATE = 3.0
-DIRECTORY_HOLD_S = 30  # while the Worth following check runs (it can use the whole allowance), the sweep waits
+# The background's Polymarket reads a second at most: the Worth following check's, the sweep's and the evaluation's
+# together, retries included. They share it rather than take turns: one running alone gets all of it. The SDK
+# allows 8 a second per Polymarket host, for everything the engine reads, and the background's reads come out of
+# those 8, so the Feed and pages always have the other 4 (the Feed's poller reads one trader at a time, 4 reads in
+# ~1.2 s, so it never needs more than ~3.3 a second), and all 8 while the background is idle.
+BACKGROUND_RATE = float(os.environ.get("SIGNALS_BACKGROUND_RATE", "4"))
 DIRECTORY_BATCH = 2000  # sightings kept per write
 DIRECTORY_STATS_TTL_S = 300
 _directory_stop = threading.Event()
@@ -342,6 +364,23 @@ def directory() -> Directory:
     if path not in _directories:
         _directories[path] = Directory(path)
     return _directories[path]
+
+
+_background: dict[str, Any] = {}
+_background_lock = threading.Lock()
+
+
+def background() -> Whales:
+    """The SDK's reads for the background (the check, the sweep, the evaluation): the engine's own client, so the
+    per-host limits are shared with every other read, with each Polymarket read also taken from one budget of
+    BACKGROUND_RATE a second (signals/budget.py). Its scorer keeps price histories where the check keeps them."""
+    with _background_lock:
+        if "whales" not in _background:
+            budget = Budget(BACKGROUND_RATE)
+            whales = Whales(BackgroundHttp(reads._http, budget), reads._layer, reads)  # type: ignore[arg-type]
+            whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
+            _background.update(budget=budget, whales=whales)
+        return _background["whales"]  # type: ignore[no-any-return]
 
 
 def _directory_note(seen: list[Seen]) -> None:
@@ -413,10 +452,9 @@ def sweep_left(d: Directory, now: float | None = None) -> tuple[list[tuple[str, 
 
 def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
     """One sweep: followed wallets, then the SDK's ``find_wallets`` over what's left (``sweep_left``): the
-    leaderboards, then markets of every size, kept as they come. Each leaderboard is marked done once the sweep has
-    moved past it and kept everything it found, and the markets once they're all read, so a restart loses at most
-    the board it was on. While the Worth following check runs it waits, between reads (the SDK reads only as it's
-    asked for the next wallet). Returns what it kept, how long it waited, and the error if it stopped early."""
+    leaderboards, then markets of every size, kept as they come, at the background's rate. Each leaderboard is
+    marked done once the sweep has moved past it and kept everything it found, and the markets once they're all
+    read, so a restart loses at most the board it was on. Returns what it kept and the error if it stopped early."""
     d = directory()
     halt = stop or threading.Event()
     # a sweep cut off before sweeps kept their progress: the boards it got past count as read (once)
@@ -424,9 +462,9 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
     boards, markets = sweep_left(d)
     started = d.sweep_started()
     print(f"directory sweep started: {len(boards)} of {len(all_boards())} leaderboards"
-          f"{' and the markets' if markets else ''} to read ({DIRECTORY_RATE:g} reads a second at most)", flush=True)  # fmt: skip
+          f"{' and the markets' if markets else ''} to read ({BACKGROUND_RATE:g} reads a second at most, with the "
+          f"rest of the background)", flush=True)  # fmt: skip
     sightings = new = 0
-    held = 0.0
     error: str | None = None
     batch: list[Seen] = []
 
@@ -447,9 +485,7 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
 
     try:
         batch += [Seen(w, "follow") for w in sorted({w for u in _load_follows()["users"].values() for w in u.get("follows") or []})]
-        found = reads.whales.find_wallets(
-            leaderboards=bool(boards), boards=boards, markets=markets, per_second=DIRECTORY_RATE
-        )
+        found = background().find_wallets(leaderboards=bool(boards), boards=boards, markets=markets)  # the budget paces it
         for s in found:
             if halt.is_set():
                 error = "Stopped before it finished (the app was shutting down)."
@@ -461,11 +497,6 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
             batch.append(from_sighting(s))
             if len(batch) >= DIRECTORY_BATCH:
                 keep()
-            while _worth["running"] and not halt.is_set():  # before the next read: the check has the allowance
-                _directory_state["held"] = "the Worth following check is running"
-                halt.wait(DIRECTORY_HOLD_S)
-                held += DIRECTORY_HOLD_S
-            _directory_state["held"] = None
         else:  # read to the end: the last board, and the markets if they were read
             board_done()
             if markets:
@@ -480,9 +511,9 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
     d.sweep_finished(started, error)
     # one line for the logs (hosted: Railway's), so a sweep can be watched without the owner's /api/directory
     print(f"directory sweep {'stopped' if error else 'done'} in {(time.time() - started) / 60:.0f} min: "
-          f"{sightings} sightings, {new} new wallets, held {held / 60:.0f} min{f', error: {error}' if error else ''}",
+          f"{sightings} sightings, {new} new wallets{f', error: {error}' if error else ''}",
           flush=True)  # fmt: skip
-    return {"sightings": sightings, "new": new, "held_s": held, "error": error}
+    return {"sightings": sightings, "new": new, "error": error}
 
 
 def _directory_loop() -> None:
@@ -492,7 +523,7 @@ def _directory_loop() -> None:
     while not _directory_stop.is_set():
         try:
             boards, markets = sweep_left(directory())
-            if not _worth["running"] and (boards or markets):
+            if boards or markets:
                 _directory_state["running"] = True
                 try:
                     result = directory_sweep(_directory_stop)
@@ -508,17 +539,177 @@ def _directory_loop() -> None:
         _directory_stop.wait(600)
 
 
+# ---- the directory, phase 3: every wallet evaluated in the background ----
+# Each wallet due a look (Directory.due: recommended traders every 6 hours, then wallets never looked at, newest
+# found first, then the rest as they come due; the categories take turns) gets a quick check first: one read of its
+# latest trades, kept as the evidence (markets bought in 30 and 90 days, the last buy). A wallet with too few bets in
+# the last 30 days for a score to say anything, no buy in 90, or no buy this week and none since its last score, is
+# labelled why it isn't recommended and looked at again (daily; weekly when dormant). Every wallet is kept. The rest
+# are scored as a trader page scores them (5-30 s, 10-80 reads) and kept. A recommended trader is scored again
+# without the check: their score is what's shown.
+# The schedule is kept in directory.db, so a restart carries on where it was. SIGNALS_EVALUATE=1 turns it on.
+
+EVALUATE_ON = os.environ.get("SIGNALS_EVALUATE") == "1"
+EVALUATE_WORKERS = 3  # wallets looked at side by side: a score mostly waits for answers, and the budget holds the rate
+EVALUATE_BATCH = 30  # wallets taken from the queue at a time
+EVALUATE_START_S = 120  # after launch, so the page's first reads come first
+EVALUATE_IDLE_S = 60  # with nothing due, it looks again after this
+EVALUATE_FAILS_IN_A_ROW = 5  # this many failed tries in a row and Polymarket is likely down...
+EVALUATE_PAUSE_S = 600  # ...so it waits this long before the next
+EVALUATE_LOG_S = 3600  # a line in the logs this often
+LISTED_KEEP_S = 6 * 3600  # the boards read directly, when the sweep's are stale, are kept this long (31 reads)
+OUTCOMES = ("scored", "not_enough_recent_evidence", "not_trading_lately", "dormant", "failed")
+_evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None, "leaderboards": None,
+                                   "since_launch": dict.fromkeys(OUTCOMES, 0)}  # fmt: skip
+
+
+def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None) -> QuickLook:
+    """One read of a wallet's latest trades: the evidence, and whether a score is worth its reads (``quick_look``)."""
+    now = time.time() if now is None else now
+    got = background().trades("polymarket", wallet, limit=QUICK_TRADES)
+    trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0]) for t in got]
+    return quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
+
+
+def listed_now() -> frozenset[str]:
+    """The wallets the Worth following check would call "on the leaderboard" (uselayer's find_candidates: the
+    monthly profit board's top 1,000, the weekly and all-time profit and monthly volume boards' top 50, each
+    category's monthly top 50), read now on the background's budget and kept LISTED_KEEP_S. For when the sweep's
+    sightings are stale or the sweep is off, so a score's on_leaderboard (and so its tier) doesn't change with them."""
+
+    def read() -> frozenset[str]:
+        poly = background()._poly  # the SDK's leaderboard reader, as its own finder uses it
+        out: set[str] = set()
+        for order, period, category, places in CHECK_BOARDS:
+            for offset in range(0, places, 50):
+                rows = poly.leaderboard(order, period, 50, category=category, offset=offset)
+                out |= {str(r.get("proxyWallet") or "").lower() for r in rows} - {""}
+                if len(rows) < 50:
+                    break
+        return frozenset(out)
+
+    return cached("listed", LISTED_KEEP_S, read)  # type: ignore[no-any-return]
+
+
+def _on_leaderboard(due: list[dict[str, Any]], now: float | None = None) -> None:
+    """Each due wallet's on_leaderboard: from the sweep's sightings while they're fresh (``Directory.due``), else
+    from the boards read now. If those can't be read either, the sightings stand, and /api/directory says so."""
+    now = time.time() if now is None else now
+    seen = directory().boards_seen_at()
+    if seen is not None and now - seen < LISTED_FRESH_S:
+        _evaluate_state["leaderboards"] = "sweep"
+        return
+    try:
+        listed = listed_now()
+    except VenueError as e:
+        _evaluate_state["leaderboards"] = f"stale, and couldn't be read: {e}"
+        return
+    _evaluate_state["leaderboards"] = "read"
+    for item in due:
+        item["on_leaderboard"] = item["wallet"] in listed
+
+
+def evaluate_one(item: dict[str, Any]) -> str:
+    """One due wallet (from ``Directory.due``): the quick check, then, if it's worth a score, its score, kept in
+    the directory. Returns what came of it, one of OUTCOMES. Any error is kept as a failed try, so one wallet
+    never holds up the rest: it's tried again later each time it fails again in a row."""
+    d, w = directory(), item["wallet"]
+    try:
+        if item["kind"] != "recommended":
+            look = quick_check(w, item.get("scored_at"))
+            d.quick_checked(w, look)
+            if not look.score:
+                return look.reason  # type: ignore[return-value]
+        scored = background().score(w, on_leaderboard=item["on_leaderboard"]).to_dict()
+    except Exception as e:  # VenueError mostly (the read's retries already spent)
+        d.score_failed(w, f"{type(e).__name__}: {e}")
+        return "failed"
+    d.keep_scores([_with_odds(scored) | {"format": WORTH_FORMAT}], "background")
+    return "scored"
+
+
+def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
+    """The next EVALUATE_BATCH due wallets, EVALUATE_WORKERS at a time. Stops early after EVALUATE_FAILS_IN_A_ROW
+    failed tries in a row. Returns how many were due, what came of those looked at (by outcome), and how many
+    failed in a row at the end."""
+    halt = stop or threading.Event()
+    due = directory().due(EVALUATE_BATCH)
+    if due:
+        _on_leaderboard(due)
+    done = dict.fromkeys(OUTCOMES, 0)
+    lock = threading.Lock()
+    in_a_row = 0
+
+    def one(item: dict[str, Any]) -> None:
+        nonlocal in_a_row
+        if halt.is_set() or in_a_row >= EVALUATE_FAILS_IN_A_ROW:
+            return
+        got = evaluate_one(item)
+        with lock:
+            done[got] += 1
+            _evaluate_state["since_launch"][got] += 1
+            in_a_row = in_a_row + 1 if got == "failed" else 0
+
+    with ThreadPoolExecutor(max_workers=EVALUATE_WORKERS, thread_name_prefix="evaluate") as pool:
+        list(pool.map(one, due))
+    return {"due": len(due), "done": done, "failed_in_a_row": in_a_row}
+
+
+def _evaluate_loop() -> None:
+    """Rounds of ``evaluate_round`` while the app runs: a minute apart when nothing is due, EVALUATE_PAUSE_S after
+    a run of failures or an error, and a line in the logs each EVALUATE_LOG_S with what it did."""
+    _directory_stop.wait(EVALUATE_START_S)
+    print(f"directory evaluation started ({BACKGROUND_RATE:g} reads a second at most, with the sweep)", flush=True)
+    _evaluate_state["running"] = True
+    logged, hour = time.time(), dict.fromkeys(OUTCOMES, 0)
+    while not _directory_stop.is_set():
+        pause = 0.0
+        try:
+            r = evaluate_round(_directory_stop)
+            hour = {k: hour[k] + r["done"][k] for k in OUTCOMES}
+            _evaluate_state["error"] = None
+            if r["failed_in_a_row"] >= EVALUATE_FAILS_IN_A_ROW:
+                pause = EVALUATE_PAUSE_S
+                print(f"directory evaluation: {r['failed_in_a_row']} failed in a row, waiting "
+                      f"{EVALUATE_PAUSE_S // 60} min", flush=True)  # fmt: skip
+            elif not r["due"]:
+                pause = EVALUATE_IDLE_S
+        except Exception as e:  # the directory couldn't be read or written: try again later
+            _evaluate_state["error"] = f"{type(e).__name__}: {e}"
+            print(f"directory evaluation error: {_evaluate_state['error']}", flush=True)
+            pause = EVALUATE_PAUSE_S
+        if time.time() - logged >= EVALUATE_LOG_S:
+            budget = _background["budget"].state() if "budget" in _background else {}
+            try:
+                due = directory().due_counts()
+            except (sqlite3.Error, OSError):
+                due = {}
+            print(f"directory evaluation, last {(time.time() - logged) / 60:.0f} min: "
+                  f"{', '.join(f'{n} {k}' for k, n in hour.items())}; due now: "
+                  f"{', '.join(f'{n} {k}' for k, n in due.items())}; {budget.get('per_second')} reads a second, "
+                  f"{budget.get('rate_limited')} rate limits so far", flush=True)  # fmt: skip
+            logged, hour = time.time(), dict.fromkeys(OUTCOMES, 0)
+        if pause:
+            _evaluate_state["paused_until"] = time.time() + pause
+            _directory_stop.wait(pause)
+            _evaluate_state["paused_until"] = None
+    _evaluate_state["running"] = False
+
+
 @app.get("/api/directory")
 def directory_stats(request: Request, response: Response) -> dict[str, Any]:
-    """How many wallets the directory has found, and where: counts only, never a wallet. The owner's, as
-    /api/metrics is: locally, or with SIGNALS_METRICS_KEY."""
+    """How many wallets the directory has found, and where, and how its evaluation is going: counts only, never a
+    wallet. The owner's, as /api/metrics is: locally, or with SIGNALS_METRICS_KEY."""
     _owner(request)
     response.headers["Cache-Control"] = "private, no-store"
     stats = cached("directory", DIRECTORY_STATS_TTL_S, lambda: directory().stats())
     boards, markets = sweep_left(directory())
-    stats["sweep_left"] = {"leaderboards": len(boards), "of": len(all_boards()), "markets": markets}
-    return stats | {"sweeping": _directory_state["running"], "held": _directory_state.get("held"),
-                    "last_error": directory().last_error()}
+    evaluating = {k: v for k, v in _evaluate_state.items()} | {"on": EVALUATE_ON}
+    if "budget" in _background:
+        evaluating["budget"] = _background["budget"].state()
+    return stats | {"sweep_left": {"leaderboards": len(boards), "of": len(all_boards()), "markets": markets},
+                    "sweeping": _directory_state["running"], "last_error": directory().last_error(),
+                    "evaluating": evaluating}
 
 
 # ---- the Traders leaderboard's columns ----
