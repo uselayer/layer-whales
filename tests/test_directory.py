@@ -97,8 +97,8 @@ def test_stats_count_wallets_by_source_and_category_without_naming_any(d: Direct
            Seen(CAL, "search")], at=1000.0)  # fmt: skip
     s = d.stats(now=1000.0 + 3600)
     assert s["wallets"] == 3 and s["new_last_day"] == 3
-    assert s["by_source"] == {"leaderboard": 1, "market": 2, "feed": 0, "search": 1, "follow": 0}
-    assert s["only_from"] == {"leaderboard": 0, "market": 1, "feed": 0, "search": 1, "follow": 0}
+    assert s["by_source"] == {"leaderboard": 1, "market": 2, "feed": 0, "search": 1, "follow": 0, "check": 0}
+    assert s["only_from"] == {"leaderboard": 0, "market": 1, "feed": 0, "search": 1, "follow": 0, "check": 0}
     assert s["first_found_by"]["leaderboard"] == 1 and s["first_found_by"]["market"] == 1
     assert s["by_category"] == {"Politics": 1, "Sports": 1, "Crypto": 1}
     assert s["leaderboards_seen"] == 1

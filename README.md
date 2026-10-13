@@ -122,17 +122,28 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   in the markets someone picked (onboarding or the Feed's Change, saved to their account; Skip means none) alert them too. At most 20 alerts per person per UTC day. What
   was sent, the buys behind grouped alerts and the votes are kept in `/data/alerts.db` (SQLite). In the chat,
   `/list` shows who you follow and `/stop` turns alerts off. The bot uses long polling: no webhook to set up.
-- **Trader directory** (phase 1: finding only): every Polymarket wallet Signals finds, and where, kept across
-  runs in `/data/directory.db` (SQLite). Once a day the engine sweeps every Polymarket leaderboard (88: profit and
+- **Trader directory** (phase 1: finding; phase 2: keeping scores): every Polymarket wallet Signals finds, and
+  where, kept across runs in `/data/directory.db` (SQLite). Once a day the engine sweeps every Polymarket leaderboard (88: profit and
   volume, four periods, overall and each category, to rank ~10,050) and open markets at every level of activity
   (the SDK's `find_wallets`, uselayer 0.9): about 18,000 reads, roughly 2.5 hours. It stays out of the Feed's way:
   at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one trader at a time, needs
   at most ~3.3), and none while the Worth following check runs, which can use all 8. Traders in the Feed's big
   trades, wallets opened that the last check didn't have (pasted into search, mostly) and followed wallets are kept
   too, at no extra reads, by a writer thread so no page waits for the directory; a follow keeps the wallet, never
-  who follows it. At full size the file is roughly 300 MB (the volume holds 5 GB). Nothing is scored or shown from it yet: the Worth following check still picks its own 200
-  wallets. `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps) to the
-  owner only, as `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off.
+  who follows it. At full size the file is roughly 300 MB (the volume holds 5 GB).
+  Each wallet also has its evaluation: a status (found, never scored; scored; or failed, the last try failed, an
+  earlier score kept), when it was last scored and last tried, its last activity (the latest trade of theirs
+  whose time we know: a Feed trade, or the last buy a score saw; a leaderboard or market sighting never sets
+  it), and the latest score's segment and main category. Every score worked out is kept, at no extra reads: the
+  Worth following check's 200, a wallet scored on its page, and a try that failed. The latest score is kept whole
+  (compressed, 30 checked bets, about 6 KB a wallet), every score's headline figures stay in its history, and the
+  latest score's price test in each category in its own table. A score never replaces a newer one, so a wallet a
+  later check leaves out keeps its last score. On each launch the last check's scores in `worth-following.json`
+  are imported, as of when that check finished: the first time adds them, after that it changes nothing. Nothing
+  is shown from the directory yet: the Worth following check still picks its own 200 wallets and the page reads
+  its file. `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps; scored,
+  failed and never scored, by segment and category, active in the last week) to the owner only, as
+  `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off; scores are kept either way.
 - **Counting** (is any of this useful?): per alert and per follow, in `/data/alerts.db`, with nothing personal
   beyond the signed-in account (no IPs, no user agents): minutes from their trade to the alert, taps on an
   alert's links (each goes through `/go/<alert id>/<target>`, which counts the tap and redirects: to Polymarket
