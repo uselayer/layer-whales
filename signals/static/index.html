@@ -1218,6 +1218,7 @@ function onboardingPage() {
   $("#app").innerHTML = `<section class="onb"><h1>Find traders worth following.</h1>
     <p class="lede">Discover interesting traders, understand how they trade, and decide who to follow.</p><div id="onbpick"></div></section>`;
   interestPicker($("#onbpick"), { go: "Discover traders →", alt: "Skip", onDone: (v) => {
+    if (v.length) post("/api/count/picked", {}).catch(() => {}); // counted, anonymously: no id of any kind
     setInterests(v, { picked: true });
     if (location.hash === "#/traders") route(); else location.hash = "#/traders";
   } });

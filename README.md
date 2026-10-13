@@ -122,6 +122,16 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   in the markets someone picked (onboarding or the Feed's Change, saved to their account; Skip means none) alert them too. At most 20 alerts per person per UTC day. What
   was sent, the buys behind grouped alerts and the votes are kept in `/data/alerts.db` (SQLite). In the chat,
   `/list` shows who you follow and `/stop` turns alerts off. The bot uses long polling: no webhook to set up.
+- **Counting** (is any of this useful?): per alert and per follow, in `/data/alerts.db`, with nothing personal
+  beyond the signed-in account (no IPs, no user agents): minutes from their trade to the alert, taps on an
+  alert's links (each goes through `/go/<alert id>/<target>`, which counts the tap and redirects: to Polymarket
+  or Signals only, and even when counting fails), "Stop alerts" taps and unfollows (and how many came within 7
+  days of an alert about that trader), Useful / Not useful votes, follows per visitor who picks interests (the
+  pick is counted anonymously, no id at all) and followers who connected Telegram. To read the summary:
+  - locally: `curl http://127.0.0.1:8790/api/metrics` (from the same machine only);
+  - hosted: the owner sets `SIGNALS_METRICS_KEY` in Railway's variables, then
+    `curl -H "Authorization: Bearer $SIGNALS_METRICS_KEY" https://usesignals.app/api/metrics`. Without the key
+    it answers 404; with no key set it's closed. `?days=7` changes the period (default 30).
 - **Limits**: "Check again" on Worth following only starts a new check when the last one is over an hour old.
   Someone can follow up to 20 traders.
 
