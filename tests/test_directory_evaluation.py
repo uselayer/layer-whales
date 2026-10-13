@@ -101,6 +101,16 @@ def test_each_reason_reads_as_a_sentence() -> None:
     assert reason_label("not_trading_lately") == "Not trading lately: no buy in the last 7 days"
     assert reason_label("dormant") == "Dormant: no buy in the last 90 days"
     assert reason_label(None) is None  # recommended
+    # uselayer 0.10's tiers: every one that isn't recommended is a reason with a sentence, and big profit without a
+    # clear edge is never called luck: only profit resting on one win is
+    from uselayer.whale_scores import RECOMMENDED, SEGMENTS
+
+    from signals.directory import REASON_LABELS, REASONS, reason_for
+
+    for seg in set(SEGMENTS) - set(RECOMMENDED):
+        assert reason_for(seg) in REASONS and reason_for(seg) in REASON_LABELS, seg
+    assert reason_label("lucky") == "Scored: a big profit that rests on one win"
+    assert reason_label("big_profit", 5).endswith("(and nothing shows luck)")
 
 
 # ---- the schedule ----
