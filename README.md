@@ -70,9 +70,15 @@ three tabs:
     is kept in the store dir, so later launches show the last result at once while a new check runs in the
     background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
     `client.whales.discover()` / `score()` in the SDK.
-  - **A trader's page**: their profit, their open trades as cards, recent results, and a Copy trader button. The
-    evidence (each check, how the price moved after their buys, their categories, the trades checked) is under
-    **Details**. A leaderboard trader's page also asks **Same person on the other venue?**: accounts that may
+  - **A trader's profile** (from the leaderboard or a wallet search): their market and last trade, a link to their
+    Polymarket profile, and **Copy trader** when they're copyable. A stat strip (profit and per $ traded for the
+    period, weeks in profit, won X of Y, usual trade, wallet), a profit chart for 7D / 30D / 90D with the stretches
+    below their previous high shaded, and **Why they're here** in three plain lines (consistent, how they trade,
+    can you copy them) plus the SDK's own warnings. Tabs: **Positions** (open, with "You can still get in", and
+    closed), **Activity** (their recent buys and sells) and **Stats** (consistency, risk, style, execution), with
+    the evidence (each check, how the price moved after their buys, by category, the trades checked) under **How
+    we measure this**. Wallet, exits and their usual price range show "—" until the SDK provides them.
+  - **A leaderboard trader's page** (Top profit, Big trades) also asks **Same person on the other venue?**: accounts that may
     be the same person, each with the evidence (the same name or X handle on an account that really trades,
     and trades in the same market, the same way, within 5 minutes). It's an inference, never a confirmed
     identity.

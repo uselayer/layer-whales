@@ -297,6 +297,58 @@
   .lb-more { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; padding: 12px; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; }
   .lb-foot { margin-top: 12px; font-size: 13px; color: var(--faint); line-height: 1.7; }
   .lb-foot .link { font-size: 13px; }
+  /* A trader's profile: header, stat strip, profit chart, why they're here, then Positions / Activity / Stats */
+  .pf-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .pf-head .grow { flex: 1; min-width: 0; }
+  .pf-head h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0; overflow-wrap: anywhere; }
+  .pf-tag { color: var(--muted); margin-top: 2px; font-size: 15px; }
+  .pf-tag .ext { font-size: inherit; }
+  .pf-cta { display: grid; gap: 6px; justify-items: end; text-align: right; }
+  .pf-cta small { color: var(--muted); font-size: 13px; max-width: 280px; }
+  .pf-cta .btn[disabled] { background: var(--soft); color: var(--faint); cursor: default; }
+  .pf-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 22px; }
+  .pf-stat { background: var(--card); padding: 14px 16px; min-width: 0; }
+  .pf-stat > span { display: block; font-size: 12px; color: var(--muted); }
+  .pf-stat b { display: block; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin-top: 2px; }
+  .pf-stat small { font-size: 12px; color: var(--muted); }
+  .pf-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-top: 16px; }
+  .pf-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .pf-card h2 { font-size: 16px; margin: 0; }
+  .pf-chart svg { width: 100%; height: auto; display: block; }
+  .pf-chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+  .pf-legend { font-size: 12px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+  .pf-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; background: var(--line); }
+  .pf-why { display: grid; gap: 12px; margin-top: 12px; }
+  .pf-why > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }
+  .pf-why b { font-weight: 600; }
+  .pf-why p { margin: 0; color: var(--muted); }
+  .pf-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 26px; }
+  .pf-tabs button { border: 0; background: none; padding: 10px 14px; font: inherit; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+  .pf-tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+  .pf-sec { font-size: 13px; color: var(--muted); margin: 18px 0 2px; }
+  .pf-li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 14px 2px; border-bottom: 1px solid var(--line); }
+  .pf-li .t { font-weight: 500; overflow-wrap: anywhere; }
+  .pf-li .s { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .pf-li .r { text-align: right; }
+  .pf-oc { display: inline-block; font-size: 12px; background: var(--soft); border-radius: 6px; padding: 1px 7px; margin-right: 6px; color: var(--fg); }
+  .pf-group { margin-top: 20px; }
+  .pf-group h3 { font-size: 15px; margin: 0 0 4px; }
+  .pf-kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+  .pf-kv div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .pf-kv div > span { color: var(--muted); }
+  .pf-kv b { font-weight: 600; text-align: right; }
+  .pf-mix { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin: 8px 0 6px; }
+  .pf-mix i { background: var(--fg); } .pf-mix i:nth-child(2) { background: var(--muted); } .pf-mix i:nth-child(n+3) { background: var(--faint); }
+  .pf-empty { color: var(--muted); padding: 18px 2px; }
+  @media (max-width: 760px) {
+    .pf-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pf-stats .pf-stat:last-child { grid-column: span 2; }
+    .pf-why > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .pf-kv { grid-template-columns: minmax(0, 1fr); }
+    .pf-cta { justify-items: start; text-align: left; width: 100%; }
+    .pf-head h1 { font-size: 24px; }
+  }
+
   @media (max-width: 1180px) {
     .lb-cols { grid-template-columns: 28px minmax(0, 1fr) 160px 108px 88px 96px 104px 128px; }
   }
@@ -922,7 +974,11 @@ const isWalletQuery = (q) => /^0x[0-9a-f]{40}$/i.test(q.trim());
 const PERIOD_DAYS = { "7d": 7, "30d": 30, "90d": 90 };
 const byDesc = (f) => (a, b) => (f(b) ?? -Infinity) - (f(a) ?? -Infinity);
 // returns here are small (copies keep fractions of a percent), so one decimal under 10%
-const lbPct = (x) => x == null ? "—" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x) < 0.1 ? (Math.abs(x) * 100).toFixed(1) : Math.round(Math.abs(x) * 100)}%`;
+const lbPct = (x) => {
+  if (x == null) return "—";
+  const v = Math.abs(x) < 0.1 ? (Math.abs(x) * 100).toFixed(1) : String(Math.round(Math.abs(x) * 100));
+  return `${Number(v) === 0 ? "" : x > 0 ? "+" : "−"}${v}%`; // rounds to zero: no sign
+};
 const LB_SORTS = {
   recommended: ["Recommended", (a, b) => SEG_ORDER.indexOf(a.segment) - SEG_ORDER.indexOf(b.segment) || (b.edge?.z ?? -99) - (a.edge?.z ?? -99)],
   consistent: ["Most consistent", (a, b) => (weeksUp(b) ?? -1) - (weeksUp(a) ?? -1) || (profitOf(b, "30d") ?? 0) - (profitOf(a, "30d") ?? 0)],
@@ -1088,47 +1144,148 @@ async function bigView() {
   bindActions(box);
 }
 
-// ---- a Polymarket trader we've scored ----
+// ---- a Polymarket trader we've scored: their profile ----
+// Header with the copy action, a stat strip, the profit chart, why they're here, then Positions / Activity /
+// Stats. Same helpers as the leaderboard (profitOf, weeksUp, isCopyable, lbPct), so the two always agree. A
+// figure the data doesn't have yet (wallet, exits, price range: the SDK's next release) shows "—".
+const pf = { period: "30d", tab: "positions", s: null, detail: null };
+const PF_PERIOD = { "7d": "7 days", "30d": "30 days", "90d": "90 days" };
+
 async function worthTraderPage(wallet) {
   const app = $("#app");
   const back = `<a class="back" href="#/traders">← Traders</a>`;
-  app.innerHTML = `${back}<div class="th">${avatar(wallet, 64)}<div style="flex:1"><div class="skel" style="width:50%;height:22px"></div><div class="skel" style="width:30%;height:14px;margin-top:10px"></div></div></div>
+  app.innerHTML = `${back}<div class="pf-head">${avatar(wallet, 64)}<div class="grow"><div class="skel" style="width:40%;height:24px"></div><div class="skel" style="width:25%;height:14px;margin-top:10px"></div></div></div>
     <p class="muted" style="margin-top:24px">Checking this trader's trades (up to a minute)…</p>`;
   let s;
   try { s = await api(`/api/worth/${wallet}`); } catch (e) { app.innerHTML = back + errorState(e.message); bindActions(app); return; }
   if (location.hash !== `#/worth/${wallet}`) return;
+  Object.assign(pf, { s, detail: null, tab: "positions", period: s.periods ? pf.period : "30d" });
+  if (!copy) await loadCopy();
+  renderProfile();
+  try { pf.detail = await api(`/api/trader/polymarket/${wallet}`); } catch (e) { pf.detail = { error: e.message }; }
+  if (location.hash === `#/worth/${wallet}` && pf.s === s) renderProfile();
+}
+
+function pfChart(s, n) {
+  const days = { "7d": 7, "30d": 30, "90d": 90 }[n];
+  const raw = (s.pnl_daily || []).slice(-(days + 1)).map((p) => p[1]);
+  if (raw.length < 2) return null;
+  const pts = raw.map((v) => v - raw[0]); // profit over the period, from 0
+  const W = 640, H = 230, L = 58, R = 12, T = 12, B = 26;
+  const lo = Math.min(0, ...pts), hi = Math.max(0, ...pts), pad = (hi - lo) * 0.08 || 1, y0 = lo - pad, y1 = hi + pad;
+  const X = (i) => L + (i / (pts.length - 1)) * (W - L - R), Y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const xy = (v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`;
+  let peak = -Infinity, worst = 0;
+  const peaks = pts.map((v) => { peak = Math.max(peak, v); worst = Math.max(worst, peak - v); return peak; });
+  const line = pts.map(xy).join(" "), last = pts.length - 1;
+  const tone = pts[last] > 0 ? "var(--gain)" : pts[last] < 0 ? "var(--loss)" : "var(--fg)";
+  const ticks = [lo, 0, hi].filter((v, i, a) => a.findIndex((x) => Math.abs(x - v) <= (hi - lo) * 0.15) === i);
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Profit over ${PF_PERIOD[n]}: ${usd(pts[last], true)}">
+    ${ticks.map((v) => `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)" stroke-width="1" ${v === 0 ? "" : 'stroke-dasharray="3 4"'}/><text x="${L - 8}" y="${(Y(v) + 4).toFixed(1)}" text-anchor="end">${v === 0 ? "$0" : usd(v, true)}</text>`).join("")}
+    <polygon points="${xy(0, 0)} ${line} ${X(last).toFixed(1)},${Y(0).toFixed(1)}" fill="color-mix(in srgb, ${tone} 7%, transparent)"/>
+    <polygon points="${peaks.map(xy).join(" ")} ${pts.map(xy).reverse().join(" ")}" fill="var(--line)"/>
+    <polyline points="${line}" fill="none" stroke="${tone}" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${X(last).toFixed(1)}" cy="${Y(pts[last]).toFixed(1)}" r="4" fill="${tone}"/>
+    <text x="${L}" y="${H - 6}">${PF_PERIOD[n]} ago</text><text x="${W - R}" y="${H - 6}" text-anchor="end">Today</text></svg>`;
+  return { svg, worst };
+}
+
+function renderProfile() {
+  const s = pf.s, d = pf.detail, n = pf.period, app = $("#app");
+  if (!s || !app) return;
+  const t = { venue: "polymarket", id: s.wallet, name: s.name };
   const name = displayName(s.name, s.wallet);
-  const odds = oddsEdge(s);
-  const pct = (x) => `${Math.round(100 * x)}%`;
-  const hero = s.pnl_window != null ? [pl(s.pnl_window, usd(s.pnl_window, true)), "Profit, last 30 days"] : [pl(s.pnl, usd(s.pnl, true)), "Profit, all time"];
-  // 30 days ahead of all time reads like a bug; it means they lost money before the window.
-  const before = s.pnl_window != null && s.pnl != null ? s.pnl - s.pnl_window : null;
-  const strong = s.strong_categories.map((c) => `<span class="chip" style="font-size:12px;padding:2px 8px">Strong in ${esc(c)}</span>`).join("");
-  const results = (s.sample || []).filter((b) => b.payout != null).slice(0, 8);
-  app.innerHTML = `${back}
-    <div class="th">${avatar(s.wallet, 64)}<div style="min-width:0"><h1 class="name">${esc(name)}</h1>
-      <div class="badges">${tier(s.segment)}${beatsBadge(s)}${strong}</div>
-      <div class="badges">${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div></div>
-    <div class="hero"><div class="big">${hero[0]}</div><div class="cap">${hero[1]}${s.pnl_window != null && s.pnl != null ? `<span class="sep">·</span>All time ${pl(s.pnl, usd(s.pnl, true))}` : ""}</div>
-      ${before != null && before < 0 ? `<div class="cap">More than all time: before these 30 days they were down ${usd(-before)}.</div>` : ""}</div>
-    <p class="reason">${esc(sdkText(s.reason))}</p>
-    <div class="tiles">
-      <div class="tile"><span>Your profit if you'd copied them</span><b>${s.copy ? pl(s.copy.mean, centsSigned(s.copy.mean)) : "—"}</b><small>a contract, after fees</small></div>
-      <div class="tile"><span>Beats the odds</span><b>${odds == null ? "—" : pl(odds, `${odds > 0 ? "+" : odds < 0 ? "−" : ""}${Math.abs(odds)} pts`)}</b><small>${odds == null ? "no settled trades yet" : `won ${pct(s.won / s.settled)} when the odds said ${pct(s.odds)}`}</small></div>
+  const cats = s.categories || [], total = cats.reduce((a, c) => a + (c.bets || 0), 0);
+  const profit = profitOf(s, n), perDollar = perDollarOf(s, n), up = weeksUp(s);
+  const wallet = s.cash_usd ?? s.positions_value ?? null;
+  const share = wallet && s.typical_usd != null ? s.typical_usd / wallet : null;
+  const allTime = s.trading_pnl ?? s.pnl;
+  const without = allTime != null && s.biggest_win != null ? allTime - s.biggest_win : null;
+  const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way by the time a copy gets in
+  const band = Array.isArray(s.price_band) ? `${cents(s.price_band[0])}–${cents(s.price_band[1])}` : null;
+  const chart = pfChart(s, n);
+  const copied = isCopied(t.venue, t.id), can = isCopyable(s);
+  const cta = copied || can ? copyButton(t) : `<button class="btn" disabled>Copying isn't offered</button>`;
+  const ctaNote = copied ? "" : can ? "Copyable: copies get similar prices" : s.segment === "too_fast" ? "Too fast to copy: the price moves before a copy gets in" : "Not recommended";
+  const period = (cls) => s.periods ? `<div class="lb-period ${cls}" role="group" aria-label="Period">${Object.keys(PF_PERIOD).map((p) => `<button type="button" data-pfperiod="${p}" aria-pressed="${n === p}">${p.toUpperCase()}</button>`).join("")}</div>` : "";
+
+  // why they're here: three plain sentences, plus the SDK's own warnings
+  const consistent = [up != null ? `In profit ${up} of the last 12 weeks` : null, s.settled ? `won ${s.won} of ${s.settled} settled trades` : null].filter(Boolean).join("; ");
+  const steady = without == null ? "" : without > 0 ? " Still in profit without their biggest win." : ` Most of their profit is one win (${usd(s.biggest_win)}).`;
+  const how = [cats.slice(0, 2).map((c) => c.category).join(" and ") || null, band ? `buys around ${band}` : s.avg_price != null ? `pays ${cents(s.avg_price)} on average` : null,
+    s.typical_usd != null ? `usually ${usd(s.typical_usd)}${share != null ? ` (${lbPct(share).replace("+", "")} of their wallet)` : ""}` : null,
+    s.trades_per_day != null ? perDayText(s.trades_per_day) : null, s.held_to_settlement != null ? `holds ${Math.round(s.held_to_settlement * 100)}% to settlement` : null].filter(Boolean).join(", ");
+  const copyWhy = `${can ? "Yes" : s.segment === "too_fast" ? "Not really" : "Not recommended"}: ${gap != null ? `a copy a few minutes late paid about ${centsSigned(gap).replace("+", "")} more than they did` : "we couldn't measure the price a copy would get"}${s.copy_return != null ? `, and copies made ${lbPct(s.copy_return)} after fees` : ""}.`;
+  const risks = (s.risks || []).map(sdkText);
+
+  // the tabs
+  let body;
+  if (pf.tab === "positions") {
+    const open = d && !d.error ? (d.positions || []).map((p) => ({ title: p.title || p.market, outcome: p.outcome, size: p.size, price: p.avg_price, now: p.current_price, status: p.status, url: p.url }))
+      .filter((p) => !["won", "lost", "closed"].includes(p.status)) : null;
+    const closedSdk = d && Array.isArray(d.closed) ? d.closed : null;
+    const settled = (s.sample || []).filter((b) => b.payout != null).slice(0, 10);
+    const openRow = (p) => `<div class="pf-li"><div><div class="t">${esc(p.title)}</div><div class="s">${p.outcome ? `<span class="pf-oc">${esc(p.outcome)}</span>` : ""}${p.size != null ? `${Math.round(p.size).toLocaleString()} at ${cents(p.price)} · ${usd((p.price ?? 0) * p.size)}` : ""}${p.now != null ? ` · now ${cents(p.now)}` : ""}${p.url ? ` · ${marketLink(p.url)}` : ""}</div></div><div class="r">${statusLine(p.status)}</div></div>`;
+    const closedRow = (c) => `<div class="pf-li"><div><div class="t">${esc(c.title || c.market)}</div><div class="s">${c.outcome ? `<span class="pf-oc">${esc(c.outcome)}</span>` : ""}${c.size != null ? `${Math.round(c.size).toLocaleString()} at ${cents(c.avg_price)}` : `bought at ${cents(c.price)}`}${c.exit_price != null && c.result === "sold" ? ` · sold at ${cents(c.exit_price)}` : ""}${c.pnl != null ? ` · ${pl(c.pnl, usd(c.pnl, true))}` : ""} · ${ago(c.closed_at || c.at)}${c.url ? ` · ${marketLink(c.url)}` : ""}</div></div>
+      <div class="r">${statusLine(c.result === "sold" ? "closed" : c.result || (c.payout === 1 ? "won" : "lost"))}</div></div>`;
+    body = `<p class="pf-sec">Open</p>${open == null ? (d?.error ? `<p class="inline-err">${esc(d.error)}</p>` : `<div class="skel" style="width:60%;height:14px;margin:16px 0"></div>`)
+        : open.length ? `<div>${open.slice(0, 12).map(openRow).join("")}</div>` : `<p class="pf-empty">No open trades.</p>`}
+      <p class="pf-sec">Closed${closedSdk ? "" : " · settled trades we checked"}</p>
+      ${(closedSdk || settled).length ? `<div>${(closedSdk || settled).slice(0, 12).map(closedRow).join("")}</div>` : `<p class="pf-empty">No settled trades yet. Results show up once their markets settle.</p>`}`;
+  } else if (pf.tab === "activity") {
+    const trades = d && !d.error ? d.trades || [] : null;
+    const act = trades ? trades.map((x) => ({ sell: x.action === "sell", title: x.title || x.market, outcome: x.outcome, usd: x.usd, price: x.price, at: x.at, url: x.url }))
+      : (s.recent || []).map((b) => ({ sell: false, title: b.title || b.market, outcome: b.outcome, usd: b.usd, price: b.price, at: b.at, url: b.url }));
+    body = act.length ? `<div>${act.slice(0, 20).map((a) => `<div class="pf-li"><div><div class="t">${a.sell ? "Sold" : "Bought"} ${a.outcome ? `<span class="pf-oc">${esc(a.outcome)}</span>` : ""}${esc(a.title)}</div>
+        <div class="s">${usd(a.usd)} at ${cents(a.price)}${a.url ? ` · ${marketLink(a.url)}` : ""}</div></div><div class="r s">${ago(a.at)}</div></div>`).join("")}</div>`
+      : `<p class="pf-empty">No trades in the last 30 days.</p>`;
+  } else {
+    const weeks = s.pnl_weeks || [];
+    let run = 0, longest = 0; for (const w of weeks) { run = w < 0 ? run + 1 : 0; longest = Math.max(longest, run); }
+    const worst90 = pfChart(s, "90d")?.worst;
+    const dash = `<span class="lb-none">—</span>`;
+    body = `<div class="pf-group"><h3>Consistency</h3><div class="pf-kv">
+        <div><span>Weeks in profit</span><b>${up != null ? `${up} of 12` : dash}</b></div><div><span>Won</span><b>${s.settled ? `${s.won} of ${s.settled} settled` : dash}</b></div>
+        <div><span>All time without their biggest win</span><b>${without != null ? pl(without, usd(without, true)) : dash}</b></div><div><span>Longest run of losing weeks</span><b>${weeks.length ? longest : dash}</b></div></div></div>
+      <div class="pf-group"><h3>Risk</h3><div class="pf-kv">
+        <div><span>Usual trade</span><b>${s.typical_usd != null ? usd(s.typical_usd) : dash}</b></div><div><span>Of their wallet</span><b>${share != null ? lbPct(share).replace("+", "") : dash}</b></div>
+        <div><span>Biggest win</span><b>${s.biggest_win != null ? usd(s.biggest_win) : dash}</b></div><div><span>Worst drop from a high, 90 days</span><b>${worst90 != null ? usd(-worst90) : dash}</b></div></div></div>
+      <div class="pf-group"><h3>Style</h3>
+        ${total ? `<div class="pf-mix" aria-hidden="true">${cats.slice(0, 4).map((c) => `<i style="flex:${c.bets}"></i>`).join("")}</div>` : ""}
+        <div class="pf-kv"><div><span>Markets</span><b>${total ? cats.slice(0, 3).map((c) => `${esc(c.category)} ${Math.round((100 * c.bets) / total)}%`).join(" · ") : dash}</b></div>
+        <div><span>Usual price</span><b>${band || (s.avg_price != null ? `${cents(s.avg_price)} on average` : dash)}</b></div>
+        <div><span>Trades</span><b>${s.trades_per_day != null ? perDayText(s.trades_per_day) : dash}</b></div><div><span>Held until the market settles</span><b>${s.held_to_settlement != null ? `${Math.round(s.held_to_settlement * 100)}%` : dash}</b></div></div></div>
+      <div class="pf-group"><h3>Execution</h3><div class="pf-kv">
+        <div><span>Resting orders (maker)</span><b>${s.maker_share != null ? `${Math.round(s.maker_share * 100)}%` : dash}</b></div><div><span>Price gap for a copy a few minutes late</span><b>${gap != null ? centsSigned(gap).replace("+", "") : dash}</b></div></div></div>
+      <details class="fold"><summary>How we measure this</summary>${worthDetails(s)}</details>`;
+  }
+
+  app.innerHTML = `<a class="back" href="#/traders">← Traders</a>
+    <div class="pf-head">${avatar(s.wallet, 64)}
+      <div class="grow"><h1>${esc(name)}</h1><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
+      <div class="pf-cta">${cta}${ctaNote ? `<small>${ctaNote}</small>` : ""}<small id="made" hidden></small></div></div>
+    <div class="pf-stats">
+      <div class="pf-stat"><span>Profit, ${PF_PERIOD[n]}</span><b>${profit != null ? pl(profit, usd(profit, true)) : "—"}</b><small>${perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit"}</small></div>
+      <div class="pf-stat"><span>Weeks in profit</span><b>${up != null ? `${up} of 12` : "—"}</b><small>last 12 weeks</small></div>
+      <div class="pf-stat"><span>Won</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>settled trades</small></div>
+      <div class="pf-stat"><span>Usual trade</span><b>${s.typical_usd != null ? usd(s.typical_usd) : "—"}</b><small>${share != null ? `${lbPct(share).replace("+", "")} of their wallet` : s.trades_per_day != null ? perDayText(s.trades_per_day) : ""}</small></div>
+      <div class="pf-stat"><span>Wallet</span><b>${wallet != null ? usd(wallet) : "—"}</b><small>on Polymarket</small></div>
     </div>
-    <div class="card copybox" id="copybox"></div>
-    <h2 class="h2">Open trades</h2><div id="open">${skelCards(2)}</div>
-    <h2 class="h2">Latest buys</h2>
-    ${(s.recent || []).length ? `<div class="list">${s.recent.map((b) => `<div class="row"><div><div class="t">${esc(b.title || b.market)}</div>
-      <div class="s">${b.outcome ? `<span class="chip" style="font-size:12px;padding:1px 7px">${esc(b.outcome)} ${cents(b.price)}</span>` : `Bought at ${cents(b.price)}`}${b.category ? ` · ${esc(b.category)}` : ""}${b.url ? ` · ${marketLink(b.url)}` : ""}</div></div>
-      <div class="r"><b>${usd(b.usd)}</b><div class="s">${ago(b.at)}</div></div></div>`).join("")}</div>`
-      : `<div class="card">${emptyState("No buys in the last 30 days")}</div>`}
-    <h2 class="h2">Recent results <small>settled trades we checked</small></h2>
-    ${results.length ? `<div class="list">${results.map((b) => `<div class="row"><div><div class="t">${esc(b.title || b.market)}</div><div class="s">${esc(b.outcome || "")} · bought at ${cents(b.price)} · ${ago(b.at)}${b.url ? ` · ${marketLink(b.url)}` : ""}</div></div>
-      <div class="r">${statusLine(b.payout === 1 ? "won" : "lost")}</div></div>`).join("")}</div>` : `<div class="card">${emptyState("No settled trades yet", "Results show up once their markets settle.")}</div>`}
-    <details class="fold"><summary>Details</summary>${worthDetails(s)}</details>`;
-  worthCopyBox(s);
-  loadOpenTrades(s);
+    <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Profit</h2>${period("")}</div>
+      ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
+        : `<p class="pf-empty">Their profit history isn't available yet.</p>`}</section>
+    <section class="pf-card"><h2>Why they're here</h2><div class="pf-why">
+      <div><b>Consistent</b><p>${consistent ? `${esc(consistent.charAt(0).toUpperCase() + consistent.slice(1))}.` : "Too few settled trades to say yet."}${steady}</p></div>
+      <div><b>How they trade</b><p>${how ? `${esc(how.charAt(0).toUpperCase() + how.slice(1))}.` : "—"}</p></div>
+      <div><b>Can you copy them</b><p>${esc(copyWhy)}</p></div>
+      ${risks.length ? `<div><b>Worth knowing</b><p>${risks.map(esc).join(" ")}</p></div>` : ""}
+    </div></section>
+    <div class="pf-tabs" role="tablist">${[["positions", "Positions"], ["activity", "Activity"], ["stats", "Stats"]].map(([k, l]) => `<button type="button" role="tab" data-pftab="${k}" aria-selected="${pf.tab === k}">${l}</button>`).join("")}</div>
+    <div>${body}</div>`;
+  $$("[data-pfperiod]", app).forEach((b) => (b.onclick = () => { pf.period = b.dataset.pfperiod; renderProfile(); }));
+  $$("[data-pftab]", app).forEach((b) => (b.onclick = () => { pf.tab = b.dataset.pftab; renderProfile(); }));
+  bindActions(app);
+  fillYouMade($("#made", app), t);
 }
 
 function worthDetails(s) {
@@ -1166,23 +1323,6 @@ async function loadOpenTrades(s, venue = "polymarket", id = s.wallet) {
   shown = bets;
   box.innerHTML = bets.length ? `<div class="cards">${bets.map((b, i) => tradeCard(b, i, { who: false })).join("")}</div>` : `<div class="card">${emptyState("No open trades")}</div>`;
   bindActions(box);
-}
-
-async function worthCopyBox(s) {
-  const box = $("#copybox"), t = { venue: "polymarket", id: s.wallet, name: s.name };
-  if (!copy) await loadCopy();
-  if (!box.isConnected) return;
-  const no = isCopied(t.venue, t.id) ? null // already copying: show that, and Stop, whatever the rating
-    : s.action === "signal" ? ["Copying isn't offered", "Their edge is gone by the time a copier gets in. Watch their trades instead."]
-    : s.action === "avoid" || s.action === "skip" ? ["Not worth copying", esc(sdkText(s.reason))] : null;
-  if (no) {
-    box.classList.remove("compact");
-    box.innerHTML = `<div class="head">${no[0]}</div><p style="margin:0">${no[1]}</p><p id="made" style="margin:8px 0 0" hidden></p>`;
-    fillYouMade($("#made", box), t);
-    return;
-  }
-  copyBox(box, t, { categories: s.categories.map((c) => c.category), strong: s.strong_categories,
-    note: s.action === "watch" ? "They're still a maybe: too few trades to be sure." : "", redraw: () => worthCopyBox(s) });
 }
 
 // What your sandbox copies of one trader have made so far: the same numbers as My trades, open ones at what
@@ -1369,7 +1509,8 @@ function route() {
   const t = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
   const tab = name === "mine" ? "mine" : name === "feed" ? "feed" : "traders";
   $$("[data-tab]").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
-  $$(".wrap").forEach((el) => el.classList.toggle("wide", name === "traders:worth" && interests !== null)); // the leaderboard needs the room
+  const wide = (name === "traders:worth" && interests !== null) || location.hash.startsWith("#/worth/"); // the leaderboard and profiles need the room
+  $$(".wrap").forEach((el) => el.classList.toggle("wide", wide));
   window.scrollTo(0, 0);
   if (interests === null && (name === "feed" || name === "traders:worth")) onboardingPage(); // first run; links to a trader skip it
   else if (name === "feed") feedPage();
