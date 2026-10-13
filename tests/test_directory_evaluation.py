@@ -1,7 +1,8 @@
-"""The trader directory, phase 3: every wallet evaluated in the background. A quick check before a score, the
-schedule (recommended traders every six hours, inactive and thin wallets less often, failures backing off), the
-queue's order and its categories taking turns, one read budget for the background with retries and rate limits,
-and carrying on after a restart (no network: the SDK's reads are stand-ins)."""
+"""The trader directory, phase 3: every wallet evaluated in the background. A quick check before a score that keeps
+the evidence and says why a wallet isn't recommended (every wallet kept), the schedule (recommended traders every six
+hours, wallets short of evidence daily, dormant ones weekly, failures backing off), the queue's order and its
+categories taking turns, one read budget for the background with retries and rate limits, and carrying on after a
+restart (no network: the SDK's reads are stand-ins)."""
 
 from __future__ import annotations
 
@@ -17,15 +18,17 @@ from uselayer import VenueError
 from signals import app as engine
 from signals.budget import COOL_S, RECOVER_S, BackgroundHttp, Budget
 from signals.directory import (
-    RECHECK_INACTIVE_S,
-    RECHECK_INSUFFICIENT_S,
+    RECHECK_EVIDENCE_S,
+    RECHECK_QUIET_S,
     RECHECK_SCORED_S,
     RESCORE_S,
     RETRY_S,
     Directory,
+    QuickLook,
     Seen,
     next_check_at,
-    quick_verdict,
+    quick_look,
+    reason_label,
 )  # fmt: skip
 
 AMY = "0x" + "a1" * 20
@@ -55,50 +58,76 @@ def d(tmp_path: Any) -> Directory:
 # ---- the quick check ----
 
 
-def test_no_buy_in_the_last_week_is_inactive_whatever_else_they_did() -> None:
-    sold = [(T0 - DAY, False, "0xm1")]  # a sale yesterday isn't a buy
-    assert quick_verdict(sold + buys(20, T0 - 8 * DAY), T0, read_all=True) == "inactive"
-    assert quick_verdict([], T0, read_all=True) == "inactive"  # nothing at all
+def look(trades: list[tuple[float, bool, str]], read_all: bool = True, scored_at: float | None = None) -> tuple[Any, ...]:
+    q = quick_look(trades, T0, read_all, scored_at)
+    return q.score, q.reason, q.buys_30d, q.buys_90d
 
 
-def test_fewer_than_eight_markets_bought_in_the_window_is_too_little_to_score() -> None:
+def test_fewer_than_eight_markets_bought_in_30_days_is_not_enough_evidence_and_the_90_days_are_kept() -> None:
     again = [(T0 - 60 * i, True, "0xm0") for i in range(30)]  # thirty buys of one market is one bet
-    assert quick_verdict(again + buys(6, T0 - DAY), T0, read_all=True) == "insufficient"
-    assert quick_verdict(buys(7, T0) + buys(5, T0 - 31 * DAY), T0, read_all=True) == "insufficient"  # older ones don't count
-    assert quick_verdict(buys(8, T0), T0, read_all=True) == "eligible"
+    assert look(again + buys(6, T0 - DAY)) == (False, "not_enough_recent_evidence", 6, 6)  # 0xm0 is among the six
+    # a selective trader: 5 bets this month, 20 over three months. Kept, labelled, not dismissed
+    assert look(buys(5, T0) + buys(15, T0 - 40 * DAY, every=DAY)) == (False, "not_enough_recent_evidence", 5, 15)
+    assert look(buys(8, T0))[:2] == (True, None)
+
+
+def test_no_buy_in_90_days_is_dormant() -> None:
+    sold = [(T0 - DAY, False, "0xm1")]  # a sale yesterday isn't a buy
+    assert look(sold + buys(20, T0 - 95 * DAY)) == (False, "dormant", 0, 0)
+    assert look([])[:2] == (False, "dormant")  # nothing at all
+
+
+def test_a_paused_trader_is_scored_once_then_left_until_they_buy_again() -> None:
+    paused = buys(12, T0 - 10 * DAY)  # 12 markets this month, none this week
+    assert look(paused)[:2] == (True, None)  # never scored: the score is the evidence (it says "not trading lately")
+    assert look(paused, scored_at=T0 - 9 * DAY)[:2] == (False, "not_trading_lately")  # nothing new since that score
+    assert look(buys(1, T0) + paused, scored_at=T0 - 9 * DAY)[:2] == (True, None)  # bought again: scored again
 
 
 def test_a_read_cut_short_only_judges_the_time_it_covers() -> None:
     # 100 sales in the last two days, and the read stopped there: a buy before them can't be ruled out
     busy = [(T0 - i * 1700, False, f"0xm{i}") for i in range(100)]
-    assert quick_verdict(busy, T0, read_all=False) == "eligible"
-    # ...but 100 trades reaching back past the week with no buy among them is inactive
-    slow = [(T0 - 8 * DAY - i, False, "0xm1") for i in range(100)]
-    assert quick_verdict(slow, T0, read_all=False) == "inactive"
+    assert look(busy, read_all=False)[:2] == (True, None)
+    # ...but 100 trades reaching back past 90 days with no buy among them is dormant
+    slow = [(T0 - 95 * DAY - i, False, "0xm1") for i in range(100)]
+    assert look(slow, read_all=False)[:2] == (False, "dormant")
     # 3 markets in the last few hours, read cut short: the rest of the window is unknown, so it's scored
-    assert quick_verdict(buys(3, T0, every=60) * 30, T0, read_all=False) == "eligible"
+    assert look(buys(3, T0, every=60) * 30, read_all=False)[:2] == (True, None)
+
+
+def test_each_reason_reads_as_a_sentence() -> None:
+    assert reason_label("not_enough_recent_evidence", 5) == (
+        "Not enough recent evidence: 5 bets in the last 30 days, and 8 are needed to judge a trader")
+    assert reason_label("not_trading_lately") == "Not trading lately: no buy in the last 7 days"
+    assert reason_label("dormant") == "Dormant: no buy in the last 90 days"
+    assert reason_label(None) is None  # recommended
 
 
 # ---- the schedule ----
 
 
 def test_each_kind_of_wallet_is_looked_at_again_on_its_own_schedule() -> None:
-    assert next_check_at("scored", "proven", T0) == T0 + RESCORE_S == T0 + 6 * 3600
-    assert next_check_at("scored", "too_fast", T0) == T0 + RESCORE_S
-    assert next_check_at("scored", "no_edge", T0) == T0 + RECHECK_SCORED_S
-    assert next_check_at("scored", "inactive", T0) == next_check_at("scored", "no_view", T0) == T0 + RECHECK_INACTIVE_S
-    assert next_check_at("insufficient", None, T0) == T0 + RECHECK_INSUFFICIENT_S
-    assert next_check_at("inactive", "proven", T0) == T0 + RECHECK_INACTIVE_S
-    assert RESCORE_S < RECHECK_SCORED_S < RECHECK_INSUFFICIENT_S < RECHECK_INACTIVE_S  # the quiet ones, less often
-    assert [next_check_at("failed", None, T0, n) - T0 for n in (1, 2, 3, 9)] == [*RETRY_S[:3], RETRY_S[-1]]
+    assert next_check_at("scored", None, "proven", T0) == T0 + RESCORE_S == T0 + 6 * 3600
+    assert next_check_at("scored", None, "too_fast", T0) == T0 + RESCORE_S
+    assert next_check_at("scored", "no_edge", "no_edge", T0) == T0 + RECHECK_SCORED_S
+    assert next_check_at("scored", "no_view", "no_view", T0) == T0 + RECHECK_QUIET_S
+    for reason in ("not_enough_recent_evidence", "not_trading_lately"):  # one read a day: scored as soon as they can be
+        assert next_check_at("checked", reason, None, T0) == T0 + RECHECK_EVIDENCE_S == T0 + DAY
+    assert next_check_at("scored", "not_trading_lately", "inactive", T0) == T0 + DAY
+    assert next_check_at("checked", "dormant", "proven", T0) == T0 + RECHECK_QUIET_S
+    assert RESCORE_S < RECHECK_EVIDENCE_S < RECHECK_SCORED_S < RECHECK_QUIET_S
+    assert [next_check_at("failed", None, None, T0, n) - T0 for n in (1, 2, 3, 9)] == [*RETRY_S[:3], RETRY_S[-1]]
 
 
-def test_a_new_wallet_is_due_at_once_and_a_score_schedules_the_next(d: Directory) -> None:
+def test_a_new_wallet_is_due_at_once_and_a_score_schedules_the_next_and_says_why(d: Directory) -> None:
     d.add([Seen(AMY, "search")], at=T0)
     assert d.wallet(AMY)["next_check"] == T0  # type: ignore[index]
     d.keep_scores([score(AMY, "rising")], "background", at=T0 + 10)
-    assert d.wallet(AMY)["next_check"] == T0 + 10 + RESCORE_S  # type: ignore[index]
+    w = d.wallet(AMY)
+    assert (w["next_check"], w["not_recommended"]) == (T0 + 10 + RESCORE_S, None)  # type: ignore[index]
     assert d.due(10, now=T0 + 20) == []
+    d.keep_scores([score(AMY, "inactive")], "background", at=T0 + 30)
+    assert d.wallet(AMY)["not_recommended"] == "not_trading_lately"  # type: ignore[index]
 
 
 def test_failures_back_off_and_a_score_clears_them(d: Directory) -> None:
@@ -110,23 +139,26 @@ def test_failures_back_off_and_a_score_clears_them(d: Directory) -> None:
     d.keep_scores([score(AMY, "no_edge")], "background", at=T0 + 2)
     w = d.wallet(AMY)
     assert (w["status"], w["failures"], w["next_check"]) == ("scored", 0, T0 + 2 + RECHECK_SCORED_S)  # type: ignore[index]
+    assert w["not_recommended"] == "no_edge"  # type: ignore[index]
 
 
-def test_a_quick_check_keeps_its_verdict_and_their_last_trade_and_leaves_an_earlier_score(d: Directory) -> None:
+def test_a_quick_check_keeps_the_evidence_and_why_and_leaves_an_earlier_score(d: Directory) -> None:
     d.keep_scores([score(AMY, "no_edge")], "check", at=T0)
-    d.quick_checked(AMY, "inactive", last_trade=T0 + 5, buys=0, at=T0 + DAY)
+    d.quick_checked(AMY, QuickLook(False, "not_enough_recent_evidence", 3, 11, T0 + 4, T0 + 5), at=T0 + DAY)
     w = d.wallet(AMY)
-    assert (w["status"], w["next_check"], w["recent_buys"]) == ("inactive", T0 + DAY + RECHECK_INACTIVE_S, 0)  # type: ignore[index]
-    assert w["last_active"] == T0 + 5 and w["segment"] == "no_edge" and d.score(AMY)["segment"] == "no_edge"  # type: ignore[index]
-    d.quick_checked(BEN, "eligible", last_trade=T0, buys=12, at=T0)  # eligible: what it read, nothing else
-    assert d.wallet(BEN)["status"] == "found" and d.wallet(BEN)["recent_buys"] == 12  # type: ignore[index]
+    assert (w["status"], w["not_recommended"], w["next_check"]) == ("checked", "not_enough_recent_evidence", T0 + 2 * DAY)  # type: ignore[index]
+    assert (w["buys_30d"], w["buys_90d"], w["last_buy"], w["last_active"]) == (3, 11, T0 + 4, T0 + 5)  # type: ignore[index]
+    assert w["segment"] == "no_edge" and d.score(AMY)["segment"] == "no_edge"  # type: ignore[index]  # the score stays
+    d.quick_checked(BEN, QuickLook(True, None, 12, 30, T0, T0), at=T0)  # worth a score: the evidence, nothing else
+    w = d.wallet(BEN)
+    assert (w["status"], w["not_recommended"], w["buys_30d"]) == ("found", None, 12)  # type: ignore[index]
 
 
 def test_the_check_scoring_a_wallet_after_a_quick_check_doesnt_undo_the_quick_checks_verdict(d: Directory) -> None:
-    d.quick_checked(AMY, "insufficient", last_trade=None, buys=3, at=T0 + 100)
+    d.quick_checked(AMY, QuickLook(False, "dormant", 0, 0, None, None), at=T0 + 100)
     d.keep_scores([score(AMY, "no_edge")], "check", at=T0)  # a check that finished before the quick check
     w = d.wallet(AMY)
-    assert (w["status"], w["next_check"]) == ("insufficient", T0 + 100 + RECHECK_INSUFFICIENT_S)  # type: ignore[index]
+    assert (w["status"], w["not_recommended"], w["next_check"]) == ("checked", "dormant", T0 + 100 + RECHECK_QUIET_S)  # type: ignore[index]
 
 
 # ---- the queue ----
@@ -309,28 +341,34 @@ def store(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     return tmp_path
 
 
-def test_a_new_wallet_gets_the_quick_check_and_only_an_eligible_one_is_scored(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_new_wallet_gets_the_quick_check_and_is_scored_only_with_the_evidence_for_it(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     import time
 
     now = time.time()
     sdk = FakeSdk(
         {AMY: [trade(now - 3600 * i, market=f"0xm{i}") for i in range(10)],  # ten markets this week
-         BEN: [trade(now - 9 * DAY)],  # nothing this week
-         CAL: [trade(now - 3600, market="0xm1"), trade(now - 7200, market="0xm2")]},  # two markets
-        {AMY: score(AMY, "rising")},
+         BEN: [trade(now - 95 * DAY)],  # nothing in 90 days
+         CAL: [trade(now - 3600, market="0xm1"), trade(now - 40 * DAY, market="0xm2")],  # selective
+         DAN: [trade(now - 10 * DAY, market=f"0xm{i}") for i in range(9)]},  # paused, never scored
+        {AMY: score(AMY, "rising"), DAN: score(DAN, "inactive")},
     )  # fmt: skip
     monkeypatch.setattr(engine, "background", lambda: sdk)
     d = engine.directory()
-    d.add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", rank=12), Seen(BEN, "search"), Seen(CAL, "search")])
+    d.add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", rank=12), Seen(BEN, "search"), Seen(CAL, "search"),
+           Seen(DAN, "search")])  # fmt: skip
     r = engine.evaluate_round()
-    assert r["due"] == 3 and r["done"] == {"scored": 1, "inactive": 1, "insufficient": 1, "failed": 0}
-    assert sdk.scored == [(AMY, True)]  # on the monthly board's top 1,000: scored as the check would
-    assert {w: d.wallet(w)["status"] for w in (AMY, BEN, CAL)} == {AMY: "scored", BEN: "inactive", CAL: "insufficient"}  # type: ignore[index]
+    assert r["due"] == 4 and r["done"] == {"scored": 2, "not_enough_recent_evidence": 1, "not_trading_lately": 0,
+                                           "dormant": 1, "failed": 0}  # fmt: skip
+    assert sorted(sdk.scored) == [(AMY, True), (DAN, False)]  # AMY on the monthly top 1,000, as the check would pass
+    status = {w: (d.wallet(w)["status"], d.wallet(w)["not_recommended"]) for w in (AMY, BEN, CAL, DAN)}  # type: ignore[index]
+    assert status == {AMY: ("scored", None), BEN: ("checked", "dormant"),
+                      CAL: ("checked", "not_enough_recent_evidence"), DAN: ("scored", "not_trading_lately")}  # fmt: skip
     kept = d.score(AMY)
     assert (kept["via"], kept["format"], kept["won"], kept["settled"]) == ("background", engine.WORTH_FORMAT, 1, 2)  # type: ignore[index]
-    assert d.wallet(CAL)["recent_buys"] == 2 and d.wallet(BEN)["last_active"] == pytest.approx(now - 9 * DAY)  # type: ignore[index]
-    assert engine.directory().due(10) == []  # each scheduled for later
-    assert engine._evaluate_state["since_launch"]["scored"] == 1
+    assert (d.wallet(CAL)["buys_30d"], d.wallet(CAL)["buys_90d"]) == (1, 2)  # type: ignore[index]
+    assert d.wallet(BEN)["last_active"] == pytest.approx(now - 95 * DAY)  # type: ignore[index]
+    assert all(d.wallet(w) for w in (AMY, BEN, CAL, DAN)) and engine.directory().due(10) == []  # kept, for later
+    assert engine._evaluate_state["since_launch"]["scored"] == 2
 
 
 def test_a_recommended_trader_is_scored_again_without_the_quick_check(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -369,7 +407,7 @@ def test_after_a_restart_the_evaluation_carries_on_where_it_was(store: Any, monk
     import time
 
     now = time.time()
-    sdk = FakeSdk({AMY: [trade(now - 9 * DAY)], BEN: [trade(now - 9 * DAY)]}, {})
+    sdk = FakeSdk({AMY: [trade(now - 95 * DAY)], BEN: [trade(now - 95 * DAY)]}, {})
     monkeypatch.setattr(engine, "background", lambda: sdk)
     monkeypatch.setattr(engine, "EVALUATE_BATCH", 1)
     engine.directory().add([Seen(AMY, "search")], at=now - 10)
@@ -393,10 +431,11 @@ def test_the_owner_sees_how_the_evaluation_is_going_in_counts_only(store: Any, m
     from fastapi.testclient import TestClient
 
     engine.directory().add([Seen(AMY, "search")])
-    engine.directory().quick_checked(BEN, "insufficient", last_trade=None, buys=2)
+    engine.directory().quick_checked(BEN, QuickLook(False, "not_enough_recent_evidence", 2, 9, None, None))
     s = TestClient(engine.app, client=("127.0.0.1", 50000)).get("/api/directory").json()
     e = s["evaluation"]
     assert e["due_now"] == {"recommended": 0, "new": 1, "recheck": 0}
-    assert e["by_status"]["insufficient"] == 1 and e["looked_at_last_day"]["insufficient"] == 1
+    assert e["by_status"]["checked"] == 1 and e["looked_at_last_day"]["checked"] == 1
+    assert e["not_recommended"]["not_enough_recent_evidence"] == 1 and e["selective"] == 1
     assert s["evaluating"]["on"] is engine.EVALUATE_ON and "since_launch" in s["evaluating"]
     assert AMY not in repr(s) and BEN not in repr(s)

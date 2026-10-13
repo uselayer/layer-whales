@@ -40,7 +40,7 @@ from uselayer import Client, VenueError, Whales, WhaleTrade
 from uselayer.whale_scores import CATEGORY_TAGS, COPY_BETS, RECOMMENDED, SEGMENTS, Stat, category_of, copyable_verdict
 
 from signals.budget import BackgroundHttp, Budget
-from signals.directory import SCORE_DAYS, Directory, Seen, from_sighting, quick_verdict
+from signals.directory import QUICK_TRADES, Directory, QuickLook, Seen, from_sighting, quick_look
 
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
@@ -496,9 +496,11 @@ def _directory_loop() -> None:
 # ---- the directory, phase 3: every wallet evaluated in the background ----
 # Each wallet due a look (Directory.due: recommended traders every 6 hours, then wallets never looked at, newest
 # found first, then the rest as they come due; the categories take turns) gets a quick check first: one read of its
-# latest trades. A wallet with no buy in the last week, or too few bets in the window for any score to recommend
-# it, is left until it's due again (a week; three days). The rest are scored as a trader page scores them (5-30 s,
-# 10-80 reads) and kept. A recommended trader is scored again without the check: their score is what's shown.
+# latest trades, kept as the evidence (markets bought in 30 and 90 days, the last buy). A wallet with too few bets in
+# the last 30 days for a score to say anything, no buy in 90, or no buy this week and none since its last score, is
+# labelled why it isn't recommended and looked at again (daily; weekly when dormant). Every wallet is kept. The rest
+# are scored as a trader page scores them (5-30 s, 10-80 reads) and kept. A recommended trader is scored again
+# without the check: their score is what's shown.
 # The schedule is kept in directory.db, so a restart carries on where it was. SIGNALS_EVALUATE=1 turns it on.
 
 EVALUATE_ON = os.environ.get("SIGNALS_EVALUATE") == "1"
@@ -509,34 +511,30 @@ EVALUATE_IDLE_S = 60  # with nothing due, it looks again after this
 EVALUATE_FAILS_IN_A_ROW = 5  # this many failed tries in a row and Polymarket is likely down...
 EVALUATE_PAUSE_S = 600  # ...so it waits this long before the next
 EVALUATE_LOG_S = 3600  # a line in the logs this often
-QUICK_TRADES = 100  # the latest trades a quick check reads (one read)
-OUTCOMES = ("scored", "inactive", "insufficient", "failed")
+OUTCOMES = ("scored", "not_enough_recent_evidence", "not_trading_lately", "dormant", "failed")
 _evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None,
                                    "since_launch": dict.fromkeys(OUTCOMES, 0)}  # fmt: skip
 
 
-def quick_check(wallet: str, now: float | None = None) -> tuple[str, float | None, int]:
-    """One read of a wallet's latest trades: whether a full score could recommend them (``quick_verdict``), their
-    latest trade's time, and how many markets they bought in the score's window."""
+def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None) -> QuickLook:
+    """One read of a wallet's latest trades: the evidence, and whether a score is worth its reads (``quick_look``)."""
     now = time.time() if now is None else now
     got = background().trades("polymarket", wallet, limit=QUICK_TRADES)
     trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0]) for t in got]
-    window = now - SCORE_DAYS * 86400
-    buys = len({m for at, bought, m in trades if bought and at >= window})
-    return quick_verdict(trades, now, read_all=len(got) < QUICK_TRADES), max((at for at, _, _ in trades), default=None), buys
+    return quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
 
 
 def evaluate_one(item: dict[str, Any]) -> str:
-    """One due wallet (from ``Directory.due``): the quick check, then, if it could be recommended, its score, kept
-    in the directory. Returns what came of it, one of OUTCOMES. Any error is kept as a failed try, so one wallet
+    """One due wallet (from ``Directory.due``): the quick check, then, if it's worth a score, its score, kept in
+    the directory. Returns what came of it, one of OUTCOMES. Any error is kept as a failed try, so one wallet
     never holds up the rest: it's tried again later each time it fails again in a row."""
     d, w = directory(), item["wallet"]
     try:
         if item["kind"] != "recommended":
-            verdict, last, buys = quick_check(w)
-            d.quick_checked(w, verdict, last_trade=last, buys=buys)
-            if verdict != "eligible":
-                return verdict
+            look = quick_check(w, item.get("scored_at"))
+            d.quick_checked(w, look)
+            if not look.score:
+                return look.reason  # type: ignore[return-value]
         scored = background().score(w, on_leaderboard=item["on_leaderboard"]).to_dict()
     except Exception as e:  # VenueError mostly (the read's retries already spent)
         d.score_failed(w, f"{type(e).__name__}: {e}")
