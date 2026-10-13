@@ -32,7 +32,7 @@ behind Vercel (see README, "Hosting").
   trade means the cost preview, then "Buy on Polymarket ↗", where the user buys it themselves. A session never
   places a real-money order, not even a test one.
 - Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
-  asked for only to follow a trader, and the button says so ("Follow · get an alert after they buy"). Alerts go
+  asked for only to follow a trader, and the button says so ("Follow · get an alert after they trade"). Alerts go
   to Telegram (`alert_pass` in `app.py`). Signals is trader discovery and trading intelligence first, copying
   second: following is research, so every buy by a trader you follow alerts you, whatever the amount and whoever
   the trader (their buys of one outcome within 30 minutes add up, across rounds and restarts, shown as the total
@@ -43,8 +43,12 @@ behind Vercel (see README, "Hosting").
   after the facts, in one italic line (`COPY_LINE`), only for a trader copying is offered for (`copy_ok`) and
   only while the price is still in range; never a cost in the alert: costs, the fill, liquidity and risks are the
   trade page's. Every alert links "Check current price" (`#/check/<wallet>/<market>`, the trade's own page,
-  neutral for every trader), and "Buy on Polymarket", which only opens the market. No alert at all when the price
-  now is settled (2¢ or less, 98¢ or more). At most
+  neutral for every trader), and "Buy on Polymarket", which only opens the market. Sells by a trader you follow
+  alert too, whatever the amount (`_sell_text`): who sold which outcome at what price and for how much, the market
+  and when, measured; while they still hold some, the price now and "Check current price"; once they hold none,
+  "They no longer hold it." and no price (never a made-up one). A sell is information only: never "sell too",
+  never a copy line, never grouped, "Open on Polymarket" for the market. No alert at all when the price
+  now is settled (2¢ or less, 98¢ or more), or a sell's price is. At most
   20 alerts per person per UTC day, then one "You've reached today's alert limit; more tomorrow" and nothing until
   the next day. When 2+ traders you follow buy the same outcome, each within 6 hours of the one before (1 hour in
   Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the price now, how
