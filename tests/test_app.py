@@ -198,6 +198,17 @@ def test_live_bets_carry_status_and_category(api: TestClient, monkeypatch: pytes
     assert api.get("/static/fonts/HostGrotesk-latin-var.woff2").status_code == 200
 
 
+def test_the_feed_follows_recommended_traders_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # uselayer 0.6.0: a sharp who stopped buying is "inactive", and the feed doesn't follow them.
+    scores = [
+        SCORE | {"wallet": w, "segment": seg, "label": label}
+        for w, seg, label in (("0xa", "rising", "Rising"), ("0xb", "inactive", "Not trading lately"))
+    ]
+    monkeypatch.setattr(engine, "_worth_data", {"scores": scores})
+    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(AMY, "visible", {}, [], []))
+    assert [t["wallet"] for t in api.get("/api/live").json()["traders"]] == ["0xa"]
+
+
 def test_market_links_go_to_the_event_on_polymarket() -> None:
     u = engine.polymarket_url
     assert u("nfl-lar-sea") == "https://polymarket.com/event/nfl-lar-sea"
