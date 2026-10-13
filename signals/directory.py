@@ -1,9 +1,10 @@
 """The trader directory: every Polymarket wallet Signals has found, and where, kept across runs, with what scoring
 said about each.
 
-Phase 1 is finding; phase 2 keeps every score worked out. Nothing here is ranked or shown on the page, and the
-Worth following check still picks its own 200 wallets: a wallet in the directory is *discovered*, and a score
-kept here is the record of a check, never a recommendation.
+Phase 1 is finding; phase 2 keeps every score worked out; phase 3 evaluates every wallet in the background
+(``due``: what to look at next). Nothing here is ranked or shown on the page, and the Worth following check still
+picks its own 200 wallets: a wallet in the directory is *discovered*, and a score kept here is the record of a
+check, never a recommendation.
 
 Where a wallet can be found (``source``):
 
@@ -20,12 +21,21 @@ A market or Feed sighting is kept per category (``place`` is the category, ``exa
 directory stays the size of its wallets however many markets a sweep reads. Each wallet also keeps the first
 place it was ever found (``first_source``, ``first_place``).
 
-Each wallet's evaluation (phase 2), on its row in ``wallets``:
+Each wallet's evaluation (phases 2 and 3), on its row in ``wallets``:
 
-- ``status``: ``found`` (never scored), ``scored``, or ``failed`` (the last try failed; an earlier score stays).
+- ``status``: ``found`` (never looked at), ``scored``, ``checked`` (a quick check's evidence only, no score: see
+  ``quick_look``), or ``failed`` (the last try failed). An earlier score stays whatever comes after it.
+- ``not_recommended``: why they aren't recommended now, one of REASONS (None: they are, or nothing's known yet).
+  Every wallet is kept, whatever it says: it's about the evidence to recommend them, never whether they're worth
+  keeping or looking at again. ``reason_label`` says it in a sentence.
+- ``buys_30d``, ``buys_90d``, ``last_buy``: the evidence, as the last quick check read it: markets bought in the
+  last 30 and 90 days (at least: one read is at most QUICK_TRADES trades) and their latest buy.
 - ``scored_at``: when its latest score was worked out; ``tried_at``: the last try, whatever came of it.
-- ``last_active``: their latest trade whose time we know: a Feed trade, or the last buy a score saw. A leaderboard
-  or market sighting has no trade time, so it never sets this.
+- ``next_check``: when it's due to be looked at again (``next_check_at``); ``failures``: tries failed in a row.
+- ``seen_category``: the category it was first seen in, so the evaluation can take each category in turn before
+  a wallet has a score (``category``) of its own.
+- ``last_active``: their latest trade whose time we know: a Feed trade, the last buy a score saw, or the latest
+  trade a quick check read. A leaderboard or market sighting has no trade time, so it never sets this.
 - ``segment`` and ``category`` (where most of their checked bets were), from the latest score.
 
 ``scores`` keeps each wallet's latest score whole (the engine's dict, zlib-compressed JSON, its checked bets cut
@@ -47,10 +57,47 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from uselayer.whale_scores import ACTIVE_DAYS, RECOMMENDED, RISING_BETS
+
 SOURCES = ("leaderboard", "market", "feed", "search", "follow", "check")
-STATUSES = ("found", "scored", "failed")
-VIA = ("check", "page", "import")  # what kept a score: the Worth following check, a trader page, the import
+STATUSES = ("found", "scored", "checked", "failed")
+# Why a wallet isn't recommended now. The first three are about the evidence (what a quick check or a score saw of
+# their recent trading); the rest are what a score found.
+REASONS = ("not_enough_recent_evidence", "not_trading_lately", "dormant", "too_few", "no_edge", "big_profit", "lucky",
+           "no_view")  # fmt: skip
+REASON_LABELS = {
+    "not_enough_recent_evidence": "Not enough recent evidence: {buys_30d} bets in the last 30 days, and {need} are "
+                                  "needed to judge a trader",
+    "not_trading_lately": "Not trading lately: no buy in the last {active} days",
+    "dormant": "Dormant: no buy in the last {evidence} days",
+    "too_few": "Scored: not enough data, too few of their trades could be checked",
+    "no_edge": "Scored: edge not proven",
+    "big_profit": "Scored: a big profit, but the price test doesn't show skill (and nothing shows luck)",
+    "lucky": "Scored: a big profit that rests on one win",
+    "no_view": "Scored: a market maker or arbitrage, not views on the outcome",
+}  # fmt: skip
+# uselayer 0.10's tiers (``segment``) are skill and track record only: "too_few" and "big_profit" are new, and a
+# "lucky" or "no_edge" kept before then may be either of them until the wallet is scored again.
+# what kept a score: the Worth following check, a trader page, the import, the background evaluation
+VIA = ("check", "page", "import", "background")
+KINDS = ("recommended", "new", "recheck")  # what ``due`` hands out, in that order
 SAMPLE_KEEP = 30  # checked bets kept with a score, as the Worth following check keeps them
+
+SCORE_DAYS = 30  # the window a score reads, as the Worth following check and a trader page score
+EVIDENCE_DAYS = 90  # how far back a quick check counts buys, so a selective trader's record is kept too
+QUICK_TRADES = 500  # the latest trades a quick check reads: one read (Polymarket's most a page), so a few markets traded
+#                     heavily still reach back past the 30 days instead of cutting the read short
+
+# When a wallet is looked at again, by why it isn't recommended (``next_check_at``).
+RESCORE_S = 6 * 3600  # a recommended trader (one of uselayer's RECOMMENDED segments): scored again, as the check is
+RECHECK_EVIDENCE_S = 86400  # not enough recent evidence, or not trading lately: one read a day, so they're scored as
+#                             soon as they have the bets (or buy again)
+RECHECK_SCORED_S = 2 * 86400  # any other score
+RECHECK_QUIET_S = 7 * 86400  # dormant, or a score of market making or arbitrage (which rarely changes)
+RETRY_S = (900, 3600, 4 * 3600, 12 * 3600, 86400)  # after 1, 2, 3, 4, 5 or more failed tries in a row
+# A leaderboard place counts for on_leaderboard while a sweep saw it this recently (a sweep is daily, and takes a
+# few hours). When the sweep is off or behind, the evaluation reads the boards itself (app.listed_now).
+LISTED_FRESH_S = 26 * 3600
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS wallets (wallet TEXT PRIMARY KEY, name TEXT, first_seen REAL NOT NULL,
@@ -64,6 +111,7 @@ CREATE INDEX IF NOT EXISTS sightings_by_source ON sightings (source, last_seen);
 CREATE INDEX IF NOT EXISTS sightings_by_category ON sightings (category);
 CREATE TABLE IF NOT EXISTS sweeps (started REAL PRIMARY KEY, finished REAL, sightings INTEGER NOT NULL DEFAULT 0,
   new INTEGER NOT NULL DEFAULT 0, error TEXT);
+CREATE TABLE IF NOT EXISTS sweep_parts (part TEXT PRIMARY KEY, done_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS scores (wallet TEXT PRIMARY KEY, scored_at REAL NOT NULL, via TEXT NOT NULL,
   format INTEGER, segment TEXT, skill TEXT, copyable TEXT, style TEXT, confidence TEXT, active INTEGER, bets INTEGER,
   decisions INTEGER, edge REAL, edge_z REAL, copy REAL, copy_low REAL, trading_pnl_window REAL, pnl REAL, volume REAL,
@@ -82,6 +130,98 @@ _PHASE_2_INDEXES = """
 CREATE INDEX IF NOT EXISTS wallets_by_status ON wallets (status, scored_at);
 CREATE INDEX IF NOT EXISTS wallets_by_last_active ON wallets (last_active);
 """
+# Phase 3, the evaluation's schedule: added to an older directory.db when it's first opened (``_upgrade``).
+_PHASE_3_COLUMNS = (("next_check", "REAL"), ("failures", "INTEGER NOT NULL DEFAULT 0"), ("seen_category", "TEXT"),
+                    ("not_recommended", "TEXT"), ("buys_30d", "INTEGER"), ("buys_90d", "INTEGER"),
+                    ("last_buy", "REAL"))  # fmt: skip
+_PHASE_3_INDEXES = "CREATE INDEX IF NOT EXISTS wallets_by_next_check ON wallets (next_check);"
+
+_RECOMMENDED_SQL = ", ".join(f"'{s}'" for s in RECOMMENDED)
+# Which of KINDS a due wallet is: a recommended trader (scored, or failed since), one never looked at, any other.
+_KIND = f"""CASE WHEN segment IN ({_RECOMMENDED_SQL}) AND status IN ('scored', 'failed') THEN 0
+  WHEN status = 'found' THEN 1 ELSE 2 END"""
+# On the boards the Worth following check reads to call a wallet "on the leaderboard" (uselayer's find_candidates,
+# passed to its score as on_leaderboard): the monthly profit board's top 1,000; the weekly and all-time profit and
+# monthly volume boards' top 50; each category's monthly profit top 50.
+CHECK_CATEGORIES = ("SPORTS", "CRYPTO", "POLITICS", "ECONOMICS", "CULTURE", "WEATHER", "ESPORTS", "TECH")
+# (order, period, category, places): the same boards, to read directly
+CHECK_BOARDS = (("PNL", "MONTH", None, 1000), ("PNL", "WEEK", None, 50), ("PNL", "ALL", None, 50),
+                ("VOL", "MONTH", None, 50), *(("PNL", "MONTH", c, 50) for c in CHECK_CATEGORIES))  # fmt: skip
+_CHECK_BOARDS = ("PNL WEEK OVERALL", "PNL ALL OVERALL", "VOL MONTH OVERALL", *(f"PNL MONTH {c}" for c in CHECK_CATEGORIES))
+_LISTED = f"""EXISTS (SELECT 1 FROM sightings s WHERE s.wallet = q.wallet AND s.source = 'leaderboard'
+  AND s.last_seen >= ? AND ((s.place = 'PNL MONTH OVERALL' AND s.rank <= 1000)
+  OR (s.place IN ({", ".join(f"'{b}'" for b in _CHECK_BOARDS)}) AND s.rank <= 50)))"""
+
+
+def reason_for(segment: str | None) -> str | None:
+    """Why a score's segment isn't recommended (one of REASONS), or None when it is."""
+    if segment is None or segment in RECOMMENDED:
+        return None
+    return "not_trading_lately" if segment == "inactive" else segment
+
+
+def reason_label(reason: str | None, buys_30d: int | None = None) -> str | None:
+    """A reason in a sentence, for a page (None when they're recommended)."""
+    if reason is None:
+        return None
+    return REASON_LABELS.get(reason, reason).format(buys_30d=buys_30d if buys_30d is not None else "Fewer than",
+                                                    need=RISING_BETS, active=ACTIVE_DAYS, evidence=EVIDENCE_DAYS)  # fmt: skip
+
+
+def next_check_at(status: str, reason: str | None, segment: str | None, at: float, failures: int = 0) -> float:
+    """When a wallet is due again after a look at ``at`` that left it ``status``, not recommended for ``reason``
+    (its latest score's ``segment``): a recommended trader in RESCORE_S; one short of evidence or not trading
+    lately each day; dormant ones and market makers weekly; a failed try later each time it fails again in a row."""
+    if status == "failed":
+        return at + RETRY_S[min(max(failures, 1), len(RETRY_S)) - 1]
+    if status == "found":
+        return at
+    if reason in ("not_enough_recent_evidence", "not_trading_lately"):
+        return at + RECHECK_EVIDENCE_S
+    if reason in ("dormant", "no_view"):
+        return at + RECHECK_QUIET_S
+    return at + (RESCORE_S if segment in RECOMMENDED else RECHECK_SCORED_S)
+
+
+@dataclass(frozen=True)
+class QuickLook:
+    """What one read of a wallet's latest trades says: whether to ``score`` them now, else why they aren't
+    recommended (``reason``), and the evidence: markets bought in the last 30 and 90 days, their latest buy and
+    their latest trade."""
+
+    score: bool
+    reason: str | None
+    buys_30d: int
+    buys_90d: int
+    last_buy: float | None
+    last_trade: float | None
+
+
+def quick_look(trades: list[tuple[float, bool, str]], now: float, read_all: bool,
+               scored_at: float | None = None) -> QuickLook:  # fmt: skip
+    """From a wallet's latest trades (``(time, bought, market)``, newest first, as one read gives them), whether a
+    score is worth its reads now. Not when there's no buy in the last EVIDENCE_DAYS (``dormant``), or fewer than
+    RISING_BETS markets bought in the last SCORE_DAYS (``not_enough_recent_evidence``: a score needs that many bets
+    to say anything about skill), or no buy in the last ACTIVE_DAYS and none since their last score
+    (``not_trading_lately``: a new score would say the same). Both thresholds are the SDK's own: they decide whether
+    there's enough recent evidence to recommend someone, and the wallet is kept and looked at again either way.
+    When the read was cut short (``read_all`` False), only the time it covers counts."""
+    covered = float("-inf") if read_all or not trades else min(t for t, _, _ in trades)
+    week, window, evidence = (now - d * 86400 for d in (ACTIVE_DAYS, SCORE_DAYS, EVIDENCE_DAYS))
+    bought = [(t, m) for t, b, m in trades if b]
+    buys_30d = len({m for t, m in bought if t >= window})
+    buys_90d = len({m for t, m in bought if t >= evidence})
+    last_buy = max((t for t, _ in bought), default=None)
+    reason = None
+    if covered <= evidence and buys_90d == 0:
+        reason = "dormant"
+    elif covered <= window and buys_30d < RISING_BETS:
+        reason = "not_enough_recent_evidence"
+    elif covered <= week and (last_buy is None or last_buy < week) and scored_at is not None and (
+            last_buy is None or last_buy <= scored_at):  # fmt: skip
+        reason = "not_trading_lately"
+    return QuickLook(reason is None, reason, buys_30d, buys_90d, last_buy,
+                     max((t for t, _, _ in trades), default=None))  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -166,10 +306,10 @@ _LAST_ACTIVE = (
     "MAX(COALESCE(excluded.last_active, wallets.last_active), COALESCE(wallets.last_active, excluded.last_active))"
 )
 _UPSERT_WALLET = f"""
-INSERT INTO wallets (wallet, name, first_seen, last_seen, first_source, first_place, last_active)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO wallets (wallet, name, first_seen, last_seen, first_source, first_place, last_active, seen_category)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (wallet) DO UPDATE SET last_seen = excluded.last_seen, name = COALESCE(excluded.name, wallets.name),
-  last_active = {_LAST_ACTIVE}
+  last_active = {_LAST_ACTIVE}, seen_category = COALESCE(wallets.seen_category, excluded.seen_category)
 """
 _UPSERT_SIGHTING = """
 INSERT INTO sightings (wallet, source, place, category, rank, example, example_title, times, trades, usd,
@@ -198,16 +338,37 @@ class Directory:
                 con.execute("PRAGMA journal_mode=WAL")
                 con.executescript(SCHEMA)
                 if not self._upgraded:
-                    have = {r[1] for r in con.execute("PRAGMA table_info(wallets)")}
-                    for col, kind in _PHASE_2_COLUMNS:
-                        if col not in have:
-                            con.execute(f"ALTER TABLE wallets ADD COLUMN {col} {kind}")
-                    con.executescript(_PHASE_2_INDEXES)
+                    self._upgrade(con)
                     self._upgraded = True
                 yield con
                 con.commit()
             finally:
                 con.close()
+
+    @staticmethod
+    def _upgrade(con: sqlite3.Connection) -> None:
+        """A directory.db from an earlier phase gets the columns it lacks; then each wallet without a schedule
+        (only ever one from before phase 3) gets one from its last look, and the category it was first seen in."""
+        have = {r[1] for r in con.execute("PRAGMA table_info(wallets)")}
+        for col, kind in _PHASE_2_COLUMNS + _PHASE_3_COLUMNS:
+            if col not in have:
+                con.execute(f"ALTER TABLE wallets ADD COLUMN {col} {kind}")
+        con.executescript(_PHASE_2_INDEXES + _PHASE_3_INDEXES)
+        rows = con.execute(
+            "SELECT wallet, status, segment, first_seen, scored_at, tried_at, failures FROM wallets "
+            "WHERE next_check IS NULL"
+        ).fetchall()
+        if not rows:
+            return
+        con.executemany(
+            "UPDATE wallets SET next_check = ?, not_recommended = ? WHERE wallet = ?",
+            [(next_check_at(st, reason_for(seg), seg, (tried if st == "failed" else scored) or first, fails),
+              reason_for(seg), w) for w, st, seg, first, scored, tried, fails in rows],
+        )  # fmt: skip
+        con.execute(
+            "UPDATE wallets SET seen_category = (SELECT category FROM sightings s WHERE s.wallet = wallets.wallet "
+            "AND s.category IS NOT NULL ORDER BY s.first_seen, s.times DESC LIMIT 1) WHERE seen_category IS NULL"
+        )
 
     def add(self, seen: Iterable[Seen], at: float | None = None) -> int:
         """Keeps each sighting: a new wallet is added, a known one gets its last-seen time. Returns how many
@@ -223,13 +384,14 @@ class Directory:
     def _add(con: sqlite3.Connection, rows: list[Seen], now: float) -> int:
         before = con.total_changes
         con.executemany(
-            "INSERT OR IGNORE INTO wallets (wallet, name, first_seen, last_seen, first_source, first_place) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [(s.wallet.lower(), s.name, now, now, s.source, s.place) for s in rows],
+            "INSERT OR IGNORE INTO wallets (wallet, name, first_seen, last_seen, first_source, first_place, "
+            "next_check, seen_category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [(s.wallet.lower(), s.name, now, now, s.source, s.place, now, s.category) for s in rows],
         )
         new = con.total_changes - before
         con.executemany(
-            _UPSERT_WALLET, [(s.wallet.lower(), s.name, now, now, s.source, s.place, s.traded_at) for s in rows]
+            _UPSERT_WALLET,
+            [(s.wallet.lower(), s.name, now, now, s.source, s.place, s.traded_at, s.category) for s in rows],
         )
         con.executemany(
             _UPSERT_SIGHTING,
@@ -283,26 +445,95 @@ class Directory:
                       _stat(c.get("copy"))[2], int(bool(c.get("strong")))) for c in s.get("categories") or []
                      if c.get("category")],
                 )  # fmt: skip
-                # a try since this score (one that failed) keeps its status and why
+                # a try since this score (one that failed, or a quick check) keeps its status, why, and its schedule
                 con.execute(
                     "UPDATE wallets SET status = CASE WHEN tried_at > ? THEN status ELSE 'scored' END, "
                     "score_error = CASE WHEN tried_at > ? THEN score_error END, scored_at = ?, "
+                    "next_check = CASE WHEN tried_at > ? THEN next_check ELSE ? END, "
+                    "not_recommended = CASE WHEN tried_at > ? THEN not_recommended ELSE ? END, "
+                    "failures = CASE WHEN tried_at > ? THEN failures ELSE 0 END, "
                     "tried_at = MAX(COALESCE(tried_at, ?), ?), segment = ?, category = ?, name = COALESCE(name, ?) "
                     "WHERE wallet = ?",
-                    (now, now, now, now, now, s.get("segment"), main_category(s), _username(s), w),
+                    (now, now, now, now, next_check_at("scored", reason_for(s.get("segment")), s.get("segment"), now),
+                     now, reason_for(s.get("segment")), now, now, now, s.get("segment"), main_category(s),
+                     _username(s), w),
                 )  # fmt: skip
                 kept += 1
         return kept
 
     def score_failed(self, wallet: str, error: str, at: float | None = None) -> None:
-        """Scoring a wallet failed: ``failed``, with why and when. An earlier score stays, with its time."""
+        """Scoring a wallet failed: ``failed``, with why and when, tried again later each time it fails again in
+        a row (RETRY_S). An earlier score stays, with its time."""
         now = time.time() if at is None else at
         w = wallet.lower()
         with self._db() as con:
             if not self._has(con, w):
                 self._add(con, [Seen(w, "search")], now)
-            con.execute("UPDATE wallets SET status = 'failed', tried_at = ?, score_error = ? WHERE wallet = ?",
-                        (now, error[:500], w))  # fmt: skip
+            failures, segment = con.execute("SELECT failures, segment FROM wallets WHERE wallet = ?", (w,)).fetchone()
+            con.execute(
+                "UPDATE wallets SET status = 'failed', tried_at = ?, score_error = ?, failures = ?, next_check = ? "
+                "WHERE wallet = ?",
+                (now, error[:500], failures + 1, next_check_at("failed", None, segment, now, failures + 1), w),
+            )
+
+    def quick_checked(self, wallet: str, look: QuickLook, at: float | None = None) -> None:
+        """What a quick check found (``quick_look``): the evidence (``buys_30d``, ``buys_90d``, ``last_buy``, and
+        their latest trade as ``last_active``) always. When it isn't worth a score now, the wallet is ``checked``,
+        not recommended for the look's reason, until it's due again; otherwise a score follows and says the rest.
+        An earlier score stays either way."""
+        now = time.time() if at is None else at
+        w = wallet.lower()
+        with self._db() as con:
+            if not self._has(con, w):
+                self._add(con, [Seen(w, "search")], now)
+            con.execute(
+                "UPDATE wallets SET last_active = MAX(COALESCE(?, last_active), COALESCE(last_active, ?)), "
+                "buys_30d = ?, buys_90d = ?, last_buy = MAX(COALESCE(?, last_buy), COALESCE(last_buy, ?)) "
+                "WHERE wallet = ?",
+                (look.last_trade, look.last_trade, look.buys_30d, look.buys_90d, look.last_buy, look.last_buy, w),
+            )
+            if not look.score:
+                segment = con.execute("SELECT segment FROM wallets WHERE wallet = ?", (w,)).fetchone()[0]
+                con.execute(
+                    "UPDATE wallets SET status = 'checked', not_recommended = ?, tried_at = ?, score_error = NULL, "
+                    "failures = 0, next_check = ? WHERE wallet = ?",
+                    (look.reason, now, next_check_at("checked", look.reason, segment, now), w),
+                )
+
+    def due(self, limit: int, now: float | None = None) -> list[dict[str, Any]]:
+        """Up to ``limit`` wallets due a look (``next_check`` passed), in the order to take them: recommended
+        traders first (most overdue first), then wallets never looked at (newest found first), then the rest
+        (most overdue first). Within each, the categories take turns (a wallet's from its score, else where it
+        was first seen), so no category waits behind a bigger one. Each with its ``kind`` (one of KINDS),
+        ``status``, ``scored_at``, ``category``, ``name``, and ``on_leaderboard`` as the Worth following check
+        would pass it."""
+        now = time.time() if now is None else now
+        with self._db() as con:
+            rows = con.execute(
+                f"""SELECT wallet, kind, cat, status, scored_at, name, {_LISTED} FROM (
+                  SELECT *, ROW_NUMBER() OVER (PARTITION BY kind, cat
+                    ORDER BY CASE WHEN kind = 1 THEN -first_seen ELSE next_check END, wallet) AS turn
+                  FROM (SELECT wallet, status, scored_at, name, first_seen, next_check, {_KIND} AS kind,
+                    COALESCE(category, seen_category, 'Other') AS cat FROM wallets WHERE next_check <= ?)) q
+                ORDER BY kind, turn, cat LIMIT ?""",
+                (now - LISTED_FRESH_S, now, limit),
+            ).fetchall()
+        return [{"wallet": w, "kind": KINDS[k], "category": c, "status": st, "scored_at": at, "name": n,
+                 "on_leaderboard": bool(b)} for w, k, c, st, at, n, b in rows]  # fmt: skip
+
+    def boards_seen_at(self) -> float | None:
+        """When a sweep last saw the monthly profit board (the one on_leaderboard leans on most), or None."""
+        with self._db() as con:
+            return con.execute(  # type: ignore[no-any-return]
+                "SELECT MAX(last_seen) FROM sightings WHERE source = 'leaderboard' AND place = 'PNL MONTH OVERALL'"
+            ).fetchone()[0]
+
+    def due_counts(self, now: float | None = None) -> dict[str, int]:
+        """How many wallets are due a look now, by kind."""
+        now = time.time() if now is None else now
+        with self._db() as con:
+            got = dict(con.execute(f"SELECT {_KIND}, COUNT(*) FROM wallets WHERE next_check <= ? GROUP BY 1", (now,)))
+        return {k: got.get(i, 0) for i, k in enumerate(KINDS)}
 
     @staticmethod
     def _has(con: sqlite3.Connection, wallet: str) -> bool:
@@ -348,6 +579,33 @@ class Directory:
                 "UPDATE sweeps SET finished = ?, error = ? WHERE started = ?",
                 (time.time() if at is None else at, error, started),
             )
+
+    def part_done(self, part: str, at: float | None = None) -> None:
+        """One part of a sweep read to its end, with everything it found kept: a leaderboard (``"PNL MONTH
+        POLITICS"``) or ``"markets"``. A sweep after a restart skips parts done since the last cutoff."""
+        with self._db() as con:
+            con.execute("INSERT OR REPLACE INTO sweep_parts VALUES (?, ?)", (part, time.time() if at is None else at))
+
+    def backfill_parts(self, order: list[str], since: float) -> int:
+        """For a directory from before ``sweep_parts`` (a sweep was cut off by a deploy before it kept its progress):
+        a sweep reads the leaderboards in ``order``, so every board before the last one with sightings since
+        ``since`` was read to its end. Marks those done, as of their last sighting; the last one, maybe cut off
+        partway, is read again. Only when no part was ever marked. Returns how many it marked."""
+        with self._db() as con:
+            if con.execute("SELECT 1 FROM sweep_parts LIMIT 1").fetchone():
+                return 0
+            seen = dict(con.execute(
+                "SELECT place, MAX(last_seen) FROM sightings WHERE source = 'leaderboard' AND last_seen >= ? "
+                "GROUP BY place", (since,)
+            ))  # fmt: skip
+            reached = max((i for i, b in enumerate(order) if b in seen), default=-1)
+            done = [(b, seen[b]) for b in order[:reached] if b in seen]
+            con.executemany("INSERT OR REPLACE INTO sweep_parts VALUES (?, ?)", done)
+        return len(done)
+
+    def parts_done_since(self, since: float) -> set[str]:
+        with self._db() as con:
+            return {r[0] for r in con.execute("SELECT part FROM sweep_parts WHERE done_at >= ?", (since,))}
 
     def last_sweep(self) -> dict[str, Any] | None:
         """The latest sweep that finished without an error, or None."""
@@ -397,6 +655,18 @@ class Directory:
             active_week = con.execute("SELECT COUNT(*) FROM wallets WHERE last_active >= ?", (now - 7 * 86400,)).fetchone()[0]
             known_active = con.execute("SELECT COUNT(*) FROM wallets WHERE last_active IS NOT NULL").fetchone()[0]
             history = con.execute("SELECT COUNT(*) FROM score_history").fetchone()[0]
+            tried_day = dict(con.execute(
+                "SELECT status, COUNT(*) FROM wallets WHERE tried_at >= ? GROUP BY status", (now - 86400,)
+            ))  # fmt: skip
+            reasons = dict(con.execute(
+                "SELECT not_recommended, COUNT(*) FROM wallets WHERE not_recommended IS NOT NULL GROUP BY 1"
+            ))  # fmt: skip
+            recommended = con.execute(
+                f"SELECT COUNT(*) FROM wallets WHERE status = 'scored' AND segment IN ({_RECOMMENDED_SQL})"
+            ).fetchone()[0]
+            selective = con.execute(
+                "SELECT COUNT(*) FROM wallets WHERE buys_30d < ? AND buys_90d >= ?", (RISING_BETS, RISING_BETS)
+            ).fetchone()[0]
         return {
             "wallets": total,
             "new_last_day": new_day,
@@ -417,6 +687,12 @@ class Directory:
                 "strong_by_category": strong,
                 "last_active_known": known_active,
                 "active_last_week": active_week,
+                "looked_at_last_day": {s: tried_day.get(s, 0) for s in STATUSES if s != "found"},
+                "recommended_now": recommended,
+                "not_recommended": {r: reasons.get(r, 0) for r in REASONS},
+                # enough bets over 90 days, too few in the last 30: the traders investigation B is about
+                "selective": selective,
+                "due_now": self.due_counts(now),
             },
         }
 

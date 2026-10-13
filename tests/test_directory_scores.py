@@ -186,8 +186,8 @@ def test_stats_count_evaluations_without_naming_any_wallet(d: Directory) -> None
     d.keep_scores([score(AMY), score(BEN, "lucky", last_buy="2026-09-01T00:00:00+00:00")], "check", at=T0)
     d.score_failed(BEN, "VenueError: timeout", at=T0 + 10)
     e = d.stats(now=T0 + 3600)["evaluation"]
-    assert e["by_status"] == {"found": 1, "scored": 1, "failed": 1}
-    assert e["scored_last_day"] == 2 and e["latest_score_by"] == {"check": 2, "page": 0, "import": 0}
+    assert e["by_status"] == {"found": 1, "scored": 1, "checked": 0, "failed": 1}
+    assert e["scored_last_day"] == 2 and e["latest_score_by"] == {"check": 2, "page": 0, "import": 0, "background": 0}
     assert e["by_segment"] == {"lucky": 1, "rising": 1} and e["by_category"] == {"Sports": 2}
     assert e["strong_by_category"] == {"Esports": 2}
     assert (e["last_active_known"], e["active_last_week"], e["scores_kept"]) == (2, 1, 2)
@@ -226,7 +226,7 @@ def test_a_check_keeps_every_score_and_wallets_it_dropped_keep_theirs(store: Any
                                                        "sources": {}, "failed": 0, "started": "x", "finished": next(finished)})  # fmt: skip
 
     monkeypatch.setattr(engine.reads.whales, "scorer", lambda **k: None)
-    monkeypatch.setattr(engine.reads.whales, "discover", discover)
+    monkeypatch.setattr(engine, "background", lambda: SimpleNamespace(discover=discover))
     engine._worth_run()
     engine._worth_run()
     flush()
@@ -245,7 +245,7 @@ def test_the_check_still_finishes_when_the_directory_cant_be_written(store: Any,
         raise sqlite3.OperationalError("disk I/O error")
 
     monkeypatch.setattr(engine.reads.whales, "scorer", lambda **k: None)
-    monkeypatch.setattr(engine.reads.whales, "discover", discover)
+    monkeypatch.setattr(engine, "background", lambda: SimpleNamespace(discover=discover))
     monkeypatch.setattr(Directory, "keep_scores", broken)
     engine._worth_run()
     flush()

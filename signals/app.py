@@ -36,7 +36,8 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from uselayer import Client, VenueError, WhaleTrade
+from uselayer import Client, VenueError, Whales, WhaleTrade
+from uselayer.whale_finder import all_boards
 from uselayer.whale_scores import (
     CATEGORY_TAGS,
     COPY_BETS,
@@ -48,7 +49,17 @@ from uselayer.whale_scores import (
     segment_of,
 )
 
-from signals.directory import Directory, Seen, from_sighting
+from signals.budget import BackgroundHttp, Budget
+from signals.directory import (
+    CHECK_BOARDS,
+    LISTED_FRESH_S,
+    QUICK_TRADES,
+    Directory,
+    QuickLook,
+    Seen,
+    from_sighting,
+    quick_look,
+)  # fmt: skip
 
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
@@ -74,6 +85,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _directory_later(_directory_import)  # the scores kept before the directory had them (once: then a no-op)
     if DIRECTORY_ON:  # finds wallets for the trader directory, once a day, at a rate that leaves the site its reads
         threading.Thread(target=_directory_loop, daemon=True).start()
+    if EVALUATE_ON:  # looks at every wallet in the directory, in turn, on the same background budget as the sweep
+        threading.Thread(target=_evaluate_loop, daemon=True).start()
     if TG_TOKEN:  # alerts: the bot's messages (connecting a chat, /list, /stop), and new buys of followed traders
         threading.Thread(target=_bot_loop, daemon=True).start()
         threading.Thread(target=_alert_loop, daemon=True).start()
@@ -165,6 +178,8 @@ def trader(venue: str, trader_id: str) -> dict[str, Any]:
     try:
         d = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40, closed=50))  # type: ignore[arg-type]
     except VenueError as e:
+        if e.code == "not_found":
+            count("no_profile", target="trader")
         raise venue_error(e) from e
     out = d.to_dict()
     links = position_links(d.trader.id) if venue == "polymarket" and d.positions else {}
@@ -216,7 +231,8 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 # ---- worth following (Polymarket) ----
 # Finding and scoring ~200 wallets takes 20-30 minutes, so it runs in the background: on launch when the
 # kept result is older than WORTH_MAX_AGE_S, then again each time it gets that old. The page shows the last
-# result meanwhile. A wallet that isn't in it is scored when its page is opened.
+# result meanwhile. A wallet that isn't in it is scored when its page is opened. Its reads come out of the
+# background's budget (BACKGROUND_RATE), shared with the directory's sweep and evaluation.
 
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
@@ -265,18 +281,15 @@ def _worth_upgrade(data: dict[str, Any]) -> dict[str, Any]:
 def _worth_run() -> None:
     global _worth_data
     try:
-        reads.whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
+        reads.whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))  # a trader page's scores
 
         def progress(done: int, total: int, _s: Any) -> None:
             _worth.update(done=done, total=total)
 
-        d = reads.whales.discover(wallets=WORTH_WALLETS, on_progress=progress)
+        d = background().discover(wallets=WORTH_WALLETS, on_progress=progress)
         data = d.to_dict(sample=True) | {"format": WORTH_FORMAT}
         for s in data["scores"]:
-            settled = [b for b in s["sample"] if b.get("payout") is not None]  # before the sample is cut
-            s["won"], s["settled"] = sum(1 for b in settled if b["payout"] == 1), len(settled)
-            # the price paid is the market's chance they'd win, so this is the win rate the odds expected
-            s["odds"] = sum(b["price"] for b in settled) / len(settled) if settled else None
+            _with_odds(s)
             s["sample"] = s["sample"][:30]
         STORE_DIR.mkdir(parents=True, exist_ok=True)
         worth_file().write_text(json.dumps(data))
@@ -288,6 +301,16 @@ def _worth_run() -> None:
         _worth["error"] = str(e)
     finally:
         _worth["running"] = False
+
+
+def _with_odds(s: dict[str, Any]) -> dict[str, Any]:
+    """A score as the check keeps it: of its checked bets (all of them: before the sample is cut), how many
+    settled and won, and the win rate their prices expected."""
+    settled = [b for b in s.get("sample") or [] if b.get("payout") is not None]
+    s["won"], s["settled"] = sum(1 for b in settled if b["payout"] == 1), len(settled)
+    # the price paid is the market's chance they'd win, so this is the win rate the odds expected
+    s["odds"] = sum(b["price"] for b in settled) / len(settled) if settled else None
+    return s
 
 
 def worth_refresh() -> None:
@@ -317,22 +340,24 @@ def _worth_loop() -> None:
         _worth_stop.wait(60)
 
 
-# ---- the trader directory (phase 1: finding wallets; phase 2: keeping their scores; see directory.py) ----
+# ---- the trader directory (1: finding wallets; 2: keeping their scores; 3: evaluating them; see directory.py) ----
 # Every wallet Signals finds, and where, kept across runs: the SDK's sweep of every leaderboard and of markets
 # at every level of activity, once a day, plus traders in the Feed's big trades, wallets opened that the last
 # check didn't have, and followed wallets. Every score worked out is kept there too (the Worth following check's,
 # a trader page's, a failed try, and on launch the last check's from worth-following.json), at no extra reads.
 # Nothing is shown from it yet: the Worth following check still picks its own wallets and the page reads its file.
 # /api/directory gives counts only. SIGNALS_DIRECTORY=0 turns the sweep off; scores are kept either way.
+# What the check, the sweep and the evaluation (below) read from Polymarket comes out of one budget, BACKGROUND_RATE.
 
 DIRECTORY_ON = os.environ.get("SIGNALS_DIRECTORY", "1") != "0"
 DIRECTORY_SWEEP_S = 24 * 3600  # a new sweep once the last finished one is this old
 DIRECTORY_RETRY_S = 3600  # after a sweep that failed
-# The sweep's reads a second at most. The SDK allows 8 a second per Polymarket host, for everything the engine reads.
-# The Feed's poller reads one trader at a time (4 reads, ~1.2 s), so it never needs more than ~3.3 a second; 3 here
-# leaves room for pages too. The sweep runs at ~2 a second anyway: each read waits for its answer.
-DIRECTORY_RATE = 3.0
-DIRECTORY_HOLD_S = 30  # while the Worth following check runs (it can use the whole allowance), the sweep waits
+# The background's Polymarket reads a second at most: the Worth following check's, the sweep's and the evaluation's
+# together, retries included. They share it rather than take turns: one running alone gets all of it. The SDK
+# allows 8 a second per Polymarket host, for everything the engine reads, and the background's reads come out of
+# those 8, so the Feed and pages always have the other 4 (the Feed's poller reads one trader at a time, 4 reads in
+# ~1.2 s, so it never needs more than ~3.3 a second), and all 8 while the background is idle.
+BACKGROUND_RATE = float(os.environ.get("SIGNALS_BACKGROUND_RATE", "4"))
 DIRECTORY_BATCH = 2000  # sightings kept per write
 DIRECTORY_STATS_TTL_S = 300
 _directory_stop = threading.Event()
@@ -349,6 +374,23 @@ def directory() -> Directory:
     if path not in _directories:
         _directories[path] = Directory(path)
     return _directories[path]
+
+
+_background: dict[str, Any] = {}
+_background_lock = threading.Lock()
+
+
+def background() -> Whales:
+    """The SDK's reads for the background (the check, the sweep, the evaluation): the engine's own client, so the
+    per-host limits are shared with every other read, with each Polymarket read also taken from one budget of
+    BACKGROUND_RATE a second (signals/budget.py). Its scorer keeps price histories where the check keeps them."""
+    with _background_lock:
+        if "whales" not in _background:
+            budget = Budget(BACKGROUND_RATE)
+            whales = Whales(BackgroundHttp(reads._http, budget), reads._layer, reads)  # type: ignore[arg-type]
+            whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
+            _background.update(budget=budget, whales=whales)
+        return _background["whales"]  # type: ignore[no-any-return]
 
 
 def _directory_note(seen: list[Seen]) -> None:
@@ -408,16 +450,31 @@ def _feed_note(trades: list[WhaleTrade], cats: dict[str, str]) -> None:
     ])  # fmt: skip
 
 
+MARKETS_PART = "markets"  # the sweep's market part, as sweep_parts names it (a leaderboard is "PNL MONTH POLITICS")
+
+
+def sweep_left(d: Directory, now: float | None = None) -> tuple[list[tuple[str, str, str]], bool]:
+    """What a sweep still has to read: the leaderboards, and whether the markets, not read to their end in the last
+    DIRECTORY_SWEEP_S. After a restart (a deploy) a sweep picks up here instead of starting over."""
+    done = d.parts_done_since((time.time() if now is None else now) - DIRECTORY_SWEEP_S)
+    return [b for b in all_boards() if " ".join(b) not in done], MARKETS_PART not in done
+
+
 def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
-    """One sweep: followed wallets, then the SDK's ``find_wallets`` (every leaderboard, then markets of every
-    size), kept as they come. While the Worth following check runs it waits, between reads (the SDK reads only as
-    it's asked for the next wallet). Returns what it kept, how long it waited, and the error if it stopped early."""
+    """One sweep: followed wallets, then the SDK's ``find_wallets`` over what's left (``sweep_left``): the
+    leaderboards, then markets of every size, kept as they come, at the background's rate. Each leaderboard is
+    marked done once the sweep has moved past it and kept everything it found, and the markets once they're all
+    read, so a restart loses at most the board it was on. Returns what it kept and the error if it stopped early."""
     d = directory()
     halt = stop or threading.Event()
+    # a sweep cut off before sweeps kept their progress: the boards it got past count as read (once)
+    d.backfill_parts([" ".join(b) for b in all_boards()], time.time() - DIRECTORY_SWEEP_S)
+    boards, markets = sweep_left(d)
     started = d.sweep_started()
-    print(f"directory sweep started ({DIRECTORY_RATE:g} reads a second at most)", flush=True)
+    print(f"directory sweep started: {len(boards)} of {len(all_boards())} leaderboards"
+          f"{' and the markets' if markets else ''} to read ({BACKGROUND_RATE:g} reads a second at most, with the "
+          f"rest of the background)", flush=True)  # fmt: skip
     sightings = new = 0
-    held = 0.0
     error: str | None = None
     batch: list[Seen] = []
 
@@ -429,21 +486,33 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
             sightings, new = sightings + len(batch), new + n
             batch.clear()
 
+    board: str | None = None  # the leaderboard being read: done once the sweep has moved past it
+
+    def board_done() -> None:
+        if board is not None:
+            keep()  # everything found on it is kept before it's marked done
+            d.part_done(board)
+
     try:
         batch += [Seen(w, "follow") for w in sorted({w for u in _load_follows()["users"].values() for w in u.get("follows") or []})]
-        for s in reads.whales.find_wallets(per_second=DIRECTORY_RATE):
+        found = background().find_wallets(leaderboards=bool(boards), boards=boards, markets=markets)  # the budget paces it
+        for s in found:
             if halt.is_set():
                 error = "Stopped before it finished (the app was shutting down)."
                 break
+            where = s.where if s.source == "leaderboard" else None
+            if where != board:  # on to the next board, or to the markets
+                board_done()
+                board = where
             batch.append(from_sighting(s))
             if len(batch) >= DIRECTORY_BATCH:
                 keep()
-            while _worth["running"] and not halt.is_set():  # before the next read: the check has the allowance
-                _directory_state["held"] = "the Worth following check is running"
-                halt.wait(DIRECTORY_HOLD_S)
-                held += DIRECTORY_HOLD_S
-            _directory_state["held"] = None
-    except Exception as e:  # what it found stays; the next sweep starts over
+        else:  # read to the end: the last board, and the markets if they were read
+            board_done()
+            if markets:
+                keep()
+                d.part_done(MARKETS_PART)
+    except Exception as e:  # what it found stays; the next sweep picks up from the board it was on
         error = f"{type(e).__name__}: {e}"
     try:
         keep()  # the last batch, however the sweep ended
@@ -452,19 +521,19 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
     d.sweep_finished(started, error)
     # one line for the logs (hosted: Railway's), so a sweep can be watched without the owner's /api/directory
     print(f"directory sweep {'stopped' if error else 'done'} in {(time.time() - started) / 60:.0f} min: "
-          f"{sightings} sightings, {new} new wallets, held {held / 60:.0f} min{f', error: {error}' if error else ''}",
+          f"{sightings} sightings, {new} new wallets{f', error: {error}' if error else ''}",
           flush=True)  # fmt: skip
-    return {"sightings": sightings, "new": new, "held_s": held, "error": error}
+    return {"sightings": sightings, "new": new, "error": error}
 
 
 def _directory_loop() -> None:
-    """A sweep whenever the last finished one is DIRECTORY_SWEEP_S old, a minute after launch (the page's reads
-    first); after a failed one, again in DIRECTORY_RETRY_S."""
+    """A sweep whenever a leaderboard or the markets weren't read in the last DIRECTORY_SWEEP_S (``sweep_left``),
+    a minute after launch (the page's reads first); after a failed one, again in DIRECTORY_RETRY_S."""
     _directory_stop.wait(60)
     while not _directory_stop.is_set():
         try:
-            last = directory().last_sweep()
-            if not _worth["running"] and (last is None or time.time() - last["finished"] >= DIRECTORY_SWEEP_S):
+            boards, markets = sweep_left(directory())
+            if boards or markets:
                 _directory_state["running"] = True
                 try:
                     result = directory_sweep(_directory_stop)
@@ -480,15 +549,177 @@ def _directory_loop() -> None:
         _directory_stop.wait(600)
 
 
+# ---- the directory, phase 3: every wallet evaluated in the background ----
+# Each wallet due a look (Directory.due: recommended traders every 6 hours, then wallets never looked at, newest
+# found first, then the rest as they come due; the categories take turns) gets a quick check first: one read of its
+# latest trades, kept as the evidence (markets bought in 30 and 90 days, the last buy). A wallet with too few bets in
+# the last 30 days for a score to say anything, no buy in 90, or no buy this week and none since its last score, is
+# labelled why it isn't recommended and looked at again (daily; weekly when dormant). Every wallet is kept. The rest
+# are scored as a trader page scores them (5-30 s, 10-80 reads) and kept. A recommended trader is scored again
+# without the check: their score is what's shown.
+# The schedule is kept in directory.db, so a restart carries on where it was. SIGNALS_EVALUATE=1 turns it on.
+
+EVALUATE_ON = os.environ.get("SIGNALS_EVALUATE") == "1"
+EVALUATE_WORKERS = 3  # wallets looked at side by side: a score mostly waits for answers, and the budget holds the rate
+EVALUATE_BATCH = 30  # wallets taken from the queue at a time
+EVALUATE_START_S = 120  # after launch, so the page's first reads come first
+EVALUATE_IDLE_S = 60  # with nothing due, it looks again after this
+EVALUATE_FAILS_IN_A_ROW = 5  # this many failed tries in a row and Polymarket is likely down...
+EVALUATE_PAUSE_S = 600  # ...so it waits this long before the next
+EVALUATE_LOG_S = 3600  # a line in the logs this often
+LISTED_KEEP_S = 6 * 3600  # the boards read directly, when the sweep's are stale, are kept this long (31 reads)
+OUTCOMES = ("scored", "not_enough_recent_evidence", "not_trading_lately", "dormant", "failed")
+_evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None, "leaderboards": None,
+                                   "since_launch": dict.fromkeys(OUTCOMES, 0)}  # fmt: skip
+
+
+def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None) -> QuickLook:
+    """One read of a wallet's latest trades: the evidence, and whether a score is worth its reads (``quick_look``)."""
+    now = time.time() if now is None else now
+    got = background().trades("polymarket", wallet, limit=QUICK_TRADES)
+    trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0]) for t in got]
+    return quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
+
+
+def listed_now() -> frozenset[str]:
+    """The wallets the Worth following check would call "on the leaderboard" (uselayer's find_candidates: the
+    monthly profit board's top 1,000, the weekly and all-time profit and monthly volume boards' top 50, each
+    category's monthly top 50), read now on the background's budget and kept LISTED_KEEP_S. For when the sweep's
+    sightings are stale or the sweep is off, so a score's on_leaderboard (and so its tier) doesn't change with them."""
+
+    def read() -> frozenset[str]:
+        poly = background()._poly  # the SDK's leaderboard reader, as its own finder uses it
+        out: set[str] = set()
+        for order, period, category, places in CHECK_BOARDS:
+            for offset in range(0, places, 50):
+                rows = poly.leaderboard(order, period, 50, category=category, offset=offset)
+                out |= {str(r.get("proxyWallet") or "").lower() for r in rows} - {""}
+                if len(rows) < 50:
+                    break
+        return frozenset(out)
+
+    return cached("listed", LISTED_KEEP_S, read)  # type: ignore[no-any-return]
+
+
+def _on_leaderboard(due: list[dict[str, Any]], now: float | None = None) -> None:
+    """Each due wallet's on_leaderboard: from the sweep's sightings while they're fresh (``Directory.due``), else
+    from the boards read now. If those can't be read either, the sightings stand, and /api/directory says so."""
+    now = time.time() if now is None else now
+    seen = directory().boards_seen_at()
+    if seen is not None and now - seen < LISTED_FRESH_S:
+        _evaluate_state["leaderboards"] = "sweep"
+        return
+    try:
+        listed = listed_now()
+    except VenueError as e:
+        _evaluate_state["leaderboards"] = f"stale, and couldn't be read: {e}"
+        return
+    _evaluate_state["leaderboards"] = "read"
+    for item in due:
+        item["on_leaderboard"] = item["wallet"] in listed
+
+
+def evaluate_one(item: dict[str, Any]) -> str:
+    """One due wallet (from ``Directory.due``): the quick check, then, if it's worth a score, its score, kept in
+    the directory. Returns what came of it, one of OUTCOMES. Any error is kept as a failed try, so one wallet
+    never holds up the rest: it's tried again later each time it fails again in a row."""
+    d, w = directory(), item["wallet"]
+    try:
+        if item["kind"] != "recommended":
+            look = quick_check(w, item.get("scored_at"))
+            d.quick_checked(w, look)
+            if not look.score:
+                return look.reason  # type: ignore[return-value]
+        scored = background().score(w, on_leaderboard=item["on_leaderboard"]).to_dict()
+    except Exception as e:  # VenueError mostly (the read's retries already spent)
+        d.score_failed(w, f"{type(e).__name__}: {e}")
+        return "failed"
+    d.keep_scores([_with_odds(scored) | {"format": WORTH_FORMAT}], "background")
+    return "scored"
+
+
+def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
+    """The next EVALUATE_BATCH due wallets, EVALUATE_WORKERS at a time. Stops early after EVALUATE_FAILS_IN_A_ROW
+    failed tries in a row. Returns how many were due, what came of those looked at (by outcome), and how many
+    failed in a row at the end."""
+    halt = stop or threading.Event()
+    due = directory().due(EVALUATE_BATCH)
+    if due:
+        _on_leaderboard(due)
+    done = dict.fromkeys(OUTCOMES, 0)
+    lock = threading.Lock()
+    in_a_row = 0
+
+    def one(item: dict[str, Any]) -> None:
+        nonlocal in_a_row
+        if halt.is_set() or in_a_row >= EVALUATE_FAILS_IN_A_ROW:
+            return
+        got = evaluate_one(item)
+        with lock:
+            done[got] += 1
+            _evaluate_state["since_launch"][got] += 1
+            in_a_row = in_a_row + 1 if got == "failed" else 0
+
+    with ThreadPoolExecutor(max_workers=EVALUATE_WORKERS, thread_name_prefix="evaluate") as pool:
+        list(pool.map(one, due))
+    return {"due": len(due), "done": done, "failed_in_a_row": in_a_row}
+
+
+def _evaluate_loop() -> None:
+    """Rounds of ``evaluate_round`` while the app runs: a minute apart when nothing is due, EVALUATE_PAUSE_S after
+    a run of failures or an error, and a line in the logs each EVALUATE_LOG_S with what it did."""
+    _directory_stop.wait(EVALUATE_START_S)
+    print(f"directory evaluation started ({BACKGROUND_RATE:g} reads a second at most, with the sweep)", flush=True)
+    _evaluate_state["running"] = True
+    logged, hour = time.time(), dict.fromkeys(OUTCOMES, 0)
+    while not _directory_stop.is_set():
+        pause = 0.0
+        try:
+            r = evaluate_round(_directory_stop)
+            hour = {k: hour[k] + r["done"][k] for k in OUTCOMES}
+            _evaluate_state["error"] = None
+            if r["failed_in_a_row"] >= EVALUATE_FAILS_IN_A_ROW:
+                pause = EVALUATE_PAUSE_S
+                print(f"directory evaluation: {r['failed_in_a_row']} failed in a row, waiting "
+                      f"{EVALUATE_PAUSE_S // 60} min", flush=True)  # fmt: skip
+            elif not r["due"]:
+                pause = EVALUATE_IDLE_S
+        except Exception as e:  # the directory couldn't be read or written: try again later
+            _evaluate_state["error"] = f"{type(e).__name__}: {e}"
+            print(f"directory evaluation error: {_evaluate_state['error']}", flush=True)
+            pause = EVALUATE_PAUSE_S
+        if time.time() - logged >= EVALUATE_LOG_S:
+            budget = _background["budget"].state() if "budget" in _background else {}
+            try:
+                due = directory().due_counts()
+            except (sqlite3.Error, OSError):
+                due = {}
+            print(f"directory evaluation, last {(time.time() - logged) / 60:.0f} min: "
+                  f"{', '.join(f'{n} {k}' for k, n in hour.items())}; due now: "
+                  f"{', '.join(f'{n} {k}' for k, n in due.items())}; {budget.get('per_second')} reads a second, "
+                  f"{budget.get('rate_limited')} rate limits so far", flush=True)  # fmt: skip
+            logged, hour = time.time(), dict.fromkeys(OUTCOMES, 0)
+        if pause:
+            _evaluate_state["paused_until"] = time.time() + pause
+            _directory_stop.wait(pause)
+            _evaluate_state["paused_until"] = None
+    _evaluate_state["running"] = False
+
+
 @app.get("/api/directory")
 def directory_stats(request: Request, response: Response) -> dict[str, Any]:
-    """How many wallets the directory has found, and where: counts only, never a wallet. The owner's, as
-    /api/metrics is: locally, or with SIGNALS_METRICS_KEY."""
+    """How many wallets the directory has found, and where, and how its evaluation is going: counts only, never a
+    wallet. The owner's, as /api/metrics is: locally, or with SIGNALS_METRICS_KEY."""
     _owner(request)
     response.headers["Cache-Control"] = "private, no-store"
     stats = cached("directory", DIRECTORY_STATS_TTL_S, lambda: directory().stats())
-    return stats | {"sweeping": _directory_state["running"], "held": _directory_state.get("held"),
-                    "last_error": directory().last_error()}
+    boards, markets = sweep_left(directory())
+    evaluating = {k: v for k, v in _evaluate_state.items()} | {"on": EVALUATE_ON}
+    if "budget" in _background:
+        evaluating["budget"] = _background["budget"].state()
+    return stats | {"sweep_left": {"leaderboards": len(boards), "of": len(all_boards()), "markets": markets},
+                    "sweeping": _directory_state["running"], "last_error": directory().last_error(),
+                    "evaluating": evaluating}
 
 
 # ---- the Traders leaderboard's columns ----
@@ -789,16 +1020,6 @@ def _score_of(wallet: str) -> dict[str, Any]:
     return _worth_one[w]
 
 
-def refuse_unless_copy_offered(venue: str, wallet: str) -> None:
-    """The cost preview's check (400, a plain sentence): a Polymarket trader's trade is priced for copying only
-    when ``copy_offer`` says so, the same rule the page shows. Kalshi traders have no score, so nothing to check them against."""
-    if venue != "polymarket":
-        return
-    ok, why = copy_offer(_score_of(wallet))
-    if not ok:
-        raise HTTPException(400, detail=why)
-
-
 ACCOUNT_TTL_S = 60
 _WALLET = re.compile(r"0x[0-9a-f]{40}")
 
@@ -825,7 +1046,7 @@ def with_links(s: dict[str, Any]) -> dict[str, Any]:
 FEED_SEGMENTS = RECOMMENDED  # Traders' two sections: Sharps and Rising ("inactive" isn't in it)
 RECOMMENDED_MIN_USD = 1000.0  # the Feed's Recommended shows only trades this big: fewer, bigger trades
 FEED_HOURS = 24
-GET_IN = 0.03  # at most this far above their price you can still get in: the cost preview's limit too
+GET_IN = 0.03  # at most this far above their price you can still get in: an alert's "$10 gets you" limit too
 FELL_BY = 0.05  # at most this far below: a bigger drop means the market turned against them, a different trade
 SETTLED_LOW, SETTLED_HIGH = 0.02, 0.98  # at or past these the market has settled, or as good as
 
@@ -954,6 +1175,8 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
     try:
         d = _live_read(w)
     except VenueError as e:
+        if e.code == "not_found":  # a wallet with no Polymarket profile: counted, so we know how often it happens
+            count("no_profile", target="check")
         raise venue_error(e) from e
     who = {"wallet": w, "name": (s or {}).get("name") or d.trader.name, "segment": (s or {}).get("segment"),
            "label": (s or {}).get("label")} | copy_fields(s)  # fmt: skip
@@ -1008,11 +1231,13 @@ def _iso_ts(s: str) -> float:
     return datetime.fromisoformat(s).timestamp()
 
 
-# ---- what copying one trade would cost now (a Feed trade the trader already made) ----
-# A preview only: it reads Polymarket's order book and sends nothing. Signals places no orders and keeps no
-# sandbox: you buy on Polymarket yourself.
+# ---- what buying a trade's outcome now would cost (a Feed trade the trader already made) ----
+# A quote only, for every trade whoever made it: it reads Polymarket's market and order book and sends nothing.
+# Whether copying a trader is offered (copy_offer) is a separate record, never a gate on this. Signals places no
+# orders and keeps no sandbox: you buy on Polymarket yourself.
 
 PREVIEW_SIZE = 5  # contracts, when the page sends no amount
+BUY_LIMIT = 0.03  # a quote walks the book up to this far above the cheapest price for sale now, and no further
 
 
 class OneTrade(BaseModel):
@@ -1032,51 +1257,75 @@ class OneTrade(BaseModel):
     spend: float | None = None  # dollars to put in, fee included; None: PREVIEW_SIZE contracts
 
 
-def _their_trade(req: OneTrade) -> WhaleTrade:
+def _their_trade(req: OneTrade, price: float | None = None) -> WhaleTrade:
+    """Their trade as the SDK takes it; ``price`` stands in for theirs to set where the book walk stops."""
     at = datetime.fromisoformat(req.at) if req.at else datetime.now(UTC)
     return WhaleTrade(
         venue="polymarket", trader=req.wallet, name=req.name, market=req.market, side="yes", action="buy",
-        price=req.price, size=req.size or 0.0, usd=req.usd or 0.0, at=at, trade_id=f"feed:{req.wallet}:{req.market}:{req.at}",
-        title=req.title, outcome=req.outcome, url=req.url, token=req.token,
+        price=req.price if price is None else price, size=req.size or 0.0, usd=req.usd or 0.0, at=at,
+        trade_id=f"feed:{req.wallet}:{req.market}:{req.at}", title=req.title, outcome=req.outcome, url=req.url,
+        token=req.token,
     )  # fmt: skip
 
 
 @app.post("/api/trade/preview")
 def trade_preview(req: OneTrade) -> dict[str, Any]:
-    """What buying this trade now would cost and pay, on the same Polymarket market, priced from the order
-    book up to 3¢ above their price. Refused (400, a plain sentence) when the price is one you can't still get
-    in at: settled, more than 5¢ below theirs or more than 3¢ above (``why_not_copy``); the SDK itself only
-    refuses a price above theirs plus ``max_slippage``. Sends nothing."""
+    """What buying this outcome now would cost and pay on Polymarket, for anyone's trade: an estimate, never an
+    order or a promised fill. Read here, never taken from the page: the market's status (the SDK says, in
+    ``reason``, when Polymarket lists it closed or isn't taking orders) and the order book, priced up to
+    ``BUY_LIMIT`` above the cheapest price for sale now (``best_price``; ``limit`` is the most a contract is
+    priced at). ``price_changed``: the book moved between the reads, so there's no quote, only "refresh". Their
+    price (``their_price``) is context only. ``priced_at``: when it was read. Sends nothing; each quote is counted
+    (``quotes``: outcome, reads, time taken), with nothing about who asked or which trade."""
     if req.spend is not None and req.spend <= 0:
         raise HTTPException(400, detail="Enter an amount above $0.")
     size: dict[str, Any] = {"spend": req.spend} if req.spend else {"size": float(PREVIEW_SIZE)}
-    refuse_unless_copy_offered("polymarket", req.wallet)
+    t0, reads_made = time.monotonic(), [0]
     try:
-        p = reads.whales.preview_copy(_their_trade(req), **size, max_slippage=GET_IN)
+        p = _buy_now(req, size, reads_made)
     except VenueError as e:
+        count_quote("rate_limited" if e.code == "rate_limited" else "error", reads_made[0], t0)
         raise venue_error(e) from e
-    if p.ok and (why := why_not_copy(req.price, p.price)):
-        raise HTTPException(400, detail=why)
-    return p.to_dict() | {"best_price": _best_price(req, p)}  # type: ignore[no-any-return]
+    changed = _price_changed(p)
+    count_quote(_quote_outcome(p, changed), reads_made[0], t0)
+    return p.to_dict() | {"their_price": req.price, "priced_at": datetime.now(UTC).isoformat(),  # type: ignore[no-any-return]
+                          "price_changed": changed}  # fmt: skip
 
 
-def _best_price(req: OneTrade, p: Any) -> float | None:
-    """The cheapest price for sale now, to name the slippage (your average fill against it). A uselayer release
-    whose CopyPreview has ``best_price`` (the best ask, before the fee) gives it; uselayer 0.8.1's doesn't, so then:
-    when every contract filled at one level, the average is the best price; when the walk went deeper, a
-    one-contract preview's price is the best ask (the SDK returns it even when one contract is under the market's
-    smallest order). None when the order book couldn't be read."""
-    if not p.ok or not getattr(p, "depth_checked", False) or p.price is None:
-        return None
-    if getattr(p, "best_price", None) is not None:  # the SDK says it: no second read
-        return float(p.best_price)
-    if getattr(p, "worst_price", None) is None or p.worst_price <= p.price + 1e-9:
-        return float(p.price)
-    try:
-        q = reads.whales.preview_copy(_their_trade(req), size=1.0, max_slippage=GET_IN)
-    except VenueError:
-        return None
-    return float(q.price) if q.depth_checked and q.price is not None and q.price <= p.price + 1e-9 else None
+def _buy_now(req: OneTrade, size: dict[str, Any], reads_made: list[int]) -> Any:
+    """The SDK prices a buy up to a trade's price plus ``max_slippage``. The first read gets the market's status
+    and the cheapest price for sale now (``best_price``, set whether or not this amount fills); when that isn't
+    their price, a second read prices the amount from it. A market that's closed, not taking orders or has no
+    book to read comes back from the first read as it is. ``reads_made`` counts the reads, for ``quotes``."""
+    reads_made[0] += 1
+    p = reads.whales.preview_copy(_their_trade(req), **size, max_slippage=BUY_LIMIT)
+    best = p.best_price if p.depth_checked else p.price  # no book read: Gamma's best price for sale
+    if best is None or abs(best - req.price) < 1e-9:
+        return p
+    reads_made[0] += 1
+    return reads.whales.preview_copy(_their_trade(req, price=best), **size, max_slippage=BUY_LIMIT)
+
+
+def _price_changed(p: Any) -> bool:
+    """Nothing for sale within the limit because the cheapest price is now above it: the book moved between the
+    two reads. Not a lack of liquidity, so the page says "Price changed" and offers a fresh quote."""
+    return bool(not p.ok and p.depth_checked and p.best_price is not None and p.limit is not None
+                and p.best_price > p.limit + 1e-9)  # fmt: skip
+
+
+def _quote_outcome(p: Any, changed: bool) -> str:
+    """How a quote ended, for ``quotes``: ok, no_book (priced from Gamma's best price, the book unread),
+    price_changed, short (the book holds less than the amount), closed, rate_limited or other."""
+    if p.ok:
+        return "ok" if p.depth_checked else "no_book"
+    if changed:
+        return "price_changed"
+    why = (p.reason or "").lower()
+    if "too many requests" in why:
+        return "rate_limited"
+    if "taking orders" in why or "doesn't list" in why:
+        return "closed"
+    return "short" if p.depth_checked and p.max_spend else "other"
 
 
 # ---- following traders: sign in with Clerk (Google or Telegram), alerts on Telegram ----
@@ -1341,8 +1590,8 @@ def _who(wallet: str) -> str:
 
 
 CONNECTED = (
-    "Connected. You'll get a message here a few minutes after a trader you follow buys, whatever the amount: what "
-    "they bought, what they paid, the price now and when they traded. Polymarket's public data runs a few minutes "
+    "Connected. You'll get a message here a few minutes after a trader you follow buys or sells, whatever the amount: "
+    "what they traded, at what price, the price now and when they traded. Polymarket's public data runs a few minutes "
     "behind, so alerts are never instant. When two or more of them buy the same thing, one message lists them all, and it's "
     f"updated as more buy. If you've picked markets on Signals, trades of ${WHALE_USD:,.0f} or more there come too. "
     f"At most {DAILY_CAP} alerts a day.\n\nFollowing: {{names}}\n/list: who you follow · /stop: turn alerts off"
@@ -1414,7 +1663,7 @@ def _on_update(u: dict[str, Any]) -> None:
         elif arg:
             _say(chat, f"That link has expired. Tap Connect Telegram on {SITE} again.")
         else:
-            _say(chat, f"Follow traders on {SITE}, then tap Connect Telegram there to get an alert after they buy.")
+            _say(chat, f"Follow traders on {SITE}, then tap Connect Telegram there to get an alert after they trade.")
     elif cmd == "/list":
         mine = next((x for x in _load_follows()["users"].values() if x.get("chat") == chat), None)
         names = [_who(w) for w in (mine or {}).get("follows", [])]
@@ -1481,6 +1730,7 @@ CREATE TABLE IF NOT EXISTS votes (alert_id TEXT NOT NULL, uid TEXT NOT NULL, use
   at REAL NOT NULL, PRIMARY KEY (alert_id, uid));
 CREATE TABLE IF NOT EXISTS events (at REAL NOT NULL, kind TEXT NOT NULL, uid TEXT, alert_id TEXT, target TEXT,
   trader TEXT);
+CREATE TABLE IF NOT EXISTS quotes (at REAL NOT NULL, outcome TEXT NOT NULL, reads INTEGER NOT NULL, ms REAL NOT NULL);
 """
 
 
@@ -1511,7 +1761,7 @@ def _today(now: float | None = None) -> str:
     return datetime.fromtimestamp(time.time() if now is None else now, UTC).date().isoformat()
 
 
-COUNTED = ("buy", "group", "whale")  # what the daily cap counts: a group once, its edits never
+COUNTED = ("buy", "sell", "group", "whale")  # what the daily cap counts: a group once, its edits never
 
 
 def _sent_today(uid: str, kinds: tuple[str, ...] = COUNTED) -> int:
@@ -1569,7 +1819,8 @@ def _copy_offered(wallet: str) -> bool:
     return s is not None and copy_offer(s)[0]
 
 
-LINK_TARGETS = {"Buy on Polymarket": "market", "Their record": "record", "Check current price": "check"}
+LINK_TARGETS = {"Buy on Polymarket": "market", "Open on Polymarket": "market", "Their record": "record",
+                "Check current price": "check"}  # fmt: skip
 
 
 def _go(aid: str, target: str, url: str) -> str:
@@ -1595,6 +1846,11 @@ def _lag(at: float, seen: float) -> str:
     return "under a minute" if mins < 1 else f"{mins} min"
 
 
+def _traded(at: float, seen: float) -> str:
+    """When they traded, and how long before this alert that was: "Traded 14:02 UTC, 6 min before this alert."."""
+    return f"Traded {datetime.fromtimestamp(at, UTC):%H:%M} UTC, {_lag(at, seen)} before this alert."
+
+
 def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, at: float, seen: float,
                 record: bool, aid: str | None) -> str:  # fmt: skip
     """What happened, the same for every trader: ``head`` (who bought which outcome, at what price, for how much),
@@ -1606,7 +1862,7 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
     e = html.escape
     status = bet_status(paid, now)
     lines = [head, e(t.title or "A Polymarket market"), f"Now {_cents(now)}{', price already moved' if status != 'in' else ''}.",
-             f"Traded {datetime.fromtimestamp(at, UTC):%H:%M} UTC, {_lag(at, seen)} before this alert."]  # fmt: skip
+             _traded(at, seen)]  # fmt: skip
     if status == "in" and _copy_offered(wallet):
         lines.append(COPY_LINE)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}"),
@@ -1669,6 +1925,53 @@ class NewBuy:
         if self._text is None:
             self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.usd, self.at, self.seen, ALERT_ID_MARK)
         return self._text.replace(ALERT_ID_MARK, aid)
+
+
+def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool, now: float | None, at: float,
+               seen: float, aid: str | None = None) -> str:  # fmt: skip
+    """The Telegram message for a sell by a trader you follow, whoever they are: information only, never a
+    suggestion to sell and nothing about copying. Who sold which outcome at what price (their average across the
+    fills) and for how much, the market, and when they traded, measured against this alert. While they still hold
+    some of it: the price now and "Check current price"; once they hold none, "They no longer hold it." and no price
+    (there's no position to read it from, and no number is made up)."""
+    e = html.escape
+    still = ("They still hold some." if now is None else f"Now {_cents(now)}. They still hold some.") if held else "They no longer hold it."
+    lines = [f"<b>{e(_who(wallet))}</b> sold <b>{e(t.outcome or 'Yes')}</b> at {_cents(price)} (${usd:,.0f})",
+             e(t.title or "A Polymarket market"), still, _traded(at, seen)]  # fmt: skip
+    links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}" if held else None),
+                   ("Their record", f"{SITE}/#/worth/{wallet}"), ("Open on Polymarket", t.url), aid=aid)  # fmt: skip
+    return "\n".join([*lines, links, DATA_DELAY])
+
+
+class NewSell:
+    """One trader's new sell of one outcome in a round, fills merged: the price they got on average, whether they
+    still hold some (an open position), and the price now from it. Its text is built once for every follower."""
+
+    def __init__(self, wallet: str, fills: list[WhaleTrade], held: bool, now: float | None, seen: float) -> None:
+        self.wallet, self.t, self.held, self.now, self.seen = wallet, max(fills, key=lambda f: f.at), held, now, seen
+        self.size, self.usd = sum(f.size for f in fills), sum(f.usd for f in fills)
+        self.at = min(f.at for f in fills).timestamp()
+        self.price = self.usd / self.size
+        self.outcome = self.t.token or self.t.market
+        self._text: str | None = None
+
+    def settled(self) -> bool:
+        """Sold at a settled price, or the price now is (2¢ or less, 98¢ or more): closing out a decided market."""
+        return _settled(self.price) or (self.now is not None and _settled(self.now))
+
+    def text(self, aid: str) -> str:
+        if self._text is None:
+            self._text = _sell_text(self.wallet, self.t, self.price, self.usd, self.held, self.now, self.at, self.seen,
+                                    ALERT_ID_MARK)  # fmt: skip
+        return self._text.replace(ALERT_ID_MARK, aid)
+
+
+def _sold_recently(trader: str, outcome: str, now: float) -> bool:
+    """Whether this trader's sell of this outcome was already alerted (to anyone) in the last ALERT_AGAIN_S, from
+    alerts.db, so a restart doesn't alert it again."""
+    with _db() as con:
+        q = "SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ? LIMIT 1"
+        return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S)).fetchone() is not None
 
 
 def _recently(uid: str | None, trader: str, outcome: str, now: float) -> bool:
@@ -1749,8 +2052,8 @@ def _added_up(w: str, market: str) -> None:
 
 def alert_pass(now: float | None = None) -> int:
     """One round: each followed trader's trades, read once however many people follow them, and for each new
-    buy, whatever the amount and whoever the trader, a message to every connected follower (grouped when 2+ traders they follow
-    bought the same outcome), then big trades in people's chosen markets. A trader's trades from before their
+    buy or sell, whatever the amount and whoever the trader, a message to every connected follower (grouped when 2+ traders they follow
+    bought the same outcome; sells never are), then big trades in people's chosen markets. A trader's trades from before their
     first round are only noted, never alerted. No alert for a buy with no price now (no open position to read it
     from: there's no saying how far the price moved), nor when the price now is settled (2¢ or less, 98¢ or more).
     Returns how many messages went out."""
@@ -1763,6 +2066,7 @@ def alert_pass(now: float | None = None) -> int:
         del _seen[w]
     now = time.time() if now is None else now
     new_buys: list[NewBuy] = []
+    new_sells: list[NewSell] = []
     for w in to:
         try:
             d = _live_read(w, LIVE_ALERT_S)
@@ -1777,9 +2081,16 @@ def alert_pass(now: float | None = None) -> int:
             continue
         prices = {p.market: p.current_price for p in d.positions}
         fills: dict[str, list[WhaleTrade]] = {}
+        sold: dict[str, list[WhaleTrade]] = {}
         for t in new:
-            if t.action == "buy" and t.size and now - t.at.timestamp() <= ALERT_MAX_AGE_S:
-                fills.setdefault(t.market, []).append(t)
+            if t.action in ("buy", "sell") and t.size and now - t.at.timestamp() <= ALERT_MAX_AGE_S:
+                (fills if t.action == "buy" else sold).setdefault(t.market, []).append(t)
+        for market, ts in sold.items():
+            sell = NewSell(w, ts, market in prices, prices.get(market), now)
+            if now - _alerted.get((w, f"sell:{market}"), 0) < ALERT_AGAIN_S or sell.settled() or _sold_recently(w, sell.outcome, now):
+                continue
+            _alerted[(w, f"sell:{market}")] = now
+            new_sells.append(sell)
         totals = _add_up(w, [f for ts in fills.values() for f in ts], now) if fills else {}
         for market, ts in fills.items():
             price = prices.get(market)
@@ -1799,6 +2110,11 @@ def alert_pass(now: float | None = None) -> int:
     for b in new_buys:
         for uid in to[b.wallet]:
             sent += _deliver(uid, users[uid]["chat"], b, cats.get(b.t.market))
+    for sell in new_sells:  # never grouped
+        for uid in to[sell.wallet]:
+            if _send(uid, users[uid]["chat"], "sell", sell.text, trader=sell.wallet, outcome=sell.outcome,
+                     trade_at=sell.at, stop=sell.wallet):  # fmt: skip
+                sent += 1
     return sent + whale_pass(users, now)
 
 
@@ -1883,10 +2199,12 @@ def _alert_loop() -> None:
 # Per alert and per follow, kept in the store's alerts.db with nothing personal beyond the signed-in account (its
 # Clerk id): no IPs, no user agents. Minutes from their trade to the alert (alerts: trade_at, sent_at), taps on an
 # alert's links (/go), "Stop alerts" taps and unfollows, votes (votes), follows, interests picked and Telegram
-# connected (events). /api/metrics sums them up for the owner: locally, or with SIGNALS_METRICS_KEY.
+# connected (events). Also anonymous, with no id, wallet or trade: each "What buying now costs" quote (quotes: how
+# it ended, Polymarket reads, milliseconds) and each page that couldn't open because the wallet has no Polymarket
+# profile (events: no_profile). /api/metrics sums them up for the owner: locally, or with SIGNALS_METRICS_KEY.
 
 METRICS_KEY = os.environ.get("SIGNALS_METRICS_KEY", "")
-EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "picked")
+EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "picked", "no_profile")
 _ALERT_ID = re.compile(r"[A-Za-z0-9_-]{4,16}")
 
 
@@ -1896,6 +2214,15 @@ def count(kind: str, *, uid: str | None = None, alert_id: str | None = None, tar
     try:
         with _db() as con:
             con.execute("INSERT INTO events VALUES (?, ?, ?, ?, ?, ?)", (time.time(), kind, uid, alert_id, target, trader))
+    except (sqlite3.Error, OSError):
+        pass
+
+
+def count_quote(outcome: str, reads_made: int, t0: float) -> None:
+    """One quote: how it ended, how many Polymarket reads it took and how long (from ``t0``, monotonic). Never in the way."""
+    try:
+        with _db() as con:
+            con.execute("INSERT INTO quotes VALUES (?, ?, ?, ?)", (time.time(), outcome, reads_made, (time.monotonic() - t0) * 1000))
     except (sqlite3.Error, OSError):
         pass
 
@@ -1991,6 +2318,9 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
             " GROUP BY e.kind", (week, since)).fetchall())  # fmt: skip
         votes = dict(con.execute("SELECT useful, COUNT(*) FROM votes WHERE at >= ? GROUP BY useful", (since,)).fetchall())
         voted = con.execute("SELECT COUNT(DISTINCT alert_id) FROM votes WHERE at >= ?", (since,)).fetchone()[0]
+        quotes = con.execute("SELECT outcome, reads, ms FROM quotes WHERE at >= ?", (since,)).fetchall()
+        no_profile = dict(con.execute("SELECT target, COUNT(*) FROM events WHERE kind = 'no_profile' AND at >= ?"
+                                      " GROUP BY target", (since,)).fetchall())  # fmt: skip
     users = _load_follows()["users"].values()
     followers = [u for u in users if u.get("follows")]
     with_interests = [u for u in users if u.get("interests") is not None]
@@ -2013,6 +2343,11 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
         "telegram": {"followers": len(followers), "followers_with_telegram": sum(1 for u in followers if u.get("chat")),
                      "share": ratio(sum(1 for u in followers if u.get("chat")), len(followers)),
                      "connected_in_period": n.get("telegram", 0)},
+        "quotes": {"n": len(quotes), "by_outcome": {o: sum(1 for q in quotes if q[0] == o) for o in sorted({q[0] for q in quotes})},
+                   "polymarket_reads": sum(q[1] for q in quotes), "reads_per_quote": ratio(sum(q[1] for q in quotes), len(quotes)),
+                   "ms": {"median": _pct([q[2] for q in quotes], 0.5), "p90": _pct([q[2] for q in quotes], 0.9)},
+                   "share_rate_limited": ratio(sum(1 for q in quotes if q[0] == "rate_limited"), len(quotes))},
+        "no_profile": {"by_page": no_profile, "check_link_taps": taps.get("check", 0)},
     }  # fmt: skip
 
 
