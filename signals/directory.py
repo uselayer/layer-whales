@@ -80,7 +80,8 @@ SAMPLE_KEEP = 30  # checked bets kept with a score, as the Worth following check
 
 SCORE_DAYS = 30  # the window a score reads, as the Worth following check and a trader page score
 EVIDENCE_DAYS = 90  # how far back a quick check counts buys, so a selective trader's record is kept too
-QUICK_TRADES = 100  # the latest trades a quick check reads (one read)
+QUICK_TRADES = 500  # the latest trades a quick check reads: one read (Polymarket's most a page), so a few markets traded
+#                     heavily still reach back past the 30 days instead of cutting the read short
 
 # When a wallet is looked at again, by why it isn't recommended (``next_check_at``).
 RESCORE_S = 6 * 3600  # a recommended trader (one of uselayer's RECOMMENDED segments): scored again, as the check is
