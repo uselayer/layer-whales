@@ -83,6 +83,13 @@ behind Vercel (see README, "Hosting").
     the 1200px container (Top profit keeps a 680px reading column), so the account sits at the header's right and
     nothing moves between tabs. Feed cards are a grid: three across on desktop, one on a phone. Keep loading,
     empty and error states.
+  - The Feed has two parts. **Following** (`#/`, the default, `/api/me/feed`): every trade from the last day of
+    the traders you follow, whoever they are (following is also research); signed out it's one short sign-in
+    prompt. **Recommended** (`#/recommended`, `/api/live`): trades of $1,000 or more (`RECOMMENDED_MIN_USD`) from
+    the traders in Worth copying, Rising and Worth watching, with neutral cards for anyone not copy_ok. Recommended
+    stays quiet (fewer, bigger trades) and never more prominent than Following: second in the switch, never the
+    default. Both keep the switch "Only trades I can still get into", one card per outcome with "Also bought
+    by", and the delay line. Big trades (`#/big`) is linked from the foot of Recommended.
   - Market chips live on Traders only. The Feed follows the same choice and says so in one line ("Your markets:
     Politics, Sports · Change"); Change opens the onboarding picker. Never a second set of filter chips.
   - A trade at 2¢ or less, 98¢ or more, or no longer held is settled (Won / Lost / Closed), never a bargain

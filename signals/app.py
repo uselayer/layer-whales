@@ -23,6 +23,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import AsyncIterator, Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -584,7 +585,8 @@ def with_links(s: dict[str, Any]) -> dict[str, Any]:
 # Their buys over the last day, one row per bet (fills on the same outcome merged), with the price now:
 # the current price of their open position. Polymarket's public trade feed runs a few minutes behind.
 
-FEED_SEGMENTS = ("proven", "quiet", "rising")  # the Follow and Watch verdicts; "inactive" traders aren't followed
+FEED_SEGMENTS = RECOMMENDED  # Traders' three sections: Worth copying, Rising, Worth watching ("inactive" isn't in it)
+RECOMMENDED_MIN_USD = 1000.0  # the Feed's Recommended shows only trades this big: fewer, bigger trades
 FEED_HOURS = 24
 GET_IN = 0.03  # at most this far above their price you can still get in: the cost preview's limit too
 FELL_BY = 0.05  # at most this far below: a bigger drop means the market turned against them, a different trade
@@ -684,26 +686,44 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
 
 @app.get("/api/live")
 def live() -> dict[str, Any]:
+    """The Feed's Recommended: trades of RECOMMENDED_MIN_USD or more over the last FEED_HOURS from the traders in
+    Traders' three sections (Worth copying, Rising, Worth watching). Quiet on purpose: fewer, bigger trades."""
     data = _worth_load()
-    follow = [s for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
+    people = [s | {"copy_ok": copy_offer(s)[0]} for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
+    bets, failed = _feed(people, RECOMMENDED_MIN_USD)
+    return {"traders": [{k: s[k] for k in ("wallet", "name", "segment", "label", "copy_ok")} for s in people],
+            "failed": failed, "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD, "bets": bets}  # fmt: skip
+
+
+def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> tuple[list[dict[str, Any]], int]:
+    """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), newest first, with
+    status and category; and how many traders couldn't be read."""
     since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
     bets: list[dict[str, Any]] = []
     failed = 0
-    offers = {s["wallet"]: copy_offer(s)[0] for s in follow}
-    for s in follow:
+
+    def read(w: str) -> Any:
         try:
-            d = _live_read(s["wallet"])
+            return _live_read(w)
         except VenueError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:  # a trader a second one by one; Recommended has dozens
+        details = list(pool.map(read, [s["wallet"] for s in people]))
+    for s, d in zip(people, details, strict=True):
+        if d is None:
             failed += 1
             continue
-        bets += _bets_of(d, s | {"copy_ok": offers[s["wallet"]]}, since)
+        who = s if s.get("name") else s | {"name": d.trader.name}  # a followed wallet we haven't scored
+        bets += [b for b in _bets_of(d, who, since) if b["usd"] >= min_usd]
     bets.sort(key=lambda b: b["at"], reverse=True)
-    cats = _categories([b["market"] for b in bets]) if bets else {}
+    try:
+        cats = _categories([b["market"] for b in bets]) if bets else {}
+    except VenueError:
+        cats = {}  # the trades still show, under All
     for b in bets:
         b["status"], b["category"] = bet_status(b["price"], b["price_now"]), cats.get(b["market"])
-    return {"traders": [{"wallet": s["wallet"], "name": s["name"], "segment": s["segment"], "label": s["label"],
-                         "copy_ok": offers[s["wallet"]]} for s in follow],
-            "failed": failed, "hours": FEED_HOURS, "bets": bets}  # fmt: skip
+    return bets, failed
 
 
 def _iso_ts(s: str) -> float:
@@ -968,6 +988,19 @@ def unfollow(wallet: str, response: Response, uid: str = Depends(signed_in)) -> 
             u["follows"].remove(wallet.lower())
             _save_follows(d)
     return _me_view(u)
+
+
+@app.get("/api/me/feed")
+def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
+    """The Feed's Following: your followed traders' buys over the last FEED_HOURS, every size. Whoever they are:
+    a trader the last check didn't score has no tier, and copying isn't offered for them (copy_ok False)."""
+    _private(response)
+    follows = list((_load_follows()["users"].get(uid) or {}).get("follows") or [])
+    scores = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
+    people = [{"wallet": w, "name": (s := scores.get(w) or {}).get("name"), "segment": s.get("segment"),
+               "label": s.get("label"), "copy_ok": bool(s) and copy_offer(s)[0]} for w in follows]  # fmt: skip
+    bets, failed = _feed(people)
+    return {"traders": people, "failed": failed, "hours": FEED_HOURS, "bets": bets}
 
 
 @app.post("/api/me/telegram")
