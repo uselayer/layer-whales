@@ -27,6 +27,8 @@ Then open http://127.0.0.1:8790.
 - `SIGNALS_PORT` (default 8790) and `SIGNALS_STORE_DIR` (default `~/.uselayer/signals`) change the port and
   where the sandbox account, copy rules and Worth following results live. `SIGNALS_WORTH_WALLETS` (default 200)
   is how many wallets Worth following checks.
+- `SIGNALS_MOCK=1` fills the leaderboard's profit-history columns (weeks in profit, trend, 7D/90D) with made-up
+  sample values, marked as such, to review the page before the SDK provides them. Local only: ignored hosted.
 
 ## What's on the page
 
@@ -35,8 +37,8 @@ evidence does and doesn't show. Copying a trader in the sandbox is optional, a w
 promise of profit.
 
 The first visit asks one question, which markets interest you (Politics, Sports, Crypto, Esports, or Skip for all
-markets), then opens Traders → Worth following. The choice is kept in your browser; **Change** on that page picks
-again. Then three tabs:
+markets), then opens Traders. The choice is kept in your browser; the market chips on Traders change it. Then
+three tabs:
 
 - **Feed**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp or Rising, one
   card per trade: the market, their pick, what they paid, the price now, how much they put in, and one status
@@ -47,23 +49,27 @@ again. Then three tabs:
   trades I can still get into" to see them all. Tap a card for the details, the trader and a link to Polymarket.
   **Copy trader** copies that trader's next trades in the sandbox; a trade they already made isn't copied.
   It updates every 30 seconds; Polymarket shows trades a few minutes late.
-- **Traders**:
-  - **Worth following**: Polymarket traders in the markets you picked, in two groups. **Worth exploring**
-    (Proven sharp, Quiet sharp, Rising): the price tends to move their way after they buy; Rising means early
-    signs, too few trades to be sure. **Too fast to copy**: the price moves within minutes of their buys, so a
-    copy usually comes too late; worth watching, and copying isn't offered. Each row shows their profit over 30
-    days, whether they beat the odds, and what you'd have made a contract copying them. A trader matches your
-    markets when it's the category they trade most or one they're strong in. Lucky traders (big profit without
-    skill), market makers, arbitrage and traders with no clear edge are left out; the footer counts them and how
-    many traders match your markets. An empty group says so and offers **Show all markets**; the checks are
-    never loosened to fill it. "How we pick traders" explains the checks in plain words. Wallets come from the
-    leaderboards and from busy markets' trades. The first check
-    takes 20–30 minutes and is kept in the store dir, so later launches show the last result at once while a
-    new check runs in the background (on launch if it's over 6 hours old, then every 6 hours while the app is
-    open). Scoring is `client.whales.discover()` / `score()` in the SDK.
-  - **Top profit**: both venues' leaderboards in one list, by profit. Pick one venue to sort by volume
-    (Kalshi counts contracts, Polymarket dollars, so the two aren't comparable).
-  - **Big trades**: trades of $250 or more right now, with the trader's name when the venue shows it.
+- **Traders**: a leaderboard of the Polymarket traders we recommend: Proven sharp, Quiet sharp, Rising, and
+  Too fast to copy (the price moves within minutes of their buys, so a copy usually comes too late).
+  - One bar: on the left the market chips (your onboarding choice) and **Copyable only**; on the right
+    **Search name or wallet**, the period (7D / 30D / 90D, once the SDK provides it) and the sort: Recommended
+    (the checks' order), Most consistent, Profit, Win rate, Most active, Copy result.
+  - Columns, grouped: **Track record** (weeks in profit out of the last 12, profit, trend, won X of Y settled),
+    **Style** (their usual trade and how often they trade), **Copying** (what a copy a few minutes late made
+    after fees, as a share of what it paid). On a phone each trader is one card.
+  - Weeks in profit, trend, 7D/90D and the "per $ traded" return come from the SDK's profit history (uselayer
+    0.6). Until then they show "—" and **Most consistent** says "coming soon"; nothing is made up.
+  - A trader matches your markets when it's the category they trade most or one they're strong in. Searching a
+    full wallet that isn't in the list offers **Check this wallet** (scored in up to a minute), including your
+    own. An empty result says so and offers **Show all markets**; the checks are never loosened to fill it.
+  - The footer counts who's left out (Lucky traders, market makers, arbitrage, no clear edge) and **See all
+    checked traders** shows everyone but market makers and arbitrage, each marked. It also links to **Top
+    profit** (both venues' leaderboards) and **Big trades** (trades of $250 or more right now). "How we pick
+    traders" explains the checks in plain words.
+  - Wallets come from the leaderboards and from busy markets' trades. The first check takes 20–30 minutes and
+    is kept in the store dir, so later launches show the last result at once while a new check runs in the
+    background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
+    `client.whales.discover()` / `score()` in the SDK.
   - **A trader's page**: their profit, their open trades as cards, recent results, and a Copy trader button. The
     evidence (each check, how the price moved after their buys, their categories, the trades checked) is under
     **Details**. A leaderboard trader's page also asks **Same person on the other venue?**: accounts that may

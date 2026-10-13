@@ -227,6 +227,65 @@ def _worth_loop() -> None:
         _worth_stop.wait(60)
 
 
+# ---- the Traders leaderboard's columns ----
+# How each trader trades, from what the last check kept: no new reads. A field the SDK provides itself
+# (typical_usd, last_buy, from uselayer 0.6) wins; until then it's worked out here from the checked bets.
+# Profit history (pnl_weeks, pnl_daily, periods) only comes from the SDK: the page shows "—" without it.
+
+def _mock() -> bool:
+    """Sample profit history to review the page: SIGNALS_MOCK=1, and only ever on your machine, never hosted."""
+    return os.environ.get("SIGNALS_MOCK") == "1" and not HOSTED
+
+
+def _median(xs: list[float]) -> float | None:
+    xs = sorted(x for x in xs if x is not None)
+    if not xs:
+        return None
+    mid = len(xs) // 2
+    return xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2
+
+
+def _board(s: dict[str, Any]) -> dict[str, Any]:
+    """The leaderboard's fields for one scored trader, added to (never replacing) what the score has."""
+    bets = s.get("sample") or []
+    out: dict[str, Any] = {}
+    if s.get("typical_usd") is None:
+        out["typical_usd"] = _median([b.get("usd") for b in bets])
+    if s.get("last_buy") is None:
+        ats = [b["at"] for b in (s.get("recent") or []) + bets if b.get("at")]
+        out["last_buy"] = max(ats) if ats else None
+    window = s.get("window") or []
+    if len(window) == 2 and s.get("decisions") is not None:
+        days = max(1.0, (_iso_ts(window[1]) - _iso_ts(window[0])) / 86400)
+        out["trades_per_day"] = round(s["decisions"] / days, 2)
+    price = s.get("avg_price") or _median([b.get("price") for b in bets])
+    copy = s.get("copy") or {}
+    # what a copier a few minutes late kept after the fee, per dollar they paid
+    out["copy_return"] = copy["mean"] / price if copy.get("mean") is not None and price else None
+    if _mock() and s.get("pnl_weeks") is None:
+        out |= _mock_history(s)
+    return out
+
+
+def _mock_history(s: dict[str, Any]) -> dict[str, Any]:
+    """Made-up profit history in the SDK's shape, marked ``sample_data``. Never served hosted (see _mock)."""
+    import random
+
+    r = random.Random(s.get("wallet"))
+    scale = abs(s.get("pnl_window") or 1000) / 4
+    days = [scale / 7 * (r.random() * 2 - 0.7) for _ in range(90)]
+    start = datetime.now(UTC) - timedelta(days=90)
+    cum, daily = 0.0, [[start.date().isoformat(), 0.0]]  # as the SDK: 91 points, day 0 = 0, through today
+    for i, d in enumerate(days, 1):
+        cum += d
+        daily.append([(start + timedelta(days=i)).date().isoformat(), round(cum, 2)])
+    weeks = [round(sum(days[len(days) - 84 + 7 * i :][:7]), 2) for i in range(12)]  # the last 12 weeks, oldest first
+    volume = (s.get("volume_window") or abs(s.get("pnl_window") or 1000) * 20) / 30
+    periods = {f"{n}d": {"trading_pnl": round(sum(days[-n:]), 2), "volume": round(volume * n, 2),
+                         "return_per_dollar": sum(days[-n:]) / (volume * n)} for n in (7, 30, 90)}  # fmt: skip
+    return {"pnl_weeks": weeks, "pnl_daily": daily, "periods": periods, "sample_data": True}
+
+
 @app.get("/api/worth")
 def worth() -> dict[str, Any]:
     """Every scored wallet without its bets, plus whether a refresh is running."""
@@ -234,7 +293,7 @@ def worth() -> dict[str, Any]:
     out: dict[str, Any] = {"status": dict(_worth), "result": None}
     if data is not None:
         out["result"] = {k: v for k, v in data.items() if k != "scores"} | {
-            "scores": [{k: v for k, v in s.items() if k != "sample"} for s in data["scores"]]
+            "scores": [{k: v for k, v in s.items() if k != "sample"} | _board(s) for s in data["scores"]]
         }
     return out
 
@@ -253,7 +312,7 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
     data = _worth_load()
     for s in (data or {}).get("scores", []):
         if s["wallet"] == w:
-            return with_links(s)
+            return with_links(s) | _board(s)
     if w not in _worth_one:
         try:
             _worth_one[w] = reads.whales.score(w).to_dict()
@@ -261,7 +320,7 @@ def worth_wallet(wallet: str) -> dict[str, Any]:
             raise venue_error(e) from e
         if len(_worth_one) > WORTH_ONE_KEEP:
             del _worth_one[next(iter(_worth_one))]  # the oldest
-    return with_links(_worth_one[w])
+    return with_links(_worth_one[w]) | _board(_worth_one[w])
 
 
 def with_links(s: dict[str, Any]) -> dict[str, Any]:
