@@ -1126,7 +1126,7 @@ function renderWorth() {
     const notRec = !SEG_ORDER.includes(s.segment) ? ` · ${esc(TIER[s.segment]?.[0] || "Not recommended")}` : "";
     const cat = s.categories?.[0]?.category;
     const copyMain = copy == null ? `<span class="lb-none">—</span>` : `<span class="lb-main ${isCopyable(s) ? "" : "lb-muted"}">${isCopyable(s) ? pl(copy, lbPct(copy)) : lbPct(copy)}</span>`;
-    const copySub = isCopyable(s) ? (copyRange(s) ? `range ${copyRange(s)}` : "estimate, after fees") : s.segment !== "too_fast" ? "not recommended" : copy > 0 ? "not proven" : "no copy advantage";
+    const copySub = isCopyable(s) ? (copyRange(s) ? `range ${copyRange(s)}` : "estimate, after fees") : !SEG_ORDER.includes(s.segment) ? "not recommended" : copy > 0 ? "not proven" : "no copy advantage";
     return `<a class="lb-cols lb-row" href="#/worth/${esc(s.wallet)}" ${i >= RANKED && !lb.more ? "hidden" : ""}>
       <span class="lb-rank">${i + 1}</span>
       <span class="lb-who">${avatar(s.wallet, 40)}<span style="min-width:0"><span class="nm">${esc(displayName(s.name, s.wallet))}</span><span class="lb-sub">${[cat, s.last_buy ? `active ${ago(s.last_buy)}` : ""].filter(Boolean).map(esc).join(" · ")}${notRec}</span></span></span>
@@ -1137,7 +1137,7 @@ function renderWorth() {
       <span class="lb-usual">${s.typical_usd != null ? `<span class="lb-main">${usd(s.typical_usd)}</span><span class="lb-sub">${perDayText(s.trades_per_day)}</span>` : `<span class="lb-none">—</span>`}</span>
       <span class="lb-copy">${copyMain}<span class="lb-sub">${copySub}</span></span>
       <span class="lb-meta">${[s.settled ? `Last 30 days: won ${s.won} of ${s.settled}` : "", s.typical_usd != null ? `usually ${usd(s.typical_usd)}` : "", perDayText(s.trades_per_day)].filter(Boolean).join(" · ")}</span>
-      <span class="lb-copyline">${copy == null ? "" : isCopyable(s) ? copyEstimate(s) : `<span class="lb-muted">${s.segment === "too_fast" ? copyEstimate(s) : `Not recommended: estimated copy return ${lbPct(copy)}`}</span>`}</span>
+      <span class="lb-copyline">${copy == null ? "" : isCopyable(s) ? copyEstimate(s) : `<span class="lb-muted">${SEG_ORDER.includes(s.segment) ? copyEstimate(s) : `Not recommended: estimated copy return ${lbPct(copy)}`}</span>`}</span>
     </a>`;
   };
 
