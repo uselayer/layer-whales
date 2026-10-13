@@ -45,8 +45,9 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
 - **Feed**: one switch at the top, **Following** (the default) or **Recommended**.
   - **Following**: signed in, every trade over the last 24 hours from the traders you follow, whoever they are.
     Signed out, a short prompt to sign in.
-  - **Recommended**: trades of $1,000 or more over the last 24 hours from the traders in Traders' three sections
-    (Worth copying, Rising, Worth watching). Quieter on purpose, and never the default.
+  - **Recommended**: trades of $1,000 or more over the last 24 hours from the traders in Traders' two sections
+    (Sharps, Rising). Quieter on purpose, and never the default. Their trades are research, not tips: we
+    haven't found that buying after them pays, and the page says so.
   - Both: one card per trade, opened on your markets, three across on a desktop: the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
     paid; **Price moved away** means further either way. A bigger drop means
@@ -65,9 +66,11 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     opens their page. With Kalshi on, it shows every big trade on both venues instead ("Anonymous trader" when
     Kalshi doesn't name them), not filtered by your markets: the SDK has no categories for Kalshi markets, and
     almost all big trades are Kalshi's.
-- **Traders**: a leaderboard of the Polymarket traders we recommend: Proven sharp, Quiet sharp, Rising, and
-  No proven copy advantage (the price moves within minutes of their buys, so a copy usually comes too late; a
-  small positive copy estimate is shown as not reliably above zero, never as a gain).
+- **Traders**: a leaderboard of the Polymarket traders we recommend, in two sections by tier: **Sharps** (Proven
+  sharp, Quiet sharp) and **Rising**. The tier is skill and track record only; copying is a separate copy status
+  on every trader: **Copyable**, **Copy not proven** (not reliably above zero; a small positive estimate is never
+  shown as a gain), **Costly to copy** (the whole range of what copies kept is below zero: usually the price moves
+  their way before a copy gets in) or **Not offered**. A Proven sharp can be costly to copy.
   - One bar: on the left the market chips (your onboarding choice) and **Copyable only**; on the right
     **Search name or wallet**, the period (7D / 30D / 90D, once the SDK provides it) and the sort: Recommended
     (the checks' order), Most consistent, Profit, Win rate, Most active, Copy result.
@@ -79,16 +82,18 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
   - A trader matches your markets when it's the category they trade most or one they're strong in. Searching a
     full wallet that isn't in the list offers **Check this wallet** (scored in up to a minute), including your
     own. An empty result says so and offers **Show all markets**; the checks are never loosened to fill it.
-  - The footer counts who's left out (Lucky traders, market makers, arbitrage, no clear edge) and **See all
+  - The footer counts who's left out (edge not proven, not enough data, big profit with the edge unproven or
+    resting on one win, market makers, arbitrage) and **See all
     checked traders** shows everyone but market makers and arbitrage, each marked. It also links to **Top
-    profit** (Polymarket's leaderboard; both venues' with Kalshi on). "How we pick traders" explains the checks in plain words.
+    profit** (Polymarket's leaderboard; both venues' with Kalshi on). "How we pick traders" explains the checks,
+    the tiers and copying (its own tab) in plain words.
   - Wallets come from the leaderboards and from busy markets' trades. The first check takes 20–30 minutes and
     is kept in the store dir, so later launches show the last result at once while a new check runs in the
     background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
     `client.whales.discover()` / `score()` in the SDK.
   - **A trader's profile** (from the leaderboard or a wallet search): their market and last trade, a link to their
-    Polymarket profile, their tier, and their copy status under Follow (Copyable, Copy not proven or Not
-    recommended, with "Why?"). A stat strip (profit and per $ traded for the
+    Polymarket profile, their tier, and their copy status under Follow (Copyable, Copy not proven, Costly to copy
+    or Not offered, with "Why?"). A stat strip (profit and per $ traded for the
     period, 12-week consistency, win record and usual trade over the last 30 days, wallet; a note says the period
     switch changes only profit), a profit chart for 7D / 30D / 90D with the stretches
     below their previous high shaded, and **Why they're here**: why they're on the list, their copy status and its reason, the SDK's

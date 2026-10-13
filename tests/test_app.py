@@ -375,15 +375,32 @@ def test_copying_is_offered_only_for_recommended_tiers_with_copies_reliably_abov
     assert not engine.copy_offer(SCORE)[0]  # no copyable verdict at all: not offered
 
 
+def test_a_copy_status_is_said_from_the_copy_result_whatever_the_tier() -> None:
+    def status(seg: str, cp: str, **copy: float) -> str:
+        return engine.copy_status(_scored(seg, cp) | ({"copy": copy} if copy else {}))[0]
+
+    losing = {"mean": -0.026, "margin": 0.022, "n": 53, "z": -2.4}  # NM-P: −2.6¢, the whole range below zero
+    assert status("proven", "no", **losing) == "Costly to copy"  # a Proven sharp can be costly to copy
+    assert status("lucky", "no", **losing) == "Costly to copy"
+    assert status("proven", "no", mean=-0.005, margin=0.016, n=40, z=-0.6) == "Copy not proven"  # range crosses zero
+    assert status("proven", "no", mean=-0.03, margin=0.02, n=5, z=-2.5) == "Copy not proven"  # 5 bets: too few to say
+    assert status("rising", "unknown") == "Copy not proven"
+    assert status("no_edge", "yes") == "Not offered" and status("inactive", "yes") == "Not offered"
+    assert status("quiet", "yes") == "Copyable"
+    why = engine.copy_status(_scored("proven", "no") | {"copy": losing})[1] or ""
+    assert why.startswith("Costly to copy: ") and "A reading of the past, not a promise." in why
+    assert engine.copy_fields(None) == {"copy_ok": False, "copy_label": None}  # never scored: nothing said
+
+
 def test_any_traders_trade_is_priced_and_no_score_is_read_for_it(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Whether copying is offered is the trader's record, shown apart: never a gate on what buying costs.
     monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [
-        COPYABLE, _scored("too_fast", "no", "0xfast"), _scored("no_edge", "yes", "0xmeh")]})  # fmt: skip
+        COPYABLE, _scored("proven", "no", "0xfast"), _scored("no_edge", "yes", "0xmeh")]})  # fmt: skip
     monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: _quote())
     monkeypatch.setattr(engine.reads.whales, "score", lambda w: pytest.fail("scored"))
-    for wallet in ("0xabc", "0xfast", "0xmeh", "0xnew"):  # offered, Copy not proven, not recommended, never scored
+    for wallet in ("0xabc", "0xfast", "0xmeh", "0xnew"):  # Copyable, Copy not proven, Not offered, never scored
         r = api.post("/api/trade/preview", json={"wallet": wallet, "market": "0xcid:1", "price": 0.52})
         assert r.status_code == 200 and r.json()["ok"], wallet
 
@@ -401,27 +418,42 @@ def test_traders_and_the_feed_carry_the_same_copy_verdict(api: TestClient, monke
     live = api.get("/api/live").json()
     assert {t["wallet"]: t["copy_ok"] for t in live["traders"]} == {"0xabc": True, "0xr": False}
     assert {b["wallet"]: b["copy_ok"] for b in live["bets"]} == {"0xabc": True, "0xr": False}  # the Feed's buttons
+    labels = {"0xabc": "Copyable", "0xr": "Copy not proven"}
+    assert {b["wallet"]: b["copy_label"] for b in live["bets"]} == labels == {w: board[w]["copy_label"] for w in labels}
 
 
-def test_a_result_kept_before_uselayer_0_8_is_judged_by_todays_copy_rule() -> None:
+# A sharp's record as uselayer keeps it: skill "yes" on 30 bets, steady, still trading, a small account.
+SHARP = SCORE | {"skill": "yes", "style": "takes_a_side", "active": True, "trading_pnl": 5000.0, "biggest_win": 500.0,
+                 "edge": {"mean": 0.02, "margin": 0.01, "n": 30, "z": 4.0}, "checks": [{"rule": "steady", "passed": True}]}  # fmt: skip
+
+
+def test_a_result_kept_by_an_older_uselayer_is_judged_by_todays_rules() -> None:
     old = {"format": 5, "scores": [
-        # copies +1¢ ± 1.3¢ on 9 bets (z 1.5): copyable by the old rule, not by today's
-        SCORE | {"wallet": "0xa", "segment": "quiet", "copyable": "yes",
+        # copies +1¢ ± 1.3¢ on 9 bets (z 1.5): copyable by the old rule, not by today's; still a sharp
+        SHARP | {"wallet": "0xa", "segment": "quiet", "copyable": "yes",
                  "copy": {"mean": 0.01, "margin": 0.01307, "n": 9, "z": 1.5}},
         # copies +2¢ ± 0.5¢ on 40 bets: still reliably above zero with Student's t
-        SCORE | {"wallet": "0xb", "segment": "proven", "copyable": "yes",
+        SHARP | {"wallet": "0xb", "segment": "proven", "copyable": "yes", "on_leaderboard": True,
+                 "edge": {"mean": 0.02, "margin": 0.01, "n": 45, "z": 4.0},
                  "copy": {"mean": 0.02, "margin": 0.005, "n": 40, "z": 7.8}},
-        # not copyable before: never promoted
-        SCORE | {"wallet": "0xc", "segment": "too_fast", "copyable": "no",
-                 "copy": {"mean": 0.03, "margin": 0.01, "n": 40, "z": 5.9}},
+        # kept as "too fast to copy" (uselayer before 0.10): a sharp, whose copies aren't reliably above zero
+        SHARP | {"wallet": "0xc", "segment": "too_fast", "copyable": "no",
+                 "copy": {"mean": 0.03, "margin": 0.04, "n": 40, "z": 1.5}},
     ]}  # fmt: skip
     a, b, c = engine._worth_upgrade(json.loads(json.dumps(old)))["scores"]
-    assert (a["segment"], a["label"], a["copyable"]) == ("too_fast", "Sharp but too fast", "no")
+    assert (a["segment"], a["label"], a["copyable"]) == ("quiet", "Quiet sharps", "no")  # the tier stays: skill
     assert a["copy"]["margin"] > 0.01307 and a["copy"]["low"] < 0  # widened to t for 8 degrees of freedom
     assert (b["segment"], b["copyable"]) == ("proven", "yes") and b["copy"]["low"] > 0
-    assert (c["segment"], c["copyable"]) == ("too_fast", "no")
-    new = {"format": 6, "scores": [dict(old["scores"][0])]}
-    assert engine._worth_upgrade(new)["scores"][0]["segment"] == "quiet"  # a current result is left as the SDK gave it
+    assert (c["segment"], c["label"], c["copyable"]) == ("quiet", "Quiet sharps", "no")
+    assert engine.copy_status(a)[0] == engine.copy_status(c)[0] == "Copy not proven"
+    # A 0.9 result: big profit without a clear edge was "lucky"; today it's unproven, not luck.
+    big = SHARP | {"segment": "lucky", "skill": "no", "trading_pnl": 600_000.0, "biggest_win": 10_000.0,
+                   "edge": {"mean": 0.001, "margin": 0.01, "n": 30, "z": 0.2}}  # fmt: skip
+    kept = engine._worth_upgrade({"format": 7, "scores": [big, SHARP | {"segment": "no_edge", "skill": "unknown"}]})
+    assert [s["segment"] for s in kept["scores"]] == ["big_profit", "too_few"]
+    assert kept["scores"][0]["label"] == "Big profit, edge unproven"
+    current = {"format": engine.WORTH_FORMAT, "scores": [dict(old["scores"][2])]}
+    assert engine._worth_upgrade(current)["scores"][0]["segment"] == "too_fast"  # a current result is left as given
 
 
 # ---- ranking: small samples don't top a sort, and missing weeks aren't losing weeks ----
@@ -469,42 +501,47 @@ def test_the_copy_estimate_divides_by_what_a_copier_paid_when_the_sdk_says() -> 
     assert engine._board(COPYABLE | {"avg_price": 0.5, "copy_entry": None})["copy_return"] == pytest.approx(0.04)
 
 
-# ---- Traders' sections: Worth copying, Rising, Worth watching ----
+# ---- Traders' sections, by tier alone: Sharps, Rising ----
 
 
-def test_each_recommended_trader_has_one_section_and_only_copying_offered_is_worth_copying() -> None:
-    assert engine.section_of("quiet", True) == "copy" and engine.section_of("proven", True) == "copy"
-    assert engine.section_of("rising", True) == "copy"  # Rising with copies reliably above zero: offered
-    assert engine.section_of("rising", False) == "rising"
-    assert engine.section_of("too_fast", False) == "watch"  # No proven copy advantage: Worth watching
-    for seg in ("lucky", "no_edge", "no_view", "inactive", None):
-        assert engine.section_of(seg, False) is None  # not recommended: only in "See all checked traders"
-    fast = SCORE | {"segment": "too_fast", "copyable": "no", "copy": {"mean": 0.01, "margin": 0.02, "n": 40, "z": 1.0}}
-    assert (engine._board(fast)["section"], engine._board(fast)["copy_ok"]) == ("watch", False)
-    assert engine._board(COPYABLE)["section"] == "copy"
+def test_each_recommended_trader_has_one_section_by_tier_and_copying_never_moves_it() -> None:
+    assert engine.section_of("quiet") == "sharp" and engine.section_of("proven") == "sharp"
+    assert engine.section_of("rising") == "rising"
+    assert engine.section_of("too_fast") == "sharp"  # kept by uselayer before 0.10: a sharp
+    for seg in ("big_profit", "lucky", "too_few", "no_edge", "no_view", "inactive", None):
+        assert engine.section_of(seg) is None  # not recommended: only in "See all checked traders"
+    losing = SCORE | {"copyable": "no", "copy": {"mean": -0.026, "margin": 0.022, "n": 53, "z": -2.4}}
+    b = engine._board(losing)
+    assert (b["section"], b["copy_ok"], b["copy_label"]) == ("sharp", False, "Costly to copy")
+    assert (engine._board(COPYABLE)["section"], engine._board(COPYABLE)["copy_label"]) == ("sharp", "Copyable")
     assert engine._board(SCORE | {"segment": "rising", "copyable": "unknown"})["section"] == "rising"
     assert engine._board(SCORE | {"segment": "lucky"})["section"] is None
 
 
 def test_the_traders_list_carries_each_traders_section(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    fast = SCORE | {"wallet": "0xf", "segment": "too_fast", "copyable": "no"}
+    losing = SCORE | {"wallet": "0xf", "segment": "proven", "copyable": "no"}
     rising = SCORE | {"wallet": "0xr", "segment": "rising", "copyable": "unknown"}
-    lucky = SCORE | {"wallet": "0xl", "segment": "lucky"}
-    monkeypatch.setattr(engine, "_worth_data", {"scores": [COPYABLE, fast, rising, lucky]})
+    unproven = SCORE | {"wallet": "0xl", "segment": "big_profit"}
+    monkeypatch.setattr(engine, "_worth_data", {"scores": [COPYABLE, losing, rising, unproven]})
     got = {s["wallet"]: s["section"] for s in api.get("/api/worth").json()["result"]["scores"]}
-    assert got == {"0xabc": "copy", "0xf": "watch", "0xr": "rising", "0xl": None}
+    assert got == {"0xabc": "sharp", "0xf": "sharp", "0xr": "rising", "0xl": None}
 
 
 def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offered_for(api: TestClient) -> None:
     page = api.get("/").text
-    for words in ("Worth copying", "Worth watching", "No trader's copies have been reliably profitable after fees lately.",
-                  "Skilled traders worth keeping an eye on. Copy not proven: the price moves before you'd get in.",
-                  '"Copy not proven"', '"Not recommended"', "they paid", "Buy on Polymarket ↗", "weeks up",
+    for words in ('"Sharps"', '"Rising"', "No trader's copies have been reliably profitable after fees lately.",
+                  "Copying never moves it: a Proven sharp can be costly to copy.",
+                  '"Copy not proven"', '"Costly to copy"', '"Not offered"', '"Big profit, edge unproven"',
+                  '"Profit rests on one win"', '"Not enough data"', '"Edge not proven"',
+                  "Their trades are research, not tips: we haven't found that buying after them pays.",
+                  "they paid", "Buy on Polymarket ↗", "weeks up",
                   "A week counts profit taken plus the change in value of trades still open.",
                   "at least half a cent above the middle price",
                   "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip
         assert words in page, words
     assert "weeks profitable" not in page
+    for gone in ("Worth copying", "Worth watching", "Lucky", "No clear edge", "You can copy it.", "too_fast"):
+        assert gone not in page, gone  # copying is no tier, section or check; no label claims luck it can't show
 
 
 # ---- a wallet's account: when it was read, and never part of it shown as all of it ----

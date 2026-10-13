@@ -38,7 +38,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from uselayer import Client, VenueError, Whales, WhaleTrade
 from uselayer.whale_finder import all_boards
-from uselayer.whale_scores import CATEGORY_TAGS, COPY_BETS, RECOMMENDED, SEGMENTS, Stat, category_of, copyable_verdict
+from uselayer.whale_scores import (
+    CATEGORY_TAGS,
+    COPY_BETS,
+    RECOMMENDED,
+    SEGMENTS,
+    Stat,
+    category_of,
+    copyable_verdict,
+    segment_of,
+)
 
 from signals.budget import BackgroundHttp, Budget
 from signals.directory import (
@@ -228,7 +237,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
-WORTH_FORMAT = 7  # bump when the kept result gains fields; an older one is re-checked on launch (7: uselayer 0.8.1, copy_entry)
+WORTH_FORMAT = 8  # bump when the kept result gains fields; an older one is re-checked on launch (8: uselayer 0.10, tiers)
 WORTH_MIN_AGE_HOSTED_S = 3600  # hosted: "Check again" only starts a new check once the last is this old
 WORTH_ONE_KEEP = 500  # wallets scored on demand, kept until the next check
 _worth_stop = threading.Event()
@@ -252,19 +261,20 @@ def _worth_load() -> dict[str, Any] | None:
 
 
 def _worth_upgrade(data: dict[str, Any]) -> dict[str, Any]:
-    """A result kept before uselayer 0.8.0, shown while the new check runs, judged by today's copy rule: its
-    copy range widened to Student's t, ``copyable`` only when that range's bottom is above zero, and a proven or
-    quiet sharp whose copies aren't reliably positive shown as the SDK now would (too fast to copy). Never
-    looser than the kept verdicts: nothing is promoted."""
-    if (data.get("format") or 0) >= 6:
+    """A result kept by an older uselayer, shown while the new check runs, judged by today's rules. Before
+    0.8.0: its copy range widened to Student's t, ``copyable`` only when that range's bottom is above zero.
+    Before 0.10: its tier from skill and track record (the SDK's ``segment_of``), never from copying, so a
+    sharp kept as "too fast" is a sharp again and big profit without a clear edge isn't called luck."""
+    if (data.get("format") or 0) >= 8:
         return data
     for s in data.get("scores", []):
-        copy = Stat.from_dict(s["copy"]) if s.get("copy") else None
-        s["copy"] = copy.to_dict() if copy else None
-        if s.get("copyable") == "yes" and copyable_verdict(copy) != "yes":
-            s["copyable"] = copyable_verdict(copy)
-        if s.get("segment") in ("proven", "quiet") and s.get("copyable") != "yes":
-            s["segment"], s["label"], s["action"] = "too_fast", SEGMENTS["too_fast"][0], SEGMENTS["too_fast"][1]
+        if (data.get("format") or 0) < 6:
+            copy = Stat.from_dict(s["copy"]) if s.get("copy") else None
+            s["copy"] = copy.to_dict() if copy else None
+            if s.get("copyable") == "yes" and copyable_verdict(copy) != "yes":
+                s["copyable"] = copyable_verdict(copy)
+        s["segment"] = segment_of(s)
+        s["label"], s["action"] = SEGMENTS[s["segment"]]
     return data
 
 
@@ -766,8 +776,9 @@ def _board(s: dict[str, Any]) -> dict[str, Any]:
     out["copy_return_low"] = per(copy.low) if per else None
     out["copy_return_high"] = per(copy.high) if per else None
     out["copy_rank"] = out["copy_return_low"] if copy and copy.n >= COPY_BETS else None
-    out["copy_ok"], out["copy_why"] = copy_offer(s)
-    out["section"] = section_of(s.get("segment"), out["copy_ok"])
+    out["copy_label"], out["copy_why"] = copy_status(s)
+    out["copy_ok"] = out["copy_label"] == LABEL_COPYABLE
+    out["section"] = section_of(s.get("segment"))
     if _mock() and s.get("pnl_weeks") is None:
         out |= _mock_history(s)
     out |= _consistency(out.get("pnl_weeks", s.get("pnl_weeks")))
@@ -801,44 +812,62 @@ def _consistency(weeks: list[float | None] | None) -> dict[str, Any]:
 
 
 COPY_TIERS = ("proven", "quiet", "rising")  # the recommended tiers copying can be offered for
-SECTIONS = ("copy", "rising", "watch")  # Traders' sections, in order: Worth copying, Rising, Worth watching
+SECTIONS = ("sharp", "rising")  # Traders' sections, in order: Sharps (Proven and Quiet), Rising
 
 
-def section_of(segment: str | None, copy_ok: bool) -> str | None:
-    """Which section of Traders a recommended trader is listed in: ``"copy"`` (Worth copying) when copying is
-    offered (``copy_offer``), else ``"rising"`` for Rising and ``"watch"`` (Worth watching) for No proven copy
-    advantage: skilled traders worth keeping an eye on, whose copies don't reliably pay. None for a trader we
-    don't recommend, who is only in "See all checked traders"."""
+def section_of(segment: str | None) -> str | None:
+    """Which section of Traders a recommended trader is listed in, by their tier alone: ``"sharp"`` (Proven
+    and Quiet sharps) or ``"rising"``. Whether copying pays never moves a trader between sections: that's their
+    copy status (``copy_status``), shown in every row. None for a trader we don't recommend, who is only in
+    "See all checked traders"."""
     if segment not in RECOMMENDED:
         return None
-    if copy_ok:
-        return "copy"
-    return "rising" if segment == "rising" else "watch"
+    return "rising" if segment == "rising" else "sharp"  # "too_fast", kept before uselayer 0.10, was a sharp
 
 
-# A trader's copy status, in the same words everywhere (Traders, a trader's page, the Feed, the copy routes):
-# Copyable; Copy not proven (a tier we recommend whose copies aren't reliably above zero); or Not recommended.
-LABEL_COPYABLE, LABEL_NOT_PROVEN, LABEL_NOT_RECOMMENDED = "Copyable", "Copy not proven", "Not recommended"
+# A trader's copy status, a separate question from their tier, in the same words everywhere (Traders, a trader's
+# page, the Feed, the copy routes): Copyable; Costly to copy (the whole 95% range of what copies kept is below
+# zero); Copy not proven (it isn't reliably above zero); or Not offered (copies kept money, but the trader's
+# own record doesn't pass the checks).
+LABEL_COPYABLE, LABEL_NOT_PROVEN, LABEL_COSTLY, LABEL_NOT_OFFERED = (
+    "Copyable", "Copy not proven", "Costly to copy", "Not offered",
+)  # fmt: skip
+
+
+def copy_status(s: dict[str, Any]) -> tuple[str, str | None]:
+    """A trader's copy status and, unless Copyable, why: one plain sentence that starts with it ("Costly to
+    copy: …"). Copyable takes a recommended tier (Proven sharp, Quiet sharp, Rising) and copies a few minutes
+    late reliably above zero after fees (the SDK's ``copyable``: the bottom of the 95% range above zero). The
+    rest is said from the copy result alone, whatever the tier, as a reading of the past."""
+    if s.get("segment") in COPY_TIERS and s.get("copyable") == "yes":
+        return LABEL_COPYABLE, None
+    copy = Stat.from_dict(s["copy"]) if s.get("copy") else None
+    if copy is not None and copy.n >= COPY_BETS and copy.high < 0:
+        return LABEL_COSTLY, (
+            f"{LABEL_COSTLY}: copies a few minutes late lost money after fees in the trades we checked (the whole"
+            " 95% range is below zero). A reading of the past, not a promise."
+        )
+    if s.get("copyable") == "unknown":
+        return LABEL_NOT_PROVEN, f"{LABEL_NOT_PROVEN}: too few of their trades had prices after the buy to tell whether copies gain."
+    if s.get("copyable") != "yes":
+        return LABEL_NOT_PROVEN, f"{LABEL_NOT_PROVEN}: what copies a few minutes late kept after fees isn't reliably above zero."
+    if s.get("segment") == "inactive":
+        return LABEL_NOT_OFFERED, f"{LABEL_NOT_OFFERED}: they haven't traded in the last 7 days."
+    return LABEL_NOT_OFFERED, f"{LABEL_NOT_OFFERED}: copies kept money after fees, but their own record doesn't pass our checks."
 
 
 def copy_offer(s: dict[str, Any]) -> tuple[bool, str | None]:
-    """Whether Signals offers copying this trader, and if not, why: one plain sentence that starts with their
-    status ("Copy not proven: …"). One rule for Traders, a trader's page, the Feed and the copy routes: a
-    recommended tier (Proven sharp, Quiet sharp, Rising), and copies a few minutes late reliably above zero
-    after fees (the SDK's ``copyable``: the bottom of the 95% range above zero). Never Sharp but too fast,
-    Lucky, No clear edge, market makers or traders away."""
-    seg = s.get("segment")
-    if seg == "too_fast":
-        return False, f"{LABEL_NOT_PROVEN}: the price moves before a copy gets in, so what copies kept after fees isn't reliably above zero."
-    if seg == "inactive":
-        return False, f"{LABEL_NOT_RECOMMENDED}: they haven't traded in the last 7 days."
-    if seg not in COPY_TIERS:
-        return False, f"{LABEL_NOT_RECOMMENDED}: only the traders we recommend can be copyable."
-    if s.get("copyable") == "unknown":
-        return False, f"{LABEL_NOT_PROVEN}: too few of their trades had prices after the buy to tell whether copies gain."
-    if s.get("copyable") != "yes":
-        return False, f"{LABEL_NOT_PROVEN}: what copies a few minutes late kept after fees isn't reliably above zero."
-    return True, None
+    """Whether Signals offers copying this trader (Copyable), and if not, why: ``copy_status`` as a yes or no.
+    One rule for Traders, a trader's page, the Feed and the copy routes."""
+    label, why = copy_status(s)
+    return label == LABEL_COPYABLE, why
+
+
+def copy_fields(s: dict[str, Any] | None) -> dict[str, Any]:
+    """A trader's copy status as a Feed card or a follow carries it: ``copy_ok`` and ``copy_label``. No score,
+    no status: copying isn't offered for a trader the last check didn't score."""
+    label = copy_status(s)[0] if s else None
+    return {"copy_ok": label == LABEL_COPYABLE, "copy_label": label}
 
 
 def _mock_history(s: dict[str, Any]) -> dict[str, Any]:
@@ -942,14 +971,12 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
 
     edge_n = (s.get("edge") or {}).get("n")
     over = f" (over {edge_n} trades)" if edge_n else ""
+    # Skill and track record only: whether copying pays is the separate "copying" line below.
     section = s.get("section")
-    if s.get("segment") == "rising" or section == "rising":  # hedged, even when copying is offered: few trades yet
+    if section == "rising":  # hedged: few trades yet
         listed = f"Early signs: the price has tended to move their way after they buy{f', over {edge_n} trades so far' if edge_n else ''}, too few to be sure yet."
-    elif section == "copy":
-        listed = (f"The price tended to move their way within minutes after they bought{over}, and in the trades we"
-                  " checked it was still moving when a copy a few minutes late got in.")  # fmt: skip
-    elif section == "watch":
-        listed = f"The price tends to move their way within minutes after they buy{over}, though usually before a copy could get in."
+    elif section == "sharp":
+        listed = f"The price tends to move their way within minutes after they buy{over}, and it holds without their best trades."
     else:
         listed = f"Not on our list: {_trade_words(s['reason'])}" if s.get("reason") else "Not on our list."
     record = []
@@ -966,7 +993,7 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
 
     ok, why = s.get("copy_ok"), s.get("copy_why")
     copying = (f"{LABEL_COPYABLE}: copies a few minutes late were reliably above zero after fees in the trades we checked; a reading of the past, not a promise."
-               if ok else why or f"{LABEL_NOT_RECOMMENDED}.")  # fmt: skip
+               if ok else why or f"{LABEL_NOT_PROVEN}.")  # fmt: skip
     return {"trades": trades, "how": how_line[:1].upper() + how_line[1:] + "." if how_line else None,
             "listed": listed, "copying": copying}  # fmt: skip
 
@@ -1016,7 +1043,7 @@ def with_links(s: dict[str, Any]) -> dict[str, Any]:
 # Their buys over the last day, one row per bet (fills on the same outcome merged), with the price now:
 # the current price of their open position. Polymarket's public trade feed runs a few minutes behind.
 
-FEED_SEGMENTS = RECOMMENDED  # Traders' three sections: Worth copying, Rising, Worth watching ("inactive" isn't in it)
+FEED_SEGMENTS = RECOMMENDED  # Traders' two sections: Sharps and Rising ("inactive" isn't in it)
 RECOMMENDED_MIN_USD = 1000.0  # the Feed's Recommended shows only trades this big: fewer, bigger trades
 FEED_HOURS = 24
 GET_IN = 0.03  # at most this far above their price you can still get in: an alert's "$10 gets you" limit too
@@ -1130,7 +1157,7 @@ def _bets_of(d: Any, who: dict[str, Any], since: datetime | None = None) -> list
         b = one.setdefault(
             t.market,
             {"wallet": who["wallet"], "name": who.get("name"), "segment": who.get("segment"), "label": who.get("label"),
-             "copy_ok": who.get("copy_ok", False), "market": t.market, "title": t.title, "outcome": t.outcome, "url": t.url,
+             "copy_ok": who.get("copy_ok", False), "copy_label": who.get("copy_label"), "market": t.market, "title": t.title, "outcome": t.outcome, "url": t.url,
              "at": t.at, "usd": 0.0, "size": 0.0, "price_now": now.get(t.market), "token": t.token},
         )  # fmt: skip
         b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
@@ -1152,7 +1179,7 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
             count("no_profile", target="check")
         raise venue_error(e) from e
     who = {"wallet": w, "name": (s or {}).get("name") or d.trader.name, "segment": (s or {}).get("segment"),
-           "label": (s or {}).get("label"), "copy_ok": s is not None and copy_offer(s)[0]}  # fmt: skip
+           "label": (s or {}).get("label")} | copy_fields(s)  # fmt: skip
     b = next((x for x in _bets_of(d, who) if x["market"] == market), None)
     if b is None:
         raise HTTPException(404, detail="That trade isn't among their recent trades any more.")
@@ -1166,11 +1193,11 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
 @app.get("/api/live")
 def live() -> dict[str, Any]:
     """The Feed's Recommended: trades of RECOMMENDED_MIN_USD or more over the last FEED_HOURS from the traders in
-    Traders' three sections (Worth copying, Rising, Worth watching). Quiet on purpose: fewer, bigger trades."""
+    Traders' two sections (Sharps, Rising). Quiet on purpose: fewer, bigger trades."""
     data = _worth_load()
-    people = [s | {"copy_ok": copy_offer(s)[0]} for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
+    people = [s | copy_fields(s) for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
     bets, failed = _feed(people, RECOMMENDED_MIN_USD)
-    return {"traders": [{k: s[k] for k in ("wallet", "name", "segment", "label", "copy_ok")} for s in people],
+    return {"traders": [{k: s[k] for k in ("wallet", "name", "segment", "label", "copy_ok", "copy_label")} for s in people],
             "failed": failed, "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD, "bets": bets}  # fmt: skip
 
 
@@ -1499,7 +1526,7 @@ def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]
     follows = list((_load_follows()["users"].get(uid) or {}).get("follows") or [])
     scores = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
     people = [{"wallet": w, "name": (s := scores.get(w) or {}).get("name"), "segment": s.get("segment"),
-               "label": s.get("label"), "copy_ok": bool(s) and copy_offer(s)[0]} for w in follows]  # fmt: skip
+               "label": s.get("label")} | copy_fields(s or None) for w in follows]  # fmt: skip
     bets, failed = _feed(people)
     return {"traders": people, "failed": failed, "hours": FEED_HOURS, "bets": bets}
 

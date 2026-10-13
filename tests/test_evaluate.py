@@ -43,16 +43,17 @@ def test_why_theyre_here_says_what_how_why_listed_and_copying_in_plain_lines() -
     assert why["trades"] == "Politics 85%, Economy 7%"  # the top three by share; a 4% sideline isn't listed
     assert why["how"] == ("Buys around 55–84¢, usually $855, 2 new markets a day, holds 56% of closed positions until"
                           " the market settles.")  # fmt: skip
-    assert why["listed"] == ("The price tended to move their way within minutes after they bought (over 43 trades), and"
-                             " in the trades we checked it was still moving when a copy a few minutes late got in."
-                             " Trading profit +$12.3K in the last 30 days; up in 8 of the last 12 weeks.")  # fmt: skip
+    # Why they're listed is skill and track record only; copying is its own line.
+    assert why["listed"] == ("The price tends to move their way within minutes after they buy (over 43 trades), and it"
+                             " holds without their best trades. Trading profit +$12.3K in the last 30 days; up in 8 of the"
+                             " last 12 weeks.")  # fmt: skip
     assert why["copying"].startswith("Copyable: ") and "not a promise" in why["copying"]
 
-    fast = s | {"segment": "too_fast", "copyable": "no"}
-    why = engine.why_lines(fast | engine._board(fast))
-    assert why["listed"].startswith(
-        "The price tends to move their way within minutes after they buy (over 43 trades), though usually before a copy could get in.")
-    assert why["copying"] == engine.copy_offer(fast)[1] and why["copying"].startswith("Copy not proven: ")
+    # NM-P, 13 October: a sharp whose copies lost money. The same verdict line; copying says it plainly.
+    costly = s | {"copyable": "no", "copy": {"mean": -0.026, "margin": 0.022, "n": 53, "z": -2.4}}
+    why_costly = engine.why_lines(costly | engine._board(costly))
+    assert why_costly["listed"] == why["listed"] and "copy" not in why_costly["listed"]
+    assert why_costly["copying"] == engine.copy_offer(costly)[1] and why_costly["copying"].startswith("Costly to copy: ")
 
     rising = s | {"segment": "rising", "copyable": "unknown", "edge": {"mean": 0.02, "margin": 0.03, "n": 12, "z": 1}}
     assert "over 12 trades so far, too few to be sure yet" in engine.why_lines(rising | engine._board(rising))["listed"]
@@ -128,7 +129,7 @@ def test_the_check_says_how_much_the_book_holds_near_their_price(api: TestClient
 def test_rising_stays_hedged_even_when_copying_is_offered() -> None:
     rising = COPYABLE | {"segment": "rising", "edge": {"mean": 0.02, "margin": 0.03, "n": 12, "z": 1}}
     b = engine._board(rising)
-    assert b["section"] == "copy"  # listed in Worth copying
+    assert (b["section"], b["copy_ok"]) == ("rising", True)  # listed by tier; copying is its status
     assert engine.why_lines(rising | b)["listed"].startswith("Early signs: the price has tended to move their way after they buy, over 12 trades so far")
 
 
@@ -181,14 +182,19 @@ def test_last_bought_is_their_newest_buy_from_any_source(run_js: Any) -> None:
     assert run_js(("lastBuyAt",), "lastBuyAt({recent: []}, null)") is None
 
 
-def test_a_copy_status_is_one_of_three_words_everywhere(run_js: Any) -> None:
-    deps = ("isCopyable", "SEG_ORDER", "copyLabel", "esc", "COPY_LABELS", "boldStatus")
-    got = run_js(deps, "[copyLabel({copy_ok: true, segment: 'rising'}), copyLabel({copy_ok: false, segment: 'proven'}),"
-                       " copyLabel({copy_ok: false, segment: 'too_fast'}), copyLabel({segment: 'lucky'}), copyLabel({segment: 'inactive'})]")  # fmt: skip
-    assert got == ["Copyable", "Copy not proven", "Copy not proven", "Not recommended", "Not recommended"]
-    # the same words as the engine's sentences, which the page shows with the status in bold
-    for seg, copyable in (("too_fast", "no"), ("proven", "unknown"), ("lucky", "yes"), ("inactive", "yes")):
-        why = engine.copy_offer({"segment": seg, "copyable": copyable})[1] or ""
-        label = run_js(deps, f"copyLabel({{copy_ok: false, segment: '{seg}'}})")
-        assert why.startswith(f"{label}: "), (seg, why)
+def test_a_copy_status_is_one_of_four_words_everywhere(run_js: Any) -> None:
+    deps = ("isCopyable", "COPY_LABELS", "copyLabel", "esc", "boldStatus")
+    losing = {"mean": -0.026, "margin": 0.022, "n": 53, "z": -2.4}
+    # the engine's words, which the page shows as they come (copy_label) and with the status in bold
+    for s in ({"segment": "proven", "copyable": "no", "copy": losing}, {"segment": "proven", "copyable": "unknown"},
+              {"segment": "quiet", "copyable": "no"}, {"segment": "lucky", "copyable": "yes"},
+              {"segment": "inactive", "copyable": "yes"}):  # fmt: skip
+        b = engine._board(s | {"sample": []})
+        why = b["copy_why"] or ""
+        label = run_js(deps, f"copyLabel({{copy_ok: false, copy_label: {b['copy_label']!r}}})")
+        assert label == b["copy_label"] and why.startswith(f"{label}: "), (s, why)
         assert run_js(deps, f"boldStatus({why!r})").startswith(f"<b>{label}</b>: ")
+    got = run_js(deps, "[copyLabel({copy_ok: true}), copyLabel({copy_ok: false}), copyLabel({copy_label: 'Lucky'})]")
+    assert got == ["Copyable", "Copy not proven", "Copy not proven"]  # never a word the engine doesn't say
+    assert [engine._board(s | {"sample": []})["copy_label"] for s in (COPYABLE, SCORE | {"copyable": "no", "copy": losing})] == [
+        "Copyable", "Costly to copy"]  # fmt: skip

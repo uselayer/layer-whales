@@ -69,7 +69,7 @@
   .tier.t1 { background: var(--fg); color: var(--bg); }
   .tier.t2 { border: 1px solid var(--line); color: var(--fg); padding: 1px 7px; }
   .tier.t3 { background: var(--soft); color: var(--muted); }
-  .tier.s-proven { --c: var(--gain); } .tier.s-quiet { --c: var(--teal); } .tier.s-rising { --c: var(--blue); } .tier.s-fast { --c: var(--amber); }
+  .tier.s-proven { --c: var(--gain); } .tier.s-quiet { --c: var(--teal); } .tier.s-rising { --c: var(--blue); }
   .tier[class*="s-"] { background: color-mix(in srgb, var(--c) 11%, var(--card)); color: color-mix(in srgb, var(--c) 80%, var(--fg)); }
   button.tier { border: 0; font: inherit; font-size: 12px; font-weight: 500; line-height: 1.35; cursor: pointer; }
   button.tier:hover { background: color-mix(in srgb, var(--c) 20%, var(--card)); }
@@ -647,6 +647,8 @@ function ago(t) {
 // One "Copying is paused" callout for the Feed and Traders, shown while no trader's copies are offered.
 const PAUSED_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg>`;
 const pausedNote = (rest) => `<div class="paused">${PAUSED_ICON}<p><b>Copying is paused.</b> No trader's copies have been reliably profitable after fees lately. ${rest}</p></div>`;
+// What a recommended trader's activity is and isn't: something to look into, never a tested way to make money.
+const NOT_A_TIP = "Their trades are research, not tips: we haven't found that buying after them pays.";
 
 // Next to "Updated" on the Feed: the delay in a few words, the full sentence behind the ⓘ (tap or hover).
 const LAG = `<span class="lag"><button type="button" class="lag-btn" aria-describedby="lagtip">3–5 min behind<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><span class="lag-tip" role="tooltip" id="lagtip">Polymarket's public data runs 3–5 minutes behind, so trades show up here a few minutes after they're made.</span></span>`;
@@ -689,11 +691,12 @@ function avatar(seed, size = 36) {
   }
   return `<span class="av" style="--h:${h % 360};width:${size}px;height:${size}px" aria-hidden="true"><svg viewBox="0 0 5 5" fill="currentColor" shape-rendering="crispEdges">${cells}</svg></span>`;
 }
+// The tier: skill and track record only (uselayer 0.10). Whether copying pays is the copy status (copyLabel), apart.
 const TIER = {
   proven: ["Proven sharp", "s-proven"], quiet: ["Quiet sharp", "s-quiet"], rising: ["Rising", "s-rising"],
-  too_fast: ["Copy not proven", "s-fast"], // short for "No proven copy advantage": the pill must fit beside a name at 390px
-  lucky: ["Lucky", "t3"], no_edge: ["No clear edge", "t3"], no_view: ["No view", "t3"],
-  inactive: ["Not trading lately", "t3"], // uselayer 0.6: would be recommended, but no buy in 7 days
+  big_profit: ["Big profit, edge unproven", "t3"], // over $50K from trading, but the price test doesn't show skill
+  lucky: ["Profit rests on one win", "t3"], too_few: ["Not enough data", "t3"], no_edge: ["Edge not proven", "t3"],
+  no_view: ["No view", "t3"], inactive: ["Not trading lately", "t3"], // uselayer 0.6: would be recommended, but no buy in 7 days
 };
 // A trader's page: the scored page for a Polymarket wallet, else the venue leaderboard page.
 const traderHref = (venue, id) => venue === "polymarket" ? `#/worth/${esc(id)}` : `#/t/${venue}/${encodeURIComponent(id)}`;
@@ -1014,7 +1017,7 @@ function renderFeed() {
   const min = `$${Math.round(r.min_usd ?? 1000).toLocaleString("en-US")}`; // "$1,000", as everywhere else
   renderTrades(r, feed.at, feed.err, {
     who: `${plural(r.traders.length, "trader")} we recommend`,
-    note: `<p class="foot-note" style="margin:0 0 12px">Only trades of ${min} or more from Worth copying, Rising and Worth watching traders.</p>
+    note: `<p class="foot-note" style="margin:0 0 12px">Only trades of ${min} or more from Sharps and Rising traders. ${NOT_A_TIP}</p>
       ${r.traders.some((t) => t.copy_ok) ? "" : pausedNote(`Their trades still show here. <a class="link" href="#/traders">Why?</a>`)}`,
     none: [`No trades of ${min} or more in the last ${r.hours} hours`, "Recommended shows only bigger trades, so it's often quiet. Trades show up here a few minutes after they're made."],
     sheet: () => followingSheet(r.traders, "rec"),
@@ -1155,22 +1158,21 @@ function oneCardPerTrade(bets) {
 function followingSheet(traders, kind = "rec") {
   const panel = sheet(`<h2>${plural(traders.length, "trader")} ${kind === "follow" ? "you follow" : "we recommend"}</h2>
     <p class="explain">${kind === "follow" ? "Following shows every trade of theirs from the last day. Follow or unfollow from a trader's page."
-      : "Recommended shows trades of $1,000 or more from the traders in Worth copying, Rising and Worth watching."} <button class="link" id="howlink">How we pick traders</button></p>
+      : "Recommended shows trades of $1,000 or more from the traders in Sharps and Rising."} <button class="link" id="howlink">How we pick traders</button></p>
     <div class="list" style="margin-top:16px">${traders.map((t) => `<a class="trow norank" href="#/worth/${esc(t.wallet)}">${avatar(t.wallet, 36)}
       <span class="tmain"><span class="name">${esc(displayName(t.name, t.wallet))}</span></span>${tier(t.segment)}</a>`).join("")}</div>`);
   $$("a", panel).forEach((a) => a.addEventListener("click", closeSheet));
   $("#howlink", panel).onclick = () => howSheet();
 }
 
-// "How we pick traders": The checks (what we look at) and The tiers (what passing earns, and where it's listed).
-// `tab` opens one of them; `focus` marks a check ("copy") or a tier ("proven", …) and scrolls to it.
+// "How we pick traders": The checks (what we look at), The tiers (what passing earns, and where it's listed) and
+// Copying (a separate question, never part of the tier). `tab` opens one of them; `focus` marks a check, a tier
+// ("proven", …) or a copy status ("costly", …) and scrolls to it.
 const HOW_CHECKS = [
   ["edge", "The price moves their way.", "A few minutes after they buy, has the market come round to their view? That's the main sign of skill."],
   ["n", "Enough trades to trust it.", "One good week isn't a record. Trades on the same game count once."],
   ["luck", "Not one lucky win.", "Their edge has to hold without their best trades, and their profit without their biggest win."],
   ["profit", "Profitable from trading.", "They made money from trading over the last 30 days. Rewards and rebates don't count."],
-  ["copy", "You can copy it.", "Buying the same thing a minute or more after them, and paying the fee, still has to pay off an hour later, and not by luck.",
-    ["How we price a copy", "Even the low end of our estimate has to be above zero, over at least 8 trades. We price each copy at the ask, what a buyer pays: at least half a cent above the middle price Polymarket's history shows."]],
   ["side", "They take a side.", "Market makers and arbitrage traders have no view to follow, so they're left out."],
   ["active", "Still trading.", "Nobody who hasn't bought anything in a week is recommended."],
 ];
@@ -1178,27 +1180,40 @@ const HOW_TIERS = [
   ["proven", "Passes every check over at least 40 separate trades, on an account the leaderboards list or a big one."],
   ["quiet", "The same over at least 25 trades, on a small account no leaderboard lists."],
   ["rising", "Good early signs, too few trades to be sure yet."],
-  ["too_fast", "Real skill, but by the time you'd get in the price has moved, so copies make little or nothing after fees. A small positive estimate can still show; it isn't reliably above zero."],
+];
+// Every trader's copy status, in the engine's words (copy_status): what copies a minute or more after them kept.
+const HOW_COPY = [
+  ["copyable", "Copyable", "Copies kept money after fees, and not by luck: even the low end of our estimate is above zero, over at least 8 trades. Only for Proven sharps, Quiet sharps and Rising."],
+  ["not_proven", "Copy not proven", "What copies kept isn't reliably above zero, or too few of their trades had prices after the buy to tell."],
+  ["costly", "Costly to copy", "Copies lost money after fees in the trades we checked: even the high end of our estimate is below zero. Usually the price has moved their way before a copy gets in."],
+  ["not_offered", "Not offered", "Copies kept money, but the trader's own record doesn't pass the checks."],
 ];
 const howMore = ([label, text]) => `<details class="how-more"><summary>${label}</summary><p>${text}</p></details>`;
 
 function howSheet(tab = "checks", focus = null) {
-  const tabs = [["checks", "The checks"], ["tiers", "The tiers"]];
+  const tabs = [["checks", "The checks"], ["tiers", "The tiers"], ["copying", "Copying"]];
   const panel = sheet(`<h2>How we pick traders</h2>
     <div class="how-tabs" role="tablist" aria-label="How we pick traders">${tabs.map(([k, l]) => `<button type="button" role="tab" id="howtab-${k}" aria-controls="howpanel-${k}" data-howtab="${k}">${l}</button>`).join("")}</div>
     <div class="how" role="tabpanel" id="howpanel-checks" aria-labelledby="howtab-checks">
       <p class="explain" style="margin-top:12px">We look at Polymarket traders on the leaderboards and in busy markets, and check up to 60 of each one's trades from the last 30 days against Polymarket's own price history.</p>
       <ol>${HOW_CHECKS.map(([k, head, line, more]) => `<li data-howfocus="${k}"><b>${head}</b> ${line}${more ? howMore(more) : ""}</li>`).join("")}</ol>
-      <p class="explain">A trader who passes gets a tier. <button type="button" class="link" data-howtab="tiers">See the tiers →</button></p>
+      <p class="explain">A trader who passes gets a tier. Whether copying them pays is a separate question, never part of the tier. <button type="button" class="link" data-howtab="tiers">See the tiers →</button></p>
     </div>
     <div class="how" role="tabpanel" id="howpanel-tiers" aria-labelledby="howtab-tiers">
-      <p class="explain" style="margin-top:12px">The tier says how sure we are of a trader's skill. A trader is <b>Copyable</b> only when copies have also paid off after fees; otherwise <b>Copy not proven</b>.</p>
+      <p class="explain" style="margin-top:12px">The tier says how sure we are of a trader's skill and record. Copying never moves it: a Proven sharp can be costly to copy. Each trader's copy status is apart. <button type="button" class="link" data-howtab="copying">Copying →</button></p>
       ${HOW_TIERS.map(([k, text]) => `<div class="how-tier" data-howfocus="${k}">${tier(k)}<p>${text}</p></div>`).join("")}
       <h3>Where they're listed</h3>
       <ul>${SECTIONS.map(([, title, sub]) => `<li><b>${title}:</b> ${sub}</li>`).join("")}</ul>
-      ${howMore(["Left out of recommendations", "<b>Lucky</b> (over $50K profit from trading, but it rests on one win, or the price doesn't move their way after they buy), <b>No clear edge</b> (the price doesn't clearly move their way, or too few trades to tell), <b>Not trading lately</b>, and market makers and arbitrage (<b>No view</b>)."])}
+      ${howMore(["Left out of recommendations", "<b>Big profit, edge unproven</b> (over $50K profit from trading, but the price doesn't clearly move their way after they buy: not shown to be skill, and not shown to be luck either), <b>Profit rests on one win</b> (over $50K profit from trading, but without their biggest win they'd be down), <b>Edge not proven</b> (the price doesn't clearly move their way, or it does but they lost money from trading over 30 days or it rests on a few trades), <b>Not enough data</b> (too few of their trades could be checked), <b>Not trading lately</b>, and market makers and arbitrage (<b>No view</b>)."])}
       <h3>Reading the list</h3>
       <p class="explain" style="margin-top:0"><b>Weeks up</b> (12-week consistency): ${WEEK_COUNTS}</p>
+    </div>
+    <div class="how" role="tabpanel" id="howpanel-copying" aria-labelledby="howtab-copying">
+      <p class="explain" style="margin-top:12px">For every trader we also check what copying them would have kept: buying the same thing a minute or more after them, at the price a buyer pays, with the fee, an hour later. It's their copy status, apart from their tier.</p>
+      ${HOW_COPY.map(([k, label, text]) => `<div class="how-tier" data-howfocus="${k}"><b>${label}</b><p>${text}</p></div>`).join("")}
+      ${howMore(["How we price a copy", "We price each copy at the ask, what a buyer pays: at least half a cent above the middle price Polymarket's history shows. The estimate comes with a 95% range, and only its low end can make a trader Copyable."])}
+      <h3>Following isn't a tip</h3>
+      <p class="explain" style="margin-top:0">Following a trader, and the Feed, show what they buy, a few minutes after they do. That's research. ${NOT_A_TIP}</p>
     </div>
     <p class="explain" style="margin-top:18px">A reading of the past, not a promise. Signals places no orders: you buy on Polymarket yourself.</p>`);
   const show = (k) => {
@@ -1210,10 +1225,10 @@ function howSheet(tab = "checks", focus = null) {
     panel.scrollTop = 0;
   };
   $$("[data-howtab]", panel).forEach((b) => (b.onclick = () => { show(b.dataset.howtab); $(`#howtab-${b.dataset.howtab}`, panel).focus(); }));
-  $(".how-tabs", panel).onkeydown = (e) => { // the arrow keys move between the two tabs
+  $(".how-tabs", panel).onkeydown = (e) => { // the arrow keys move between the tabs, wrapping round
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     const on = tabs.findIndex(([t]) => $(`#howtab-${t}`, panel).getAttribute("aria-selected") === "true");
-    const k = tabs[(on + 1) % tabs.length][0];
+    const k = tabs[(on + (e.key === "ArrowLeft" ? -1 : 1) + tabs.length) % tabs.length][0];
     show(k); $(`#howtab-${k}`, panel).focus();
   };
   show(tab);
@@ -1307,16 +1322,16 @@ function onboardingPage() {
 // One bar: market chips (the onboarding interests), Copyable only, search by name or wallet, period, sort.
 // Profit history (weeks in profit, trend, 7D/90D) comes from the SDK's next release; until then those columns
 // show "—" and "Most consistent" waits. Never a made-up number for a real trader (sample data is local-only).
-const SEG_ORDER = ["proven", "quiet", "rising", "too_fast"]; // the tiers we recommend, in order
+const SEG_ORDER = ["proven", "quiet", "rising"]; // the tiers we recommend, in order
 const RANKED = 25;
 let worthTimer = null, worthLast = null;
 const topOpts = { venue: "all", by: "pnl" };
 const lb = { copyOnly: false, q: "", sort: null, period: "30d", all: false, more: {} }; // more: "Show more" pressed, per section
-// Traders' sections, from the engine's section_of: one rule, so the list and its tests agree.
+// Traders' sections, from the engine's section_of: by tier alone, so the list and its tests agree. Copying is
+// each row's copy status, and "Copyable only" filters on it.
 const SECTIONS = [
-  ["copy", "Worth copying", "Copies a few minutes late have been reliably profitable after fees."],
-  ["rising", "Rising", "Good early signs, too few trades to be sure yet. Copy not proven yet."],
-  ["watch", "Worth watching", "Skilled traders worth keeping an eye on. Copy not proven: the price moves before you'd get in."],
+  ["sharp", "Sharps", "The price moves their way after they buy, over enough trades to trust it. Each one's copy status is apart."],
+  ["rising", "Rising", "Good early signs, too few trades to be sure yet."],
 ];
 
 async function tradersPage(view) {
@@ -1342,9 +1357,10 @@ async function worthView() {
 // reliably above zero after fees (the bottom of the 95% range). Traders, a profile, the Feed and the copy routes
 // all use it, so none can offer what another refuses.
 const isCopyable = (s) => s.copy_ok === true;
-// A trader's copy status, in the same words everywhere and as the engine's copy_offer: Copyable, Copy not proven
-// (a tier we recommend whose copies aren't reliably above zero), or Not recommended.
-const copyLabel = (s) => isCopyable(s) ? "Copyable" : SEG_ORDER.includes(s?.segment) ? "Copy not proven" : "Not recommended";
+// A trader's copy status, apart from their tier, in the engine's words (copy_status): Copyable, Copy not proven,
+// Costly to copy or Not offered.
+const COPY_LABELS = ["Copyable", "Copy not proven", "Costly to copy", "Not offered"];
+const copyLabel = (s) => isCopyable(s) ? "Copyable" : COPY_LABELS.includes(s?.copy_label) ? s.copy_label : "Copy not proven";
 // What a copy kept after fees is an estimate: always with its 95% range, and never shown as a gain unless the
 // whole range is above zero.
 const copyRange = (s) => s.copy_return_low != null && s.copy_return_high != null ? `${lbPct(s.copy_return_low)} to ${lbPct(s.copy_return_high)}` : null;
@@ -1449,15 +1465,14 @@ function renderWorth() {
   // One list of rows, with its own ranks and "Show more": a section, or every checked trader.
   const rows = (list, key) => `${list.map((s, i) => row(s, i, lb.more[key])).join("")}
       ${list.length > RANKED && !lb.more[key] ? `<button type="button" class="lb-more" data-lbmore="${key}">Show ${list.length - RANKED} more</button>` : ""}`;
-  // Recommended traders come in sections: Worth copying, then Rising and Worth watching when they have anyone.
-  // While nobody can be copied, the "Copying is paused" callout above the list says so instead of an empty
-  // Worth copying; when someone can but not in your picks, the section stays with a line saying so.
-  // "See all checked traders" stays one marked list.
+  // Recommended traders come in sections by tier: Sharps, then Rising, each when it has anyone. Copying is each
+  // row's copy status ("Copyable only" filters on it); while nobody can be copied, the "Copying is paused"
+  // callout above the list says so. "See all checked traders" stays one marked list.
   const sections = lb.all ? null : SECTIONS.map(([key, title, sub]) => {
     const list = shown.filter((s) => s.section === key);
-    if (!list.length && (key !== "copy" || paused)) return "";
+    if (!list.length) return "";
     return `<section class="lb-section" aria-label="${title}"><div class="lb-sec"><h2>${title}</h2><p>${sub}</p></div>
-      ${list.length ? rows(list, key) : `<p class="lb-secnone">No trader you can copy matches what you've picked.</p>`}</section>`;
+      ${rows(list, key)}</section>`;
   }).join("");
 
   let body;
@@ -1503,7 +1518,7 @@ function renderWorth() {
       ${sort === "copying" ? " · Copy estimate ranks by the bottom of its range, from 8 trades" : ""}
       ${periods ? " · 7D/30D/90D changes profit and trend only: consistency always covers the last 12 weeks, wins and usual trade the last 30 days" : ""}
       ${history ? "" : " · Weeks in profit, trend and 7D/90D arrive with the next data update"}
-      <br>${lb.all ? `Showing every checked trader except market makers and arbitrage · <button class="link" id="lbrec">Recommended only</button>` : `${left ? `${left} left out: big profit without skill, market makers, arbitrage and traders with no clear edge · <button class="link" id="lbrec">See all checked traders</button>` : ""}`}
+      <br>${lb.all ? `Showing every checked trader except market makers and arbitrage · <button class="link" id="lbrec">Recommended only</button>` : `${left ? `${left} left out: edge not proven, not enough data, big profit with the edge unproven or resting on one win, market makers and arbitrage · <button class="link" id="lbrec">See all checked traders</button>` : ""}`}
       · <a class="link" href="#/traders/top">Top profit</a>
       ${st.error ? ` · <span style="color:var(--danger)">Last check failed: ${esc(st.error)}</span>` : ""}</p>`;
 
@@ -1515,7 +1530,7 @@ function renderWorth() {
   $("#lbsort").onchange = (e) => { lb.sort = e.target.value; renderWorth(); };
   $$("[data-lbsort]", box).forEach((b) => (b.onclick = () => { lb.sort = b.dataset.lbsort; renderWorth(); }));
   $$("[data-lbperiod]", box).forEach((b) => (b.onclick = () => { lb.period = b.dataset.lbperiod; renderWorth(); }));
-  const howp = $("#howpaused"); if (howp) howp.onclick = () => howSheet("checks", "copy");
+  const howp = $("#howpaused"); if (howp) howp.onclick = () => howSheet("copying", "copyable");
   $$("[data-lbmore]", box).forEach((b) => (b.onclick = () => { lb.more[b.dataset.lbmore] = true; renderWorth(); }));
   const clear = $("#lbclear"); if (clear) clear.onclick = () => { lb.q = ""; renderWorth(); };
   const all = $("#lball"); if (all) all.onclick = () => { setInterests([]); renderWorth(); };
@@ -1603,8 +1618,7 @@ function lastBuyAt(s, d) {
   return [...fresh, ...(s.recent || []), { at: s.last_buy }].map((b) => b.at).filter(Boolean)
     .reduce((m, at) => (m == null || String(at) > String(m) ? at : m), null);
 }
-// A copy status sentence ("Copy not proven: …", from the engine) with its status in bold.
-const COPY_LABELS = ["Copyable", "Copy not proven", "Not recommended"];
+// A copy status sentence ("Costly to copy: …", from the engine) with its status (COPY_LABELS) in bold.
 const boldStatus = (t) => { const l = COPY_LABELS.find((x) => t.startsWith(x)); return l ? `<b>${l}</b>${esc(t.slice(l.length))}` : esc(t); };
 const WARN_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 15 14H1z"/><path d="M8 6.2v3.6M8 11.9v.1"/></svg>`;
 
