@@ -316,10 +316,20 @@ def trade(at: float, action: str = "buy", market: str = "0xm1") -> Any:
 class FakeSdk:
     """The background's SDK reads: each wallet's latest trades, and its score (or an error)."""
 
-    def __init__(self, trades: dict[str, list[Any]], scores: dict[str, Any]) -> None:
-        self._trades, self._scores = trades, scores
+    def __init__(self, trades: dict[str, list[Any]], scores: dict[str, Any],
+                 boards: dict[tuple[str, str, str | None], list[str]] | None = None) -> None:  # fmt: skip
+        self._trades, self._scores, self._boards = trades, scores, boards or {}
         self.scored: list[tuple[str, bool]] = []
         self.checked: list[str] = []
+        self.board_reads = 0
+        self._poly = SimpleNamespace(leaderboard=self.leaderboard)
+
+    def leaderboard(self, order: str, period: str, limit: int, *, category: str | None = None, offset: int = 0) -> list[Any]:
+        self.board_reads += 1
+        if self._boards is None:
+            raise VenueError("venue_unavailable", "Polymarket is down.", venue="polymarket")
+        rows = self._boards.get((order, period, category), [])[offset : offset + limit]
+        return [{"proxyWallet": w} for w in rows]
 
     def trades(self, venue: str, wallet: str, limit: int) -> list[Any]:
         self.checked.append(wallet)
@@ -439,3 +449,52 @@ def test_the_owner_sees_how_the_evaluation_is_going_in_counts_only(store: Any, m
     assert e["not_recommended"]["not_enough_recent_evidence"] == 1 and e["selective"] == 1
     assert s["evaluating"]["on"] is engine.EVALUATE_ON and "since_launch" in s["evaluating"]
     assert AMY not in repr(s) and BEN not in repr(s)
+
+
+# ---- on_leaderboard without the sweep ----
+
+
+def test_with_the_sweep_off_on_leaderboard_comes_from_the_boards_read_directly(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    now = time.time()
+    active = [trade(now - 3600 * i, market=f"0xm{i}") for i in range(10)]
+    deep = [f"0x{i:040x}" for i in range(1, 900)] + [AMY]  # AMY at #900 on the monthly board
+    sdk = FakeSdk({AMY: active, BEN: active}, {AMY: score(AMY, "rising"), BEN: score(BEN, "rising")},
+                  boards={("PNL", "MONTH", None): deep, ("PNL", "MONTH", "SPORTS"): [CAL]})  # fmt: skip
+    monkeypatch.setattr(engine, "background", lambda: sdk)
+    engine.directory().add([Seen(AMY, "search"), Seen(BEN, "search")])  # no sweep: no leaderboard sightings
+    engine.evaluate_round()
+    assert sorted(sdk.scored) == [(AMY, True), (BEN, False)]  # as discover() would pass it
+    assert engine._evaluate_state["leaderboards"] == "read"
+    reads = sdk.board_reads
+    assert reads == 19 + 3 + 8  # the monthly board 18 full pages (to #900) and the empty 19th, the others one page each
+    engine.directory().add([Seen(CAL, "search")])
+    sdk._trades[CAL] = active
+    sdk._scores[CAL] = score(CAL, "rising")
+    engine.evaluate_round()
+    assert (CAL, True) in sdk.scored and sdk.board_reads == reads  # kept: not read again every round
+
+
+def test_while_the_sweep_is_fresh_its_sightings_are_used_and_no_board_is_read(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    now = time.time()
+    sdk = FakeSdk({AMY: [trade(now - 3600 * i, market=f"0xm{i}") for i in range(10)]}, {AMY: score(AMY, "rising")},
+                  boards={})  # fmt: skip
+    monkeypatch.setattr(engine, "background", lambda: sdk)
+    engine.directory().add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", rank=40)])
+    engine.evaluate_round()
+    assert sdk.scored == [(AMY, True)] and sdk.board_reads == 0 and engine._evaluate_state["leaderboards"] == "sweep"
+
+
+def test_when_the_boards_cant_be_read_either_the_sightings_stand_and_it_says_so(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    now = time.time()
+    sdk = FakeSdk({AMY: [trade(now - 3600 * i, market=f"0xm{i}") for i in range(10)]}, {AMY: score(AMY, "rising")})
+    sdk._boards = None  # type: ignore[assignment]  # Polymarket's leaderboard is down
+    monkeypatch.setattr(engine, "background", lambda: sdk)
+    engine.directory().add([Seen(AMY, "search")])
+    assert engine.evaluate_round()["done"]["scored"] == 1
+    assert sdk.scored == [(AMY, False)] and "couldn't be read" in engine._evaluate_state["leaderboards"]

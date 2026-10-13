@@ -90,7 +90,9 @@ RECHECK_EVIDENCE_S = 86400  # not enough recent evidence, or not trading lately:
 RECHECK_SCORED_S = 2 * 86400  # any other score
 RECHECK_QUIET_S = 7 * 86400  # dormant, or a score of market making or arbitrage (which rarely changes)
 RETRY_S = (900, 3600, 4 * 3600, 12 * 3600, 86400)  # after 1, 2, 3, 4, 5 or more failed tries in a row
-LISTED_FRESH_S = 2 * 86400  # a leaderboard place counts for on_leaderboard while a sweep saw it this recently
+# A leaderboard place counts for on_leaderboard while a sweep saw it this recently (a sweep is daily, and takes a
+# few hours). When the sweep is off or behind, the evaluation reads the boards itself (app.listed_now).
+LISTED_FRESH_S = 26 * 3600
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS wallets (wallet TEXT PRIMARY KEY, name TEXT, first_seen REAL NOT NULL,
@@ -135,8 +137,11 @@ _KIND = f"""CASE WHEN segment IN ({_RECOMMENDED_SQL}) AND status IN ('scored', '
 # On the boards the Worth following check reads to call a wallet "on the leaderboard" (uselayer's find_candidates,
 # passed to its score as on_leaderboard): the monthly profit board's top 1,000; the weekly and all-time profit and
 # monthly volume boards' top 50; each category's monthly profit top 50.
-_CHECK_BOARDS = ("PNL WEEK OVERALL", "PNL ALL OVERALL", "VOL MONTH OVERALL", *(f"PNL MONTH {c}" for c in (
-    "SPORTS", "CRYPTO", "POLITICS", "ECONOMICS", "CULTURE", "WEATHER", "ESPORTS", "TECH")))  # fmt: skip
+CHECK_CATEGORIES = ("SPORTS", "CRYPTO", "POLITICS", "ECONOMICS", "CULTURE", "WEATHER", "ESPORTS", "TECH")
+# (order, period, category, places): the same boards, to read directly
+CHECK_BOARDS = (("PNL", "MONTH", None, 1000), ("PNL", "WEEK", None, 50), ("PNL", "ALL", None, 50),
+                ("VOL", "MONTH", None, 50), *(("PNL", "MONTH", c, 50) for c in CHECK_CATEGORIES))  # fmt: skip
+_CHECK_BOARDS = ("PNL WEEK OVERALL", "PNL ALL OVERALL", "VOL MONTH OVERALL", *(f"PNL MONTH {c}" for c in CHECK_CATEGORIES))
 _LISTED = f"""EXISTS (SELECT 1 FROM sightings s WHERE s.wallet = q.wallet AND s.source = 'leaderboard'
   AND s.last_seen >= ? AND ((s.place = 'PNL MONTH OVERALL' AND s.rank <= 1000)
   OR (s.place IN ({", ".join(f"'{b}'" for b in _CHECK_BOARDS)}) AND s.rank <= 50)))"""
@@ -509,6 +514,13 @@ class Directory:
             ).fetchall()
         return [{"wallet": w, "kind": KINDS[k], "category": c, "status": st, "scored_at": at, "name": n,
                  "on_leaderboard": bool(b)} for w, k, c, st, at, n, b in rows]  # fmt: skip
+
+    def boards_seen_at(self) -> float | None:
+        """When a sweep last saw the monthly profit board (the one on_leaderboard leans on most), or None."""
+        with self._db() as con:
+            return con.execute(  # type: ignore[no-any-return]
+                "SELECT MAX(last_seen) FROM sightings WHERE source = 'leaderboard' AND place = 'PNL MONTH OVERALL'"
+            ).fetchone()[0]
 
     def due_counts(self, now: float | None = None) -> dict[str, int]:
         """How many wallets are due a look now, by kind."""

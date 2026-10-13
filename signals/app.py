@@ -40,7 +40,9 @@ from uselayer import Client, VenueError, Whales, WhaleTrade
 from uselayer.whale_scores import CATEGORY_TAGS, COPY_BETS, RECOMMENDED, SEGMENTS, Stat, category_of, copyable_verdict
 
 from signals.budget import BackgroundHttp, Budget
-from signals.directory import QUICK_TRADES, Directory, QuickLook, Seen, from_sighting, quick_look
+from signals.directory import (
+    CHECK_BOARDS, LISTED_FRESH_S, QUICK_TRADES, Directory, QuickLook, Seen, from_sighting, quick_look,
+)  # fmt: skip
 
 HERE = Path(__file__).parent
 STORE_DIR = Path(os.environ.get("SIGNALS_STORE_DIR", Path.home() / ".uselayer" / "signals"))
@@ -511,8 +513,9 @@ EVALUATE_IDLE_S = 60  # with nothing due, it looks again after this
 EVALUATE_FAILS_IN_A_ROW = 5  # this many failed tries in a row and Polymarket is likely down...
 EVALUATE_PAUSE_S = 600  # ...so it waits this long before the next
 EVALUATE_LOG_S = 3600  # a line in the logs this often
+LISTED_KEEP_S = 6 * 3600  # the boards read directly, when the sweep's are stale, are kept this long (31 reads)
 OUTCOMES = ("scored", "not_enough_recent_evidence", "not_trading_lately", "dormant", "failed")
-_evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None,
+_evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None, "leaderboards": None,
                                    "since_launch": dict.fromkeys(OUTCOMES, 0)}  # fmt: skip
 
 
@@ -522,6 +525,44 @@ def quick_check(wallet: str, scored_at: float | None = None, now: float | None =
     got = background().trades("polymarket", wallet, limit=QUICK_TRADES)
     trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0]) for t in got]
     return quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
+
+
+def listed_now() -> frozenset[str]:
+    """The wallets the Worth following check would call "on the leaderboard" (uselayer's find_candidates: the
+    monthly profit board's top 1,000, the weekly and all-time profit and monthly volume boards' top 50, each
+    category's monthly top 50), read now on the background's budget and kept LISTED_KEEP_S. For when the sweep's
+    sightings are stale or the sweep is off, so a score's on_leaderboard (and so its tier) doesn't change with them."""
+
+    def read() -> frozenset[str]:
+        poly = background()._poly  # the SDK's leaderboard reader, as its own finder uses it
+        out: set[str] = set()
+        for order, period, category, places in CHECK_BOARDS:
+            for offset in range(0, places, 50):
+                rows = poly.leaderboard(order, period, 50, category=category, offset=offset)
+                out |= {str(r.get("proxyWallet") or "").lower() for r in rows} - {""}
+                if len(rows) < 50:
+                    break
+        return frozenset(out)
+
+    return cached("listed", LISTED_KEEP_S, read)  # type: ignore[no-any-return]
+
+
+def _on_leaderboard(due: list[dict[str, Any]], now: float | None = None) -> None:
+    """Each due wallet's on_leaderboard: from the sweep's sightings while they're fresh (``Directory.due``), else
+    from the boards read now. If those can't be read either, the sightings stand, and /api/directory says so."""
+    now = time.time() if now is None else now
+    seen = directory().boards_seen_at()
+    if seen is not None and now - seen < LISTED_FRESH_S:
+        _evaluate_state["leaderboards"] = "sweep"
+        return
+    try:
+        listed = listed_now()
+    except VenueError as e:
+        _evaluate_state["leaderboards"] = f"stale, and couldn't be read: {e}"
+        return
+    _evaluate_state["leaderboards"] = "read"
+    for item in due:
+        item["on_leaderboard"] = item["wallet"] in listed
 
 
 def evaluate_one(item: dict[str, Any]) -> str:
@@ -549,6 +590,8 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
     failed in a row at the end."""
     halt = stop or threading.Event()
     due = directory().due(EVALUATE_BATCH)
+    if due:
+        _on_leaderboard(due)
     done = dict.fromkeys(OUTCOMES, 0)
     lock = threading.Lock()
     in_a_row = 0
