@@ -514,6 +514,7 @@ async function startAuth(key, alerts) {
   Object.assign(auth, { on: true, alerts, ready: true });
   window.Clerk.addListener(async () => {
     auth.me = signedIn() ? await api("/api/me").catch(() => null) : null;
+    if (auth.me) syncInterests();
     drawAccount();
     if (auth.me && auth.then) { const f = auth.then; auth.then = null; await f(); }
     redrawFollow();
@@ -574,7 +575,7 @@ async function connectTelegram(btn) {
     auth.me = await api("/api/me").catch(() => auth.me);
   }
   redrawFollow();
-  if (auth.me?.telegram) toast("Telegram connected. You'll get a message when they buy something you can still get into.");
+  if (auth.me?.telegram) toast("Telegram connected. You'll get a message when they buy.");
 }
 
 // ---- numbers ----
@@ -920,7 +921,7 @@ const inMarkets = (cat) => !(interests || []).length || interests.includes(cat);
 function marketsSheet() {
   const panel = sheet(`<div id="mktpick"></div><p class="explain" style="margin:18px 0 0;text-align:center;font-size:13px">Traders shows the same markets.</p>`);
   interestPicker($("#mktpick", panel), { selected: (interests || []).filter((c) => INTERESTS.includes(c)), go: "Show these markets",
-    alt: "All markets", onDone: (v) => { setInterests(v); closeSheet(); renderFeed(); } });
+    alt: "All markets", onDone: (v) => { setInterests(v, { picked: true }); closeSheet(); renderFeed(); } });
 }
 function bindFeedMarkets() {
   const change = $("#mktchange"); if (change) change.onclick = marketsSheet;
@@ -1080,9 +1081,36 @@ let interests = (() => {
   } catch {}
   return null;
 })();
-function setInterests(v) {
+// `picked`: the choice came from onboarding's question or the Feed's "Your markets · Change", the two places that
+// ask which markets interest you. Only such a choice is kept on your account; Traders' chips only filter the view.
+function setInterests(v, { picked = false } = {}) {
   interests = v;
   try { localStorage.setItem(INTERESTS_KEY, JSON.stringify(v)); } catch {}
+  if (picked) {
+    try { localStorage.setItem(PICKED_KEY, "1"); } catch {}
+    saveInterests();
+  }
+}
+const PICKED_KEY = "signals.interests.picked";
+const wasPicked = () => { try { return localStorage.getItem(PICKED_KEY) === "1"; } catch { return false; } };
+// Signed in, a picked choice is also kept on your account (the engine's /api/me/interests), so big trades in those
+// markets can alert you on Telegram. Nobody saved, or [] (Skip, all markets: no choice made), gets none.
+function saveInterests() {
+  if (!signedIn() || !auth.me || !Array.isArray(interests)) return;
+  const v = interests.filter((c) => INTERESTS.includes(c));
+  if (JSON.stringify(auth.me.interests) === JSON.stringify(v)) return;
+  api("/api/me/interests", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ interests: v }) })
+    .then((me) => { auth.me = me; }, () => {});
+}
+// On signing in: markets picked before signing in go to the account (never an unchosen [] over a saved choice);
+// a new browser takes the account's.
+function syncInterests() {
+  if (auth.me.interests == null) { if (wasPicked() && interests?.length) saveInterests(); return; }
+  if (interests === null) {
+    interests = auth.me.interests;
+    try { localStorage.setItem(INTERESTS_KEY, JSON.stringify(interests)); localStorage.setItem(PICKED_KEY, "1"); } catch {}
+    if ($(".onb")) route(); // past onboarding: they've answered it already
+  }
 }
 // A market chip on Traders (and the Feed's "Show all markets"): "" (All) clears them; any other turns that market on or off.
 function toggleInterest(c) {
@@ -1115,7 +1143,7 @@ function onboardingPage() {
   $("#app").innerHTML = `<section class="onb"><h1>Find traders worth following.</h1>
     <p class="lede">Discover interesting traders, understand how they trade, and decide who to follow.</p><div id="onbpick"></div></section>`;
   interestPicker($("#onbpick"), { go: "Discover traders →", alt: "Skip", onDone: (v) => {
-    setInterests(v);
+    setInterests(v, { picked: true });
     if (location.hash === "#/traders") route(); else location.hash = "#/traders";
   } });
 }
@@ -1643,8 +1671,23 @@ async function loadLinks(venue, id) {
   } catch (e) { if (box.isConnected) box.innerHTML = `<p class="inline-err" style="margin:0">${esc(e.message)}</p>`; }
 }
 
+// ---- an alert's "Check your price": that one trade, as a Feed card, with its sheet open ----
+async function checkPage(wallet, market) {
+  const app = $("#app"), back = `<a class="back" href="#/">← Feed</a>`;
+  app.innerHTML = `${back}${skelCards(1)}`;
+  let b;
+  try { b = await api(`/api/bet/${wallet}/${encodeURIComponent(market)}`); } catch (e) { app.innerHTML = back + errorState(e.message); bindActions(app); return; }
+  if (!location.hash.startsWith(`#/check/${wallet}/`)) return;
+  shown = [b];
+  app.innerHTML = `${back}<div class="cards">${tradeCard(b, 0)}</div><p class="foot-note">${DELAY_LINE}</p>`;
+  bindActions(app);
+  tradeSheet(b);
+}
+const DELAY_LINE = "Polymarket's public data runs 3–5 minutes behind, so trades show up here a few minutes after they're made.";
+
 // ---- routing ----
-// #/ feed · #/big the feed's Big trades · #/traders[/top] · #/worth/<wallet> · #/t/<venue>/<id>.
+// #/ feed · #/big the feed's Big trades · #/traders[/top] · #/worth/<wallet> · #/t/<venue>/<id> ·
+// #/check/<wallet>/<market> (an alert's "Check your price").
 // Old links still work: Big trades used to be #/traders/big; My trades (#/mine, #/copied) went with the sandbox.
 const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/", "#/mine": "#/", "#/traders/big": "#/big" };
 function routeName() {
@@ -1664,8 +1707,9 @@ function route() {
   closeSheet(); clearTimeout(feedTimer); clearTimeout(worthTimer);
   const name = routeName();
   const w = location.hash.match(/^#\/worth\/(0x[0-9a-fA-F]{40})$/);
+  const check = location.hash.match(/^#\/check\/(0x[0-9a-fA-F]{40})\/([^/]+)$/);
   const t = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
-  const tab = name.startsWith("feed") ? "feed" : "traders";
+  const tab = name.startsWith("feed") || check ? "feed" : "traders";
   $$("[data-tab]").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   $("#app").classList.toggle("narrow", name === "traders:top" || !!t); // one width everywhere else, header included
   window.scrollTo(0, 0);
@@ -1673,6 +1717,7 @@ function route() {
   else if (name.startsWith("feed")) feedPage(feedView());
   else if (name.startsWith("traders:")) tradersPage(name.split(":")[1]);
   else if (w) worthTraderPage(w[1].toLowerCase());
+  else if (check) checkPage(check[1].toLowerCase(), decodeURIComponent(check[2]));
   else if (t && !venuesOn.includes(t[1])) venueOffPage(t[1]); // an old link to a Kalshi trader
   else if (t) traderPage(t[1], decodeURIComponent(t[2]));
   else location.replace("#/");
