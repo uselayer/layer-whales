@@ -53,10 +53,6 @@
   .tabs a { padding: 7px 12px; border-radius: 999px; color: var(--muted); font-size: 14.5px; font-weight: 500; }
   .tabs a:hover { color: var(--fg); }
   .tabs a.on { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent); }
-  .pill { margin-left: auto; font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px;
-    border: 1px solid var(--line); background: var(--card); color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
-  @media (max-width: 359px) { .pill-more { display: none; } }
   .tabbar { display: none; }
   main.wrap { padding-top: 28px; padding-bottom: 40px; min-height: 70vh; }
   footer.foot { color: var(--faint); font-size: 12.5px; padding-top: 8px; padding-bottom: 36px; text-align: center; }
@@ -83,7 +79,6 @@
   .btn.small { padding: 6px 12px; font-size: 13px; }
   .btn.wide { width: 100%; padding: 13px 16px; font-size: 15px; }
   .btn:disabled { opacity: .5; cursor: default; }
-  .btn.done { background: var(--soft); color: var(--fg); }
   .link { color: var(--fg); font-weight: 500; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; cursor: pointer; background: none; border: 0; padding: 0; }
   .link:hover { text-decoration-color: currentColor; }
   .sep { color: var(--faint); margin: 0 6px; }
@@ -157,17 +152,6 @@
   .tnum small { color: var(--muted); font-size: 12.5px; }
   .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 13px 18px; border-top: 1px solid var(--line); }
   .row:first-child { border-top: 0; }
-  details.crow { border-top: 1px solid var(--line); }
-  details.crow:first-child { border-top: 0; }
-  details.crow > summary { list-style: none; cursor: pointer; border-top: 0; }
-  details.crow > summary::-webkit-details-marker { display: none; }
-  details.crow[open] > summary { padding-bottom: 6px; }
-  .vs { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px 14px; margin: 0 18px 14px; padding: 12px 14px; border-radius: 12px;
-    background: var(--soft); font-size: 14px; font-variant-numeric: tabular-nums; }
-  .vs .h { color: var(--muted); font-size: 12.5px; }
-  .vs .k { color: var(--muted); }
-  .vs b { font-weight: 600; overflow-wrap: anywhere; }
-  .vs-note { margin: -4px 18px 14px; color: var(--muted); font-size: 13px; }
   .row .t { font-weight: 500; overflow-wrap: anywhere; }
   .row .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .row .r { text-align: right; white-space: nowrap; font-size: 14px; }
@@ -214,13 +198,11 @@
   .amount button { height: 36px; padding: 0 12px; flex: none; border-radius: 999px; border: 0; background: var(--soft); color: var(--fg);
     font: inherit; font-weight: 500; cursor: pointer; font-variant-numeric: tabular-nums; }
   .amount button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
-  .copybox.compact { padding: 12px 16px; }
   .receipt { border: 1px solid var(--line); border-radius: 14px; padding: 2px 14px; margin: 0 0 14px; font-variant-numeric: tabular-nums; }
   .receipt div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 15px; }
   .receipt div + div { border-top: 1px solid var(--line); }
   .receipt span { color: var(--muted); }
   .receipt .total span, .receipt .total b { color: var(--fg); font-weight: 600; }
-  .copybox .on-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   details.fold { margin-top: 32px; border-top: 1px solid var(--line); }
   details.fold > summary { list-style: none; cursor: pointer; padding: 16px 0; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
   details.fold > summary::-webkit-details-marker { display: none; }
@@ -238,7 +220,7 @@
   .checks li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
   .ext { color: var(--muted); font-size: 14px; font-weight: 500; }
   .ext:hover { color: var(--fg); }
-  .s .ext, .sub .ext, .vs-note .ext { font-size: inherit; }
+  .s .ext, .sub .ext { font-size: inherit; }
 
   /* interests: onboarding and the picker */
   .onb { max-width: 460px; margin: 6vh auto 0; text-align: center; }
@@ -446,17 +428,15 @@
   <div class="wrap">
     <a class="brand" href="#/"><span class="logo"><svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><rect x="3" y="11" width="3" height="6" rx="1"/><rect x="8.5" y="7" width="3" height="10" rx="1"/><rect x="14" y="3" width="3" height="14" rx="1"/></svg></span>Signals</a>
     <nav class="tabs" aria-label="Main">
-      <a href="#/" data-tab="feed">Feed</a><a href="#/traders" data-tab="traders">Traders</a><a href="#/mine" data-tab="mine">My trades</a>
+      <a href="#/" data-tab="feed">Feed</a><a href="#/traders" data-tab="traders">Traders</a>
     </nav>
-    <span class="pill" title="Copies run in the sandbox: real prices and fees, no real money. No real orders are ever placed."><span>Sandbox<span class="pill-more"> · no real money</span></span></span>
   </div>
 </header>
 <main class="wrap" id="app"></main>
-<footer class="wrap foot">Built on <a href="https://uselayer.sh" target="_blank" rel="noopener">uselayer</a> · runs on your machine · sandbox only</footer>
+<footer class="wrap foot">Built on <a href="https://uselayer.sh" target="_blank" rel="noopener">uselayer</a> · Signals places no orders: you buy on Polymarket yourself</footer>
 <nav class="tabbar" aria-label="Main">
   <a href="#/" data-tab="feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h3l2.5-6 4 11 2.5-5H20"/></svg>Feed</a>
   <a href="#/traders" data-tab="traders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.7-3.2 2.9-5 5.5-5s4.8 1.8 5.5 5"/><path d="M15.5 5.2a3 3 0 0 1 0 5.6M17.5 14.4c1.6.7 2.6 2.3 3 4.6"/></svg>Traders</a>
-  <a href="#/mine" data-tab="mine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 14l2.5-2.5 2 2L16 10"/></svg>My trades</a>
 </nav>
 <div id="sheet"></div>
 <div id="toast" role="status"></div>
@@ -562,15 +542,15 @@ const STATUS = {
 };
 const statusLine = (st) => STATUS[st] ? `<span class="status ${STATUS[st][1]}"><i></i>${STATUS[st][0]}</span>` : `<span class="status"><i></i>Price unknown</span>`;
 const SETTLED = new Set(["won", "lost", "closed"]);
-const GET_IN = 0.03; // the same limit copying uses; and at most 5¢ below (FELL_BY in app.py)
+const GET_IN = 0.03; // at most 3¢ above (GET_IN in app.py), and at most 5¢ below (FELL_BY)
 function statusExplain(b) {
   const d = b.price_now != null && b.price != null ? b.price_now - b.price : null;
   const gap = (x) => Math.abs(x) < 0.01 ? "less than 1¢" : `${Math.round(Math.abs(x) * 100)}¢`; // rounded like the prices shown
   switch (b.status) {
-    case "in": return d > 0.0005 ? `The price is ${gap(d)} above what they paid. Copies buy at most 3¢ above their price, so you can still get in.`
+    case "in": return d > 0.0005 ? `The price is ${gap(d)} above what they paid. Up to 3¢ above still counts, so you can still get in.`
       : d < -0.0005 ? `The price is ${gap(d)} below what they paid, so you can still get in.` : "The price is about what they paid, so you can still get in.";
     case "moved": return d < 0 ? `The price is ${gap(d)} below what they paid: the market has turned against them since. Buying now would be a different trade from theirs.`
-      : `The price is ${gap(d)} above what they paid, more than the 3¢ copying allows. Most of their edge is already in the price.`;
+      : `The price is ${gap(d)} above what they paid, more than 3¢. Most of their edge is already in the price.`;
     case "won": return "The price is 98¢ or more: the market has settled their way, or as good as.";
     case "lost": return "The price is 2¢ or less: the market has settled against them, or as good as. Not a bargain.";
     case "closed": return "They no longer hold it: they sold, or the market settled and paid out.";
@@ -603,21 +583,6 @@ const skelRows = (n = 6) => `<div class="list">${Array.from({ length: n }, () =>
 const emptyState = (title, body = "", action = "") => `<div class="state"><b>${title}</b>${body ? `<p>${body}</p>` : ""}${action}</div>`;
 const errorState = (msg) => `<div class="state err"><b>Couldn't load this</b><p>${esc(msg)}</p><button class="btn ghost" data-retry>Try again</button></div>`;
 
-// ---- copying (sandbox) ----
-let copy = null; // { rules: {size, max_above, traders: [...]}, recent: [...] }
-const isCopied = (venue, id) => !!copy?.rules.traders.find((t) => t.venue === venue && t.id === id);
-async function loadCopy() { try { copy = await api("/api/copy"); } catch {} return copy; }
-setInterval(loadCopy, 15000);
-async function startCopy(t) { // everything they trade next, in every market
-  copy = await post("/api/copy/traders", { venue: t.venue, id: t.id, name: t.name });
-  toast(`Copying ${esc(displayName(t.name, t.id))}'s next trades in the sandbox.<a href="#/mine">My trades</a>`);
-}
-async function stopCopy(venue, id) { copy = await api(`/api/copy/traders/${venue}/${encodeURIComponent(id)}`, { method: "DELETE" }); }
-function copyButton(t, cls = "") {
-  if (isCopied(t.venue, t.id)) return `<button class="btn done ${cls}" data-goto="#/mine">Copying trader ✓</button>`;
-  return `<button class="btn ${cls}" data-copy='${esc(JSON.stringify({ venue: t.venue, id: t.id, name: t.name }))}'>Copy trader</button>`;
-}
-
 // The market's page on the venue, opened in a new tab, so the trade can be checked there.
 const marketLink = (url, label = "Polymarket ↗") => url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener">${label}</a>` : "";
 const profileLink = (url, venue = "polymarket") => url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener">${VENUE[venue] || "Venue"} profile ↗</a>` : "";
@@ -631,9 +596,8 @@ function tradeCard(b, i, { who = true } = {}) {
   const name = displayName(b.name, b.wallet);
   const top = who ? `<div class="trade-top">${avatar(b.wallet, 28)}<span class="who"><span class="name">${esc(name)}</span>${tier(b.segment)}</span>
       <span class="when">${[b.category, b.at ? ago(b.at) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>` : "";
-  const offered = b.copy_ok === true || isCopied("polymarket", b.wallet); // the engine's copy rule, as on Traders and the trader's page; a trader you already copy can still be stopped
-  const act = !offered ? "" : who && b.status === "in" && b.wallet && b.market ? `<button class="btn small" data-open-trade="${i}">Copy trade</button>`
-    : who && !SETTLED.has(b.status) && b.wallet ? copyButton({ venue: "polymarket", id: b.wallet, name: b.name }, "small") : "";
+  // the engine's copy rule (copy_ok), as on Traders and the trader's page: only then is copying priced
+  const act = who && b.copy_ok === true && b.status === "in" && b.wallet && b.market ? `<button class="btn small" data-open-trade="${i}">Check your price</button>` : "";
   return `<article class="card trade${who ? "" : " compact"}" data-trade="${i}" tabindex="0">
     ${top}
     <h3 class="trade-title">${esc(b.title || "Untitled market")}</h3>
@@ -664,17 +628,16 @@ function tradeSheet(b) {
       ${b.at || b.category ? `<div><span>When</span><b>${b.at ? ago(b.at) : "—"}</b></div><div><span>Category</span><b>${esc(b.category || "—")}</b></div>` : ""}
     </div>
     ${b.wallet ? `<a class="sheet-who" href="#/worth/${esc(b.wallet)}">${avatar(b.wallet, 36)}<span class="grow"><span class="name">${esc(name)}</span><span class="muted" style="font-size:13px">See their record</span></span>${tier(b.segment)}</a>` : ""}
-    ${b.copy_ok === true && b.wallet && b.status === "in" && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>` : ""}
-    ${(b.copy_ok === true || isCopied("polymarket", b.wallet)) && b.wallet && !SETTLED.has(b.status) ? `<div style="margin-top:16px">${copyButton({ venue: "polymarket", id: b.wallet, name: b.name }, b.status === "in" ? "wide ghost" : "wide")}</div>
-      <p class="fine">Copy trader copies their next trades in the sandbox, from now on.</p>` : ""}
-    ${b.copy_ok === false && b.wallet && !isCopied("polymarket", b.wallet) ? `<p class="fine">Copying isn't offered for this trader. <a class="link" href="#/worth/${esc(b.wallet)}">See their record</a></p>` : ""}
-    ${b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">Open on Polymarket ↗</a></p>` : ""}`);
+    ${b.copy_ok === false && b.wallet ? `<p class="fine">Copying isn't offered for this trader. <a class="link" href="#/worth/${esc(b.wallet)}">See their record</a></p>` : ""}
+    ${b.copy_ok === true && b.wallet && b.status === "in" && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>`
+      : b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">Open on Polymarket ↗</a></p>` : ""}`);
   bindActions(panel);
   const box = $("#copynow", panel);
-  if (box) copyNowBox(box, b);
+  if (box) costBox(box, b);
 }
 
-// "Copy this trade": buy the trade on the card now, in the sandbox, after a look at what it pays.
+// "What copying it costs": what buying the trade on the card would cost you now, priced from Polymarket's
+// order book. Signals places no orders: the button opens the market on Polymarket, where you buy it yourself.
 const oneTrade = (b) => ({ wallet: b.wallet, name: b.name, market: b.market, price: b.price, title: b.title, outcome: b.outcome, url: b.url, at: b.at, size: b.size, usd: b.usd, token: b.token });
 // The two ways it can end, in the outcome's own words: "If it ends No" / "If it ends Yes", or "If Jets wins" / "If not".
 const yesNo = (o) => /^(yes|no)$/i.test(o || "");
@@ -690,22 +653,22 @@ function fillExplain(p, b, spend) {
 }
 // Money you put in or get back, to the cent: "$49.91", "+$42.09".
 const money = (x, signed = false) => x == null ? "—" : `${x < 0 ? "−" : signed && x > 0 ? "+" : ""}$${Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-async function copyNowBox(box, b, amount = 10) {
-  box.innerHTML = `<div class="head">Copy this trade</div>
-    <p>How much do you want to spend in total? Real prices, sandbox money.</p>
+async function costBox(box, b, amount = 10) {
+  box.innerHTML = `<div class="head">What copying it costs</div>
+    <p>How much would you put in, fee included? Priced from what's for sale on Polymarket right now.</p>
     <div class="amount"><label class="box"><span class="muted">$</span><input id="amt" inputmode="decimal" autocomplete="off" aria-label="Amount in dollars" value="${amount}"></label>
       ${PICKS.map((v) => `<button type="button" data-amt="${v}" aria-pressed="${v === amount}">$${v}</button>`).join("")}</div>
     <div id="pv"><div class="skel" style="width:70%;height:14px"></div></div>
-    <button class="btn wide" id="docopynow" disabled>Copy this trade</button>`;
-  const input = $("#amt", box), pv = $("#pv", box), btn = $("#docopynow", box);
+    ${b.url ? `<a class="btn wide" id="buyon" href="${esc(b.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">Buy on Polymarket ↗</a>
+      <p class="fine">Signals places no orders. Prices can move before your order gets there.</p>` : ""}`;
+  const input = $("#amt", box), pv = $("#pv", box);
   const top = document.getElementById("sheetstatus"), before = top ? top.innerHTML : "";
   const setTop = (st, why) => { if (top) top.innerHTML = `${STATUS[st] ? statusLine(st) : `<span class="status moved"><i></i>${esc(st)}</span>`}<p class="explain">${esc(why)}</p>`; };
   const resetTop = () => { if (top) top.innerHTML = before; };
-  let seq = 0, timer = null, ready = null; // ready: the amount the preview on screen is for, if it can be copied
+  let seq = 0, timer = null;
   const spendNow = () => { const v = parseFloat(String(input.value).replace(/[$,\s]/g, "")); return Number.isFinite(v) ? Math.round(v * 100) / 100 : null; };
   const show = async () => {
     const spend = spendNow(), my = ++seq;
-    ready = null; btn.disabled = true;
     $$("[data-amt]", box).forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.amt === spend)));
     if (!spend || spend <= 0) { pv.innerHTML = `<p>Enter an amount above $0.</p>`; return; }
     let p;
@@ -734,25 +697,10 @@ async function copyNowBox(box, b, amount = 10) {
       <div class="kv" style="margin:0 0 14px">
         <div><span>${ifWins(b.outcome)}</span><b>You get ${money(p.payout)}</b></div><div><span>${ifLoses(b.outcome)}</span><b>You lose ${money(p.total)}</b></div>
       </div>
-      <p style="margin-top:-6px">That's ${pl(p.profit_if_win, money(p.profit_if_win, true))} if it wins. Each contract pays $1 if it wins and nothing if it loses.${!p.depth_checked && p.total >= 100 ? " Polymarket's order book couldn't be read just now, so a real order this size might fill higher." : ""}</p>`;
-    ready = spend; btn.disabled = false;
+      <p style="margin-top:-6px">That's ${pl(p.profit_if_win, money(p.profit_if_win, true))} if it wins. Each contract pays $1 if it wins and nothing if it loses.${!p.depth_checked ? " Polymarket's order book couldn't be read just now, so an order this size might fill higher." : ""}</p>`;
   };
-  const later = () => { clearTimeout(timer); btn.disabled = true; timer = setTimeout(show, 350); };
-  input.oninput = later;
+  input.oninput = () => { clearTimeout(timer); timer = setTimeout(show, 350); };
   $$("[data-amt]", box).forEach((x) => (x.onclick = () => { input.value = x.dataset.amt; clearTimeout(timer); show(); }));
-  btn.onclick = async () => {
-    const spend = ready;
-    if (spend == null) return;
-    btn.disabled = true;
-    try {
-      const e = await post("/api/trade/copy", { ...oneTrade(b), spend });
-      if (e.status !== "copied") { btn.disabled = false; pv.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(sdkText(e.reason))}</p>`); return; }
-      btn.outerHTML = `<button class="btn done wide" data-goto="#/mine">Copied ✓ See My trades</button>`;
-      input.disabled = true; $$("[data-amt]", box).forEach((x) => (x.disabled = true));
-      bindActions(box);
-      toast(`Copied: ${plural(e.filled, "contract")}${b.outcome ? ` of ${esc(b.outcome)}` : ""} at ${cents(e.avg_price)} for ${money(e.filled * e.avg_price + (e.fees || 0))} in the sandbox.<a href="#/mine">My trades</a>`);
-    } catch (err) { btn.disabled = false; pv.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(err.message)}</p>`); }
-  };
   show();
 }
 
@@ -762,27 +710,12 @@ function bindActions(root) {
     el.onclick = (e) => { if (!e.target.closest("button, a")) tradeSheet(shown[+el.dataset.trade]); };
     el.onkeydown = (e) => { if (e.key === "Enter" && e.target === el) tradeSheet(shown[+el.dataset.trade]); };
   });
-  $$("[data-copy]", root).forEach((btn) => (btn.onclick = async (e) => {
-    e.stopPropagation(); btn.disabled = true;
-    try { await startCopy(JSON.parse(btn.dataset.copy)); } catch (err) { btn.disabled = false; toast(esc(err.message)); return; }
-    refreshCopyButtons();
-  }));
   $$("[data-open-trade]", root).forEach((btn) => (btn.onclick = (e) => { e.stopPropagation(); tradeSheet(shown[+btn.dataset.openTrade]); }));
-  $$("[data-goto]", root).forEach((btn) => (btn.onclick = (e) => { e.stopPropagation(); closeSheet(); location.hash = btn.dataset.goto; }));
   $$("[data-retry]", root).forEach((btn) => (btn.onclick = () => route()));
   $$("[data-href]", root).forEach((el) => {
     el.onclick = (e) => { if (!e.target.closest("a")) location.hash = el.dataset.href; };
     el.onkeydown = (e) => { if (e.key === "Enter" && e.target === el) location.hash = el.dataset.href; };
   });
-}
-function refreshCopyButtons() {
-  $$("[data-copy], [data-goto='#/mine']").forEach((btn) => {
-    const t = btn.dataset.copy ? JSON.parse(btn.dataset.copy) : null;
-    if (t && isCopied(t.venue, t.id)) {
-      btn.outerHTML = `<button class="btn done ${btn.classList.contains("small") ? "small" : ""} ${btn.classList.contains("wide") ? "wide" : ""}" data-goto="#/mine">Copying trader ✓</button>`;
-    }
-  });
-  bindActions(document);
 }
 
 // ---- feed ----
@@ -963,7 +896,7 @@ function howSheet() {
       <li><b>No proven copy advantage</b> (marked "Copy not proven"): real skill, but by the time you'd get in the price has moved, so copies make little or nothing after fees. A small positive estimate can still show; it isn't reliably above zero. Copying isn't offered.</li>
     </ul>
     <p class="explain">Left out of recommendations: <b>Lucky</b> (over $50K profit from trading, but it rests on one win, or the price doesn't move their way after they buy), <b>No clear edge</b> (the price doesn't clearly move their way, or too few trades to tell), <b>Not trading lately</b>, and market makers and arbitrage (<b>No view</b>).</p>
-    <p class="explain">A reading of the past, not a promise. Copying runs in the sandbox only.</p>`);
+    <p class="explain">A reading of the past, not a promise. Signals places no orders: you buy on Polymarket yourself.</p>`);
 }
 
 // ---- interests: asked once per browser ----
@@ -1250,7 +1183,6 @@ async function worthTraderPage(wallet) {
   try { s = await api(`/api/worth/${wallet}`); } catch (e) { app.innerHTML = back + errorState(e.message); bindActions(app); return; }
   if (location.hash !== `#/worth/${wallet}`) return;
   Object.assign(pf, { s, detail: null, account: null, tab: "positions", period: s.periods ? pf.period : "30d" });
-  if (!copy) await loadCopy();
   renderProfile();
   api(`/api/account/${wallet}`).then((a) => { pf.account = a; }, () => { pf.account = { error: true }; })
     .then(() => { if (location.hash === `#/worth/${wallet}` && pf.s === s) renderProfile(); }); // their account now
@@ -1285,7 +1217,6 @@ function pfChart(s, n) {
 function renderProfile() {
   const s = pf.s, d = pf.detail, n = pf.period, app = $("#app");
   if (!s || !app) return;
-  const t = { venue: "polymarket", id: s.wallet, name: s.name };
   const name = displayName(s.name, s.wallet);
   const cats = s.categories || [], total = cats.reduce((a, c) => a + (c.bets || 0), 0);
   const profit = profitOf(s, n), perDollar = perDollarOf(s, n), up = weeksUp(s);
@@ -1308,9 +1239,8 @@ function renderProfile() {
   const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way by the time a copy gets in
   const band = Array.isArray(s.price_band) ? `${cents(s.price_band[0])}–${cents(s.price_band[1])}` : null;
   const chart = pfChart(s, n);
-  const copied = isCopied(t.venue, t.id), can = isCopyable(s);
-  const cta = copied || can ? copyButton(t) : `<button class="btn" disabled>Copying isn't offered</button>`;
-  const ctaNote = copied ? "" : can ? "Copies' estimated return after fees is reliably above zero" : s.segment === "too_fast" ? `No proven copy advantage. ${copyEstimate(s) || "The price moves before a copy gets in."}` : esc(s.copy_why || "Not recommended");
+  const can = isCopyable(s);
+  const ctaNote = can ? "Copies' estimated return after fees is reliably above zero" : s.segment === "too_fast" ? `No proven copy advantage. ${copyEstimate(s) || "The price moves before a copy gets in."}` : esc(s.copy_why || "Not recommended");
   const period = (cls) => s.periods ? `<div class="lb-period ${cls}" role="group" aria-label="Period">${Object.keys(PF_PERIOD).map((p) => `<button type="button" data-pfperiod="${p}" aria-pressed="${n === p}">${p.toUpperCase()}</button>`).join("")}</div>` : "";
 
   // why they're here: three plain sentences, plus the SDK's own warnings
@@ -1378,7 +1308,7 @@ function renderProfile() {
   app.innerHTML = `<a class="back" href="#/traders">← Traders</a>
     <div class="pf-head">${avatar(s.wallet, 64)}
       <div class="grow"><h1>${esc(name)}</h1><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
-      <div class="pf-cta">${cta}${ctaNote ? `<small>${ctaNote}</small>` : ""}<small id="made" hidden></small></div></div>
+      <div class="pf-cta"><small>${ctaNote}</small></div></div>
     <div class="pf-stats">
       <div class="pf-stat"><span>Profit, ${PF_PERIOD[n]}</span><b>${profit != null ? pl(profit, usd(profit, true)) : "—"}</b><small>${started ? `since their first trade, ${ago(started)}` : perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit"}</small></div>
       <div class="pf-stat"><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)}` : "—"}</b><small>${weeksOf(s) && weeksOf(s) < 12 ? "weeks profitable, since their first trade" : "weeks profitable"}</small></div>
@@ -1402,7 +1332,6 @@ function renderProfile() {
   $$("[data-pfperiod]", app).forEach((b) => (b.onclick = () => { pf.period = b.dataset.pfperiod; renderProfile(); }));
   $$("[data-pftab]", app).forEach((b) => (b.onclick = () => { pf.tab = b.dataset.pftab; renderProfile(); }));
   bindActions(app);
-  fillYouMade($("#made", app), t);
 }
 
 function worthDetails(s) {
@@ -1441,7 +1370,7 @@ async function loadOpenTrades(s, venue = "polymarket", id = s.wallet) {
   let d;
   try { d = await api(`/api/trader/${venue}/${encodeURIComponent(id)}`); } catch (e) { if (box.isConnected) box.innerHTML = `<p class="inline-err">${esc(e.message)}</p>`; return; }
   if (!box.isConnected) return;
-  if (d.visibility === "hidden") { box.innerHTML = `<div class="card">${emptyState("Hidden by the trader", "They hide their trades on Kalshi, so they can't be copied directly.")}</div>`; return; }
+  if (d.visibility === "hidden") { box.innerHTML = `<div class="card">${emptyState("Hidden by the trader", "They hide their trades on Kalshi, so they can't be shown here.")}</div>`; return; }
   const order = { in: 0, moved: 1 };
   const bets = d.positions.map((p) => ({ title: p.title || p.market, outcome: p.outcome, price: p.avg_price, price_now: p.current_price,
     usd: p.avg_price != null ? p.avg_price * p.size : p.value, size: p.size, status: p.status, url: p.url }))
@@ -1449,59 +1378,6 @@ async function loadOpenTrades(s, venue = "polymarket", id = s.wallet) {
   shown = bets;
   box.innerHTML = bets.length ? `<div class="cards">${bets.map((b, i) => tradeCard(b, i, { who: false })).join("")}</div>` : `<div class="card">${emptyState("No open trades")}</div>`;
   bindActions(box);
-}
-
-// What your sandbox copies of one trader have made so far: the same numbers as My trades, open ones at what
-// they'd sell for now. Fills `el` in when there's anything to say; leaves it as it is otherwise.
-async function fillYouMade(el, t, lead = "") {
-  let d;
-  try { d = await api("/api/copied"); } catch { return; }
-  if (!el.isConnected) return; // the card was redrawn while we waited
-  const same = (g) => String(g.trader.id).toLowerCase() === String(t.id).toLowerCase() && (g.trader.venue || "polymarket") === t.venue;
-  const mine = d.groups.filter((g) => same(g) && g.you.contracts);
-  if (!mine.length) return;
-  const valued = mine.filter((g) => g.you.pnl != null), open = mine.filter((g) => g.you.status === "open").length;
-  const made = valued.length ? valued.reduce((a, g) => a + g.you.pnl, 0) : null;
-  el.innerHTML = `${lead}You made <b style="color:var(--fg)">${pl(made, money(made, true))}</b> copying them on ${plural(mine.length, "trade")}${open ? ` (${open} still open)` : ""}. <a class="link" href="#/mine">My trades</a>`;
-  el.hidden = false;
-}
-
-// The copy card on a trader's page: start copying all their next trades, or stop. (A rule saved before
-// copying was always everything may still say "Only Sports": it keeps working as saved.)
-async function copyBox(box, t, opts = {}) {
-  if (!copy) { box.innerHTML = `<div class="skel" style="width:60%;height:14px"></div>`; await loadCopy(); }
-  if (!box.isConnected) return;
-  const r = copy?.rules || { size: 5 };
-  const on = copy?.rules.traders.find((x) => x.venue === t.venue && x.id === t.id);
-  box.classList.toggle("compact", !!on);
-  if (!on && t.venue === "polymarket") { // the same copy rule as Traders and the Feed: their record decides
-    box.innerHTML = `<p class="muted" style="margin:0">Checking their record before offering copying (up to a minute)…</p>`;
-    let sc = null;
-    try { sc = await api(`/api/worth/${encodeURIComponent(t.id)}`); } catch {}
-    if (!box.isConnected) return;
-    if (!sc?.copy_ok) {
-      box.innerHTML = `<div class="head">Copying isn't offered</div><p style="margin:0">${esc(sc?.copy_why || "We couldn't check their record just now, so copying isn't offered.")} <a class="link" href="#/worth/${esc(t.id)}">See their record</a></p>`;
-      return;
-    }
-  }
-  if (on) { // one line: you're copying, what it has made so far, Stop
-    box.innerHTML = `<div class="on-row"><div style="min-width:0"><div class="head">Copying trader ✓</div>
-      <p style="margin:2px 0 0" id="made">${on.categories?.length ? `Only ${esc(on.categories.join(", "))}. ` : ""}Their new buys become sandbox orders on ${VENUE[t.venue]}.</p>
-      ${on.error ? `<p class="inline-err">${esc(on.error)}</p>` : ""}</div><button class="btn ghost small" id="stop">Stop</button></div>`;
-    $("#stop", box).onclick = async () => { await stopCopy(t.venue, t.id); opts.redraw ? opts.redraw() : copyBox(box, t, opts); };
-    fillYouMade($("#made", box), t, on.categories?.length ? `Only ${esc(on.categories.join(", "))}. ` : "");
-    return;
-  }
-  box.innerHTML = `<div class="head">Copy their buys</div>
-    <p>Each new buy they make, in any market, becomes your own sandbox order in the same market on ${VENUE[t.venue]}: ${r.size} contracts, at most 3¢ above their price, held until it settles. Real prices and fees, no real money.${opts.note ? " " + esc(opts.note) : ""}</p>
-    <p id="made" hidden></p>
-    <button class="btn wide" id="docopy">Copy trader</button>`;
-  fillYouMade($("#made", box), t);
-  $("#docopy", box).onclick = async () => {
-    $("#docopy", box).disabled = true;
-    try { await startCopy(t); copyBox(box, t, opts); }
-    catch (e) { $("#docopy", box).disabled = false; box.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(e.message)}</p>`); }
-  };
 }
 
 // ---- a trader from the venue leaderboards (Kalshi or Polymarket) ----
@@ -1525,14 +1401,10 @@ async function traderPage(venue, id) {
     ${d.bio ? `<p class="reason">${esc(d.bio)}</p>` : ""}
     <div class="tiles">${tiles.map(([k, v]) => `<div class="tile"><span>${k}</span><b>${v}</b></div>`).join("")}</div>
     ${venue === "polymarket" ? `<p class="foot-note"><a class="link" href="#/worth/${esc(t.id)}">Is ${esc(name)} worth following? See their record →</a></p>` : ""}
-    <div class="card copybox" id="copybox"></div>
     ${kalshiOn() ? `<h2 class="h2">Same person on ${venue === "kalshi" ? "Polymarket" : "Kalshi"}?</h2><div class="card" id="links"><p class="muted" style="margin:0">Checking both venues (up to 30 seconds)…</p></div>` : ""}
     <h2 class="h2">Open trades</h2><div id="open">${skelCards(2)}</div>
     <h2 class="h2">Recent trades</h2>${hidden ? `<div class="card">${emptyState("Hidden by the trader")}</div>` : d.trades.length ? `<div class="list">${d.trades.slice(0, 20).map((x) => `<div class="row"><div><div class="t">${esc(x.title || x.market)}</div>
       <div class="s">${x.action === "buy" ? "Bought" : "Sold"} ${esc(x.outcome && x.venue === "polymarket" ? x.outcome : x.outcome ? `${x.side.toUpperCase()} · ${x.outcome}` : x.side.toUpperCase())} at ${cents(x.price)} · ${ago(x.at)}${x.url ? ` · ${marketLink(x.url, `${VENUE[x.venue]} ↗`)}` : ""}</div></div><div class="r">${usd(x.usd)}</div></div>`).join("")}</div>` : `<div class="card">${emptyState("No recent trades")}</div>`}`;
-  const box = $("#copybox");
-  if (hidden) box.innerHTML = `<div class="head">Can't be copied</div><p style="margin:0">${esc(name)} hides their trades on Kalshi. If they trade on Polymarket too, you can copy that account instead (see below).</p>`;
-  else copyBox(box, t);
   loadOpenTrades(null, venue, id);
   if (kalshiOn()) loadLinks(venue, id); // it reads the other venue: only when Signals reads both
 }
@@ -1554,91 +1426,16 @@ async function loadLinks(venue, id) {
   } catch (e) { if (box.isConnected) box.innerHTML = `<p class="inline-err" style="margin:0">${esc(e.message)}</p>`; }
 }
 
-// ---- my trades ----
-const pct = (x) => x == null ? "—" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(Math.round(x * 100))}%`;
-// Your copies against the traders' own trades, on the same trades and the same contracts.
-function vsLine(v) {
-  const gap = v.at_their_price - v.you;
-  return `On the same ${plural(v.trades, "trade")}, buying at the traders' own prices would have made ${pl(v.at_their_price, money(v.at_their_price, true))}; you made ${pl(v.you, money(v.you, true))} after fees.`
-    + (Math.abs(gap) >= 0.005 ? ` Copying ${gap > 0 ? "cost" : "saved"} you ${money(Math.abs(gap))}: ${gap > 0 ? "a higher price and fees" : "a better price"}.` : "");
-}
-function copiedRow(g) {
-  const y = g.you, th = g.theirs, who = esc(displayName(g.trader.name, g.trader.id));
-  const n = g.copies.length, settled = ["won", "lost", "void"].includes(y.status);
-  const each = y.contracts ? y.avg_price + y.fees / y.contracts : null; // what one of your contracts cost, fee included
-  const gap = each != null && th.price != null ? each - th.price : null;
-  // what you paid and what came back: paid + profit, so it always adds up to the profit on the right
-  const back = y.pnl != null && y.put_in != null ? y.put_in + y.pnl : null;
-  const paid = !y.contracts ? "" : `You paid ${y.fees >= 0.005 ? `${money(y.put_in - y.fees)} + ${money(y.fees)} fee` : money(y.put_in)} · ${
-    y.status === "void" ? `refunded ${money(back)}` : settled ? `got back ${money(back)}` : back != null ? `worth ${money(back)} now` : "no buyer right now"}`;
-  return `<details class="crow"><summary class="row"><div><div class="t">${esc(g.source.title || g.market)}</div>
-      <div class="s">${esc(g.source.outcome || (g.side || "").toUpperCase())} · copied from <a class="link" href="${traderHref(g.trader.venue || "polymarket", g.trader.id)}">${who}</a> · ${ago(g.at)}${n > 1 ? ` · ${n} copies` : ""}</div>
-      <div class="s">${y.contracts || "—"} contracts at ${cents(y.avg_price)} on ${VENUE[g.venue] || g.venue}${y.status === "open" && y.value != null ? ` · now ${cents(y.value)}` : ""}</div>
-      ${paid ? `<div class="s">${paid}</div>` : ""}
-      ${th.return != null && y.return != null ? `<div class="s">You ${pl(y.return, pct(y.return))} · ${who} ${pl(th.return, pct(th.return))}</div>` : ""}</div>
-    <div class="r"><b>${pl(y.pnl, money(y.pnl, true))}</b><div class="s">${y.status === "won" ? pl(1, RESULT.won) : y.status === "lost" ? pl(-1, RESULT.lost) : RESULT[y.status] || "—"}</div></div></summary>
-    <div class="vs"><span></span><span class="h">You</span><span class="h">${who}</span>
-      <span class="k">Paid</span><b>${cents(y.avg_price)}${y.fees > 0 ? ` + ${cents(y.fees / y.contracts)} fee` : ""}</b><b>${cents(th.price)}</b>
-      <span class="k">Put in</span><b>${money(y.put_in)}</b><b>${th.put_in != null ? money(th.put_in) : "—"}</b>
-      <span class="k">${settled ? "Made" : "Now"}</span><b>${pl(y.pnl, money(y.pnl, true))}</b><b>${th.pnl != null ? pl(th.pnl, money(th.pnl, true)) : "—"}</b>
-      <span class="k">Return</span><b>${pl(y.return, pct(y.return))}</b><b>${pl(th.return, pct(th.return))}</b></div>
-    <p class="vs-note">${settled ? `Settled: each contract paid ${money(y.value)}.` : y.value != null ? `Open: both valued at ${cents(y.value)}, what a contract sells for now.` : "Open: no buyer right now, so neither is valued yet."}
-      Theirs is what their buys made if held to the end, before their fees (Polymarket doesn't show those).${gap != null ? ` Each of your contracts cost ${cents(Math.abs(gap))} ${gap >= 0 ? "more" : "less"} than theirs.` : ""}
-      <a class="link" href="${traderHref(g.trader.venue || "polymarket", g.trader.id)}">See ${who}'s page →</a>${g.source.url ? ` · ${marketLink(g.source.url, "Open on Polymarket ↗")}` : ""}</p>
-  </details>`;
-}
-const RESULT = { open: "Open", won: "Won", lost: "Lost", void: "Refunded", unfilled: "Not filled" };
-async function minePage() {
-  const app = $("#app");
-  app.innerHTML = `<div class="hero" style="margin-top:4px"><div class="skel" style="width:140px;height:40px"></div><div class="skel" style="width:200px;height:13px;margin-top:12px"></div></div>${skelCards(2)}`;
-  let d;
-  try { [d, copy] = await Promise.all([api("/api/copied"), api("/api/copy")]); } catch (e) { app.innerHTML = errorState(e.message); bindActions(app); return; }
-  if (routeName() !== "mine") return;
-  const t = d.total, r = copy.rules;
-  const skipped = copy.recent.filter((e) => e.status === "skipped");
-  app.innerHTML = `
-    <div class="hero" style="margin-top:4px"><div class="big">${t.trades ? pl(t.net, usd(t.net, true)) : "$0"}</div>
-      <div class="cap">${t.trades ? `Sandbox profit after fees on ${plural(d.by_trade.trades, "copied trade")}${d.by_trade.copies > d.by_trade.trades ? ` (${d.by_trade.copies} copies)` : ""}<span class="sep">·</span>${d.by_trade.open} open · ${d.by_trade.won} won · ${d.by_trade.lost} lost${d.by_trade.void ? ` · ${d.by_trade.void} refunded` : ""}` : "Sandbox profit · no copied trades yet"}</div></div>
-    <p class="explain">Sandbox: real prices and fees, no real money. Each copy is held until its market settles; open ones count at what they'd sell for now.</p>
-    ${d.vs.trades ? `<p class="explain">${vsLine(d.vs)}</p>` : ""}
-    ${d.unvalued ? `<p class="explain">${plural(d.unvalued, "open trade")} ${d.unvalued === 1 ? "has" : "have"} no buyer right now, so ${d.unvalued === 1 ? "it isn't" : "they aren't"} in the total.</p>` : ""}
-
-    <h2 class="h2">Who you're copying</h2>
-    ${r.traders.length ? `<div class="list">${r.traders.map((x) => `<div class="trow norank" style="cursor:default">
-        ${avatar(x.venue === "polymarket" ? x.id : `${x.venue}:${x.id}`, 36)}
-        <a class="tmain" href="${traderHref(x.venue, x.id)}"><span class="name">${esc(displayName(x.name, x.id))}</span>
-          <span class="sub">${VENUE[x.venue]}${x.categories?.length ? ` · only ${esc(x.categories.join(", "))}` : ""}${x.checked_s_ago != null ? ` · checked ${Math.round(x.checked_s_ago)}s ago` : ""}</span>
-          ${x.error ? `<span class="inline-err" style="margin:0">${esc(x.error)}</span>` : ""}</a>
-        <button class="btn ghost small" data-rm="${esc(x.venue)}/${esc(x.id)}">Stop</button></div>`).join("")}</div>`
-      : `<div class="card">${emptyState("You're not copying anyone yet", "Find someone on the Feed or in Traders, then tap Copy trader.", `<a class="btn" href="#/traders">Find traders</a>`)}</div>`}
-
-    <h2 class="h2">Copied trades</h2>
-    ${d.groups.length ? `<div class="list">${d.groups.map(copiedRow).join("")}</div><p class="foot-note">Tap a trade to compare it with theirs.</p>`
-      : `<div class="card">${emptyState("Nothing copied yet", "New buys from the traders you copy show up here within seconds of them making one.")}</div>`}
-
-    ${skipped.length ? `<details class="fold"><summary>Not copied (${skipped.length} recent)</summary><div class="list">${skipped.map((e) => `<div class="row"><div><div class="t">${esc(e.source.title || e.source.market)}</div>
-      <div class="s"><span class="name" style="font-weight:500">${esc(displayName(e.trader.name, e.trader.id))}</span> · ${esc(sdkText(e.reason))}${e.source.url ? ` · ${marketLink(e.source.url)}` : ""}</div></div><div class="r s">${ago(e.at)}</div></div>`).join("")}</div></details>` : ""}
-
-    <p class="foot-note" style="margin-top:32px;text-align:center"><button class="btn ghost small" id="reset">Reset the sandbox</button><br>Stops copying everyone and clears your copied trades, so you can start fresh.</p>`;
-  $$("[data-rm]").forEach((b) => (b.onclick = async () => { const [v, id] = b.dataset.rm.split("/"); await stopCopy(v, id); minePage(); }));
-  $("#reset").onclick = async () => {
-    const who = r.traders.length ? `stop copying ${plural(r.traders.length, "trader")} and ` : "";
-    if (!confirm(`Start over? This will ${who}clear all your copied trades. You can't undo it.`)) return;
-    $("#reset").disabled = true; await api("/api/paper/reset", { method: "POST" }); minePage();
-  };
-}
-
 // ---- routing ----
-// #/ feed · #/big the feed's Big trades · #/traders[/top] · #/mine · #/worth/<wallet> · #/t/<venue>/<id>.
-// Old links still work: Big trades used to be #/traders/big.
-const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/mine", "#/traders/big": "#/big" };
+// #/ feed · #/big the feed's Big trades · #/traders[/top] · #/worth/<wallet> · #/t/<venue>/<id>.
+// Old links still work: Big trades used to be #/traders/big; My trades (#/mine, #/copied) went with the sandbox.
+const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/", "#/mine": "#/", "#/traders/big": "#/big" };
 function routeName() {
   const h = location.hash || "#/";
   if (h === "#/" || h === "#") return "feed";
   if (h === "#/big") return "feed:big";
   if (h === "#/traders") return "traders:worth";
   if (h === "#/traders/top") return "traders:top";
-  if (h === "#/mine") return "mine";
   return h;
 }
 function venueOffPage(venue) {
@@ -1651,7 +1448,7 @@ function route() {
   const name = routeName();
   const w = location.hash.match(/^#\/worth\/(0x[0-9a-fA-F]{40})$/);
   const t = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
-  const tab = name === "mine" ? "mine" : name.startsWith("feed") ? "feed" : "traders";
+  const tab = name.startsWith("feed") ? "feed" : "traders";
   $$("[data-tab]").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   const wide = (name === "traders:worth" && interests !== null) || location.hash.startsWith("#/worth/"); // the leaderboard and profiles need the room
   $$(".wrap").forEach((el) => el.classList.toggle("wide", wide));
@@ -1659,14 +1456,12 @@ function route() {
   if (interests === null && (name.startsWith("feed") || name === "traders:worth")) onboardingPage(); // first run; links to a trader skip it
   else if (name.startsWith("feed")) feedPage(feedView());
   else if (name.startsWith("traders:")) tradersPage(name.split(":")[1]);
-  else if (name === "mine") minePage();
   else if (w) worthTraderPage(w[1].toLowerCase());
   else if (t && !venuesOn.includes(t[1])) venueOffPage(t[1]); // an old link to a Kalshi trader
   else if (t) traderPage(t[1], decodeURIComponent(t[2]));
   else location.replace("#/");
 }
 window.addEventListener("hashchange", route);
-loadCopy().then(() => { if (onFeed()) refreshCopyButtons(); });
 api("/api/config").then((c) => { venuesOn = c.venues; }).catch(() => {}).finally(route); // without it: Polymarket only
 </script>
 </body>

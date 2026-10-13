@@ -1,6 +1,6 @@
-# Signals, hosted: the engine with a sandbox per browser (SIGNALS_HOSTED=1). Railway builds this.
-# The store (sandboxes, the Worth following result, the price cache) lives on a volume mounted at /data.
-# One process only: each sandbox's copiers and caches live in its memory.
+# Signals, hosted: the engine (SIGNALS_HOSTED=1). Railway builds this.
+# The store (the Worth following result, the price cache) lives on a volume mounted at /data.
+# One process only: the Worth following check and the caches live in its memory.
 FROM python:3.14-slim
 
 WORKDIR /app

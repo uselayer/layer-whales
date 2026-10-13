@@ -1,12 +1,13 @@
 # Signals
 
-See the best traders on Polymarket, open one to see their trades, and copy their next trades in a sandbox.
+See the best traders on Polymarket, open one to see their trades, and see what copying a trade would really
+cost you before you buy it on Polymarket.
 Signals is Polymarket-only for now; the SDK also covers Kalshi, which `SIGNALS_VENUES=polymarket,kalshi` turns
 back on (Kalshi traders, both venues' leaderboards, and whether a trader trades on the other venue too).
 
 Built on the [uselayer](https://uselayer.sh) Python SDK (`client.whales`). Run it on your machine, or use the
-hosted version at [usesignals.app](https://usesignals.app). Either way copies run in a sandbox (real prices and
-fees, no real money).
+hosted version at [usesignals.app](https://usesignals.app). Either way Signals places no orders: you buy on
+Polymarket yourself.
 
 ## Run it
 
@@ -22,13 +23,11 @@ LAYER_API_KEY=lyr_... uv run signals
 Then open http://127.0.0.1:8790.
 
 - `SIGNALS_VENUES` (default `polymarket`): the venues Signals reads. `polymarket,kalshi` adds Kalshi; with it
-  off, Signals never calls Kalshi, and Kalshi copy rules saved before stay saved but paused.
+  off, Signals never calls Kalshi.
 - **Layer API key** (optional, with Kalshi on): used to find the same market on the other venue, to compare two
   traders' trades. Get one at uselayer.sh.
-- **Kalshi key** (optional, with Kalshi on): set `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` to copy Kalshi
-  traders. Copying Polymarket traders needs no key.
 - `SIGNALS_PORT` (default 8790) and `SIGNALS_STORE_DIR` (default `~/.uselayer/signals`) change the port and
-  where the sandbox account, copy rules and Worth following results live. `SIGNALS_WORTH_WALLETS` (default 200)
+  where the Worth following results and price history live. `SIGNALS_WORTH_WALLETS` (default 200)
   is how many wallets Worth following checks.
 - `SIGNALS_MOCK=1` fills the leaderboard's profit-history columns (weeks in profit, trend, 7D/90D) with made-up
   sample values, marked as such, to review the page before the SDK provides them. Local only: ignored hosted.
@@ -36,24 +35,26 @@ Then open http://127.0.0.1:8790.
 ## What's on the page
 
 Signals helps you find traders worth following and understand why: who they are, how they trade, and what the
-evidence does and doesn't show. Copying a trader in the sandbox is optional, a way to test them; it isn't a
-promise of profit.
+evidence does and doesn't show. Before you copy a trade, it shows what that would really cost you: the price now
+against theirs, what your amount fills at, the fee. That isn't a promise of profit.
 
 The first visit asks one question, which markets interest you (Politics, Sports, Crypto, Esports, or Skip for all
 markets), then opens Traders. The choice is kept in your browser; the market chips on Feed and Traders change it,
-so the two always agree. Then three tabs:
+so the two always agree. Then two tabs:
 
 - **Feed**: one switch at the top, **Traders we follow** (the default) or **Big trades**.
   - **Traders we follow**: new trades over the last 24 hours from the traders we rate Proven sharp, Quiet sharp
     or Rising, one card per trade, opened on your markets (the chips are All, the four markets, and any other
     category with trades, with how many): the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
-    paid (3¢ is the same limit copying uses); **Price moved away** means further either way. A bigger drop means
+    paid; **Price moved away** means further either way. A bigger drop means
     the market has turned against them, so buying then is a different trade, not a bargain. A trade at 2¢ or
     less, 98¢ or more, or one they no longer hold is **Won**, **Lost** or **Closed**, and drops out of the default
-    feed. Turn off "Only trades I can still get into" to see them all. Tap a card for the details, the trader
-    and a link to Polymarket. **Copy trader** copies that trader's next trades in the sandbox; a trade they
-    already made isn't copied. It updates every 30 seconds; Polymarket shows trades a few minutes late.
+    feed. Turn off "Only trades I can still get into" to see them all. Tap a card for the details and the
+    trader. A trade you can still get into has **Check your price**: pick an amount and it's priced from
+    Polymarket's order book right now (at most 3¢ above their price), with the fee, your price per contract
+    against theirs, and what you get if it wins. **Buy on Polymarket ↗** opens the market there; Signals places
+    no orders. It updates every 30 seconds; Polymarket shows trades a few minutes late.
   - **Big trades** (`#/big`; the old `#/traders/big` link still works): trades of $250 or more right now on
     Polymarket, one card per trade, opened on your markets like the rest of the Feed. A named trader's card
     opens their page. With Kalshi on, it shows every big trade on both venues instead ("Anonymous trader" when
@@ -81,7 +82,7 @@ so the two always agree. Then three tabs:
     background (on launch if it's over 6 hours old, then every 6 hours while the app is open). Scoring is
     `client.whales.discover()` / `score()` in the SDK.
   - **A trader's profile** (from the leaderboard or a wallet search): their market and last trade, a link to their
-    Polymarket profile, and **Copy trader** when they're copyable. A stat strip (profit and per $ traded for the
+    Polymarket profile, and whether they're copyable. A stat strip (profit and per $ traded for the
     period, 12-week consistency, win record and usual trade over the last 30 days, wallet; a note says the period
     switch changes only profit), a profit chart for 7D / 30D / 90D with the stretches
     below their previous high shaded, and **Why they're here** in three plain lines (consistent, how they trade,
@@ -93,13 +94,6 @@ so the two always agree. Then three tabs:
     be the same person, each with the evidence (the same name or X handle on an account that really trades,
     and trades in the same market, the same way, within 5 minutes). It's an inference, never a confirmed
     identity.
-- **My trades**: the traders you copy, saved on your machine (hosted: in your browser's own sandbox). Every new buy they make becomes a sandbox order in
-  the same market where they made it: a Polymarket trader's on Polymarket, a Kalshi trader's on Kalshi (5
-  contracts, at most 3¢ above their price), held until the market settles. A Polymarket copy fills at
-  Polymarket's best price, with its taker fee, from its public market data. One row per copied trade with its
-  status (open / won / lost) and profit after fees, and what you paid (with the fee, when there is one)
-  against what came back ("You paid $9.49 · got back $10.00"; open: what it's worth now), with the total at the top. Trades that can't fill near
-  their price are skipped with the reason.
 
 Traders without a name show as "Trader 0x91…76" with a generated avatar: the page never shows wallet addresses.
 
@@ -110,20 +104,17 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
 - **Railway** runs the engine from the `Dockerfile` (one process, `railway.json`), with a volume at `/data` for
   the store. Set `LAYER_API_KEY` in the service's variables; keys never reach the browser.
 - **Vercel** holds the domain and forwards every request to Railway (`web/vercel.json`, deployed from `web/`).
-  Caching is off there, so each browser keeps its own cookie.
-- **No signup**: each browser gets its own sandbox, found by an anonymous cookie and kept in
-  `/data/visitors/<id>`. Clearing cookies or switching browsers starts a new one.
-- **Limits**: a browser copies up to 5 traders at once (`SIGNALS_MAX_TRADERS`), up to 300 browsers copy at once
-  (`SIGNALS_MAX_COPYING`), and copying pauses for a browser away two weeks until it's back. Trades of a trader
-  copied by many browsers are read once per round. "Check again" on Worth following only starts a new check
-  when the last one is over an hour old.
+  Caching is off there.
+- **No signup** and no cookie: nothing on the hosted app is anyone's own yet. Sandboxes kept from before (in
+  `/data/visitors/<id>`) are left on the volume, unread, until the owner decides to delete them.
+- **Limits**: "Check again" on Worth following only starts a new check when the last one is over an hour old.
 
 ## Good to know
 
 - With Kalshi on: Kalshi's trader data comes from the public endpoints behind kalshi.com's Leaderboard and profile pages.
   Kalshi doesn't document them, so they can change.
 - Kalshi traders choose whether to show their trades. Most leaderboard whales hide them: their page says
-  so, and they can't be copied directly. Traders under **Feed → Big trades** usually show theirs.
+  so, and their trades can't be shown. Traders under **Feed → Big trades** usually show theirs.
 - Polymarket's data comes from its public data API; every wallet is public.
 
 ## License
