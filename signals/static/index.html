@@ -1510,9 +1510,14 @@ function copiedRow(g) {
   const n = g.copies.length, settled = ["won", "lost", "void"].includes(y.status);
   const each = y.contracts ? y.avg_price + y.fees / y.contracts : null; // what one of your contracts cost, fee included
   const gap = each != null && th.price != null ? each - th.price : null;
+  // what you paid and what came back: paid + profit, so it always adds up to the profit on the right
+  const back = y.pnl != null && y.put_in != null ? y.put_in + y.pnl : null;
+  const paid = !y.contracts ? "" : `You paid ${y.fees >= 0.005 ? `${money(y.put_in - y.fees)} + ${money(y.fees)} fee` : money(y.put_in)} · ${
+    y.status === "void" ? `refunded ${money(back)}` : settled ? `got back ${money(back)}` : back != null ? `worth ${money(back)} now` : "no buyer right now"}`;
   return `<details class="crow"><summary class="row"><div><div class="t">${esc(g.source.title || g.market)}</div>
       <div class="s">${esc(g.source.outcome || (g.side || "").toUpperCase())} · copied from <a class="link" href="${traderHref(g.trader.venue || "polymarket", g.trader.id)}">${who}</a> · ${ago(g.at)}${n > 1 ? ` · ${n} copies` : ""}</div>
       <div class="s">${y.contracts || "—"} contracts at ${cents(y.avg_price)} on ${VENUE[g.venue] || g.venue}${y.status === "open" && y.value != null ? ` · now ${cents(y.value)}` : ""}</div>
+      ${paid ? `<div class="s">${paid}</div>` : ""}
       ${th.return != null && y.return != null ? `<div class="s">You ${pl(y.return, pct(y.return))} · ${who} ${pl(th.return, pct(th.return))}</div>` : ""}</div>
     <div class="r"><b>${pl(y.pnl, money(y.pnl, true))}</b><div class="s">${y.status === "won" ? pl(1, RESULT.won) : y.status === "lost" ? pl(-1, RESULT.lost) : RESULT[y.status] || "—"}</div></div></summary>
     <div class="vs"><span></span><span class="h">You</span><span class="h">${who}</span>
