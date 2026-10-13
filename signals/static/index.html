@@ -12,6 +12,7 @@
     --bg: #fafaf9; --card: #ffffff; --fg: #111112; --muted: #6c6c72; --faint: #a1a1a6; --line: #ececea;
     --soft: #f3f3f1; --green: #12a150; --green-soft: #e9f7ef; --danger: #c43d2f;
     --gain: #087f3d; --loss: #cf3426; --amber: #a86200; --teal: #0b7a83; --blue: #2557d6;
+    --accent: #4b3fe0; --on-accent: #ffffff; /* Signals' own color: never used for gains, losses or statuses */
     --shadow: 0 1px 2px rgba(17, 17, 18, .04), 0 2px 8px rgba(17, 17, 18, .03);
     --av-l: 93%; --av-fg-l: 48%; --av-s: 42%;
   }
@@ -20,6 +21,7 @@
       --bg: #0d0d0e; --card: #161618; --fg: #f2f2f3; --muted: #9b9ba1; --faint: #636368; --line: #26262a;
       --soft: #1e1e21; --green: #3ccf7e; --green-soft: #12291c; --danger: #ff7a6b;
       --gain: #3ccf7e; --loss: #ff7a6b; --amber: #f2b54a; --teal: #3cc6cf; --blue: #7aa2ff;
+      --accent: #9d97ff; --on-accent: #0d0d0e;
       --shadow: none; --av-l: 22%; --av-fg-l: 66%; --av-s: 30%;
     }
   }
@@ -27,6 +29,7 @@
     --bg: #0d0d0e; --card: #161618; --fg: #f2f2f3; --muted: #9b9ba1; --faint: #636368; --line: #26262a;
     --soft: #1e1e21; --green: #3ccf7e; --green-soft: #12291c; --danger: #ff7a6b;
       --gain: #3ccf7e; --loss: #ff7a6b; --amber: #f2b54a; --teal: #3cc6cf; --blue: #7aa2ff;
+      --accent: #9d97ff; --on-accent: #0d0d0e;
     --shadow: none; --av-l: 22%; --av-fg-l: 66%; --av-s: 30%;
   }
   * { box-sizing: border-box; }
@@ -45,11 +48,11 @@
     backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid var(--line); }
   header.top .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
   .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 17px; letter-spacing: -0.02em; white-space: nowrap; }
-  .logo { width: 26px; height: 26px; border-radius: 8px; background: var(--fg); color: var(--bg); display: grid; place-items: center; }
+  .logo { width: 26px; height: 26px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
   .tabs { display: flex; gap: 2px; margin-left: 8px; }
   .tabs a { padding: 7px 12px; border-radius: 999px; color: var(--muted); font-size: 14.5px; font-weight: 500; }
   .tabs a:hover { color: var(--fg); }
-  .tabs a.on { background: var(--soft); color: var(--fg); }
+  .tabs a.on { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent); }
   .pill { margin-left: auto; font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px;
     border: 1px solid var(--line); background: var(--card); color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
   .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
@@ -74,7 +77,7 @@
   .badge svg { width: 13px; height: 13px; }
   .chip { display: inline-block; font-size: 13px; font-weight: 500; padding: 3px 10px; border-radius: 8px; background: var(--soft); color: var(--fg); }
   .btn { border: 0; border-radius: 999px; padding: 9px 16px; font-size: 14px; font-weight: 500; cursor: pointer;
-    background: var(--fg); color: var(--bg); white-space: nowrap; transition: transform .08s ease, opacity .15s; }
+    background: var(--accent); color: var(--on-accent); white-space: nowrap; transition: transform .08s ease, opacity .15s; }
   .btn:active { transform: scale(.97); }
   .btn.ghost { background: transparent; color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
   .btn.small { padding: 6px 12px; font-size: 13px; }
@@ -109,20 +112,20 @@
   .cats::-webkit-scrollbar { display: none; }
   .cats button { border: 0; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); color: var(--fg); font-size: 14px;
     font-weight: 500; padding: 7px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
-  .cats button.on { background: var(--fg); color: var(--bg); box-shadow: none; }
+  .cats button.on { background: var(--accent); color: var(--on-accent); box-shadow: none; }
   .cats button .n { color: var(--faint); font-weight: 400; margin-left: 4px; }
-  .cats button.on .n { color: color-mix(in srgb, var(--bg) 60%, transparent); }
+  .cats button.on .n { color: color-mix(in srgb, var(--on-accent) 70%, transparent); }
   .switch { position: relative; max-width: 100%; display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); cursor: pointer; user-select: none; white-space: nowrap; }
   .switch input { position: absolute; opacity: 0; pointer-events: none; }
   .switch .track { width: 36px; height: 22px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s; flex: none; }
   .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff;
     box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s; }
-  .switch input:checked + .track { background: var(--green); }
+  .switch input:checked + .track { background: var(--accent); }
   .switch input:checked + .track::after { transform: translateX(14px); }
   .switch input:focus-visible + .track { outline: 2px solid var(--fg); outline-offset: 2px; }
 
   /* cards */
-  .cards { display: grid; gap: 12px; }
+  .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; } /* a long name truncates, never widens the cards */
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; box-shadow: var(--shadow); }
   .trade { cursor: pointer; transition: border-color .15s, transform .15s; }
   .trade:hover { border-color: color-mix(in srgb, var(--fg) 18%, var(--line)); }
@@ -210,7 +213,7 @@
     font-weight: 600; width: 100%; font-variant-numeric: tabular-nums; }
   .amount button { height: 36px; padding: 0 12px; flex: none; border-radius: 999px; border: 0; background: var(--soft); color: var(--fg);
     font: inherit; font-weight: 500; cursor: pointer; font-variant-numeric: tabular-nums; }
-  .amount button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .amount button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
   .copybox.compact { padding: 12px 16px; }
   .receipt { border: 1px solid var(--line); border-radius: 14px; padding: 2px 14px; margin: 0 0 14px; font-variant-numeric: tabular-nums; }
   .receipt div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 15px; }
@@ -218,9 +221,6 @@
   .receipt span { color: var(--muted); }
   .receipt .total span, .receipt .total b { color: var(--fg); font-weight: 600; }
   .copybox .on-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .catpick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
-  .catpick button { border: 0; border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--soft); color: var(--muted); }
-  .catpick button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
   details.fold { margin-top: 32px; border-top: 1px solid var(--line); }
   details.fold > summary { list-style: none; cursor: pointer; padding: 16px 0; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
   details.fold > summary::-webkit-details-marker { display: none; }
@@ -250,7 +250,7 @@
   .onb .picks { justify-content: center; }
   .picks button { border: 0; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); color: var(--fg); font-size: 15px;
     font-weight: 500; padding: 10px 18px; border-radius: 999px; cursor: pointer; }
-  .picks button[aria-pressed="true"] { background: var(--fg); color: var(--bg); box-shadow: none; }
+  .picks button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); box-shadow: none; }
   .pick .alt { display: block; margin: 14px auto 0; color: var(--muted); font-weight: 500; text-decoration: none; }
   .pick .alt:hover { color: var(--fg); }
 
@@ -262,7 +262,7 @@
   .lb-view { display: flex; align-items: center; gap: 10px; flex: none; }
   .lb-divider { width: 1px; height: 20px; background: var(--line); flex: none; margin-inline: 4px; }
   .lb-chip { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; flex: none; cursor: pointer; }
-  .lb-chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .lb-chip[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .lb-search { position: relative; display: flex; align-items: center; }
   .lb-search svg { position: absolute; left: 11px; width: 15px; height: 15px; color: var(--faint); pointer-events: none; }
   .lb-search input { box-sizing: border-box; width: 230px; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 5px 12px 5px 32px; font: inherit; font-size: 14px; }
@@ -324,7 +324,7 @@
   .pf-why p { margin: 0; color: var(--muted); }
   .pf-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 26px; }
   .pf-tabs button { border: 0; background: none; padding: 10px 14px; font: inherit; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
-  .pf-tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+  .pf-tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
   .pf-sec { font-size: 13px; color: var(--muted); margin: 18px 0 2px; }
   .pf-li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 14px 2px; border-bottom: 1px solid var(--line); }
   .pf-li .t { font-weight: 500; overflow-wrap: anywhere; }
@@ -414,7 +414,7 @@
       background: color-mix(in srgb, var(--card) 92%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
       padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
     .tabbar a { flex: 1; display: grid; justify-items: center; gap: 2px; padding: 4px 0; font-size: 11.5px; font-weight: 500; color: var(--faint); }
-    .tabbar a.on { color: var(--fg); }
+    .tabbar a.on { color: var(--accent); }
     .tabbar svg { width: 22px; height: 22px; }
     body { padding-bottom: 72px; }
     #toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
@@ -467,6 +467,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const sdkText = (t) => String(t ?? "").replace(/\b([Bb])et(s?)\b/g, (_, b, s) => (b === "B" ? "Trade" : "trade") + s)
   .replace(/\bat (0\.\d+) or better\b/g, (_, x) => `at ${Math.round(parseFloat(x) * 1000) / 10}¢ or better`);
 const VENUE = { kalshi: "Kalshi", polymarket: "Polymarket", polymarket_us: "Polymarket US" };
+// The venues Signals reads (SIGNALS_VENUES on the engine, from /api/config): Polymarket only for now. Kalshi's
+// views (Top profit's venue choice, Kalshi trader pages, "Same person on Kalshi?") show only when it's on.
+let venuesOn = ["polymarket"];
+const kalshiOn = () => venuesOn.includes("kalshi");
 const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
 
 async function api(path, opts) {
@@ -515,9 +519,10 @@ function updatedAgo(ms) {
 // ---- who: names, aliases, avatars, tiers ----
 // No wallet addresses on screen: a trader without a real name gets "Trader 0x91…76" and an identicon.
 const ADDR = /^0x[0-9a-f]{6,}/i;
+const SHORT_ADDR = /^0x[0-9a-f]{2,}\s*(…|\.{2,3})\s*[0-9a-f]{2,}$/i; // Polymarket names some wallets "0xd654…23e3"
 function displayName(name, id) {
   const n = String(name || "").trim();
-  if (n && !ADDR.test(n)) return n;
+  if (n && !ADDR.test(n) && !SHORT_ADDR.test(n)) return n;
   const w = ADDR.test(id || "") ? id : (n.match(/^0x[0-9a-f]+/i) || [""])[0];
   return w ? `Trader ${w.slice(0, 4)}…${w.slice(-2)}` : "Anonymous";
 }
@@ -606,8 +611,8 @@ let copy = null; // { rules: {size, max_above, traders: [...]}, recent: [...] }
 const isCopied = (venue, id) => !!copy?.rules.traders.find((t) => t.venue === venue && t.id === id);
 async function loadCopy() { try { copy = await api("/api/copy"); } catch {} return copy; }
 setInterval(loadCopy, 15000);
-async function startCopy(t, categories = []) {
-  copy = await post("/api/copy/traders", { venue: t.venue, id: t.id, name: t.name, categories });
+async function startCopy(t) { // everything they trade next, in every market
+  copy = await post("/api/copy/traders", { venue: t.venue, id: t.id, name: t.name });
   toast(`Copying ${esc(displayName(t.name, t.id))}'s next trades in the sandbox.<a href="#/mine">My trades</a>`);
 }
 async function stopCopy(venue, id) { copy = await api(`/api/copy/traders/${venue}/${encodeURIComponent(id)}`, { method: "DELETE" }); }
@@ -766,7 +771,10 @@ function bindActions(root) {
   $$("[data-open-trade]", root).forEach((btn) => (btn.onclick = (e) => { e.stopPropagation(); tradeSheet(shown[+btn.dataset.openTrade]); }));
   $$("[data-goto]", root).forEach((btn) => (btn.onclick = (e) => { e.stopPropagation(); closeSheet(); location.hash = btn.dataset.goto; }));
   $$("[data-retry]", root).forEach((btn) => (btn.onclick = () => route()));
-  $$("[data-href]", root).forEach((el) => (el.onclick = (e) => { if (!e.target.closest("a")) location.hash = el.dataset.href; }));
+  $$("[data-href]", root).forEach((el) => {
+    el.onclick = (e) => { if (!e.target.closest("a")) location.hash = el.dataset.href; };
+    el.onkeydown = (e) => { if (e.key === "Enter" && e.target === el) location.hash = el.dataset.href; };
+  });
 }
 function refreshCopyButtons() {
   $$("[data-copy], [data-goto='#/mine']").forEach((btn) => {
@@ -779,24 +787,49 @@ function refreshCopyButtons() {
 }
 
 // ---- feed ----
-const feed = { data: null, at: 0, err: null, cat: "All", onlyIn: true };
-const BASE_CATS = ["All", "Sports", "Politics", "Crypto", "Esports"];
+// One switch at the top: the traders we follow (#/, the default) or Big trades (#/big: $250 or more right now,
+// on the venues Signals reads). Both open filtered to your markets, with the same chips, and the same
+// interests, as Traders (Big trades only while Signals reads Polymarket alone: see renderBig).
+const feed = { data: null, at: 0, err: null, onlyIn: true, big: null, bigAt: 0, bigErr: null };
 let feedTimer = null;
-const onFeed = () => routeName() === "feed";
+const onFeed = () => routeName().startsWith("feed");
+const feedView = () => routeName() === "feed:big" ? "big" : "follow";
 
-async function feedPage() {
-  $("#app").innerHTML = `<div id="fbar"></div><div id="flist">${skelCards(3)}</div>`;
-  if (feed.data) renderFeed();
+async function feedPage(view) {
+  $("#app").innerHTML = `<nav class="seg" aria-label="Feed">${[["follow", "#/", "Traders we follow"], ["big", "#/big", "Big trades"]]
+    .map(([k, href, l]) => `<a href="${href}" class="${view === k ? "on" : ""}"${view === k ? ' aria-current="page"' : ""}>${l}</a>`).join("")}</nav>
+    <div id="fbar"></div><div id="flist">${skelCards(3)}</div>`;
+  if (view === "big" ? feed.big : feed.data) renderFeed();
   await loadFeed();
 }
 async function loadFeed() {
   clearTimeout(feedTimer);
-  try { feed.data = await api("/api/live"); feed.at = Date.now(); feed.err = null; } catch (e) { feed.err = e.message; }
-  if (!onFeed()) return;
+  const big = feedView() === "big";
+  try {
+    if (big) { feed.big = await api("/api/trading-now?min_usd=250"); feed.bigAt = Date.now(); feed.bigErr = null; }
+    else { feed.data = await api("/api/live"); feed.at = Date.now(); feed.err = null; }
+  } catch (e) { if (big) feed.bigErr = e.message; else feed.err = e.message; }
+  if (!onFeed() || (feedView() === "big") !== big) return; // the other view, or another page, since
   feedTimer = setTimeout(() => { if (onFeed()) loadFeed(); }, 30000);
   renderFeed();
 }
+
+// The market chips, as on Traders: All, the four markets, then any other category with trades here (with
+// how many). Tapping one changes your interests, so Feed and Traders always agree.
+function marketChips(counts = {}) {
+  const picked = interests || [];
+  const extra = [...new Set([...Object.keys(counts), ...picked])].filter((c) => !INTERESTS.includes(c)).sort();
+  const chip = (c, label, on) => `<button type="button" data-mkt="${esc(c)}" class="${on ? "on" : ""}" aria-pressed="${on}">${esc(label)}${c && counts[c] ? `<span class="n">${counts[c]}</span>` : ""}</button>`;
+  return `<div class="cats" role="group" aria-label="Markets">${chip("", "All", !picked.length)}${[...INTERESTS, ...extra].map((c) => chip(c, c, picked.includes(c))).join("")}</div>`;
+}
+const inMarkets = (cat) => !(interests || []).length || interests.includes(cat);
+function bindFeedChips(root) {
+  $$("[data-mkt]", root).forEach((b) => (b.onclick = () => { toggleInterest(b.dataset.mkt); renderFeed(); }));
+  const all = $("#feedall"); if (all) all.onclick = () => { toggleInterest(""); renderFeed(); };
+}
+
 function renderFeed() {
+  if (feedView() === "big") return renderBig();
   const r = feed.data;
   if (!r) { $("#flist").innerHTML = errorState(feed.err || "No answer from the app."); bindActions($("#flist")); return; }
   if (!r.traders.length) {
@@ -808,10 +841,10 @@ function renderFeed() {
   }
   const n = r.traders.length;
   const counts = {};
-  const pool = oneCardPerTrade(r.bets).filter((b) => !feed.onlyIn || b.status === "in");
+  const cards = oneCardPerTrade(r.bets);
+  const pool = cards.filter((b) => !feed.onlyIn || b.status === "in");
   pool.forEach((b) => { if (b.category) counts[b.category] = (counts[b.category] || 0) + 1; });
-  const cats = [...BASE_CATS, ...Object.keys(counts).filter((c) => !BASE_CATS.includes(c)).sort()];
-  if (!cats.includes(feed.cat)) feed.cat = "All";
+  const names = interestNames(interests || []);
   $("#fbar").innerHTML = `
     <div class="feedtop">
       <button class="follow" id="following">${`<span class="stack">${r.traders.slice(0, 5).map((t) => avatar(t.wallet, 28)).join("")}</span>`}
@@ -819,28 +852,69 @@ function renderFeed() {
       <span class="updated" id="updated">${updatedAgo(feed.at)}</span>
     </div>
     <div class="filters">
-      <div class="cats" role="tablist">${cats.map((c) => `<button data-cat="${esc(c)}" class="${c === feed.cat ? "on" : ""}">${esc(c)}${c !== "All" && counts[c] ? `<span class="n">${counts[c]}</span>` : ""}</button>`).join("")}</div>
+      ${marketChips(counts)}
       <label class="switch"><input type="checkbox" id="onlyin" ${feed.onlyIn ? "checked" : ""}><span class="track"></span>Only trades I can still get into</label>
     </div>
     ${feed.err ? `<p class="inline-err">Couldn't refresh: ${esc(feed.err)}. Showing the last update.</p>` : ""}
     ${r.failed ? `<p class="foot-note" style="margin:0 0 12px">${plural(r.failed, "trader")} couldn't be read just now; retrying.</p>` : ""}`;
-  $$("[data-cat]").forEach((b) => (b.onclick = () => { feed.cat = b.dataset.cat; renderFeed(); }));
   $("#onlyin").onchange = (e) => { feed.onlyIn = e.target.checked; renderFeed(); };
   $("#following").onclick = () => followingSheet(r.traders);
 
-  shown = pool.filter((b) => feed.cat === "All" || b.category === feed.cat);
+  shown = pool.filter((b) => inMarkets(b.category));
+  const anyHere = cards.some((b) => inMarkets(b.category)); // before "Only trades I can still get into"
   let html;
   if (!r.bets.length) html = emptyState(`None of your traders traded in the last ${r.hours} hours`, "New trades show up here within a few minutes of being made. Polymarket shows trades a few minutes late.");
-  else if (!shown.length) html = emptyState(feed.onlyIn ? "Nothing you can still get into" : `No ${esc(feed.cat)} trades`,
-    feed.onlyIn ? `Every ${feed.cat === "All" ? "" : esc(feed.cat) + " "}trade from the last ${r.hours} hours has moved away or settled.` : `Nothing in ${esc(feed.cat)} in the last ${r.hours} hours.`,
-    feed.onlyIn ? `<button class="btn ghost" id="showall">Show all trades</button>` : "");
+  else if (!shown.length && anyHere) html = emptyState("Nothing you can still get into",
+    `Every ${names ? esc(names) + " " : ""}trade from the last ${r.hours} hours has moved away or settled.`, `<button class="btn ghost" id="showall">Show all trades</button>`);
+  else if (!shown.length) html = emptyState(`No ${esc(names)} trades`, `Nothing in ${esc(names)} in the last ${r.hours} hours.`, `<button class="btn ghost" id="feedall">Show all markets</button>`);
   else html = `<div class="cards">${shown.map((b, i) => tradeCard(b, i)).join("")}</div>`;
   $("#flist").innerHTML = html;
   const all = $("#showall");
   if (all) all.onclick = () => { feed.onlyIn = false; renderFeed(); };
+  bindFeedChips(document);
   bindActions($("#flist"));
 }
-setInterval(() => { const u = $("#updated"); if (u && feed.at) u.innerHTML = updatedAgo(feed.at); }, 5000);
+
+// Big trades: trades of $250 or more on the venues Signals reads, one card each, in the Feed's card style.
+// Polymarket only (for now), every trade knows its market, so Big trades opens on your markets like the rest of
+// the Feed. With Kalshi on, it shows everything: the SDK has no categories for Kalshi markets, and almost all
+// big trades are Kalshi's, so a filter would mostly hide them. The SDK's big trades have no price now, so there
+// is no "You can still get in" here; a named trader's card opens their page.
+function renderBig() {
+  const rows = feed.big;
+  if (!rows) { $("#fbar").innerHTML = ""; $("#flist").innerHTML = errorState(feed.bigErr || "No answer from the app."); bindActions($("#flist")); return; }
+  const filtered = !kalshiOn(), counts = {};
+  rows.forEach((t) => { if (t.category) counts[t.category] = (counts[t.category] || 0) + 1; });
+  const names = interestNames(filtered ? interests || [] : []);
+  const list = filtered ? rows.filter((t) => inMarkets(t.category)) : rows;
+  const where = venuesOn.map((v) => VENUE[v]).join(" and ");
+  $("#fbar").innerHTML = `
+    <div class="feedtop"><span class="muted" style="font-size:14px">${filtered ? "Trades" : "Every trade"} of $250 or more right now, on ${where}.</span>
+      <span class="updated" id="updated">${updatedAgo(feed.bigAt)}</span></div>
+    ${filtered ? `<div class="filters">${marketChips(counts)}</div>` : ""}
+    ${feed.bigErr ? `<p class="inline-err">Couldn't refresh: ${esc(feed.bigErr)}. Showing the last update.</p>` : ""}`;
+  let html;
+  if (!rows.length) html = emptyState("No big trades right now", "Trades of $250 or more show up here as they happen.");
+  else if (!list.length) html = emptyState(`No big ${esc(names)} trades right now`, `None of the last ${plural(rows.length, "big trade")} ${rows.length === 1 ? "is" : "are"} in ${esc(names)}.`,
+    `<button class="btn ghost" id="feedall">Show all markets</button>`);
+  else html = `<div class="cards">${list.map(bigCard).join("")}</div>${kalshiOn() ? `<p class="foot-note">Kalshi names only traders who turned on their social profile.</p>` : ""}`;
+  $("#flist").innerHTML = html;
+  bindFeedChips(document);
+  bindActions($("#flist"));
+}
+function bigCard(t) {
+  const href = t.trader ? `#/t/${t.venue}/${encodeURIComponent(t.trader)}` : "";
+  const pick = t.outcome && t.venue === "polymarket" ? t.outcome : t.outcome ? `${t.side.toUpperCase()} · ${t.outcome}` : t.side.toUpperCase();
+  return `<article class="card${href ? " trade" : ""}"${href ? ` data-href="${href}" tabindex="0"` : ""}>
+    <div class="trade-top">${avatar(t.trader ? `${t.venue}:${t.trader}` : "anon", 28)}<span class="who"><span class="name">${t.trader ? esc(displayName(t.name, t.trader)) : "Anonymous trader"}</span></span>
+      <span class="when">${[t.category, kalshiOn() ? VENUE[t.venue] : null, ago(t.at)].filter(Boolean).map(esc).join(" · ")}</span></div>
+    <h3 class="trade-title">${esc(t.title || t.market)}</h3>
+    <div class="trade-tags"><span class="chip">${esc(pick)}</span>${marketLink(t.url, `${VENUE[t.venue]} ↗`)}</div>
+    <div class="trade-nums"><span>${t.action === "buy" ? "Bought" : "Sold"} at <b>${cents(t.price)}</b></span><span class="amt">${usd(t.usd)}</span></div>
+    ${t.trader ? "" : `<div class="trade-foot"><span class="muted" style="font-size:14px">Anonymous: ${VENUE[t.venue] || "the venue"} doesn't name this trader.</span></div>`}
+  </article>`;
+}
+setInterval(() => { const u = $("#updated"), at = feedView() === "big" ? feed.bigAt : feed.at; if (u && at) u.innerHTML = updatedAgo(at); }, 5000);
 
 // Traders we follow often buy the same thing, minutes apart: one card per outcome they bought. It shows the
 // buy you can best still follow (you can still get in, then whoever bought first) and lists the others;
@@ -892,19 +966,26 @@ function howSheet() {
 
 // ---- interests: asked once per browser ----
 // Kept in localStorage; [] means all markets, null not asked yet. Storage can be blocked (private windows),
-// so the choice then holds for this visit only and onboarding never traps anyone.
+// so the choice then holds for this visit only and onboarding never traps anyone. Onboarding offers the four
+// markets; the Feed's chips can add another category it has trades in (Economy, Weather…), kept the same way.
 const INTERESTS = ["Politics", "Sports", "Crypto", "Esports"];
 const INTERESTS_KEY = "signals.interests";
 let interests = (() => {
   try {
     const v = JSON.parse(localStorage.getItem(INTERESTS_KEY));
-    if (Array.isArray(v)) return v.filter((c) => INTERESTS.includes(c));
+    if (Array.isArray(v)) return v.filter((c) => typeof c === "string" && c && c.length <= 40);
   } catch {}
   return null;
 })();
 function setInterests(v) {
   interests = v;
   try { localStorage.setItem(INTERESTS_KEY, JSON.stringify(v)); } catch {}
+}
+// A market chip, on Feed or Traders: "" (All) clears them; any other turns that market on or off.
+function toggleInterest(c) {
+  const now = new Set(interests || []);
+  if (!c) now.clear(); else now.has(c) ? now.delete(c) : now.add(c);
+  setInterests([...INTERESTS.filter((x) => now.has(x)), ...[...now].filter((x) => !INTERESTS.includes(x)).sort()]);
 }
 const interestNames = (cs) => cs.length < 2 ? cs.join("") : `${cs.slice(0, -1).join(", ")} or ${cs[cs.length - 1]}`;
 // A trader matches when an interest is their most-traded category or one they're strong in.
@@ -948,9 +1029,9 @@ const lb = { copyOnly: false, q: "", sort: null, period: "30d", all: false, more
 async function tradersPage(view) {
   const app = $("#app");
   if (view === "worth") { app.innerHTML = `<div id="tview">${skelRows(7)}</div>`; return worthView(); }
-  app.innerHTML = `<a class="back" href="#/traders">← Traders</a><nav class="seg"><a href="#/traders/top" class="${view === "top" ? "on" : ""}">Top profit</a><a href="#/traders/big" class="${view === "big" ? "on" : ""}">Big trades</a></nav>
+  app.innerHTML = `<a class="back" href="#/traders">← Traders</a><h2 class="h2" style="margin-top:0">Top profit</h2>
     <div id="tview">${skelRows(7)}</div>`;
-  return view === "big" ? bigView() : topView();
+  return topView(); // Big trades moved to the Feed (#/big)
 }
 
 async function worthView() {
@@ -1065,7 +1146,7 @@ function renderWorth() {
     <div class="lb-toolbar">
       <div class="lb-filters" role="group" aria-label="Filter traders">
         <button type="button" class="lb-chip" data-lbmkt="" aria-pressed="${!picked.length}">All</button>
-        ${INTERESTS.map((c) => `<button type="button" class="lb-chip" data-lbmkt="${c}" aria-pressed="${picked.includes(c)}">${c}</button>`).join("")}
+        ${[...INTERESTS, ...picked.filter((c) => !INTERESTS.includes(c))].map((c) => `<button type="button" class="lb-chip" data-lbmkt="${esc(c)}" aria-pressed="${picked.includes(c)}">${esc(c)}</button>`).join("")}
         <span class="lb-divider" aria-hidden="true"></span>
         <button type="button" class="lb-chip" id="lbcopy" aria-pressed="${lb.copyOnly}">Copyable only</button>
       </div>
@@ -1083,13 +1164,10 @@ function renderWorth() {
       ${sort === "consistent" ? " · Most consistent ranks by weeks in profit out of the last 12, then 30-day profit" : ""}
       ${history ? "" : " · Weeks in profit, trend and 7D/90D arrive with the next data update"}
       <br>${lb.all ? `Showing every checked trader except market makers and arbitrage · <button class="link" id="lbrec">Recommended only</button>` : `${left ? `${left} left out: big profit without skill, market makers, arbitrage and traders with no clear edge · <button class="link" id="lbrec">See all checked traders</button>` : ""}`}
-      · <a class="link" href="#/traders/top">Top profit</a> · <a class="link" href="#/traders/big">Big trades</a>
+      · <a class="link" href="#/traders/top">Top profit</a>
       ${st.error ? ` · <span style="color:var(--danger)">Last check failed: ${esc(st.error)}</span>` : ""}</p>`;
 
-  $$("[data-lbmkt]", box).forEach((b) => (b.onclick = () => {
-    const c = b.dataset.lbmkt, now = new Set(interests || []);
-    if (!c) now.clear(); else now.has(c) ? now.delete(c) : now.add(c);
-    setInterests(INTERESTS.filter((x) => now.has(x))); renderWorth(); }));
+  $$("[data-lbmkt]", box).forEach((b) => (b.onclick = () => { toggleInterest(b.dataset.lbmkt); renderWorth(); }));
   $("#lbcopy").onclick = () => { lb.copyOnly = !lb.copyOnly; renderWorth(); };
   $("#lbq").oninput = (e) => {
     lb.q = e.target.value; const at = e.target.selectionStart; renderWorth();
@@ -1107,9 +1185,11 @@ function renderWorth() {
 
 async function topView() {
   const box = $("#tview");
+  if (!kalshiOn()) topOpts.venue = "polymarket"; // one venue: no venue to choose
   if (topOpts.venue === "all") topOpts.by = "pnl";
-  const opts = `<div class="opts">${[["all", "Both venues"], ["kalshi", "Kalshi"], ["polymarket", "Polymarket"]].map(([v, l]) => `<button data-venue="${v}" class="${topOpts.venue === v ? "on" : ""}">${l}</button>`).join("")}
-    <span class="gap"></span>${[["pnl", "By profit"], ["volume", "By volume"]].map(([v, l]) => `<button data-by="${v}" class="${topOpts.by === v ? "on" : ""}" ${v === "volume" && topOpts.venue === "all" ? 'disabled title="Pick one venue: Kalshi counts contracts, Polymarket dollars"' : ""}>${l}</button>`).join("")}</div>`;
+  const venues = kalshiOn() ? [["all", "Both venues"], ["kalshi", "Kalshi"], ["polymarket", "Polymarket"]] : [];
+  const opts = `<div class="opts">${venues.map(([v, l]) => `<button data-venue="${v}" class="${topOpts.venue === v ? "on" : ""}">${l}</button>`).join("")}
+    ${venues.length ? `<span class="gap"></span>` : ""}${[["pnl", "By profit"], ["volume", "By volume"]].map(([v, l]) => `<button data-by="${v}" class="${topOpts.by === v ? "on" : ""}" ${v === "volume" && topOpts.venue === "all" ? 'disabled title="Pick one venue: Kalshi counts contracts, Polymarket dollars"' : ""}>${l}</button>`).join("")}</div>`;
   box.innerHTML = opts + skelRows(8);
   const bindOpts = () => {
     $$("[data-venue]", box).forEach((b) => (b.onclick = () => { topOpts.venue = b.dataset.venue; topView(); }));
@@ -1124,24 +1204,8 @@ async function topView() {
       <span class="rank">${i + 1}</span>${avatar(`${t.venue}:${t.id}`, 40)}
       <span class="tmain"><span class="line"><span class="name">${esc(displayName(t.name, t.id))}</span></span><span class="sub">${VENUE[t.venue]}${vol(t) ? ` · ${vol(t)}` : ""}</span></span>
       <span class="tnum"><b>${pl(t.pnl, usd(t.pnl, true))}</b><small>all time</small></span></a>`).join("")}</div>
-    <p class="foot-note">The venues' own leaderboards. Big profit isn't the same as skill: see Worth following.</p>` : emptyState("No traders"));
+    <p class="foot-note">${kalshiOn() ? "The venues' own leaderboards" : "Polymarket's own leaderboard"}. Big profit isn't the same as skill: see Worth following.</p>` : emptyState("No traders"));
   bindOpts();
-}
-
-async function bigView() {
-  const box = $("#tview");
-  let rows;
-  try { rows = await api("/api/trading-now?min_usd=250"); } catch (e) { box.innerHTML = errorState(e.message); bindActions(box); return; }
-  if (routeName() !== "traders:big") return;
-  box.innerHTML = `<p class="lede">Trades of $250 or more, right now, on Kalshi and Polymarket.</p>` + (rows.length ? `<div class="list">${rows.map((t) => `
-    <div class="trow norank" ${t.trader ? `data-href="#/t/${t.venue}/${encodeURIComponent(t.trader)}"` : 'style="cursor:default"'}>
-      ${avatar(t.trader ? `${t.venue}:${t.trader}` : "anon", 36)}
-      <span class="tmain"><span class="line"><span class="name">${t.trader ? esc(displayName(t.name, t.trader)) : "Anonymous"}</span><span class="muted" style="font-size:13px">${VENUE[t.venue]} · ${ago(t.at)}</span></span>
-        <span class="sub" style="color:var(--fg);font-size:14px">${esc(t.title || t.market)}</span>
-        <span class="sub">${t.action === "buy" ? "Bought" : "Sold"} ${esc(t.outcome || t.side.toUpperCase())} at ${cents(t.price)}${t.url ? ` · ${marketLink(t.url, `${VENUE[t.venue]} ↗`)}` : ""}</span></span>
-      <span class="tnum"><b>${usd(t.usd)}</b></span></div>`).join("")}</div>
-    <p class="foot-note">Kalshi only names traders who turned on their social profile.</p>` : emptyState("No big trades right now", "Trades of $250 or more show up here as they happen."));
-  bindActions(box);
 }
 
 // ---- a Polymarket trader we've scored: their profile ----
@@ -1197,8 +1261,12 @@ function renderProfile() {
   const name = displayName(s.name, s.wallet);
   const cats = s.categories || [], total = cats.reduce((a, c) => a + (c.bets || 0), 0);
   const profit = profitOf(s, n), perDollar = perDollarOf(s, n), up = weeksUp(s);
-  const wallet = s.cash_usd ?? s.positions_value ?? null;
+  // their wallet: cash (read on-chain) plus open positions; either may be unknown (None), never taken as $0
+  const cash = s.cash_usd ?? null, inPositions = s.positions_usd ?? null;
+  const wallet = cash != null && inPositions != null ? cash + inPositions : null;
   const share = wallet && s.typical_usd != null ? s.typical_usd / wallet : null;
+  const walletTile = wallet != null ? [usd(wallet), "cash + open positions"] : cash != null ? [usd(cash), "cash on Polymarket"]
+    : inPositions != null ? [usd(inPositions), "in open positions"] : ["—", "on Polymarket"];
   const allTime = s.trading_pnl ?? s.pnl;
   const without = allTime != null && s.biggest_win != null ? allTime - s.biggest_win : null;
   const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way by the time a copy gets in
@@ -1214,7 +1282,7 @@ function renderProfile() {
   const steady = without == null ? "" : without > 0 ? " Still in profit without their biggest win." : ` Most of their profit is one win (${usd(s.biggest_win)}).`;
   const how = [cats.slice(0, 2).map((c) => c.category).join(" and ") || null, band ? `buys around ${band}` : s.avg_price != null ? `pays ${cents(s.avg_price)} on average` : null,
     s.typical_usd != null ? `usually ${usd(s.typical_usd)}${share != null ? ` (${lbPct(share).replace("+", "")} of their wallet)` : ""}` : null,
-    s.trades_per_day != null ? perDayText(s.trades_per_day) : null, s.held_to_settlement != null ? `holds ${Math.round(s.held_to_settlement * 100)}% to settlement` : null].filter(Boolean).join(", ");
+    s.trades_per_day != null ? perDayText(s.trades_per_day) : null, s.held_share != null ? `holds ${Math.round(s.held_share * 100)}% to settlement` : null].filter(Boolean).join(", ");
   const copyWhy = `${can ? "Yes" : s.segment === "too_fast" ? "Not really" : "Not recommended"}: ${gap != null ? `a copy a few minutes late paid about ${centsSigned(gap).replace("+", "")} more than they did` : "we couldn't measure the price a copy would get"}${s.copy_return != null ? `, and copies made ${lbPct(s.copy_return)} after fees` : ""}.`;
   const risks = (s.risks || []).map(sdkText);
 
@@ -1226,8 +1294,13 @@ function renderProfile() {
     const closedSdk = d && Array.isArray(d.closed) ? d.closed : null;
     const settled = (s.sample || []).filter((b) => b.payout != null).slice(0, 10);
     const openRow = (p) => `<div class="pf-li"><div><div class="t">${esc(p.title)}</div><div class="s">${p.outcome ? `<span class="pf-oc">${esc(p.outcome)}</span>` : ""}${p.size != null ? `${Math.round(p.size).toLocaleString()} at ${cents(p.price)} · ${usd((p.price ?? 0) * p.size)}` : ""}${p.now != null ? ` · now ${cents(p.now)}` : ""}${p.url ? ` · ${marketLink(p.url)}` : ""}</div></div><div class="r">${statusLine(p.status)}</div></div>`;
-    const closedRow = (c) => `<div class="pf-li"><div><div class="t">${esc(c.title || c.market)}</div><div class="s">${c.outcome ? `<span class="pf-oc">${esc(c.outcome)}</span>` : ""}${c.size != null ? `${Math.round(c.size).toLocaleString()} at ${cents(c.avg_price)}` : `bought at ${cents(c.price)}`}${c.exit_price != null && c.result === "sold" ? ` · sold at ${cents(c.exit_price)}` : ""}${c.pnl != null ? ` · ${pl(c.pnl, usd(c.pnl, true))}` : ""} · ${ago(c.closed_at || c.at)}${c.url ? ` · ${marketLink(c.url)}` : ""}</div></div>
-      <div class="r">${statusLine(c.result === "sold" ? "closed" : c.result || (c.payout === 1 ? "won" : "lost"))}</div></div>`;
+    const closedRow = (c) => {
+      const sdk = "result" in c, when = c.closed_at || c.at;
+      const bought = sdk ? `${c.size != null ? `${Math.round(c.size).toLocaleString()} ` : ""}${c.avg_price != null ? `at ${cents(c.avg_price)}` : "bought"}` : `bought at ${cents(c.price)}`;
+      const status = sdk ? { won: "won", lost: "lost", sold: "closed" }[c.result] : c.payout === 1 ? "won" : "lost"; // null: not settled yet
+      return `<div class="pf-li"><div><div class="t">${esc(c.title || c.market)}</div><div class="s">${c.outcome ? `<span class="pf-oc">${esc(c.outcome)}</span>` : ""}${bought}${c.result === "sold" && c.exit_price != null ? ` · sold at ${cents(c.exit_price)}` : ""}${c.pnl != null ? ` · ${pl(c.pnl, usd(c.pnl, true))}` : ""}${when ? ` · ${ago(when)}` : ""}${c.url ? ` · ${marketLink(c.url)}` : ""}</div></div>
+      <div class="r">${status ? statusLine(status) : ""}</div></div>`;
+    };
     body = `<p class="pf-sec">Open</p>${open == null ? (d?.error ? `<p class="inline-err">${esc(d.error)}</p>` : `<div class="skel" style="width:60%;height:14px;margin:16px 0"></div>`)
         : open.length ? `<div>${open.slice(0, 12).map(openRow).join("")}</div>` : `<p class="pf-empty">No open trades.</p>`}
       <p class="pf-sec">Closed${closedSdk ? "" : " · settled trades we checked"}</p>
@@ -1254,7 +1327,7 @@ function renderProfile() {
         ${total ? `<div class="pf-mix" aria-hidden="true">${cats.slice(0, 4).map((c) => `<i style="flex:${c.bets}"></i>`).join("")}</div>` : ""}
         <div class="pf-kv"><div><span>Markets</span><b>${total ? cats.slice(0, 3).map((c) => `${esc(c.category)} ${Math.round((100 * c.bets) / total)}%`).join(" · ") : dash}</b></div>
         <div><span>Usual price</span><b>${band || (s.avg_price != null ? `${cents(s.avg_price)} on average` : dash)}</b></div>
-        <div><span>Trades</span><b>${s.trades_per_day != null ? perDayText(s.trades_per_day) : dash}</b></div><div><span>Held until the market settles</span><b>${s.held_to_settlement != null ? `${Math.round(s.held_to_settlement * 100)}%` : dash}</b></div></div></div>
+        <div><span>Trades</span><b>${s.trades_per_day != null ? perDayText(s.trades_per_day) : dash}</b></div><div><span>Held until the market settles</span><b>${s.held_share != null ? `${Math.round(s.held_share * 100)}%` : dash}</b></div></div></div>
       <div class="pf-group"><h3>Execution</h3><div class="pf-kv">
         <div><span>Resting orders (maker)</span><b>${s.maker_share != null ? `${Math.round(s.maker_share * 100)}%` : dash}</b></div><div><span>Price gap for a copy a few minutes late</span><b>${gap != null ? centsSigned(gap).replace("+", "") : dash}</b></div></div></div>
       <details class="fold"><summary>How we measure this</summary>${worthDetails(s)}</details>`;
@@ -1269,7 +1342,7 @@ function renderProfile() {
       <div class="pf-stat"><span>Weeks in profit</span><b>${up != null ? `${up} of 12` : "—"}</b><small>last 12 weeks</small></div>
       <div class="pf-stat"><span>Won</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>settled trades</small></div>
       <div class="pf-stat"><span>Usual trade</span><b>${s.typical_usd != null ? usd(s.typical_usd) : "—"}</b><small>${share != null ? `${lbPct(share).replace("+", "")} of their wallet` : s.trades_per_day != null ? perDayText(s.trades_per_day) : ""}</small></div>
-      <div class="pf-stat"><span>Wallet</span><b>${wallet != null ? usd(wallet) : "—"}</b><small>on Polymarket</small></div>
+      <div class="pf-stat"><span>Wallet</span><b>${walletTile[0]}</b><small>${walletTile[1]}</small></div>
     </div>
     <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Profit</h2>${period("")}</div>
       ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
@@ -1340,7 +1413,8 @@ async function fillYouMade(el, t, lead = "") {
   el.hidden = false;
 }
 
-// The copy card on a trader's page: start copying (optionally only some categories), or stop.
+// The copy card on a trader's page: start copying all their next trades, or stop. (A rule saved before
+// copying was always everything may still say "Only Sports": it keeps working as saved.)
 async function copyBox(box, t, opts = {}) {
   if (!copy) { box.innerHTML = `<div class="skel" style="width:60%;height:14px"></div>`; await loadCopy(); }
   if (!box.isConnected) return;
@@ -1355,18 +1429,14 @@ async function copyBox(box, t, opts = {}) {
     fillYouMade($("#made", box), t, on.categories?.length ? `Only ${esc(on.categories.join(", "))}. ` : "");
     return;
   }
-  const cats = opts.categories || [], strong = opts.strong || [];
   box.innerHTML = `<div class="head">Copy their buys</div>
-    <p>Each new buy they make becomes your own sandbox order in the same market on ${VENUE[t.venue]}: ${r.size} contracts, at most 3¢ above their price, held until it settles. Real prices and fees, no real money.${opts.note ? " " + esc(opts.note) : ""}</p>
+    <p>Each new buy they make, in any market, becomes your own sandbox order in the same market on ${VENUE[t.venue]}: ${r.size} contracts, at most 3¢ above their price, held until it settles. Real prices and fees, no real money.${opts.note ? " " + esc(opts.note) : ""}</p>
     <p id="made" hidden></p>
-    ${cats.length > 1 ? `<div class="catpick">${cats.map((c) => `<button aria-pressed="${!strong.length || strong.includes(c)}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>` : ""}
     <button class="btn wide" id="docopy">Copy trader</button>`;
   fillYouMade($("#made", box), t);
-  $$(".catpick button", box).forEach((b) => (b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true")));
   $("#docopy", box).onclick = async () => {
     $("#docopy", box).disabled = true;
-    const picked = $$(".catpick button[aria-pressed=true]", box).map((b) => b.dataset.c);
-    try { await startCopy(t, cats.length > 1 && picked.length < cats.length ? picked : []); copyBox(box, t, opts); }
+    try { await startCopy(t); copyBox(box, t, opts); }
     catch (e) { $("#docopy", box).disabled = false; box.insertAdjacentHTML("beforeend", `<p class="inline-err">${esc(e.message)}</p>`); }
   };
 }
@@ -1392,7 +1462,7 @@ async function traderPage(venue, id) {
     <div class="tiles">${tiles.map(([k, v]) => `<div class="tile"><span>${k}</span><b>${v}</b></div>`).join("")}</div>
     ${venue === "polymarket" ? `<p class="foot-note"><a class="link" href="#/worth/${esc(t.id)}">Is ${esc(name)} worth following? See their record →</a></p>` : ""}
     <div class="card copybox" id="copybox"></div>
-    <h2 class="h2">Same person on ${venue === "kalshi" ? "Polymarket" : "Kalshi"}?</h2><div class="card" id="links"><p class="muted" style="margin:0">Checking both venues (up to 30 seconds)…</p></div>
+    ${kalshiOn() ? `<h2 class="h2">Same person on ${venue === "kalshi" ? "Polymarket" : "Kalshi"}?</h2><div class="card" id="links"><p class="muted" style="margin:0">Checking both venues (up to 30 seconds)…</p></div>` : ""}
     <h2 class="h2">Open trades</h2><div id="open">${skelCards(2)}</div>
     <h2 class="h2">Recent trades</h2>${hidden ? `<div class="card">${emptyState("Hidden by the trader")}</div>` : d.trades.length ? `<div class="list">${d.trades.slice(0, 20).map((x) => `<div class="row"><div><div class="t">${esc(x.title || x.market)}</div>
       <div class="s">${x.action === "buy" ? "Bought" : "Sold"} ${esc(x.outcome && x.venue === "polymarket" ? x.outcome : x.outcome ? `${x.side.toUpperCase()} · ${x.outcome}` : x.side.toUpperCase())} at ${cents(x.price)} · ${ago(x.at)}${x.url ? ` · ${marketLink(x.url, `${VENUE[x.venue]} ↗`)}` : ""}</div></div><div class="r">${usd(x.usd)}</div></div>`).join("")}</div>` : `<div class="card">${emptyState("No recent trades")}</div>`}`;
@@ -1400,7 +1470,7 @@ async function traderPage(venue, id) {
   if (hidden) box.innerHTML = `<div class="head">Can't be copied</div><p style="margin:0">${esc(name)} hides their trades on Kalshi. If they trade on Polymarket too, you can copy that account instead (see below).</p>`;
   else copyBox(box, t);
   loadOpenTrades(null, venue, id);
-  loadLinks(venue, id);
+  if (kalshiOn()) loadLinks(venue, id); // it reads the other venue: only when Signals reads both
 }
 
 async function loadLinks(venue, id) {
@@ -1490,16 +1560,21 @@ async function minePage() {
 }
 
 // ---- routing ----
-// #/ feed · #/traders[/top|/big] · #/mine · #/worth/<wallet> · #/t/<venue>/<id>. Old links still work.
-const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/mine" };
+// #/ feed · #/big the feed's Big trades · #/traders[/top] · #/mine · #/worth/<wallet> · #/t/<venue>/<id>.
+// Old links still work: Big trades used to be #/traders/big.
+const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/mine", "#/traders/big": "#/big" };
 function routeName() {
   const h = location.hash || "#/";
   if (h === "#/" || h === "#") return "feed";
+  if (h === "#/big") return "feed:big";
   if (h === "#/traders") return "traders:worth";
   if (h === "#/traders/top") return "traders:top";
-  if (h === "#/traders/big") return "traders:big";
   if (h === "#/mine") return "mine";
   return h;
+}
+function venueOffPage(venue) {
+  $("#app").innerHTML = `<a class="back" href="#/traders">← Traders</a>${emptyState(`${esc(VENUE[venue] || venue)} isn't in Signals right now`,
+    "Signals covers Polymarket traders for now.", `<a class="btn ghost" href="#/traders">See the traders</a>`)}`;
 }
 function route() {
   if (OLD[location.hash]) { location.replace(OLD[location.hash]); return; }
@@ -1507,22 +1582,23 @@ function route() {
   const name = routeName();
   const w = location.hash.match(/^#\/worth\/(0x[0-9a-fA-F]{40})$/);
   const t = location.hash.match(/^#\/t\/(kalshi|polymarket)\/(.+)$/);
-  const tab = name === "mine" ? "mine" : name === "feed" ? "feed" : "traders";
+  const tab = name === "mine" ? "mine" : name.startsWith("feed") ? "feed" : "traders";
   $$("[data-tab]").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   const wide = (name === "traders:worth" && interests !== null) || location.hash.startsWith("#/worth/"); // the leaderboard and profiles need the room
   $$(".wrap").forEach((el) => el.classList.toggle("wide", wide));
   window.scrollTo(0, 0);
-  if (interests === null && (name === "feed" || name === "traders:worth")) onboardingPage(); // first run; links to a trader skip it
-  else if (name === "feed") feedPage();
+  if (interests === null && (name.startsWith("feed") || name === "traders:worth")) onboardingPage(); // first run; links to a trader skip it
+  else if (name.startsWith("feed")) feedPage(feedView());
   else if (name.startsWith("traders:")) tradersPage(name.split(":")[1]);
   else if (name === "mine") minePage();
   else if (w) worthTraderPage(w[1].toLowerCase());
+  else if (t && !venuesOn.includes(t[1])) venueOffPage(t[1]); // an old link to a Kalshi trader
   else if (t) traderPage(t[1], decodeURIComponent(t[2]));
   else location.replace("#/");
 }
 window.addEventListener("hashchange", route);
 loadCopy().then(() => { if (onFeed()) refreshCopyButtons(); });
-route();
+api("/api/config").then((c) => { venuesOn = c.venues; }).catch(() => {}).finally(route); // without it: Polymarket only
 </script>
 </body>
 </html>
