@@ -140,7 +140,9 @@ def test_sample_profit_history_is_local_only(api: TestClient, monkeypatch: pytes
     monkeypatch.setattr(engine, "_worth_data", {"finished": "2026-10-07T00:00:00+00:00", "scores": [SCORE | {"pnl_window": 500.0}]})
     monkeypatch.setenv("SIGNALS_MOCK", "1")
     s = api.get("/api/worth").json()["result"]["scores"][0]
-    assert s["sample_data"] and len(s["pnl_weeks"]) == 12 and len(s["pnl_daily"]) == 90
+    assert s["sample_data"] and len(s["pnl_weeks"]) == 12 and len(s["pnl_daily"]) == 91  # the SDK's shape
+    assert s["pnl_daily"][0][1] == 0.0
+    assert sum(s["pnl_weeks"]) == pytest.approx(s["pnl_daily"][-1][1] - s["pnl_daily"][-85][1], abs=0.1)  # weeks add up
     monkeypatch.setattr(engine, "HOSTED", True)  # usesignals.app: never made-up numbers for real traders
     s = api.get("/api/worth").json()["result"]["scores"][0]
     assert "sample_data" not in s and "pnl_weeks" not in s

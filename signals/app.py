@@ -247,12 +247,12 @@ def _mock_history(s: dict[str, Any]) -> dict[str, Any]:
     r = random.Random(s.get("wallet"))
     scale = abs(s.get("pnl_window") or 1000) / 4
     days = [scale / 7 * (r.random() * 2 - 0.7) for _ in range(90)]
-    cum, daily = 0.0, []
-    start = datetime.now(UTC) - timedelta(days=89)
-    for i, d in enumerate(days):
+    start = datetime.now(UTC) - timedelta(days=90)
+    cum, daily = 0.0, [[start.date().isoformat(), 0.0]]  # as the SDK: 91 points, day 0 = 0, through today
+    for i, d in enumerate(days, 1):
         cum += d
         daily.append([(start + timedelta(days=i)).date().isoformat(), round(cum, 2)])
-    weeks = [round(sum(days[-84 + 7 * i : -84 + 7 * i + 7]), 2) for i in range(12)]
+    weeks = [round(sum(days[len(days) - 84 + 7 * i :][:7]), 2) for i in range(12)]  # the last 12 weeks, oldest first
     volume = (s.get("volume_window") or abs(s.get("pnl_window") or 1000) * 20) / 30
     periods = {f"{n}d": {"trading_pnl": round(sum(days[-n:]), 2), "volume": round(volume * n, 2),
                          "return_per_dollar": sum(days[-n:]) / (volume * n)} for n in (7, 30, 90)}  # fmt: skip
