@@ -878,8 +878,19 @@ async function costBox(box, b, amount = 10) {
     if (!spend || spend <= 0) { pv.innerHTML = `<p>Enter an amount above $0.</p>`; return; }
     let p;
     try { p = await post("/api/trade/preview", { ...oneTrade(b), spend }); }
-    catch (e) { if (my === seq) pv.innerHTML = `<p class="inline-err">${esc(e.message)}</p>`; return; }
+    catch (e) {
+      if (my !== seq) return;
+      pv.innerHTML = `<p class="inline-err">Couldn't get a quote: ${esc(e.message)}</p><p><button type="button" class="btn ghost small" id="requote">Refresh quote</button></p>`;
+      $("#requote", pv).onclick = () => { clearTimeout(timer); show(); };
+      return;
+    }
     if (my !== seq || !box.isConnected) return; // a newer amount is on its way
+    if (!p.ok && p.price_changed) { // the book moved between the engine's reads: no estimate, never a stale price
+      pv.innerHTML = `<p><b>Price changed—refresh quote</b></p><p>The cheapest price for sale moved while we read Polymarket's order book, so there's no estimate right now.</p>
+        <p><button type="button" class="btn ghost small" id="requote">Refresh quote</button></p>${freshLine(p)}`;
+      $("#requote", pv).onclick = () => { clearTimeout(timer); show(); };
+      return;
+    }
     if (!p.ok) {
       const np = notPriced(p, spend);
       pv.innerHTML = `<p>${esc(np.line)}</p>${limitLine(p)}${freshLine(p)}`;

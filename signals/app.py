@@ -156,6 +156,8 @@ def trader(venue: str, trader_id: str) -> dict[str, Any]:
     try:
         d = cached(f"trader:{venue}:{trader_id}", 15, lambda: reads.whales.trader(venue, trader_id, trades=40, closed=50))  # type: ignore[arg-type]
     except VenueError as e:
+        if e.code == "not_found":
+            count("no_profile", target="trader")
         raise venue_error(e) from e
     out = d.to_dict()
     links = position_links(d.trader.id) if venue == "polymarket" and d.positions else {}
@@ -917,6 +919,8 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
     try:
         d = _live_read(w)
     except VenueError as e:
+        if e.code == "not_found":  # a wallet with no Polymarket profile: counted, so we know how often it happens
+            count("no_profile", target="check")
         raise venue_error(e) from e
     who = {"wallet": w, "name": (s or {}).get("name") or d.trader.name, "segment": (s or {}).get("segment"),
            "label": (s or {}).get("label"), "copy_ok": s is not None and copy_offer(s)[0]}  # fmt: skip
@@ -1014,27 +1018,58 @@ def trade_preview(req: OneTrade) -> dict[str, Any]:
     order or a promised fill. Read here, never taken from the page: the market's status (the SDK says, in
     ``reason``, when Polymarket lists it closed or isn't taking orders) and the order book, priced up to
     ``BUY_LIMIT`` above the cheapest price for sale now (``best_price``; ``limit`` is the most a contract is
-    priced at). Their price (``their_price``) is context only. ``priced_at``: when it was read. Sends nothing."""
+    priced at). ``price_changed``: the book moved between the reads, so there's no quote, only "refresh". Their
+    price (``their_price``) is context only. ``priced_at``: when it was read. Sends nothing; each quote is counted
+    (``quotes``: outcome, reads, time taken), with nothing about who asked or which trade."""
     if req.spend is not None and req.spend <= 0:
         raise HTTPException(400, detail="Enter an amount above $0.")
     size: dict[str, Any] = {"spend": req.spend} if req.spend else {"size": float(PREVIEW_SIZE)}
+    t0, reads_made = time.monotonic(), [0]
     try:
-        p = _buy_now(req, size)
+        p = _buy_now(req, size, reads_made)
     except VenueError as e:
+        count_quote("rate_limited" if e.code == "rate_limited" else "error", reads_made[0], t0)
         raise venue_error(e) from e
-    return p.to_dict() | {"their_price": req.price, "priced_at": datetime.now(UTC).isoformat()}  # type: ignore[no-any-return]
+    changed = _price_changed(p)
+    count_quote(_quote_outcome(p, changed), reads_made[0], t0)
+    return p.to_dict() | {"their_price": req.price, "priced_at": datetime.now(UTC).isoformat(),  # type: ignore[no-any-return]
+                          "price_changed": changed}  # fmt: skip
 
 
-def _buy_now(req: OneTrade, size: dict[str, Any]) -> Any:
+def _buy_now(req: OneTrade, size: dict[str, Any], reads_made: list[int]) -> Any:
     """The SDK prices a buy up to a trade's price plus ``max_slippage``. The first read gets the market's status
     and the cheapest price for sale now (``best_price``, set whether or not this amount fills); when that isn't
     their price, a second read prices the amount from it. A market that's closed, not taking orders or has no
-    book to read comes back from the first read as it is."""
+    book to read comes back from the first read as it is. ``reads_made`` counts the reads, for ``quotes``."""
+    reads_made[0] += 1
     p = reads.whales.preview_copy(_their_trade(req), **size, max_slippage=BUY_LIMIT)
     best = p.best_price if p.depth_checked else p.price  # no book read: Gamma's best price for sale
     if best is None or abs(best - req.price) < 1e-9:
         return p
+    reads_made[0] += 1
     return reads.whales.preview_copy(_their_trade(req, price=best), **size, max_slippage=BUY_LIMIT)
+
+
+def _price_changed(p: Any) -> bool:
+    """Nothing for sale within the limit because the cheapest price is now above it: the book moved between the
+    two reads. Not a lack of liquidity, so the page says "Price changed" and offers a fresh quote."""
+    return bool(not p.ok and p.depth_checked and p.best_price is not None and p.limit is not None
+                and p.best_price > p.limit + 1e-9)  # fmt: skip
+
+
+def _quote_outcome(p: Any, changed: bool) -> str:
+    """How a quote ended, for ``quotes``: ok, no_book (priced from Gamma's best price, the book unread),
+    price_changed, short (the book holds less than the amount), closed, rate_limited or other."""
+    if p.ok:
+        return "ok" if p.depth_checked else "no_book"
+    if changed:
+        return "price_changed"
+    why = (p.reason or "").lower()
+    if "too many requests" in why:
+        return "rate_limited"
+    if "taking orders" in why or "doesn't list" in why:
+        return "closed"
+    return "short" if p.depth_checked and p.max_spend else "other"
 
 
 # ---- following traders: sign in with Clerk (Google or Telegram), alerts on Telegram ----
@@ -1440,6 +1475,7 @@ CREATE TABLE IF NOT EXISTS votes (alert_id TEXT NOT NULL, uid TEXT NOT NULL, use
   at REAL NOT NULL, PRIMARY KEY (alert_id, uid));
 CREATE TABLE IF NOT EXISTS events (at REAL NOT NULL, kind TEXT NOT NULL, uid TEXT, alert_id TEXT, target TEXT,
   trader TEXT);
+CREATE TABLE IF NOT EXISTS quotes (at REAL NOT NULL, outcome TEXT NOT NULL, reads INTEGER NOT NULL, ms REAL NOT NULL);
 """
 
 
@@ -1849,10 +1885,12 @@ def _alert_loop() -> None:
 # Per alert and per follow, kept in the store's alerts.db with nothing personal beyond the signed-in account (its
 # Clerk id): no IPs, no user agents. Minutes from their trade to the alert (alerts: trade_at, sent_at), taps on an
 # alert's links (/go), "Stop alerts" taps and unfollows, votes (votes), follows, interests picked and Telegram
-# connected (events). /api/metrics sums them up for the owner: locally, or with SIGNALS_METRICS_KEY.
+# connected (events). Also anonymous, with no id, wallet or trade: each "What buying now costs" quote (quotes: how
+# it ended, Polymarket reads, milliseconds) and each page that couldn't open because the wallet has no Polymarket
+# profile (events: no_profile). /api/metrics sums them up for the owner: locally, or with SIGNALS_METRICS_KEY.
 
 METRICS_KEY = os.environ.get("SIGNALS_METRICS_KEY", "")
-EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "picked")
+EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "picked", "no_profile")
 _ALERT_ID = re.compile(r"[A-Za-z0-9_-]{4,16}")
 
 
@@ -1862,6 +1900,15 @@ def count(kind: str, *, uid: str | None = None, alert_id: str | None = None, tar
     try:
         with _db() as con:
             con.execute("INSERT INTO events VALUES (?, ?, ?, ?, ?, ?)", (time.time(), kind, uid, alert_id, target, trader))
+    except (sqlite3.Error, OSError):
+        pass
+
+
+def count_quote(outcome: str, reads_made: int, t0: float) -> None:
+    """One quote: how it ended, how many Polymarket reads it took and how long (from ``t0``, monotonic). Never in the way."""
+    try:
+        with _db() as con:
+            con.execute("INSERT INTO quotes VALUES (?, ?, ?, ?)", (time.time(), outcome, reads_made, (time.monotonic() - t0) * 1000))
     except (sqlite3.Error, OSError):
         pass
 
@@ -1957,6 +2004,9 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
             " GROUP BY e.kind", (week, since)).fetchall())  # fmt: skip
         votes = dict(con.execute("SELECT useful, COUNT(*) FROM votes WHERE at >= ? GROUP BY useful", (since,)).fetchall())
         voted = con.execute("SELECT COUNT(DISTINCT alert_id) FROM votes WHERE at >= ?", (since,)).fetchone()[0]
+        quotes = con.execute("SELECT outcome, reads, ms FROM quotes WHERE at >= ?", (since,)).fetchall()
+        no_profile = dict(con.execute("SELECT target, COUNT(*) FROM events WHERE kind = 'no_profile' AND at >= ?"
+                                      " GROUP BY target", (since,)).fetchall())  # fmt: skip
     users = _load_follows()["users"].values()
     followers = [u for u in users if u.get("follows")]
     with_interests = [u for u in users if u.get("interests") is not None]
@@ -1979,6 +2029,11 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
         "telegram": {"followers": len(followers), "followers_with_telegram": sum(1 for u in followers if u.get("chat")),
                      "share": ratio(sum(1 for u in followers if u.get("chat")), len(followers)),
                      "connected_in_period": n.get("telegram", 0)},
+        "quotes": {"n": len(quotes), "by_outcome": {o: sum(1 for q in quotes if q[0] == o) for o in sorted({q[0] for q in quotes})},
+                   "polymarket_reads": sum(q[1] for q in quotes), "reads_per_quote": ratio(sum(q[1] for q in quotes), len(quotes)),
+                   "ms": {"median": _pct([q[2] for q in quotes], 0.5), "p90": _pct([q[2] for q in quotes], 0.9)},
+                   "share_rate_limited": ratio(sum(1 for q in quotes if q[0] == "rate_limited"), len(quotes))},
+        "no_profile": {"by_page": no_profile, "check_link_taps": taps.get("check", 0)},
     }  # fmt: skip
 
 

@@ -25,7 +25,10 @@ behind Vercel (see README, "Hosting").
   Feed's poller, and holds while the Worth following check runs. Pages and the check never write to it
   themselves: `_directory_note_later` and `_directory_later` (the writer thread; a failed write is never theirs).
 - Counting (README, "Counting"): per alert and per follow, in the store's `alerts.db`, never anything personal
-  beyond the signed-in account (no IPs, no user agents; an interest pick is counted with no id at all). Alert
+  beyond the signed-in account (no IPs, no user agents; an interest pick is counted with no id at all). Quotes
+  (`quotes`: how each ended, Polymarket reads, milliseconds) and pages a wallet with no Polymarket profile stopped
+  (`no_profile`) are counted with no id, wallet or trade at all: watch reads per quote, latency and rate limits
+  there as traffic grows. Alert
   links go through `/go/<alert id>/<target>`, which redirects to Polymarket or Signals only, and still redirects
   when counting fails. `/api/metrics` is the owner's: locally, or with `SIGNALS_METRICS_KEY`; never public.
 - Signals is a consumer website (usesignals.app); running it locally is for development. It places no orders:
@@ -41,7 +44,10 @@ behind Vercel (see README, "Hosting").
   estimated cost, what's for sale within the limit, the fee, the estimated slippage and when the book was read
   (plus the 3–5 minute lag of their trade). Their price is context ("They paid 37¢, 12m ago, for context"),
   never a target. It's always an estimate: never imply a guaranteed fill (it may fill higher, in part, or not
-  at all), and no green or "you can still get in" in it.
+  at all), and no green or "you can still get in" in it. A quote that fails shows no price: when the book moved
+  between the reads (`price_changed`) it says "Price changed—refresh quote", never that nothing is for sale;
+  "Only $X is for sale" is only for an amount bigger than the book holds within the limit. Transparency over a
+  quote that always succeeds.
 - Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
   asked for only to follow a trader, and the button says so ("Follow · get an alert when they buy"). Alerts go
   to Telegram (`alert_pass` in `app.py`), for every buy of $100 or more by a trader you follow (their buys of one

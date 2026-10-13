@@ -30,7 +30,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
     )
     monkeypatch.setattr(w, "links", lambda *a, **k: [])
     monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
-    # The last check found 0xabc copyable: the cost preview only prices a trader the page offers copying for.
+    # The last check found 0xabc copyable (the Feed and Traders show it; a quote is priced for anyone).
     monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [COPYABLE]})
     monkeypatch.setattr(engine, "_worth_one", {})
     return TestClient(engine.app)
@@ -295,7 +295,10 @@ def test_what_buying_one_feed_trade_costs_now(api: TestClient, monkeypatch: pyte
     api.post("/api/trade/preview", json=body | {"spend": 50})
     assert seen[1][2] == {"spend": 50.0, "max_slippage": 0.03}  # an amount from the page, fee included
     assert api.post("/api/trade/preview", json=body | {"spend": 0}).status_code == 400
-    assert not list(engine.STORE_DIR.iterdir())  # nothing kept
+    assert [f.name for f in engine.STORE_DIR.iterdir()] == ["alerts.db"]  # only the anonymous count of quotes
+    with engine._db() as con:
+        assert [r[:2] for r in con.execute("SELECT outcome, reads FROM quotes")] == [("ok", 1), ("ok", 1)]
+        assert not con.execute("SELECT 1 FROM events").fetchall()
 
 
 def test_the_quote_is_priced_from_the_market_now_not_their_price(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -527,3 +530,62 @@ def test_a_wallets_account_says_when_it_was_read_and_which_part_is_missing(
     api.get(f"/api/account/{wallet}")
     assert seen == [wallet]  # kept for a minute: one read
     assert api.get("/api/account/0x123").status_code == 400
+
+
+def _owner_metrics(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """/api/metrics as the owner sees it locally (same machine, not hosted, no key)."""
+    monkeypatch.setattr(engine, "METRICS_KEY", "")
+    monkeypatch.setattr(engine, "HOSTED", False)
+    return TestClient(engine.app, client=("127.0.0.1", 50000)).get("/api/metrics").json()  # type: ignore[no-any-return]
+
+
+def test_a_quote_the_book_moved_under_says_price_changed_and_is_counted(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Their price 60¢, the cheapest for sale 70¢; by the second read it's 75¢, above the 73¢ limit: not a lack of
+    # liquidity, so price_changed (the page: "Price changed—refresh quote", no price shown).
+    def preview(self: Any, trade: Any, **kw: Any) -> CopyPreview:
+        if trade.price == 0.60:
+            return _quote(ok=False, reason="Nothing to buy at 0.63 or better right now.", contracts=None, price=0.70,
+                          limit=0.63, max_spend=0.0, best_price=0.70)  # fmt: skip
+        return _quote(ok=False, reason="Nothing to buy at 0.73 or better right now.", contracts=None, price=0.75,
+                      limit=0.73, max_spend=0.0, best_price=0.75)  # fmt: skip
+
+    monkeypatch.setattr(Whales, "preview_copy", preview)
+    r = api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.60, "spend": 50}).json()
+    assert r["price_changed"] and not r["ok"]
+    monkeypatch.setattr(Whales, "preview_copy", lambda self, trade, **kw: _quote())
+    assert api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.52}).json()["price_changed"] is False
+
+    def limited(self: Any, trade: Any, **kw: Any) -> CopyPreview:
+        raise engine.VenueError("rate_limited", "polymarket said too many requests.", venue="polymarket", status=429)
+
+    monkeypatch.setattr(Whales, "preview_copy", limited)
+    assert api.post("/api/trade/preview", json={"wallet": "0xabc", "market": "0xcid:1", "price": 0.52}).status_code == 502
+    m = _owner_metrics(monkeypatch)["quotes"]
+    assert m["n"] == 3 and m["by_outcome"] == {"ok": 1, "price_changed": 1, "rate_limited": 1}
+    assert m["polymarket_reads"] == 2 + 1 + 1 and m["share_rate_limited"] == 0.333 and m["ms"]["median"] is not None
+    with engine._db() as con:  # nothing about who asked or which trade
+        assert [c[1] for c in con.execute("PRAGMA table_info(quotes)")] == ["at", "outcome", "reads", "ms"]
+
+
+def test_how_a_quote_ended_is_named_for_the_metrics() -> None:
+    o = engine._quote_outcome
+    assert o(_quote(), False) == "ok" and o(_quote(depth_checked=False), False) == "no_book"
+    assert o(_quote(ok=False, reason="polymarket said too many requests."), False) == "rate_limited"
+    assert o(_quote(ok=False, reason="Polymarket isn't taking orders on this market now.", max_spend=None, depth_checked=False), False) == "closed"
+    assert o(_quote(ok=False, reason="Only $40.00 is for sale", max_spend=40.0), False) == "short"
+    assert o(_quote(ok=False, reason="whatever"), True) == "price_changed"
+
+
+def test_a_wallet_with_no_profile_is_counted_where_it_stops_a_page(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def gone(*a: Any, **kw: Any) -> Any:
+        raise engine.VenueError("not_found", "polymarket doesn't know that: profile not found", venue="polymarket", status=404)
+
+    monkeypatch.setattr(engine, "_live_read", gone)
+    monkeypatch.setattr(engine.reads.whales, "trader", gone)
+    assert api.get(f"/api/bet/0x{'1' * 40}/0xcid:1").status_code == 502
+    assert api.get(f"/api/trader/polymarket/0x{'2' * 40}").status_code == 502
+    assert _owner_metrics(monkeypatch)["no_profile"]["by_page"] == {"check": 1, "trader": 1}
+    with engine._db() as con:  # no wallet kept
+        assert con.execute("SELECT uid, alert_id, trader FROM events WHERE kind = 'no_profile'").fetchall() == [(None, None, None)] * 2

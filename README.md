@@ -153,7 +153,12 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   alert's links (each goes through `/go/<alert id>/<target>`, which counts the tap and redirects: to Polymarket
   or Signals only, and even when counting fails), "Stop alerts" taps and unfollows (and how many came within 7
   days of an alert about that trader), Useful / Not useful votes, follows per visitor who picks interests (the
-  pick is counted anonymously, no id at all) and followers who connected Telegram. To read the summary:
+  pick is counted anonymously, no id at all) and followers who connected Telegram. Also anonymous (no id, wallet
+  or trade): every "What buying now costs" quote, with how it ended (`ok`, `no_book`, `price_changed`, `short`,
+  `closed`, `rate_limited`, `error`), how many Polymarket reads it took and how long (`quotes`: reads per quote,
+  median and p90 milliseconds, share rate-limited), and every trade page or trader page that couldn't open because
+  the wallet has no Polymarket profile (`no_profile`, next to the alerts' "Check your price" taps for scale). To
+  read the summary:
   - locally: `curl http://127.0.0.1:8790/api/metrics` (from the same machine only);
   - hosted: the owner sets `SIGNALS_METRICS_KEY` in Railway's variables, then
     `curl -H "Authorization: Bearer $SIGNALS_METRICS_KEY" https://usesignals.app/api/metrics`. Without the key
