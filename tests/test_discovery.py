@@ -264,7 +264,7 @@ def test_the_owner_sees_the_check_and_the_directory_compared(api: TestClient, mo
     assert d["scored_by"] == {"background": 2, "page": 1, "check": 1} and d["recommended_on_no_board"] == 1
     assert d["recommended_by_category"] == {"Sports": 2} and d["recommended_older_than_12h"] == 0
     assert d["age_hours"]["newest"] == pytest.approx(2.0, abs=0.1) and d["age_hours"]["oldest"] == pytest.approx(4.0, abs=0.1)
-    assert r["pool"] == {"scores": 4, "recommended": 2, "recommended_over_limit": 0, "recommended_seen_on_any_board": 1,
+    assert r["pool"] == {"scores": 4, "recommended": 2, "recommended_over_limit": 0, "seen_on_any_board": 1, "recommended_seen_on_any_board": 1,
                          "scored_by": {"background": 2, "page": 1, "check": 1}, "recommended_by_category": {"Sports": 2}}  # fmt: skip
     assert r["by_interest"]["Sports"] == {"check": 2, "directory": 2} and r["by_interest"]["Esports"] == {"check": 0, "directory": 0}
     assert (r["flag"], r["serving"], r["error"]) == ("directory", "directory", None)
@@ -288,3 +288,14 @@ def test_the_comparison_is_the_owners_only(api: TestClient, monkeypatch: pytest.
     assert TestClient(engine.app, client=("203.0.113.9", 4000)).get("/api/discovery").status_code == 404
     monkeypatch.setattr(engine, "HOSTED", True)
     assert api.get("/api/discovery").status_code == 404
+
+
+def test_the_owner_sees_how_the_feeds_poller_keeps_up(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "_live_stats", engine.deque(maxlen=120))
+    engine.live_poll_once()  # nobody followed or recommended yet: a round that reads no one
+    engine._live_stats.append({"at": NOW, "seconds": 12.5, "followed": 3, "recommended": 29, "read": 20,
+                               "rate_limited": True, "never_read": 0, "oldest_followed_s": 31,
+                               "oldest_recommended_s": 95})  # fmt: skip
+    f = api.get("/api/discovery").json()["feed"]
+    assert f["rounds"] == 2 and f["rate_limited_rounds"] == 1 and f["last"]["recommended"] == 29
+    assert f["oldest_followed_s"] == {"median": 31, "max": 31} and f["round_s"]["max"] == 12.5
