@@ -49,6 +49,29 @@ DIFFERENCES = {
 }
 _YES, _NO = "yes", "no"
 
+# Kalshi's player-prop series: one player's stat line (NFL field goals are a team's, so not here). When the player doesn't
+# play, International settles the line Under/No (a pitcher's strikeouts 50-50) and Kalshi and Polymarket US at a fair price
+# from before the game. Layer calls that venue policy, stated once in its docs and never on a match (Layer ROADMAP 6.4),
+# so no match carries it: Signals says it on every prop twin, first.
+PLAYER_PROPS = frozenset({
+    "KXNFLPASSYDS", "KXNFLPASSTDS", "KXNFLPASSATT", "KXNFLPASSCOMP", "KXNFLPASSINT", "KXNFLRSHYDS", "KXNFLRSHATT",
+    "KXNFLRECYDS", "KXNFLREC", "KXNFLRRYDS", "KXNFLTD",
+    "KXMLBTB", "KXMLBHRR", "KXMLBHIT", "KXMLBRBI", "KXMLBHR", "KXMLBSB", "KXMLBKS", "KXMLBHA", "KXMLBWA", "KXMLBERA",
+    "KXMLBOUTS",
+    "KXNHLPTS", "KXNHLGOAL", "KXNHLAST",
+    "KXWNBAPTS", "KXWNBAREB", "KXWNBAAST", "KXWNBA3PT",
+    "KXUEFANLGOAL", "KXINTLFRIENDLYGOAL",
+})  # fmt: skip
+SITS_OUT = {
+    "code": "player_sits_out",
+    "text": "If the player doesn't play, the two can pay differently: Polymarket International usually settles this line as "
+            "No (Under), or 50-50 for a pitcher's strikeouts, while Polymarket US settles it at a fair price from before the game.",
+}  # fmt: skip
+
+
+def _player_prop(m: dict[str, Any]) -> bool:
+    return str((m.get("kalshi") or {}).get("series") or "").upper() in PLAYER_PROPS
+
 
 def _cid(market_id: str) -> str:
     return market_id.split(":", 1)[0]
@@ -91,7 +114,7 @@ def _twin(intl: dict[str, Any], us: dict[str, Any], side: str, checked_at: str) 
         "outcome": u.get("outcome") if side == "same" else f"No on {u['outcome']}" if u.get("outcome") else "No",
         "via": "kalshi",
         "confidence": min(float(intl.get("confidence") or 0), float(us.get("confidence") or 0)),
-        "differences": _differences(intl, us),
+        "differences": ([dict(SITS_OUT)] if _player_prop(intl) else []) + _differences(intl, us),
         "checked_at": checked_at,
     }
 
