@@ -122,7 +122,7 @@ def test_a_followed_trader_nobody_recommends_or_has_checked_alerts_too(api: Test
     trades: list[WhaleTrade] = []
     detail = lambda *a, **k: TraderDetail(Trader(venue="polymarket", id=quiet, name="Quiet"), "visible", {},  # noqa: E731
                                           [WhalePosition("0xcid:0", None, "Yes", 100, 0.4, 0.40, None, None)], list(trades))  # fmt: skip
-    monkeypatch.setattr(engine.reads.whales, "trader", detail)
+    live_reads(monkeypatch, detail)
     assert engine.alert_pass() == 0  # first round: noted only
     trades[:0] = [trade(quiet, datetime.now(UTC), 0.40, 2500, "0xcid:0")]
     engine._cache.clear()
