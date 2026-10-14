@@ -2746,9 +2746,9 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
     when they traded, measured against this alert, and where (``_venue_line``:
     Polymarket International, and its Polymarket US twin when there's a verified one). Then COPY_LINE, only when
     copying is offered for them and the price is still in range. Links: "Check current price" (the trade's own page
-    on Signals, neutral for every trader), their record, "Buy on Polymarket International" (it only opens the market:
-    Signals places no orders), "View on Polymarket US" with a twin; then ``delay``, how late this kind of alert can
-    be (FOLLOW_DELAY, or BIG_DELAY for a big trade)."""
+    on Signals, neutral for every trader), their record, "View on Polymarket US" with a twin (it leads the venues),
+    "Buy on Polymarket International" (it only opens the market: Signals places no orders); then ``delay``, how late
+    this kind of alert can be (FOLLOW_DELAY, or BIG_DELAY for a big trade)."""
     e = html.escape
     status = bet_status(paid, now)
     where, us_url = _venue_line(t)
@@ -2758,7 +2758,7 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
         lines.append(COPY_LINE)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}"),
                    ("Their record", f"{SITE}/#/worth/{wallet}" if record else None),
-                   ("Buy on Polymarket International", t.url), ("View on Polymarket US", us_url), aid=aid)  # fmt: skip
+                   ("View on Polymarket US", us_url), ("Buy on Polymarket International", t.url), aid=aid)  # fmt: skip
     return "\n".join([*lines, links, delay])
 
 
@@ -2785,8 +2785,8 @@ def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: flo
     moved = bet_status(members[-1][1], now) != "in"
     where, us_url = _venue_line(t)
     lines += [f"Now {_cents(now)}{', price already moved' if moved else ''}.", f"Latest buy {_lag(last_at, seen)} before this alert.",
-              where, _links(("Check current price", f"{SITE}/#/check/{last}/{t.market}"), ("Buy on Polymarket International", t.url),
-                            ("View on Polymarket US", us_url), aid=aid),
+              where, _links(("Check current price", f"{SITE}/#/check/{last}/{t.market}"), ("View on Polymarket US", us_url),
+                            ("Buy on Polymarket International", t.url), aid=aid),
               FOLLOW_DELAY]  # fmt: skip
     return "\n".join(lines)
 
@@ -2835,8 +2835,8 @@ def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool,
     where, us_url = _venue_line(t)
     lines.append(where)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}" if held else None),
-                   ("Their record", f"{SITE}/#/worth/{wallet}"), ("Open on Polymarket International", t.url),
-                   ("View on Polymarket US", us_url), aid=aid)  # fmt: skip
+                   ("Their record", f"{SITE}/#/worth/{wallet}"), ("View on Polymarket US", us_url),
+                   ("Open on Polymarket International", t.url), aid=aid)  # fmt: skip
     return "\n".join([*lines, links, FOLLOW_DELAY])
 
 
