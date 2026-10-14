@@ -210,22 +210,16 @@ def test_a_trader_page_shows_the_directorys_fresh_score_without_scoring_again(ap
     assert (s["wallet"], s["segment"], s["section"]) == (DAN, "no_edge", None) and len(s["sample"]) == 30
 
 
-def test_every_recommended_trader_is_shown_whatever_the_limit(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(engine, "DISCOVERY_LIMIT", 1)
-    scored(score(AMY, "proven", z=3.0), score(BEN, "rising"), score(CAL, "no_edge"))
-    assert wallets(api) == [AMY, BEN]  # the limit only bounds the others
-
-
-def test_a_pick_fills_the_rest_with_traders_in_its_markets_from_the_whole_directory(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(engine, "DISCOVERY_LIMIT", 3)
-    scored(score(AMY, "proven", "Sports", z=3.0), score(CAL, "rising", "Esports", z=1.0),
-           score(BEN, "no_edge", "Sports", z=1.4), score(DAN, "no_edge", "Politics", strong=("Esports",), z=1.0),
-           score(EVE, "no_edge", "Crypto", z=0.5))  # fmt: skip
-    assert wallets(api) == [AMY, CAL, BEN]  # no pick: every recommended trader, then the best of the rest
+def test_a_pick_gets_the_best_traders_in_its_markets_from_the_whole_directory(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "DISCOVERY_LIMIT", 2)
+    scored(score(AMY, "proven", "Sports", z=3.0), score(BEN, "rising", "Sports", z=2.0),
+           score(CAL, "rising", "Esports", z=1.0), score(DAN, "no_edge", "Politics", strong=("Esports",)))  # fmt: skip
+    assert wallets(api) == [AMY, BEN]  # no pick: the best of everyone, recommended first
     # an interest is their most-traded category or one they're strong in, as the page matches it
-    assert wallets(api, "Esports") == [AMY, CAL, DAN] and result(api, "Esports")["interests"] == ["Esports"]
-    assert wallets(api, "Crypto") == [AMY, CAL, EVE]
-    assert wallets(api, "Nonsense") == [AMY, CAL, BEN]  # only the markets onboarding offers count
+    assert wallets(api, "Esports") == [CAL, DAN] and result(api, "Esports")["interests"] == ["Esports"]
+    assert wallets(api, "Politics,Esports") == [CAL, DAN]
+    assert wallets(api, "Sports,Esports") == [AMY, BEN]
+    assert wallets(api, "Nonsense") == [AMY, BEN]  # only the markets onboarding offers count
 
 
 def test_explore_lists_what_traders_leaves_out(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -235,10 +229,13 @@ def test_explore_lists_what_traders_leaves_out(api: TestClient, monkeypatch: pyt
     monkeypatch.setattr(engine, "EXPLORE_ON", True)
     engine.directory().add([Seen(w, "leaderboard", "PNL MONTH OVERALL", rank=i) for i, w in enumerate((AMY, BEN, CAL))],
                            at=NOW - 3600)  # fmt: skip
-    scored(score(AMY, "proven"), score(BEN, "no_edge"), score(CAL, "edge_losing"))
+    scored(score(AMY, "proven", z=3.0), score(DAN, "rising"), score(BEN, "no_edge"), score(CAL, "edge_losing"))
+    engine.directory().add([Seen(DAN, "market", "Sports", category="Sports")], at=NOW - 3600)
     assert wallets(api) == [AMY]
     listed = {r["wallet"] for r in api.get("/api/traders", params={"group": "checked"}).json()["rows"]}
     assert listed == {BEN, CAL}  # beyond the limit, still browsable
+    found = api.get("/api/traders", params={"q": "trader-d4"}).json()["rows"]
+    assert [(r["wallet"], r["group"]) for r in found] == [(DAN, "recommended")]  # a recommended one past it too
 
 
 def test_the_page_sends_the_picked_markets(run_js: Any) -> None:
@@ -266,7 +263,7 @@ def test_the_owner_sees_the_check_and_the_directory_compared(api: TestClient, mo
     assert d["scored_by"] == {"background": 2, "page": 1, "check": 1} and d["recommended_on_no_board"] == 1
     assert d["recommended_by_category"] == {"Sports": 2} and d["recommended_older_than_12h"] == 0
     assert d["age_hours"]["newest"] == pytest.approx(2.0, abs=0.1) and d["age_hours"]["oldest"] == pytest.approx(4.0, abs=0.1)
-    assert r["pool"] == {"scores": 4, "recommended": 2, "recommended_seen_on_any_board": 1,
+    assert r["pool"] == {"scores": 4, "recommended": 2, "recommended_over_limit": 0, "recommended_seen_on_any_board": 1,
                          "scored_by": {"background": 2, "page": 1, "check": 1}, "recommended_by_category": {"Sports": 2}}  # fmt: skip
     assert r["by_interest"]["Sports"] == {"check": 2, "directory": 2} and r["by_interest"]["Esports"] == {"check": 0, "directory": 0}
     assert (r["flag"], r["serving"], r["error"]) == ("directory", "directory", None)

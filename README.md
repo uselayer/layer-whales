@@ -184,16 +184,16 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   Traders, the Feed's Recommended, alerts and trader pages show each wallet's latest score from the last 2 days
   (twice the background evaluation's daily rescore; a trader shown is rescored every 6 hours), whoever worked it out
   (the check, the background evaluation, a trader page), in the check's order (tier, then the strength of their
-  edge), in the same response as before. Every recommended trader is in it, however many (Explore's lists leave
-  recommended tiers to Traders, so a cap there would hide them); the other checked traders fill it up to
-  `SIGNALS_DISCOVERY_LIMIT` (default the check's 200), those in the picked markets (onboarding's, sent with the
-  request) first. Explore browses the whole directory either way. A score is the same score wherever it's read, so
+  edge), at most `SIGNALS_DISCOVERY_LIMIT` (default the check's 200, so the page and the Feed's poller stay the
+  size they are), in the same response as before, those in the picked markets (onboarding's, sent with the
+  request) first, so a pick gets the best of the whole directory. Explore browses the whole directory, never
+  limited by it. A score is the same score wherever it's read, so
   a trader gets the same tier, section and copy status either way. The check keeps running beside it, so
   `SIGNALS_DISCOVERY=check` (the default) goes back to it at once, and it's shown anyway while the directory has no
   fresh score or can't be read. `/api/discovery` (the owner's, as `/api/metrics`) compares the two: each one's
   traders and recommended traders by section, where they come from (the check's "on the leaderboard", any board
   a sweep has seen, or none), who scored them, how old the scores are, by category and by each onboarding pick;
-  who only one recommends and why; and every wallet the check scored that was also scored apart from it within 6
+  who only one recommends and why (and how many recommended traders the limit leaves to Explore); and every wallet the check scored that was also scored apart from it within 6
   hours, with how often the tier, section and copy verdict agree, and the differences.
   `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps; scored,
   failed and never scored, by segment and category, active in the last week) to the owner only, as

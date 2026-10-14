@@ -21,8 +21,8 @@ behind Vercel (see README, "Hosting").
   not recommended, and a kept score is a record, not a pick: never say a found wallet is any good, and scoring and
   its thresholds stay as they are. Traders shows the directory only with `SIGNALS_DISCOVERY=directory` (phase 5,
   the owner's flag; `check`, the default, is the Worth following check's own 200): its latest fresh scores in the
-  check's shape and order, through `_worth_load`, so the Feed, alerts and trader pages follow. Every recommended
-  trader is in it (the limit only bounds the rest), and Explore is never limited by it. The check keeps
+  check's shape and order, through `_worth_load`, so the Feed, alerts and trader pages follow. At most
+  `SIGNALS_DISCOVERY_LIMIT` (the page and the Feed's poller stay their size); Explore is never limited by it. The check keeps
   running beside it, so going back is one switch; `/api/discovery` compares the two (the owner's). Keeping a score
   costs no reads: it's written where a score is already made (`_worth_run`, `_score_of`, the launch import), and
   a score never replaces a newer one. It keeps wallets only (a follow keeps the wallet, never who follows). Its

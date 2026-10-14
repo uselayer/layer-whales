@@ -755,12 +755,12 @@ def _evaluate_loop() -> None:
 # With SIGNALS_DISCOVERY=directory, Traders, the Feed's Recommended, alerts and trader pages read the traders
 # checked from the directory: each wallet's latest score from the last DISCOVERY_FRESH_S, whoever worked it out (the
 # Worth following check, the background evaluation, a trader page), in the check's order (tier, then the strength
-# of their edge), in the same shape as the check's result. Every recommended trader is in it, as every one the
-# check finds is in its result (Explore's lists leave recommended tiers to Traders, so none may be cut); the others
-# ("See all checked traders") up to DISCOVERY_LIMIT in all, those in the picked markets first (/api/worth?markets=…,
-# onboarding's interests, matched as the page's matchesInterests). A score is the same score wherever it's read, so
-# a wallet gets the same tier, section and copy status from either; the directory picks no one itself and its
-# scoring and thresholds are the SDK's, unchanged.
+# of their edge), at most DISCOVERY_LIMIT, in the same shape as the check's result: those in the picked markets
+# first (/api/worth?markets=…, onboarding's interests, matched as the page's matchesInterests), so a pick gets the
+# best of the whole directory, not of a list cut for everyone. The limit keeps the page and the Feed's poller the
+# size they are; Explore browses the whole directory, never limited by it. A score is the same score wherever it's
+# read, so a wallet gets the same tier, section and copy status from either; the directory picks no one itself and
+# its scoring and thresholds are the SDK's, unchanged.
 # For now the check keeps running either way, so going back to it (SIGNALS_DISCOVERY=check, the default) shows a
 # fresh result at once, and with no fresh score in the directory its result is shown anyway. /api/discovery
 # compares the two, for the owner. Once the directory has carried Signals for a while, the check can go.
@@ -771,8 +771,8 @@ DISCOVERY = os.environ.get("SIGNALS_DISCOVERY", "check")  # "directory": discove
 # inside it (/api/discovery counts any shown older than 2 × RESCORE_S). One window for every candidate, so nobody
 # drops out and back in as their score ages.
 DISCOVERY_FRESH_S = 2 * 86400
-# traders served, recommended ones however many: as many as the check scores, so the page weighs what it did
-# (~5 KB a trader) until more than that are recommended
+# traders served: as many as the check scores, so the page weighs what it did (~5 KB a trader) and the Feed's
+# poller reads as many Recommended traders as it did
 DISCOVERY_LIMIT = int(os.environ.get("SIGNALS_DISCOVERY_LIMIT", str(WORTH_WALLETS)))
 DISCOVERY_TTL_S = 60
 DISCOVERY_APART_S = WORTH_MAX_AGE_S  # validation: a score worked out apart this close to the check's is compared
@@ -815,12 +815,8 @@ def discovery_result(interests: tuple[str, ...] = ()) -> dict[str, Any] | None:
         def rank(r: dict[str, Any]) -> tuple[int, float]:  # as the check's: by tier, then the strength of their edge
             return order.index(r["segment"]) if r["segment"] in order else len(order), -(r["edge_z"] or 0)
 
-        # Every recommended trader, whatever the limit (Explore lists none of them: they're Traders'); the rest,
-        # those in the picked markets first, up to DISCOVERY_LIMIT in all.
-        rec = [r for r in rows if r["segment"] in RECOMMENDED]
-        rest = sorted((r for r in rows if r["segment"] not in RECOMMENDED),
-                      key=lambda r: (not _in_markets(r, interests), *rank(r)))  # fmt: skip
-        picked = rec + rest[: max(0, DISCOVERY_LIMIT - len(rec))]
+        # those in the picked markets first, then by tier (recommended first) and edge; Explore lists the rest
+        picked = sorted(rows, key=lambda r: (not _in_markets(r, interests), *rank(r)))[:DISCOVERY_LIMIT]
         kept = d.scores_of(r["wallet"] for r in picked)
         scores = [_upgraded(kept[r["wallet"]]) for r in sorted(picked, key=rank) if r["wallet"] in kept]
         at = [s["scored_at"] for s in scores]
@@ -892,8 +888,11 @@ def discovery_compare() -> dict[str, Any]:
     pool_rec = {w for w, r in rows.items() if r["segment"] in RECOMMENDED}
     checked = {s["wallet"]: s for s in (check or {}).get("scores", [])}
 
-    def why_not_in_view(w: str) -> str:  # every fresh recommended score is in the view
-        return "no_fresh_score" if w not in rows else "scored_since_another_tier"
+    def why_not_in_view(w: str) -> str:
+        r = rows.get(w)
+        if r is None:
+            return "no_fresh_score"
+        return "over_limit" if r["segment"] in RECOMMENDED else "scored_since_another_tier"
 
     def why_not_in_check(w: str) -> str:
         return "check_scored_another_tier" if w in checked else "not_in_checks_list"
@@ -930,7 +929,8 @@ def discovery_compare() -> dict[str, Any]:
         },
         "scored_apart": apart,
         # everything the directory picks from: every fresh score, before the limit
-        "pool": {"scores": len(rows), "recommended": len(pool_rec),
+        # (recommended_over_limit: recommended, but past the limit with no pick: on Explore, not on Traders' list)
+        "pool": {"scores": len(rows), "recommended": len(pool_rec), "recommended_over_limit": len(pool_rec - in_view),
                  "recommended_seen_on_any_board": len(directory().on_boards(pool_rec)),
                  "scored_by": dict(Counter(r["via"] for r in rows.values())),
                  "recommended_by_category": dict(Counter(r["main"] or "None" for w, r in rows.items()
