@@ -264,7 +264,7 @@ def test_the_owner_sees_the_check_and_the_directory_compared(api: TestClient, mo
     assert d["scored_by"] == {"background": 2, "page": 1, "check": 1} and d["recommended_on_no_board"] == 1
     assert d["recommended_by_category"] == {"Sports": 2} and d["recommended_older_than_12h"] == 0
     assert d["age_hours"]["newest"] == pytest.approx(2.0, abs=0.1) and d["age_hours"]["oldest"] == pytest.approx(4.0, abs=0.1)
-    assert r["pool"] == {"scores": 4, "recommended": 2, "recommended_over_limit": 0, "recommended_seen_on_any_board": 1,
+    assert r["pool"] == {"scores": 4, "recommended": 2, "recommended_over_limit": 0, "seen_on_any_board": 1, "recommended_seen_on_any_board": 1,
                          "scored_by": {"background": 2, "page": 1, "check": 1}, "recommended_by_category": {"Sports": 2}}  # fmt: skip
     assert r["by_interest"]["Sports"] == {"check": 2, "directory": 2} and r["by_interest"]["Esports"] == {"check": 0, "directory": 0}
     assert (r["flag"], r["serving"], r["error"]) == ("directory", "directory", None)

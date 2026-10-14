@@ -809,11 +809,11 @@ def _evaluate_loop() -> None:
 # compares the two, for the owner. Once the directory has carried Signals for a while, the check can go.
 
 DISCOVERY = os.environ.get("SIGNALS_DISCOVERY", "check")  # "directory": discovery from the directory
-# A score older than this isn't picked: twice the background evaluation's daily rescore of a recommended trader
-# nobody is shown or follows. Once shown, they're rescored every RESCORE_S, so a shown trader's score stays well
-# inside it (/api/discovery counts any shown older than 2 × RESCORE_S). One window for every candidate, so nobody
-# drops out and back in as their score ages.
-DISCOVERY_FRESH_S = 2 * 86400
+# A score older than this isn't picked: fresh_for(False), twice the background evaluation's daily rescore of a
+# recommended trader nobody is shown or follows (Explore's "Passed our checks" window too). Once shown, they're
+# rescored every RESCORE_S, so a shown trader's score stays well inside it (/api/discovery counts any shown older
+# than 2 × RESCORE_S). One window for every candidate, so nobody drops out and back in as their score ages.
+DISCOVERY_FRESH_S = fresh_for(False)
 # traders served: as many as the check scores, so the page weighs what it did (~5 KB a trader) and the Feed's
 # poller reads as many Recommended traders as it did
 DISCOVERY_LIMIT = int(os.environ.get("SIGNALS_DISCOVERY_LIMIT", str(WORTH_WALLETS)))
@@ -931,6 +931,7 @@ def discovery_compare() -> dict[str, Any]:
 
     in_check, in_view = _recommended(check), _recommended(view)
     pool_rec = {w for w, r in rows.items() if r["segment"] in RECOMMENDED}
+    pool_boards = directory().on_boards(rows)
     checked = {s["wallet"]: s for s in (check or {}).get("scores", [])}
 
     def why_not_in_view(w: str) -> str:
@@ -975,8 +976,10 @@ def discovery_compare() -> dict[str, Any]:
         "scored_apart": apart,
         # everything the directory picks from: every fresh score, before the limit
         # (recommended_over_limit: recommended, but past the limit with no pick: on Explore, not on Traders' list)
+        # (seen_on_any_board: of every fresh score, how many a sweep has seen on any of the 88 boards; the rest were
+        # found only in markets, the Feed or a search: whether the pool reaches past the leaderboards at all)
         "pool": {"scores": len(rows), "recommended": len(pool_rec), "recommended_over_limit": len(pool_rec - in_view),
-                 "recommended_seen_on_any_board": len(directory().on_boards(pool_rec)),
+                 "seen_on_any_board": len(pool_boards), "recommended_seen_on_any_board": len(pool_rec & pool_boards),
                  "scored_by": dict(Counter(r["via"] for r in rows.values())),
                  "recommended_by_category": dict(Counter(r["main"] or "None" for w, r in rows.items()
                                                          if w in pool_rec).most_common())},  # fmt: skip
