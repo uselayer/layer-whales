@@ -121,3 +121,12 @@ Exploratory only: whether the sign of the first 10 O events agrees with the rest
 - The pool comes from markets' last trades, which favours frequent traders.
 - The 12-hour grid is coarse.
 - A selective wallet has few O bets, so per-wallet results are noisy. The pooled bootstrap is the test.
+
+## Amendment 1 (2026-10-13, during classification, before any outcome was computed)
+
+**The classification read is capped at 10 pages (5,000 trades) per wallet.** A wallet trading one market all
+day had stalled the run for an hour.
+
+- A capped wallet that already shows 8+ markets in the 30 days and 20+ in the year is classified frequent.
+- Any other capped wallet is left out as `capped`. The count is reported with the results.
+- None of the rules, outcomes or bars change.

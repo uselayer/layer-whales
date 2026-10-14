@@ -113,7 +113,7 @@ def classify(w: str) -> str:
     # there are 20 single markets in the year (more pages can't change either count's verdict).
     rows: list[dict[str, Any]] = []
     upper, off = T, 0
-    while True:
+    for pages in range(1, 11):  # at most 5,000 trades: a wallet trading one market all day can't stall the pool
         page = poly.activity(w, start=T - 365 * DAY, end=upper, offset=off)
         rows += page
         oldest = int(page[-1]["timestamp"]) if page else T - 365 * DAY
@@ -122,6 +122,8 @@ def classify(w: str) -> str:
         off += 500
         if off >= 4500:
             upper, off = oldest - 1, 0
+    else:  # read cut short: only a clearly frequent wallet is classified, the rest are left out and counted
+        return "frequent" if len(single_markets(rows, T - 30 * DAY, T)) >= 8 and len(single_markets(rows, T - 365 * DAY, T)) >= 20 else "capped"
     m30, m365 = single_markets(rows, T - 30 * DAY, T), single_markets(rows, T - 365 * DAY, T)
     m90 = single_markets(rows, T - 90 * DAY, T)
     if len(m365) < 20:
