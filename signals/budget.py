@@ -25,6 +25,8 @@ from urllib.parse import urlsplit
 
 from uselayer import VenueError
 
+from signals import monitoring
+
 POLYMARKET_HOSTS = frozenset({"data-api.polymarket.com", "gamma-api.polymarket.com"})
 COOL_S = 30.0  # the least a 429 pauses the background for
 RECOVER_S = 120.0  # after a 429, the rate goes back up a step each time this passes without another
@@ -40,8 +42,9 @@ class Budget:
 
     def __init__(
         self, rate: float, clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
-        yield_to: Callable[[], bool] | None = None,
+        yield_to: Callable[[], bool] | None = None, name: str = "background",
     ) -> None:
+        self.name = name  # what monitoring counts its reads as (``lane``)
         self.target = self.rate = rate
         self._clock, self._sleep, self._yield_to = clock, sleep, yield_to
         self._lock = threading.Lock()
@@ -97,6 +100,7 @@ class BackgroundHttp:
         attempt = 0
         while True:
             self.budget.take()
+            monitoring.usage.add("lane", self.budget.name)
             try:
                 return self._http.request_with_headers(method, url, retries=0, **kw)
             except VenueError as e:
