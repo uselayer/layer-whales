@@ -1046,7 +1046,8 @@ async function loadFeed() {
   try { data = await api(view === "big" ? "/api/trading-now?min_usd=250" : view === "rec" ? "/api/live" : "/api/me/feed"); }
   catch (e) { error = e.message; }
   if (my !== feed.seq || (view === "follow" && uid !== auth.uid)) return; // stale, or someone else signed in since
-  if (error) feed[err] = error; else { feed[k] = data; feed[at] = Date.now(); feed[err] = null; }
+  // "Updated": when the oldest of it was read from Polymarket (as_of), not when this page asked
+  if (error) feed[err] = error; else { feed[k] = data; feed[at] = Math.min(Date.now(), data?.as_of || Infinity); feed[err] = null; }
   if (!onFeed() || feedView() !== view) return; // the other view, or another page, since
   clearTimeout(feedTimer);
   feedTimer = setTimeout(() => { if (onFeed()) loadFeed(); }, 30000);
@@ -1130,12 +1131,28 @@ function renderFollowing() {
   });
 }
 
+// What the Feed hasn't got (the engine's pending and failed counts, and how old the oldest of it is): a note for
+// each, and, with no trades to show, an empty state that doesn't claim "no trades" for traders not read yet.
+const STALE_NOTE_MS = 5 * 60 * 1000;
+function feedGaps(r, at, now) {
+  const notes = [], unread = (r.pending || 0) + (r.failed || 0);
+  if (r.failed) notes.push(`${plural(r.failed, "trader")} couldn't be read just now; retrying.`);
+  if (r.pending) notes.push(`Still reading ${plural(r.pending, "trader")}; their trades show in a minute.`);
+  if (at && now - at > STALE_NOTE_MS) notes.push(`Some of these traders were last read ${Math.round((now - at) / 60000)} minutes ago.`);
+  const empty = !unread ? null
+    : unread >= r.traders.length ? (r.pending ? ["Still reading their trades", "Their trades from the last day show here in a minute."]
+      : ["Their trades couldn't be read just now", "Polymarket didn't answer. We'll try again in a moment."])
+    : ["No trades from the traders read so far", "The rest show here once they've been read."];
+  return { notes, empty };
+}
+
 // One list of trade cards (Following or Recommended): who, when it was updated, your markets, the switch, notes,
 // then one card per outcome ("Also bought by" for the rest) and the empty states.
 function renderTrades(r, at, err, { who, note, none, sheet: openSheet, foot }) {
   const cards = oneCardPerTrade(r.bets);
   const pool = cards.filter((b) => !feed.onlyIn || b.status === "in");
   const names = interestNames(interests || []);
+  const gaps = feedGaps(r, at, Date.now());
   $("#fbar").innerHTML = `
     <div class="feedtop">
       <button class="follow" id="following">${`<span class="stack">${r.traders.slice(0, 5).map((t) => avatar(t.wallet, 28)).join("")}</span>`}
@@ -1148,7 +1165,7 @@ function renderTrades(r, at, err, { who, note, none, sheet: openSheet, foot }) {
     </div>
     ${err ? `<p class="inline-err">Couldn't refresh: ${esc(err)}. Showing the last update.</p>` : ""}
     ${note}
-    ${r.failed ? `<p class="foot-note" style="margin:0 0 12px">${plural(r.failed, "trader")} couldn't be read just now; retrying.</p>` : ""}`;
+    ${gaps.notes.map((n) => `<p class="foot-note" style="margin:0 0 12px">${n}</p>`).join("")}`;
   $("#onlyin").onchange = (e) => { feed.onlyIn = e.target.checked; renderFeed(); };
   $("#following").onclick = openSheet;
   bindLag();
@@ -1156,7 +1173,7 @@ function renderTrades(r, at, err, { who, note, none, sheet: openSheet, foot }) {
   shown = pool.filter((b) => inMarkets(b.category));
   const anyHere = cards.some((b) => inMarkets(b.category)); // before "Only trades I can still get into"
   let html;
-  if (!r.bets.length) html = emptyState(none[0], none[1]);
+  if (!r.bets.length) html = emptyState(...(gaps.empty || none));
   else if (!shown.length && anyHere) html = emptyState("Nothing you can still get into",
     `Every ${names ? esc(names) + " " : ""}trade here from the last ${r.hours} hours has moved away or settled.`, `<button class="btn ghost" id="showall">Show all trades</button>`);
   else if (!shown.length) html = emptyState(`No ${esc(names)} trades`, `Nothing in ${esc(names)} in the last ${r.hours} hours.`, `<button class="btn ghost" id="feedall">Show all markets</button>`);

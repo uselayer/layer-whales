@@ -48,6 +48,12 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
   - **Recommended**: trades of $1,000 or more over the last 24 hours from the traders in Traders' two sections
     (Sharps, Rising). Quieter on purpose, and never the default. The page says to use their trades to
     learn what they're doing, not as a signal to buy: we haven't found that buying after them makes money.
+  - How fresh: the engine reads each followed trader every 30 seconds and each Recommended trader every minute
+    (less often as the list grows: about every 2½ minutes at 200 traders, every 12 at 1,000), and Polymarket's
+    shared feed of $1,000+ trades moves anyone who just traded to the front. Per trader that's one read of their
+    trades, plus their open positions when there's a trade from the last day to price. "Updated" says when the
+    oldest of what's shown was read. A page never waits on Polymarket for the list: it reads at most 3 traders
+    the engine hasn't read yet, and says "Still reading N traders" for the rest.
   - Both: one card per trade, opened on your markets, three across on a desktop: the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
     paid; **Price moved away** means further either way. A bigger drop means
@@ -156,8 +162,8 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   (the SDK's `find_wallets`, uselayer 0.9): about 18,000 reads, roughly 2.5 hours. A restart (a deploy) doesn't start it
   over: each leaderboard, and the markets, is marked once read to its end, and the next sweep reads only what wasn't
   read in the last day. It stays out of the Feed's way:
-  at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one trader at a time, needs
-  at most ~3.3), and none while the Worth following check runs, which can use all 8. Traders in the Feed's big
+  at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one read at a time, needs
+  at most ~3.7, and as little as ~1.5 for today's 24 Recommended and 20 followed traders), and none while the Worth following check runs, which can use all 8. Traders in the Feed's big
   trades, wallets opened that the last check didn't have (pasted into search, mostly) and followed wallets are kept
   too, at no extra reads, by a writer thread so no page waits for the directory; a follow keeps the wallet, never
   who follows it. At full size the file is roughly 300 MB (the volume holds 5 GB).

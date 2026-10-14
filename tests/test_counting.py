@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from uselayer import WhaleTrade
 
+from conftest import live_reads
 from signals import app as engine
 
 FAPI = "clerk.signals.test"
@@ -189,7 +190,7 @@ def test_each_followers_links_name_their_own_alert(api: TestClient, monkeypatch:
     user("user_1", "555")
     user("user_2", "777")
     trades: list[WhaleTrade] = []
-    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(
+    live_reads(monkeypatch, lambda *a, **k: TraderDetail(
         Trader(venue="polymarket", id=SAM, name=None), "visible", {}, [WhalePosition("0xc:0", None, "Yes", 1, 0.5, 0.5, None, None)], list(trades)))  # fmt: skip
     engine.alert_pass()
     trades.append(buy(SAM, 1).t)
