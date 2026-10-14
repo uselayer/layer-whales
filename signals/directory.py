@@ -192,6 +192,16 @@ _LISTED = f"""EXISTS (SELECT 1 FROM sightings s WHERE s.wallet = q.wallet AND s.
   OR (s.place IN ({", ".join(f"'{b}'" for b in _CHECK_BOARDS)}) AND s.rank <= 50)))"""
 
 
+def _typical_usd(result: bytes) -> float | None:
+    """A kept score's usual trade (the SDK's ``typical_usd``), from its stored result; None when it has none or
+    the result can't be read."""
+    try:
+        usd = json.loads(zlib.decompress(result)).get("typical_usd")
+    except (zlib.error, ValueError, TypeError, AttributeError):
+        return None
+    return float(usd) if isinstance(usd, int | float) and not isinstance(usd, bool) and usd >= 0 else None
+
+
 def reason_for(segment: str | None) -> str | None:
     """Why a score's segment isn't recommended (one of REASONS), or None when it is."""
     if segment is None or segment in RECOMMENDED:
@@ -475,6 +485,14 @@ class Directory:
                 "UPDATE wallets SET listed = 1 WHERE wallet IN (SELECT DISTINCT wallet FROM sightings WHERE source IN "
                 f"({', '.join(repr(x) for x in PUBLIC_SOURCES)}))"
             )
+        # Explore's "usual trade" for wallets scored before it was kept on the wallet: from their latest kept score
+        # (its stored result), never a new read and never a new score. A score without one leaves it unknown.
+        missing = con.execute(
+            "SELECT w.wallet, s.result FROM wallets w JOIN scores s ON s.wallet = w.wallet WHERE w.typical_usd IS NULL"
+        ).fetchall()
+        sizes = [(usd, w) for w, blob in missing if (usd := _typical_usd(blob)) is not None]
+        if sizes:
+            con.executemany("UPDATE wallets SET typical_usd = ? WHERE wallet = ?", sizes)
         rows = con.execute(
             "SELECT wallet, status, segment, first_seen, scored_at, tried_at, failures FROM wallets "
             "WHERE next_check IS NULL"
