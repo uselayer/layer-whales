@@ -624,7 +624,7 @@ def test_each_lane_takes_its_own_kind_of_wallet_and_they_take_turns(d: Directory
 
 
 def test_a_lane_that_used_more_of_the_reads_lately_waits_its_turn(d: Directory) -> None:
-    w = lanes_dir(d)
+    lanes_dir(d)
     got = d.due(3, now=T0, lane_reads={"board": 100.0, "off_board": 0.0, "sample": 0.0})
     assert [g["lane"] for g in got] == ["off_board", "sample", "off_board"]  # the board lane is 100 reads ahead
     cheap = d.due(3, now=T0, lane_cost={"off_board": 60.0})  # a lane whose wallets cost more gets fewer of them
