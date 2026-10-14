@@ -2206,22 +2206,60 @@ def connect_telegram(response: Response, uid: str = Depends(signed_in)) -> dict[
     return {"link": f"https://t.me/{bot}?start={code}"}
 
 
+class TelegramError(RuntimeError):
+    """A Telegram Bot API call that failed, in Telegram's own words (never the token). ``code``: its error code
+    (None when it never got the request); ``retry_after``: how long it asked us to wait, if it did;
+    ``maybe_sent``: whether it may have done what was asked anyway (a 5xx, or the request went out and no answer
+    came back): Telegram can't tell a repeat, so that one is never asked again."""
+
+    def __init__(self, message: str, code: int | None = None, retry_after: float | None = None,
+                 maybe_sent: bool = False) -> None:  # fmt: skip
+        super().__init__(message)
+        self.code, self.retry_after, self.maybe_sent = code, retry_after, maybe_sent
+
+    @property
+    def temporary(self) -> bool:
+        """Safe to try again: Telegram surely didn't take it, and later may work (it never got the request, or it
+        said too many requests, 429)."""
+        return not self.maybe_sent and (self.code is None or self.code == 429)
+
+    @property
+    def chat_gone(self) -> bool:
+        """The chat can't get messages any more: the bot was blocked, the account deleted, the chat not found."""
+        return self.code == 403 or (self.code == 400 and "chat not found" in str(self).lower())
+
+
 def tg(method: str, **params: Any) -> Any:
-    """One Telegram Bot API call. A failure raises RuntimeError with Telegram's own words, never the token."""
+    """One Telegram Bot API call. A failure raises TelegramError with Telegram's own words, never the token, saying
+    whether Telegram may have done it anyway: urllib wraps a failure to connect or to send the request in URLError
+    (it never got it), and raises one while waiting for or reading the answer as it is (it may have)."""
     req = urllib.request.Request(f"https://api.telegram.org/bot{TG_TOKEN}/{method}", data=json.dumps(params).encode(),
                                  headers={"content-type": "application/json"})  # fmt: skip
+    code = None
     try:
         with urllib.request.urlopen(req, timeout=float(params.get("timeout", 0)) + 15) as r:
-            body = json.loads(r.read())
+            raw = r.read()
     except urllib.error.HTTPError as e:
+        code = e.code
         try:
             body = json.loads(e.read())
-        except ValueError:
+        except (ValueError, OSError):
             body = {"description": f"HTTP {e.code}"}
-    except OSError as e:  # no answer: URLError, a timeout, a dropped connection
-        raise RuntimeError(f"Telegram didn't answer ({type(e).__name__})") from None
+    except urllib.error.URLError as e:  # couldn't connect, or couldn't send the request: Telegram never got it
+        raise TelegramError(f"Telegram couldn't be reached ({type(e.reason).__name__})") from None
+    except OSError as e:  # the request went out and no answer came back (a timeout, a dropped connection)
+        raise TelegramError(f"Telegram didn't answer ({type(e).__name__})", maybe_sent=True) from None
+    else:
+        try:
+            body = json.loads(raw)
+        except ValueError:  # it answered 200 in a way we can't read: it may well have done it
+            raise TelegramError("Telegram's answer couldn't be read", maybe_sent=True) from None
     if not body.get("ok"):
-        raise RuntimeError(f"Telegram: {body.get('description') or 'refused'}")
+        wait = (body.get("parameters") or {}).get("retry_after")
+        err_code = body.get("error_code") or code
+        raise TelegramError(f"Telegram: {body.get('description') or 'refused'}", err_code,
+                            float(wait) if isinstance(wait, int | float) else None,
+                            maybe_sent=isinstance(err_code, int) and err_code >= 500)  # fmt: skip
     return body.get("result")
 
 
@@ -2378,6 +2416,12 @@ def _chat_owner(chat: str) -> str | None:
 
 _db_lock = threading.RLock()  # re-entrant: a nested read never hangs the alert loop
 _db_ready: set[str] = set()
+# Each alert's delivery (see _send): state is queued (kept, Telegram not asked yet), sending (asking it), sent,
+# retry (a temporary failure: next_at), failed (refused for good, or too late) or unknown (the engine died while
+# asking: not asked again, so never twice). NULL: an alert from before these, sent. ``body``: the message and its
+# buttons, so a retry after a restart sends exactly what was meant; ``queued_at``: when it was first kept.
+_DELIVERY_COLUMNS = (("state", "TEXT"), ("tries", "INTEGER NOT NULL DEFAULT 0"), ("queued_at", "REAL"),
+                     ("next_at", "REAL"), ("error", "TEXT"), ("body", "TEXT"))  # fmt: skip
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, uid TEXT NOT NULL, chat TEXT, kind TEXT NOT NULL,
   trader TEXT, outcome TEXT, message_id INTEGER, sent_at REAL NOT NULL, trade_at REAL, day TEXT NOT NULL,
@@ -2411,9 +2455,12 @@ def _db() -> Iterator[sqlite3.Connection]:
         con = sqlite3.connect(alerts_db())
         try:
             con.executescript(_SCHEMA)
-            if str(alerts_db()) not in _db_ready:  # a db from before trigger_at: add the column, once
-                if "trigger_at" not in {r[1] for r in con.execute("PRAGMA table_info(alerts)")}:
-                    con.execute("ALTER TABLE alerts ADD COLUMN trigger_at REAL")
+            if str(alerts_db()) not in _db_ready:  # a db from before these columns: add them, once
+                have = {r[1] for r in con.execute("PRAGMA table_info(alerts)")}
+                for col, kind in (("trigger_at", "REAL"), *_DELIVERY_COLUMNS):
+                    if col not in have:
+                        con.execute(f"ALTER TABLE alerts ADD COLUMN {col} {kind}")
+                con.execute("CREATE INDEX IF NOT EXISTS alerts_by_state ON alerts (state, next_at)")
                 _db_ready.add(str(alerts_db()))
             yield con
             con.commit()
@@ -2430,8 +2477,11 @@ COUNTED = ("buy", "sell", "group", "whale")  # what the daily cap counts: a grou
 
 
 def _sent_today(uid: str, kinds: tuple[str, ...] = COUNTED) -> int:
+    """Today's alerts of these kinds for this account: sent, or still on their way (queued, retrying, unknown);
+    not those that failed for good, so a retry never takes anyone past the cap and a refusal doesn't use it up."""
     with _db() as con:
-        q = f"SELECT COUNT(*) FROM alerts WHERE uid = ? AND day = ? AND kind IN ({','.join('?' * len(kinds))})"
+        q = (f"SELECT COUNT(*) FROM alerts WHERE uid = ? AND day = ? AND kind IN ({','.join('?' * len(kinds))})"
+             " AND COALESCE(state, 'sent') != 'failed'")  # fmt: skip
         return int(con.execute(q, (uid, _today(), *kinds)).fetchone()[0])
 
 
@@ -2443,14 +2493,24 @@ def _keyboard(alert_id: str, stop: str | None = None) -> dict[str, Any]:
     return {"inline_keyboard": rows}
 
 
+RETRY_S = (30.0, 60.0, 120.0, 240.0)  # waits before each try again of a temporary failure (or what Telegram asks)
+
+
 def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, trader: str | None = None,
           outcome: str | None = None, trade_at: float | None = None, stop: str | None = None,
           trigger_at: float | None = None) -> str | None:  # fmt: skip
-    """Send one alert if today's cap allows it; its id, or None when it wasn't sent. At the cap, the first alert
-    that doesn't fit sends CAP_TEXT instead, once a day (a failed send tries again with the next one), and the
-    rest are dropped until the next UTC day. ``text_for`` gets the alert's id (its links can name it).
-    ``trade_at``: when the alert's buys began (a group's first buy); ``trigger_at``: when the buy that sent it was
-    made (defaults to ``trade_at``)."""
+    """Send one alert if today's cap allows it; its id when it went out now, else None (not sent, or sent later by
+    a retry). At the cap, the first alert that doesn't fit sends CAP_TEXT instead, once a day (a failed send tries
+    again with the next one), and the rest are dropped until the next UTC day. ``text_for`` gets the alert's id
+    (its links can name it). ``trade_at``: when the alert's buys began (a group's first buy); ``trigger_at``: when
+    the buy that sent it was made (defaults to ``trade_at``).
+
+    Never twice, across any crash or failure (Telegram can't tell a repeat): the alert is kept (queued, with its
+    message) before Telegram is asked and marked sending just before it is. Tried again only when Telegram surely
+    didn't take it (it was never reached, or it said 429: TelegramError.temporary): after a restart a queued one is
+    sent. When it may have (a 5xx, no answer once the request went out, the engine stopping mid-request) it's
+    recorded as unknown, with why, and never asked again: not silently lost, not sent twice. A refusal for good is
+    failed, and a chat that's gone is disconnected (_chat_gone)."""
     if _sent_today(uid) >= DAILY_CAP:
         if not _sent_today(uid, ("cap",)):
             try:
@@ -2458,27 +2518,91 @@ def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, tra
             except RuntimeError:
                 return None
             with _db() as con:
-                con.execute("INSERT INTO alerts (id, uid, chat, kind, sent_at, day) VALUES (?, ?, ?, 'cap', ?, ?)",
+                con.execute("INSERT INTO alerts (id, uid, chat, kind, sent_at, day, state) VALUES (?, ?, ?, 'cap', ?, ?, 'sent')",
                             (secrets.token_urlsafe(6), uid, chat, time.time(), _today()))  # fmt: skip
         return None
     aid = secrets.token_urlsafe(6)  # 8 characters: fits Telegram's 64-byte button data with room to spare
-    # Kept before Telegram is asked, so at most once: a crash after Telegram took it (or while asking) leaves the row,
-    # and the dedupe that reads alerts (_sold_recently, _recently, the daily cap) never sends it a second time. Telegram
-    # has no way to tell a repeat, so this is the guarantee: never twice, and a crash mid-send can lose one.
+    now = time.time()
+    body = json.dumps({"text": text_for(aid), "markup": _keyboard(aid, stop)})
     with _db() as con:
-        con.execute("INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (aid, uid, chat, kind, trader, outcome, None, time.time(), trade_at, _today(),
-                     trade_at if trigger_at is None else trigger_at))  # fmt: skip
+        con.execute("INSERT INTO alerts (id, uid, chat, kind, trader, outcome, message_id, sent_at, trade_at, day,"
+                    " trigger_at, state, tries, queued_at, next_at, body) VALUES"
+                    " (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)",
+                    (aid, uid, chat, kind, trader, outcome, now, trade_at, _today(now),
+                     trade_at if trigger_at is None else trigger_at, now, now, body))  # fmt: skip
+    return aid if _attempt(aid) else None
+
+
+def _attempt(aid: str, now: float | None = None) -> bool:
+    """One try at sending a kept alert. True when Telegram took it."""
+    now = time.time() if now is None else now
+    with _db() as con:
+        row = con.execute("SELECT uid, chat, body, tries, queued_at FROM alerts WHERE id = ? AND state IN ('queued', 'retry')",
+                          (aid,)).fetchone()  # fmt: skip
+        if row is None:
+            return False
+        con.execute("UPDATE alerts SET state = 'sending', tries = tries + 1 WHERE id = ?", (aid,))
+    uid, chat, body, tries, queued_at = row
+    msg = json.loads(body)
     try:
-        msg = _say(chat, text_for(aid), reply_markup=_keyboard(aid, stop))
-    except RuntimeError:
-        with _db() as con:  # Telegram refused it, so it wasn't sent: not counted, and the next buy tries again
-            con.execute("DELETE FROM alerts WHERE id = ?", (aid,))
-        return None
-    if isinstance(msg, dict) and msg.get("message_id") is not None:
+        got = _say(chat, msg["text"], reply_markup=msg["markup"])
+    except RuntimeError as e:
+        err = e if isinstance(e, TelegramError) else TelegramError(str(e))
+        wait = err.retry_after if err.retry_after is not None else RETRY_S[min(tries, len(RETRY_S) - 1)]
+        if err.maybe_sent:  # it may have reached the chat: asking again could send it twice, so it's left as unknown
+            state = "unknown"
+        elif err.chat_gone:
+            state = "failed"
+            _chat_gone(uid, chat)
+        elif err.temporary and now + wait - (queued_at or now) <= ALERT_MAX_AGE_S:
+            state = "retry"
+        else:
+            state = "failed"  # refused for good, or it would arrive too late to be news
+        why = str(err)[:200] + (" (too late to try again)" if state == "failed" and err.temporary and not err.chat_gone else "")
         with _db() as con:
-            con.execute("UPDATE alerts SET message_id = ? WHERE id = ?", (msg["message_id"], aid))
-    return aid
+            con.execute("UPDATE alerts SET state = ?, next_at = ?, error = ? WHERE id = ?",
+                        (state, now + wait if state == "retry" else None, why, aid))  # fmt: skip
+        return False
+    with _db() as con:
+        con.execute("UPDATE alerts SET state = 'sent', sent_at = ?, message_id = ?, error = NULL WHERE id = ?",
+                    (time.time(), got.get("message_id") if isinstance(got, dict) else None, aid))  # fmt: skip
+    return True
+
+
+_retry_state: dict[str, bool] = {"started": False}
+
+
+def _retry_due(now: float | None = None) -> int:
+    """Send the alerts whose time to try again has come, oldest first; the first time after a start, also those
+    kept but never asked (queued: the engine went down first), and mark those caught mid-request unknown (never
+    asked again). One too old to be news any more fails instead. Returns how many went out."""
+    now = time.time() if now is None else now
+    with _db() as con:
+        if not _retry_state["started"]:
+            con.execute("UPDATE alerts SET state = 'unknown', error = 'the engine stopped while asking Telegram'"
+                        " WHERE state = 'sending'")  # fmt: skip
+            con.execute("UPDATE alerts SET next_at = ? WHERE state = 'queued'", (now,))
+            _retry_state["started"] = True
+        con.execute("UPDATE alerts SET state = 'failed', error = COALESCE(error, '') || ' (too late to send)'"
+                    " WHERE state IN ('queued', 'retry') AND queued_at < ?", (now - ALERT_MAX_AGE_S,))  # fmt: skip
+        due = [r[0] for r in con.execute("SELECT id FROM alerts WHERE state IN ('queued', 'retry') AND next_at <= ?"
+                                         " ORDER BY queued_at", (now,))]  # fmt: skip
+    return sum(_attempt(aid, now) for aid in due)
+
+
+def _chat_gone(uid: str, chat: str) -> None:
+    """Telegram says this chat can't get messages any more (the bot was blocked, the account deleted): disconnect
+    it, so the page asks to connect Telegram again rather than failing every round, and drop what's waiting for it."""
+    with _follow_lock:
+        d = _load_follows()
+        u = d["users"].get(uid)
+        if u and str(u.get("chat")) == str(chat):
+            u["chat"] = None
+            _save_follows(d)
+    with _db() as con:
+        con.execute("UPDATE alerts SET state = 'failed', error = 'chat gone' WHERE chat = ? AND state IN ('queued', 'retry')",
+                    (chat,))  # fmt: skip
+    count("telegram_lost", uid=uid)
 
 
 def _cents(p: float) -> str:
@@ -2795,6 +2919,7 @@ def alert_pass(now: float | None = None) -> int:
     a trade made meanwhile is alerted, once. No alert for a buy with no price now (no open position to read it
     from: there's no saying how far the price moved), nor when the price now is settled (2¢ or less, 98¢ or more).
     Returns how many messages went out."""
+    retried = _retry_due(now)  # alerts waiting to be tried again first: they were news before this round's
     users = {uid: u for uid, u in _load_follows()["users"].items() if u.get("chat")}
     to: dict[str, list[str]] = {}
     for uid, u in users.items():
@@ -2866,7 +2991,7 @@ def alert_pass(now: float | None = None) -> int:
                      trade_at=sell.at, stop=sell.wallet):  # fmt: skip
                 sent += 1
     _seen_keep(looked, set(to), now)
-    return sent + whale_pass(users, now)
+    return sent + retried + whale_pass(users, now)
 
 
 # ---- big trades in your markets, whoever the trader ----
@@ -2972,7 +3097,7 @@ _alert_wake = threading.Event()
 # profile (events: no_profile). /api/metrics sums them up for the owner: locally, or with SIGNALS_METRICS_KEY.
 
 METRICS_KEY = os.environ.get("SIGNALS_METRICS_KEY", "")
-EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "picked", "no_profile")
+EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "telegram_lost", "picked", "no_profile")
 _ALERT_ID = re.compile(r"[A-Za-z0-9_-]{4,16}")
 
 
@@ -3072,10 +3197,19 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
     since = time.time() - max(1, days) * 86400
     week = 7 * 86400
     with _db() as con:
-        sent = dict(con.execute("SELECT kind, COUNT(*) FROM alerts WHERE sent_at >= ? GROUP BY kind", (since,)).fetchall())
+        delivered = "COALESCE(state, 'sent') = 'sent'"  # reached the chat (an alert from before delivery states did)
+        sent = dict(con.execute(f"SELECT kind, COUNT(*) FROM alerts WHERE sent_at >= ? AND {delivered} GROUP BY kind",
+                                (since,)).fetchall())  # fmt: skip
+        states = dict(con.execute("SELECT COALESCE(state, 'sent'), COUNT(*) FROM alerts WHERE sent_at >= ? AND kind != 'cap'"
+                                  " GROUP BY 1", (since,)).fetchall())  # fmt: skip
+        retried_ok = con.execute(f"SELECT COUNT(*) FROM alerts WHERE sent_at >= ? AND {delivered} AND tries > 1",
+                                 (since,)).fetchone()[0]  # fmt: skip
+        why = dict(con.execute("SELECT error, COUNT(*) FROM alerts WHERE sent_at >= ? AND state = 'failed' GROUP BY error"
+                               " ORDER BY 2 DESC LIMIT 5", (since,)).fetchall())  # fmt: skip
         # from the buy that sent the alert (trigger_at; a group's is its latest buyer's, not its first)
         lags = [r[0] / 60 for r in con.execute("SELECT sent_at - COALESCE(trigger_at, trade_at) FROM alerts WHERE sent_at >= ?"
-                                                " AND COALESCE(trigger_at, trade_at) IS NOT NULL AND kind != 'cap'", (since,))]  # fmt: skip
+                                                f" AND COALESCE(trigger_at, trade_at) IS NOT NULL AND kind != 'cap' AND {delivered}",
+                                                (since,))]  # fmt: skip
         taps = dict(con.execute("SELECT target, COUNT(*) FROM events WHERE kind = 'tap' AND at >= ? GROUP BY target", (since,)).fetchall())
         tapped = con.execute("SELECT COUNT(DISTINCT e.alert_id) FROM events e JOIN alerts a ON a.id = e.alert_id"
                              " WHERE e.kind = 'tap' AND e.at >= ?", (since,)).fetchone()[0]  # fmt: skip
@@ -3100,7 +3234,13 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
     return {
         "days": days,
         "alerts": {"sent": counted, "by_kind": sent, "minutes_from_trade_to_alert": {
-            "median": _pct(lags, 0.5), "p90": _pct(lags, 0.9), "n": len(lags)}},
+            "median": _pct(lags, 0.5), "p90": _pct(lags, 0.9), "n": len(lags)},
+            # every alert's delivery: sent (of which after a retry), still on its way, failed for good (with
+            # Telegram's reason; a chat that's gone is disconnected), unknown (the engine died while asking)
+            "delivery": {"sent": states.get("sent", 0), "sent_after_retry": retried_ok,
+                         "waiting": states.get("queued", 0) + states.get("retry", 0) + states.get("sending", 0),
+                         "failed": states.get("failed", 0), "failed_why": why, "unknown": states.get("unknown", 0),
+                         "chats_disconnected": n.get("telegram_lost", 0)}},
         "taps": {"by_target": taps, "alerts_tapped": tapped, "share_of_alerts_tapped": ratio(tapped, counted)},
         "stops": {"stop_taps": n.get("stop", 0), "stop_taps_within_7_days_of_an_alert": after.get("stop", 0),
                   "unfollows": n.get("unfollow", 0), "unfollows_within_7_days_of_an_alert": after.get("unfollow", 0)},

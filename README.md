@@ -200,7 +200,8 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   failed and never scored, by segment and category, active in the last week) to the owner only, as
   `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off; scores are kept either way.
 - **Counting** (is any of this useful?): per alert and per follow, in `/data/alerts.db`, with nothing personal
-  beyond the signed-in account (no IPs, no user agents): minutes from their trade to the alert, taps on an
+  beyond the signed-in account (no IPs, no user agents): minutes from their trade to the alert, how each alert was
+  delivered (sent, sent after a retry, waiting, failed and why, unknown, chats disconnected), taps on an
   alert's links (each goes through `/go/<alert id>/<target>`, which counts the tap and redirects: to Polymarket
   or Signals only, and even when counting fails), "Stop alerts" taps and unfollows (and how many came within 7
   days of an alert about that trader), Useful / Not useful votes, follows per visitor who picks interests (the

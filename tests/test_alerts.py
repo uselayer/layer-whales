@@ -4,6 +4,7 @@ Useful / Not useful, saved interests and big-trade alerts. No network: Telegram 
 from __future__ import annotations
 
 import base64
+import json
 import time
 import urllib.parse
 from datetime import UTC, datetime, timedelta
@@ -802,6 +803,7 @@ def restart(monkeypatch: pytest.MonkeyPatch) -> None:
     for d in (engine._seen, engine._alerted, engine._whale_alerted, engine._live_priced, engine._live_failed):
         d.clear()
     monkeypatch.setattr(engine, "_whale", {"started": False, "seen": set()})
+    engine._retry_state["started"] = False
 
 
 def test_a_trade_made_while_the_engine_restarts_is_alerted_once_after(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -946,3 +948,255 @@ def test_a_crash_mid_send_never_sends_an_alert_twice(api: TestClient, monkeypatc
         assert kinds == ["big", "bought", "sold"]  # each reached the chat exactly once
     else:
         assert kinds == []  # never sent, and not sent later either: lost, not repeated
+
+
+# ---- delivery: a temporary Telegram failure is tried again, a chat that's gone is disconnected ----
+
+
+class FlakyTelegram(Telegram):
+    """Telegram that fails the next ``failures`` sendMessage calls with ``error`` (after which it delivers)."""
+
+    def __init__(self, error: Exception, failures: int = 1) -> None:
+        super().__init__()
+        self.error, self.failures, self.tried = error, failures, 0
+
+    def __call__(self, method: str, **params: Any) -> Any:
+        if method == "sendMessage":
+            self.tried += 1
+            if self.failures:
+                self.failures -= 1
+                raise self.error
+        return super().__call__(method, **params)
+
+
+def _owner_metrics(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """/api/metrics as the owner sees it locally (same machine, not hosted, no key)."""
+    monkeypatch.setattr(engine, "METRICS_KEY", "")
+    monkeypatch.setattr(engine, "HOSTED", False)
+    return TestClient(engine.app, client=("127.0.0.1", 50000)).get("/api/metrics").json()  # type: ignore[no-any-return]
+
+
+def _state(aid: str) -> tuple[Any, ...]:
+    with engine._db() as con:
+        return tuple(con.execute("SELECT state, tries, next_at, error FROM alerts WHERE id = ?", (aid,)).fetchone())
+
+
+def _one_alert(monkeypatch: pytest.MonkeyPatch, tg: Any) -> str | None:
+    user(follows=(SAM,))
+    monkeypatch.setattr(engine, "tg", tg)
+    return engine._send("user_1", "555", "buy", lambda aid: f"alert {aid}", trader=SAM, outcome="o", trade_at=time.time())
+
+
+@pytest.mark.parametrize("error, wait", [
+    (engine.TelegramError("Telegram: Too Many Requests: retry after 7", 429, 7.0), 7.0),  # as long as it asks
+    (engine.TelegramError("Telegram couldn't be reached (ConnectionRefusedError)"), engine.RETRY_S[0]),  # never got it
+])  # fmt: skip
+def test_a_temporary_failure_is_tried_again_after_a_wait_and_sent_once(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch, error: Exception, wait: float
+) -> None:
+    tg = FlakyTelegram(error)
+    t0 = time.time()
+    assert _one_alert(monkeypatch, tg) is None  # not now...
+    with engine._db() as con:
+        aid = con.execute("SELECT id FROM alerts").fetchone()[0]
+    state, tries, next_at, err = _state(aid)
+    assert (state, tries) == ("retry", 1) and next_at == pytest.approx(t0 + wait, abs=2) and err == str(error)
+    assert engine._retry_due(t0 + wait - 2) == 0 and tg.tried == 1  # not before its time
+    assert engine._retry_due(t0 + wait + 1) == 1 and _state(aid)[:2] == ("sent", 2)  # ...then once
+    assert engine._retry_due(t0 + wait + 600) == 0 and len(tg.sent) == 1
+    assert _owner_metrics(monkeypatch)["alerts"]["delivery"] | {"failed_why": {}} == {
+        "sent": 1, "sent_after_retry": 1, "waiting": 0, "failed": 0, "failed_why": {}, "unknown": 0, "chats_disconnected": 0}
+
+
+def test_a_waiting_alert_survives_a_restart_and_is_sent_once_after(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    tg = FlakyTelegram(engine.TelegramError("Telegram: Too Many Requests: retry after 20", 429, 20.0))
+    _one_alert(monkeypatch, tg)
+    restart(monkeypatch)
+    assert engine._retry_due(time.time() + 31) == 1  # its message was kept: sent as it was meant
+    assert [m["text"].startswith("alert ") for m in tg.sent] == [True] and tg.sent[0]["reply_markup"]["inline_keyboard"]
+    restart(monkeypatch)
+    assert engine._retry_due(time.time() + 3600) == 0 and len(tg.sent) == 1
+
+
+def test_a_retry_that_would_arrive_too_late_fails_and_frees_its_place_in_the_cap(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tg = FlakyTelegram(engine.TelegramError("Telegram couldn't be reached (gaierror)"), failures=99)
+    _one_alert(monkeypatch, tg)
+    assert engine._sent_today("user_1") == 1  # on its way: it counts
+    t0 = t = time.time()
+    while t < t0 + engine.ALERT_MAX_AGE_S + 300:  # keeps failing, every try, for over 30 minutes
+        t += engine.RETRY_S[-1] + 1
+        engine._retry_due(t)
+    with engine._db() as con:
+        state, err = con.execute("SELECT state, error FROM alerts").fetchone()
+    assert state == "failed" and "too late" in err and tg.sent == []  # never more than 30 minutes after: not news
+    assert engine._sent_today("user_1") == 0  # it never went out: today's 20 are still all there
+
+
+@pytest.mark.parametrize("error", [
+    engine.TelegramError("Telegram: Bad Gateway", 502, maybe_sent=True),
+    engine.TelegramError("Telegram didn't answer (TimeoutError)", maybe_sent=True),  # the request went out
+    engine.TelegramError("Telegram's answer couldn't be read", maybe_sent=True),
+])  # fmt: skip
+def test_when_telegram_may_have_taken_it_its_recorded_as_unknown_never_sent_again(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    """A 5xx, or no answer after the request went out: it may be in the chat already, and Telegram can't tell a
+    repeat. So it's never asked again (no duplicate), and it's recorded as unknown with why (not silently lost);
+    it counts toward the day's 20, as it may have arrived."""
+    tg = FlakyTelegram(error)
+    assert _one_alert(monkeypatch, tg) is None
+    with engine._db() as con:
+        state, err = con.execute("SELECT state, error FROM alerts").fetchone()
+    assert state == "unknown" and err == str(error)
+    assert engine._retry_due(time.time() + 3600) == 0 and tg.tried == 1  # never asked again
+    assert engine._sent_today("user_1") == 1
+    d = _owner_metrics(monkeypatch)["alerts"]["delivery"]
+    assert (d["unknown"], d["sent"], d["failed"], d["waiting"]) == (1, 0, 0, 0)
+
+
+def test_tg_says_whether_telegram_may_have_taken_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """How each way a call can fail is read: urllib wraps a failure to connect or send in URLError (Telegram never
+    got it: safe to try again), and raises one while waiting for the answer as it is (it may have: never again)."""
+    import io
+    import socket
+    import urllib.error
+
+    real = engine.tg  # the fixture-free module function
+
+    def failing(exc: BaseException | None = None, body: bytes = b"") -> Any:
+        def urlopen(req: Any, timeout: float = 0) -> Any:
+            if exc is not None:
+                raise exc
+            return io.BytesIO(body)
+        return urlopen
+
+    def http(code: int, body: dict[str, Any]) -> urllib.error.HTTPError:
+        return urllib.error.HTTPError("u", code, "x", {}, io.BytesIO(json.dumps(body).encode()))  # type: ignore[arg-type]
+
+    cases = {
+        "refused": urllib.error.URLError(ConnectionRefusedError()),
+        "dns": urllib.error.URLError(socket.gaierror()),
+        "connect timeout": urllib.error.URLError(TimeoutError()),
+        "read timeout": TimeoutError(),
+        "reset after send": ConnectionResetError(),
+        "429": http(429, {"ok": False, "error_code": 429, "description": "Too Many Requests: retry after 9",
+                          "parameters": {"retry_after": 9}}),  # fmt: skip
+        "502": http(502, {"ok": False, "error_code": 502, "description": "Bad Gateway"}),
+        "403": http(403, {"ok": False, "error_code": 403, "description": "Forbidden: bot was blocked by the user"}),
+        "400": http(400, {"ok": False, "error_code": 400, "description": "Bad Request: can't parse entities"}),
+    }
+    got = {}
+    for name, exc in cases.items():
+        monkeypatch.setattr(engine.urllib.request, "urlopen", failing(exc))
+        with pytest.raises(engine.TelegramError) as e:
+            real("sendMessage", chat_id="1", text="x")
+        got[name] = (e.value.temporary, e.value.maybe_sent, e.value.chat_gone, e.value.retry_after)
+    monkeypatch.setattr(engine.urllib.request, "urlopen", lambda req, timeout=0: _Ctx(b"<html>oops</html>"))
+    with pytest.raises(engine.TelegramError) as e:
+        real("sendMessage", chat_id="1", text="x")
+    got["200 unreadable"] = (e.value.temporary, e.value.maybe_sent, e.value.chat_gone, e.value.retry_after)
+    #                    try again, may have sent, chat gone, wait
+    assert got == {"refused": (True, False, False, None), "dns": (True, False, False, None),
+                   "connect timeout": (True, False, False, None),
+                   "read timeout": (False, True, False, None), "reset after send": (False, True, False, None),
+                   "429": (True, False, False, 9.0), "502": (False, True, False, None),
+                   "403": (False, False, True, None), "400": (False, False, False, None),
+                   "200 unreadable": (False, True, False, None)}  # fmt: skip
+
+
+class _Ctx:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self) -> Any:
+        return self
+
+    def __exit__(self, *a: Any) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self.body
+
+
+def test_a_chat_that_blocked_the_bot_is_disconnected_not_retried(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    tg = FlakyTelegram(engine.TelegramError("Telegram: Forbidden: bot was blocked by the user", 403), failures=99)
+    _one_alert(monkeypatch, tg)
+    assert _owner_metrics(monkeypatch)["alerts"]["delivery"]["failed"] == 1
+    assert engine._load_follows()["users"]["user_1"]["chat"] is None  # the page offers "Connect Telegram" again
+    assert engine._load_follows()["users"]["user_1"]["follows"] == [SAM]  # following stays as it was
+    assert engine._retry_due(time.time() + 3600) == 0 and tg.tried == 1  # never asked again
+    assert _owner_metrics(monkeypatch)["alerts"]["delivery"]["chats_disconnected"] == 1
+    assert engine.alert_pass() == 0  # and no more rounds for a chat that's gone
+
+
+def test_a_message_telegram_refuses_for_good_fails_alone(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    tg = FlakyTelegram(engine.TelegramError("Telegram: Bad Request: can't parse entities", 400))
+    _one_alert(monkeypatch, tg)
+    with engine._db() as con:
+        assert con.execute("SELECT state FROM alerts").fetchone()[0] == "failed"
+    assert engine._load_follows()["users"]["user_1"]["chat"] == "555"  # the chat is fine: only that message failed
+    assert engine._retry_due(time.time() + 3600) == 0 and engine._sent_today("user_1") == 0
+
+
+def test_retries_never_take_anyone_past_the_daily_cap(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    day = {"d": "2026-10-13"}
+    monkeypatch.setattr(engine, "_today", lambda now=None: day["d"])
+    user()
+    tg = FlakyTelegram(engine.TelegramError("Telegram: Too Many Requests: retry after 5", 429, 5.0), failures=3)
+    monkeypatch.setattr(engine, "tg", tg)
+    for i in range(engine.DAILY_CAP + 3):
+        engine._send("user_1", "555", "buy", lambda aid, i=i: f"alert {i} {aid}")
+    engine._retry_due(time.time() + 10)
+    alerts = [m for m in tg.sent if m["text"].startswith("alert ")]
+    assert len(alerts) == engine.DAILY_CAP  # the three that failed first went out later, within the 20
+    assert [m["text"] for m in tg.sent if not m["text"].startswith("alert ")] == [engine.CAP_TEXT]
+
+
+def test_a_crash_after_an_alert_was_kept_but_before_telegram_was_asked_sends_it_once_after(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The third point an engine can die mid-send: the alert is kept (queued) but Telegram wasn't asked. After the
+    restart it is sent, once, as it was meant; the round's trades seen again don't make a second one."""
+    user(follows=(SAM,))
+    trades = [trade(SAM, datetime.now(UTC) - timedelta(days=3), i="old")]
+    live_reads(monkeypatch, detail_of(trades, {"0xsold:0": 0.40}))
+    engine.alert_pass()
+    trades.insert(0, sold(SAM, datetime.now(UTC), 0.41, 90, "0xsold:0", "s"))
+    attempt = engine._attempt
+
+    def dies(*a: Any, **k: Any) -> bool:
+        raise _Crash
+
+    monkeypatch.setattr(engine, "_attempt", dies)
+    engine._cache.clear()
+    with pytest.raises(_Crash):
+        engine.alert_pass()
+    monkeypatch.setattr(engine, "_attempt", attempt)
+    restart(monkeypatch)
+    engine.alert_pass()
+    engine._cache.clear()
+    engine.alert_pass()
+    assert [m["text"].split("</b> ")[1].split()[0] for m in engine.tg.sent] == ["sold"]  # once
+
+
+def test_an_alerts_db_from_before_delivery_states_keeps_its_alerts_as_sent(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The hosted alerts.db has alerts without a delivery state: opened, it gets the columns, and those alerts
+    count as sent (the daily cap, the metrics), as they were."""
+    import sqlite3
+
+    engine._db_ready.discard(str(engine.alerts_db()))
+    con = sqlite3.connect(engine.alerts_db())
+    con.execute("CREATE TABLE alerts (id TEXT PRIMARY KEY, uid TEXT NOT NULL, chat TEXT, kind TEXT NOT NULL, trader TEXT,"
+                " outcome TEXT, message_id INTEGER, sent_at REAL NOT NULL, trade_at REAL, day TEXT NOT NULL, trigger_at REAL)")
+    con.execute("INSERT INTO alerts VALUES ('old1', 'user_1', '555', 'buy', ?, 'o', 7, ?, ?, ?, NULL)",
+                (SAM, time.time(), time.time() - 60, engine._today()))  # fmt: skip
+    con.commit()
+    con.close()
+    assert engine._sent_today("user_1") == 1
+    with engine._db() as c:
+        assert {"state", "tries", "queued_at", "next_at", "error", "body"} <= {r[1] for r in c.execute("PRAGMA table_info(alerts)")}
+    assert engine._retry_due() == 0  # nothing of it is sent again
+    m = _owner_metrics(monkeypatch)
+    assert m["alerts"]["sent"] == 1 and m["alerts"]["delivery"]["sent"] == 1
