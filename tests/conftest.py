@@ -57,6 +57,15 @@ def fresh_poller() -> None:
 
 
 @pytest.fixture(autouse=True)
+def checks_read_like_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scoring on the spot reads through ``engine.checker()`` (its own budget); tests stand in for it at
+    ``engine.reads.whales``, as for every other read. tests/test_directory_evaluation.py checks the real one."""
+    from signals import app as engine
+
+    monkeypatch.setattr(engine, "checker", lambda: engine.reads.whales)
+
+
+@pytest.fixture(autouse=True)
 def no_us_twins(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test starts with no Polymarket US index (as before Layer's matches are read): no test sees another's."""
     monkeypatch.setattr(us_match, "twins", us_match.UsTwins())

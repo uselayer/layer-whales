@@ -100,6 +100,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _us_stop.set()
     _worth_stop.set()
     _follow_stop.set()
+    _alert_wake.set()
     _live_stop.set()
     _directory_stop.set()
 
@@ -378,6 +379,9 @@ DIRECTORY_RETRY_S = 3600  # after a sweep that failed
 # those 8, so the Feed and pages always have the other 4 (the Feed's poller reads one trader at a time, 4 reads in
 # ~1.2 s, so it never needs more than ~3.3 a second), and all 8 while the background is idle.
 BACKGROUND_RATE = float(os.environ.get("SIGNALS_BACKGROUND_RATE", "4"))
+# Scoring a wallet on the spot ("Check now", a trader page nobody has scored lately): this many Polymarket reads a
+# second, so with the background's (4 + 3 of the SDK's 8 a host) the Feed's poller always keeps a share of its own.
+CHECK_RATE = float(os.environ.get("SIGNALS_CHECK_RATE", "3"))
 DIRECTORY_BATCH = 2000  # sightings kept per write
 DIRECTORY_STATS_TTL_S = 300
 _directory_stop = threading.Event()
@@ -406,7 +410,7 @@ def background() -> Whales:
     BACKGROUND_RATE a second (signals/budget.py). Its scorer keeps price histories where the check keeps them."""
     with _background_lock:
         if "whales" not in _background:
-            budget = Budget(BACKGROUND_RATE)
+            budget = Budget(BACKGROUND_RATE, yield_to=_reading_followed)  # half rate while alerts' reads run
             whales = Whales(BackgroundHttp(reads._http, budget), reads._layer, reads)  # type: ignore[arg-type]
             whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
             _background.update(budget=budget, whales=whales)
@@ -1141,7 +1145,7 @@ def _score_of(wallet: str) -> dict[str, Any]:
             return s  # type: ignore[no-any-return]
     if w not in _worth_one:
         try:
-            _worth_one[w] = reads.whales.score(w).to_dict()
+            _worth_one[w] = checker().score(w).to_dict()  # its own share of Polymarket's reads, never the Feed's
         except VenueError as e:
             if _WALLET.fullmatch(w):
                 why = f"{type(e).__name__}: {e}"
@@ -1244,6 +1248,25 @@ _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open posit
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
 _live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
 _live_round: dict[str, float] = {"ended": float("-inf")}  # when (monotonic) the poller's last round ended
+_followed_reading = threading.Event()  # set while the poller reads followed traders: the background and checks give way
+
+
+def _reading_followed() -> bool:
+    return _followed_reading.is_set()
+
+
+_check_budget = Budget(CHECK_RATE, yield_to=_reading_followed)
+_checker: dict[str, Whales] = {}
+
+
+def checker() -> Whales:
+    """The SDK's reads for scoring a wallet on the spot ("Check now", a trader page): the engine's own client, with
+    each Polymarket read also taken from _check_budget (CHECK_RATE a second, half while followed traders are read),
+    whichever of the SDK's threads makes it, as ``background`` does for the background."""
+    with _background_lock:
+        if "whales" not in _checker:
+            _checker["whales"] = Whales(BackgroundHttp(reads._http, _check_budget), reads._layer, reads)  # type: ignore[arg-type]
+        return _checker["whales"]
 
 
 def _open_positions(wallet: str) -> list[Any]:
@@ -1350,20 +1373,32 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
     due = sorted((w for w in followed if due_now(w)), key=lambda w: (-age(w), w))  # oldest first; ties by wallet
     late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w), w))
     done = 0
-    for i, w in enumerate(due + late):
-        if stop is not None and stop.is_set():
-            break
-        if i >= len(due) + LIVE_REC_FLOOR and time.monotonic() - started >= LIVE_POLL_S:
-            break  # the rest of Recommended goes first next round
-        try:
-            _live_read(w, 0 if w in hinted or i < len(due) else rec_after)
-            _live_failed.pop(w, None)
-            done += 1
-        except VenueError as e:
-            _live_failed[w] = time.monotonic()
-            if e.code == "rate_limited":  # the SDK's retries are spent: more reads now would only add to it
-                _worth["live_error"] = "Polymarket rate limited the Feed's reads; the rest wait for the next round"
+    def followed_read() -> None:  # alerts' reads are done: the others' full rate back, and the alert pass now
+        if _followed_reading.is_set():
+            _followed_reading.clear()
+            _alert_wake.set()
+
+    if due:
+        _followed_reading.set()
+    try:
+        for i, w in enumerate(due + late):
+            if i == len(due):
+                followed_read()
+            if stop is not None and stop.is_set():
                 break
+            if i >= len(due) + LIVE_REC_FLOOR and time.monotonic() - started >= LIVE_POLL_S:
+                break  # the rest of Recommended goes first next round
+            try:
+                _live_read(w, 0 if w in hinted or i < len(due) else rec_after)
+                _live_failed.pop(w, None)
+                done += 1
+            except VenueError as e:
+                _live_failed[w] = time.monotonic()
+                if e.code == "rate_limited":  # the SDK's retries are spent: more reads now would only add to it
+                    _worth["live_error"] = "Polymarket rate limited the Feed's reads; the rest wait for the next round"
+                    break
+    finally:
+        followed_read()
     _live_round["ended"] = time.monotonic()
     wanted, mono = followed | rec, time.monotonic()
     for key in [k for k in list(_cache) if k.startswith("live:")]:
@@ -2481,11 +2516,15 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
 
 def _alert_loop() -> None:
     while not _follow_stop.is_set():
+        _alert_wake.clear()
         try:
             alert_pass()
         except Exception as e:  # keep alerting through a bad round
             _tg["error"] = f"{type(e).__name__}: {e}"
-        _follow_stop.wait(ALERT_EVERY_S)
+        _alert_wake.wait(ALERT_EVERY_S)  # or sooner: the poller wakes it once it has read everyone followed
+
+
+_alert_wake = threading.Event()
 
 
 # ---- counting: is any of this useful? ----

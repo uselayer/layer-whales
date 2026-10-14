@@ -1571,7 +1571,7 @@ function renderWorth() {
       <div class="lb-cols lb-head"><span>#</span><span>Trader</span>${head("consistent", "12-week consistency")}${head("profit", "Profit")}<span>Trend</span>${head("won", "Won, 30 days")}${head("active", "Usual trade, 30 days")}${head("copying", "Copy estimate")}</div>
       ${sections ?? rows(shown, "all")}</div>`;
   } else if (q && isWalletQuery(q)) {
-    body = emptyState("That wallet isn't in this list", "We can still check its trades, including your own wallet. It takes up to a minute.", `<a class="btn" href="#/worth/${esc(q)}">Check this wallet</a>`);
+    body = emptyState("That wallet isn't in this list", "We can still check its trades, including your own wallet. It usually takes under a minute.", `<a class="btn" href="#/worth/${esc(q)}">Check this wallet</a>`);
   } else if (q) {
     body = emptyState("No trader matches", `Nobody called “${esc(lb.q.trim())}” here. Paste a full wallet address to check any wallet.`, `<button class="btn ghost" id="lbclear">Clear search</button>`);
   } else if (picked.length && pool.length) {
@@ -1768,7 +1768,7 @@ function renderUnchecked(s, wallet) {
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(wallet)}"></div></div></div>
     <section class="pf-card"><h2>What we know so far</h2><p class="pf-copying">${note}</p>
       <dl class="pf-facts">${evidenceFacts(r).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-      <p style="margin-top:16px"><button class="btn" id="checknow">Check now</button> <span class="muted" style="font-size:13px">Reads their last 30 days of trades, up to a minute.</span></p></section>`;
+      <p style="margin-top:16px"><button class="btn" id="checknow">Check now</button> <span class="muted" style="font-size:13px">Reads their last 30 days of trades, usually under a minute.</span></p></section>`;
   $("#checknow").onclick = async (e) => {
     e.target.disabled = true; e.target.textContent = "Checking…";
     let full;
@@ -1817,7 +1817,7 @@ async function worthTraderPage(wallet) {
   const app = $("#app");
   const back = `<a class="back" href="#/traders">← Traders</a>`;
   app.innerHTML = `${back}<div class="pf-head">${avatar(wallet, 64)}<div class="grow"><div class="skel" style="width:40%;height:24px"></div><div class="skel" style="width:25%;height:14px;margin-top:10px"></div></div></div>
-    <p class="muted" style="margin-top:24px">Checking this trader's trades (up to a minute)…</p>`;
+    <p class="muted" style="margin-top:24px">Checking this trader's trades (usually under a minute)…</p>`;
   let s;
   const peek = exploreOn && exOpen === wallet; // opened from Explore: check only when asked ("Check now")
   exOpen = null;
