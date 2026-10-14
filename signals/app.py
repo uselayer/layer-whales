@@ -2423,14 +2423,22 @@ def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, tra
                             (secrets.token_urlsafe(6), uid, chat, time.time(), _today()))  # fmt: skip
         return None
     aid = secrets.token_urlsafe(6)  # 8 characters: fits Telegram's 64-byte button data with room to spare
+    # Kept before Telegram is asked, so at most once: a crash after Telegram took it (or while asking) leaves the row,
+    # and the dedupe that reads alerts (_sold_recently, _recently, the daily cap) never sends it a second time. Telegram
+    # has no way to tell a repeat, so this is the guarantee: never twice, and a crash mid-send can lose one.
+    with _db() as con:
+        con.execute("INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (aid, uid, chat, kind, trader, outcome, None, time.time(), trade_at, _today(),
+                     trade_at if trigger_at is None else trigger_at))  # fmt: skip
     try:
         msg = _say(chat, text_for(aid), reply_markup=_keyboard(aid, stop))
     except RuntimeError:
-        return None  # blocked the bot, or Telegram is down: the next buy tries again
-    with _db() as con:
-        con.execute("INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (aid, uid, chat, kind, trader, outcome, (msg or {}).get("message_id") if isinstance(msg, dict) else None,
-                     time.time(), trade_at, _today(), trade_at if trigger_at is None else trigger_at))  # fmt: skip
+        with _db() as con:  # Telegram refused it, so it wasn't sent: not counted, and the next buy tries again
+            con.execute("DELETE FROM alerts WHERE id = ?", (aid,))
+        return None
+    if isinstance(msg, dict) and msg.get("message_id") is not None:
+        with _db() as con:
+            con.execute("UPDATE alerts SET message_id = ? WHERE id = ?", (msg["message_id"], aid))
     return aid
 
 

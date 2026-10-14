@@ -893,3 +893,52 @@ def test_big_trades_carry_on_after_a_restart_too(api: TestClient, monkeypatch: p
     assert engine.alert_pass() == 1  # made while it was down: alerted
     restart(monkeypatch)
     assert engine.alert_pass() == 0  # never twice
+
+
+class _Crash(BaseException):
+    """The process dying (a deploy's kill, an out-of-memory): nothing after it runs, not even ``except Exception``."""
+
+
+@pytest.mark.parametrize("when", ["after_telegram_took_it", "before_telegram_was_asked"])
+def test_a_crash_mid_send_never_sends_an_alert_twice(api: TestClient, monkeypatch: pytest.MonkeyPatch, when: str) -> None:
+    """Telegram can't tell a repeat, so the guarantee is at most once. The engine dies mid-send, for a buy, a sell
+    and a big trade: after Telegram took the message (it reached the chat, nothing after was recorded), or just
+    before asking (it never did). Restarted, the next rounds see the same trades as new, and send none of them
+    again: a crash can lose an alert, never repeat one."""
+    user(follows=(SAM,), interests=["Politics"])
+    trades = [trade(SAM, datetime.now(UTC) - timedelta(days=3), i="old")]
+    prices = {"0xcid:0": 0.50, "0xsold:0": 0.40, "0xw:0": 0.50}
+    live_reads(monkeypatch, detail_of(trades, prices))
+    rows: list[WhaleTrade] = []
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
+    real = engine.tg
+    assert engine.alert_pass() == 0  # noted
+    now = datetime.now(UTC)
+    trades[:0] = [trade(SAM, now, i="b"), sold(SAM, now, 0.41, 90, "0xsold:0", "s")]
+    rows.insert(0, big(WHALE, market="0xw:0", i="w"))
+
+    def dies(method: str, **p: Any) -> Any:
+        if method != "sendMessage":
+            return real(method, **p)
+        if when == "after_telegram_took_it":
+            real(method, **p)  # it reached the chat...
+        raise _Crash  # ...and the engine died before anything after it
+
+    for _ in range(3):  # the buy, the sell, the big trade: each one killing the engine in turn
+        monkeypatch.setattr(engine, "tg", dies)
+        engine._cache.clear()
+        with pytest.raises(_Crash):
+            engine.alert_pass()
+        restart(monkeypatch)
+        monkeypatch.setattr(engine, "tg", real)
+    engine._cache.clear()
+    engine.alert_pass()
+    engine._cache.clear()
+    engine.alert_pass()
+    texts = [m["text"] for m in real.sent]
+    assert len(texts) == len(set(texts))  # never the same alert twice
+    kinds = sorted("big" if t.startswith("<b>Big trade") else "sold" if "</b> sold " in t else "bought" for t in texts)
+    if when == "after_telegram_took_it":
+        assert kinds == ["big", "bought", "sold"]  # each reached the chat exactly once
+    else:
+        assert kinds == []  # never sent, and not sent later either: lost, not repeated
