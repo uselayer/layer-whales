@@ -94,7 +94,12 @@ behind Vercel (see README, "Hosting").
     The tier is skill and track record only (uselayer 0.10's `segment`; a kept older result is re-tiered with the
     SDK's `segment_of`): copying never moves a trader into, out of or between tiers or sections. A trader can be
     worth following for research when copying them doesn't pay, but nothing may present a trader's activity as a
-    tested way to make money: following and the Feed are research, not tips (`NOT_A_TIP`).
+    tested way to make money: following and the Feed are for learning what traders do, not a signal to buy
+    (`NOT_A_TIP`).
+  - Copying in plain words, for someone who has never heard of copy trading: say "buying after them" (what
+    would you have made if you'd bought the same thing after them?), never "copies" as a thing that keeps,
+    loses or gets in, and no "95% range", "ask" or "estimate" jargon on the page ("range", "the price you'd
+    actually pay"). The four status names stay as they are.
   - Traders lists the traders we recommend (Proven sharp, Quiet sharp, Rising) in two sections by tier, from the
     engine's `section_of`: **Sharps** (Proven and Quiet) and **Rising**. Each section has the same columns, its
     own ranks and "Show more"; "Copyable only" filters on copy status (greyed out, with the "Copying is paused"
@@ -112,7 +117,8 @@ behind Vercel (see README, "Hosting").
     win record and usual trade the last 30 days. Consistency is "X of N weeks up", where a week counts profit
     taken plus the change in value of trades still open. A copy estimate prices the copy at the ask (uselayer
     0.8.1's `copy_entry`), never the middle price. A positive copy estimate that isn't reliably above zero says so
-    ("Estimated copy return: +0.7% after fees, but results aren't reliably above zero"), never shown as a gain.
+    ("If you'd bought after them: +0.7% after fees (range −1.2% to +2.6%), but we can't tell that from luck"),
+    never shown as a gain.
     One bar: filters on the left (market chips = the onboarding choice, Copyable only), how you view the list on
     the right (search name or wallet, period, sort). Columns are grouped as Track record, Style and Copying.
     Recommendations never include Big profit, edge unproven; Profit rests on one win (big profit that's a loss

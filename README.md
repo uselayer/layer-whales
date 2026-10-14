@@ -46,8 +46,8 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
   - **Following**: signed in, every trade over the last 24 hours from the traders you follow, whoever they are.
     Signed out, a short prompt to sign in.
   - **Recommended**: trades of $1,000 or more over the last 24 hours from the traders in Traders' two sections
-    (Sharps, Rising). Quieter on purpose, and never the default. Their trades are research, not tips: we
-    haven't found that buying after them pays, and the page says so.
+    (Sharps, Rising). Quieter on purpose, and never the default. The page says to use their trades to
+    learn what they're doing, not as a signal to buy: we haven't found that buying after them makes money.
   - Both: one card per trade, opened on your markets, three across on a desktop: the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
     paid; **Price moved away** means further either way. A bigger drop means

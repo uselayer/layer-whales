@@ -650,9 +650,9 @@ function ago(t) {
 }
 // One "Copying is paused" callout for the Feed and Traders, shown while no trader's copies are offered.
 const PAUSED_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg>`;
-const pausedNote = (rest) => `<div class="paused">${PAUSED_ICON}<p><b>Copying is paused.</b> No trader's copies have been reliably profitable after fees lately. ${rest}</p></div>`;
+const pausedNote = (rest) => `<div class="paused">${PAUSED_ICON}<p><b>Copying is paused.</b> Lately, buying after any of these traders hasn't clearly made money after fees. ${rest}</p></div>`;
 // What a recommended trader's activity is and isn't: something to look into, never a tested way to make money.
-const NOT_A_TIP = "Their trades are research, not tips: we haven't found that buying after them pays.";
+const NOT_A_TIP = "Use their trades to learn what they're doing, not as a signal to buy: we haven't found that buying after them makes money.";
 
 // Next to "Updated" on the Feed: the delay in a few words, the full sentence behind the ⓘ (tap or hover).
 const LAG = `<span class="lag"><button type="button" class="lag-btn" aria-describedby="lagtip">3–5 min behind<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><span class="lag-tip" role="tooltip" id="lagtip">Polymarket's public data runs 3–5 minutes behind, so trades show up here a few minutes after they're made.</span></span>`;
@@ -1210,12 +1210,13 @@ const HOW_TIERS = [
   ["quiet", "The same over at least 25 trades, on a small account no leaderboard lists."],
   ["rising", "Good early signs, too few trades to be sure yet."],
 ];
-// Every trader's copy status, in the engine's words (copy_status): what copies a minute or more after them kept.
+// Every trader's copy status, as the engine decides it (copy_status), in plain words: "buying after them", never
+// "copies" as a noun, so someone who has never heard of copy trading can follow it.
 const HOW_COPY = [
-  ["copyable", "Copyable", "Copies kept money after fees, and not by luck: even the low end of our estimate is above zero, over at least 8 trades. Only for Proven sharps, Quiet sharps and Rising."],
-  ["not_proven", "Copy not proven", "What copies kept isn't reliably above zero, or too few of their trades had prices after the buy to tell."],
-  ["costly", "Costly to copy", "Copies lost money after fees in the trades we checked: even the high end of our estimate is below zero. Usually the price has moved their way before a copy gets in."],
-  ["not_offered", "Not offered", "Copies kept money, but the trader's own record doesn't pass the checks."],
+  ["copyable", "Copyable", "Buying after them made money, and often enough that it isn't just luck (we need at least 8 of their trades to say so). We only say this about traders who also pass our skill checks."],
+  ["not_proven", "Copy not proven", "We can't tell. Buying after them sometimes made money and sometimes lost it, or we had too few trades to check."],
+  ["costly", "Costly to copy", "Buying after them lost money. Usually the price had already moved by the time you could buy."],
+  ["not_offered", "Not offered", "Buying after them made money, but the trader doesn't pass our skill checks, so we don't suggest it."],
 ];
 const howMore = ([label, text]) => `<details class="how-more"><summary>${label}</summary><p>${text}</p></details>`;
 
@@ -1238,13 +1239,14 @@ function howSheet(tab = "checks", focus = null) {
       <p class="explain" style="margin-top:0"><b>Weeks up</b> (12-week consistency): ${WEEK_COUNTS}</p>
     </div>
     <div class="how" role="tabpanel" id="howpanel-copying" aria-labelledby="howtab-copying">
-      <p class="explain" style="margin-top:12px">For every trader we also check what copying them would have kept: buying the same thing a minute or more after them, at the price a buyer pays, with the fee, an hour later. It's their copy status, apart from their tier.</p>
+      <h3 style="margin-top:12px">Could you make money buying what they buy?</h3>
+      <p class="explain" style="margin-top:0">We look back at their trades and ask: if you had bought the same thing a minute or more after them, paying the real price plus Polymarket's fee, would you be up or down an hour later?</p>
       ${HOW_COPY.map(([k, label, text]) => `<div class="how-tier" data-howfocus="${k}"><b>${label}</b><p>${text}</p></div>`).join("")}
-      ${howMore(["How we price a copy", "We price each copy at the ask, what a buyer pays: at least half a cent above the middle price Polymarket's history shows. The estimate comes with a 95% range, and only its low end can make a trader Copyable."])}
+      ${howMore(["How we work out the price", "We use the price you'd actually pay, which is a bit higher than the price on Polymarket's chart. Each result has a range, and we only call a trader Copyable when even the worst end of that range is a gain."])}
       <h3>Following isn't a tip</h3>
-      <p class="explain" style="margin-top:0">Following a trader, and the Feed, show what they buy, a few minutes after they do. That's research. ${NOT_A_TIP}</p>
+      <p class="explain" style="margin-top:0">Following a trader shows you what they buy, a few minutes after they buy it. Use it to learn what they're doing, not as a signal to buy: we haven't found that buying after them makes money.</p>
     </div>
-    <p class="explain" style="margin-top:18px">A reading of the past, not a promise. Signals places no orders: you buy on Polymarket yourself.</p>`);
+    <p class="explain" style="margin-top:18px">This is about the past, not a promise. Signals never places trades: you buy on Polymarket yourself.</p>`);
   const show = (k) => {
     tabs.forEach(([t]) => {
       const on = t === k, btn = $(`#howtab-${t}`, panel);
@@ -1393,9 +1395,9 @@ const copyLabel = (s) => isCopyable(s) ? "Copyable" : COPY_LABELS.includes(s?.co
 // What a copy kept after fees is an estimate: always with its 95% range, and never shown as a gain unless the
 // whole range is above zero.
 const copyRange = (s) => s.copy_return_low != null && s.copy_return_high != null ? `${lbPct(s.copy_return_low)} to ${lbPct(s.copy_return_high)}` : null;
-const copyFigure = (s) => s.copy_return == null ? null : `Estimated copy return: ${lbPct(s.copy_return)} after fees${copyRange(s) ? ` (95% range ${copyRange(s)})` : ""}`;
-// with no reason beside it (a list row), a positive estimate says why it still isn't copyable
-const copyEstimate = (s) => s.copy_return == null ? null : `${copyFigure(s)}${!isCopyable(s) && s.copy_return > 0 ? ", but it isn't reliably above zero." : "."}`;
+const copyFigure = (s) => s.copy_return == null ? null : `If you'd bought after them: ${lbPct(s.copy_return)} after fees${copyRange(s) ? ` (range ${copyRange(s)})` : ""}`;
+// with no reason beside it (a list row), a gain that isn't Copyable says why
+const copyEstimate = (s) => s.copy_return == null ? null : `${copyFigure(s)}${!isCopyable(s) && s.copy_return > 0 ? ", but we can't tell that from luck." : "."}`;
 // Weeks in profit out of the weeks they have history for: a week before their first trade isn't a losing week.
 const weeksUp = (s) => s.weeks_up ?? null;
 // What "up" means for a week: trading profit, so open trades count at their value that week.
@@ -1673,7 +1675,7 @@ function renderProfile() {
   const per = s.periods?.[n] || (n === "30d" ? { realized: s.realized_window, unrealized: s.unrealized_window, income: s.income_window } : {});
   const started = s.pnl_since && Date.now() - new Date(s.pnl_since) < { "7d": 7, "30d": 30, "90d": 90 }[n] * 864e5 ? s.pnl_since : null;
   const without = allTime != null && s.biggest_win != null ? allTime - s.biggest_win : null;
-  const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way by the time a copy gets in
+  const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way a minute after they bought
   const band = Array.isArray(s.price_band) ? `${cents(s.price_band[0])}–${cents(s.price_band[1])}` : null;
   const chart = pfChart(s, n);
   const can = isCopyable(s);
@@ -1744,7 +1746,7 @@ function renderProfile() {
         <div><span>Usual price, ${readPeriod(s)}</span><b>${band || (s.avg_price != null ? `${cents(s.avg_price)} on average` : dash)}</b></div>
         <div><span>New markets, ${readPeriod(s)}</span><b>${s.trades_per_day != null ? perDayText(s.trades_per_day) : dash}</b></div><div><span>Held until the market settles, last 50 closed positions</span><b>${s.held_share != null ? `${Math.round(s.held_share * 100)}%` : dash}</b></div></div></div>
       <div class="pf-group"><h3>Execution</h3><div class="pf-kv">
-        <div><span>Resting orders (maker), last 500 fills</span><b>${s.maker_share != null ? `${Math.round(s.maker_share * 100)}%` : dash}</b></div><div><span>Price gap for a copy a few minutes late</span><b>${gap != null ? centsSigned(gap).replace("+", "") : dash}</b></div></div></div>
+        <div><span>Resting orders (maker), last 500 fills</span><b>${s.maker_share != null ? `${Math.round(s.maker_share * 100)}%` : dash}</b></div><div><span>How far the price moved before you could buy</span><b>${gap != null ? centsSigned(gap).replace("+", "") : dash}</b></div></div></div>
       <details class="fold"><summary>How we measure this</summary>${worthDetails(s)}</details>`;
   }
 
