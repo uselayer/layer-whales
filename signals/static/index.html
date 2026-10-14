@@ -1261,6 +1261,7 @@ function feedGaps(r, at, now) {
   const notes = [], unread = (r.pending || 0) + (r.failed || 0);
   if (r.failed) notes.push(`${plural(r.failed, "trader")} couldn't be read just now; retrying.`);
   if (r.pending) notes.push(`Still reading ${plural(r.pending, "trader")}; their trades show in a minute.`);
+  if (r.stale) notes.push(`${plural(r.stale, "trader")} couldn't be refreshed just now: showing their trades from the last good read; retrying.`);
   if (at && now - at > STALE_NOTE_MS) notes.push(`Some of these traders were last read ${Math.round((now - at) / 60000)} minutes ago.`);
   const empty = !unread ? null
     : unread >= r.traders.length ? (r.pending ? ["Still reading their trades", "Their trades from the last day show here in a minute."]

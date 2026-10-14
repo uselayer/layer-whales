@@ -51,7 +51,7 @@ def fresh_poller() -> None:
     """Every test starts with nothing the Feed's poller kept about traders' positions, failures or hints."""
     from signals import app as engine
 
-    for kept in (engine._live_priced, engine._live_failed, engine._live_hinted):
+    for kept in (engine._live_priced, engine._live_failed, engine._live_hinted, engine._live_errors):
         kept.clear()
     engine._live_round["ended"] = float("-inf")
     engine._retry_state["started"] = False  # each test's alerts.db is new: as after a start
