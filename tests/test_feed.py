@@ -197,7 +197,7 @@ def _counting(monkeypatch: pytest.MonkeyPatch, trades: Any = None, clock: Any = 
 
     monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: read(
         "trades", w, (lambda: trades(w)) if trades else (lambda: real_trades(venue, w, **k))))  # fmt: skip
-    monkeypatch.setattr(engine, "_open_positions", lambda w: read("positions", w, lambda: [] if trades else real_positions(w)))
+    monkeypatch.setattr(engine, "_open_positions", lambda w, markets=None: read("positions", w, lambda: [] if trades else real_positions(w)))
     return asked
 
 
