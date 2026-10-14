@@ -2393,6 +2393,9 @@ CREATE TABLE IF NOT EXISTS votes (alert_id TEXT NOT NULL, uid TEXT NOT NULL, use
 CREATE TABLE IF NOT EXISTS events (at REAL NOT NULL, kind TEXT NOT NULL, uid TEXT, alert_id TEXT, target TEXT,
   trader TEXT);
 CREATE TABLE IF NOT EXISTS quotes (at REAL NOT NULL, outcome TEXT NOT NULL, reads INTEGER NOT NULL, ms REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS watched (trader TEXT PRIMARY KEY, seen_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS seen_trades (trader TEXT NOT NULL, trade_id TEXT NOT NULL, at REAL NOT NULL,
+  PRIMARY KEY (trader, trade_id));
 """
 
 
@@ -2459,14 +2462,22 @@ def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, tra
                             (secrets.token_urlsafe(6), uid, chat, time.time(), _today()))  # fmt: skip
         return None
     aid = secrets.token_urlsafe(6)  # 8 characters: fits Telegram's 64-byte button data with room to spare
+    # Kept before Telegram is asked, so at most once: a crash after Telegram took it (or while asking) leaves the row,
+    # and the dedupe that reads alerts (_sold_recently, _recently, the daily cap) never sends it a second time. Telegram
+    # has no way to tell a repeat, so this is the guarantee: never twice, and a crash mid-send can lose one.
+    with _db() as con:
+        con.execute("INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (aid, uid, chat, kind, trader, outcome, None, time.time(), trade_at, _today(),
+                     trade_at if trigger_at is None else trigger_at))  # fmt: skip
     try:
         msg = _say(chat, text_for(aid), reply_markup=_keyboard(aid, stop))
     except RuntimeError:
-        return None  # blocked the bot, or Telegram is down: the next buy tries again
-    with _db() as con:
-        con.execute("INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (aid, uid, chat, kind, trader, outcome, (msg or {}).get("message_id") if isinstance(msg, dict) else None,
-                     time.time(), trade_at, _today(), trade_at if trigger_at is None else trigger_at))  # fmt: skip
+        with _db() as con:  # Telegram refused it, so it wasn't sent: not counted, and the next buy tries again
+            con.execute("DELETE FROM alerts WHERE id = ?", (aid,))
+        return None
+    if isinstance(msg, dict) and msg.get("message_id") is not None:
+        with _db() as con:
+            con.execute("UPDATE alerts SET message_id = ? WHERE id = ?", (msg["message_id"], aid))
     return aid
 
 
@@ -2738,11 +2749,50 @@ def _added_up(w: str, market: str) -> None:
         con.execute("DELETE FROM pending WHERE trader = ? AND market = ?", (w, market))
 
 
+# ---- alert state that survives a restart (a deploy) ----
+# What each round looked at, per followed trader (and for big trades, BIG_TRADES_KEY), kept in alerts.db as well as
+# in _seen: after a restart, a trader who was being watched picks up where the last round left off, so a trade that
+# showed up while the engine was down (or in its first round back) is alerted, not just noted. Nothing goes out
+# twice: a buy already alerted is in buys (_recently), a sell or big trade in alerts (_sold_recently, _recently).
+# Only a trader nobody watched before (a new follow) has their existing trades just noted.
+
+SEEN_KEEP_S = 2 * ALERT_MAX_AGE_S  # trade ids kept this long; an older trade can't be alerted anyway
+BIG_TRADES_KEY = "*big trades*"
+
+
+def _seen_load(key: str) -> tuple[set[str], float] | None:
+    """The trade ids the alert pass had looked at for ``key`` before this run (those under SEEN_KEEP_S old) and
+    when it last did, or None if it never watched it."""
+    with _db() as con:
+        row = con.execute("SELECT seen_at FROM watched WHERE trader = ?", (key,)).fetchone()
+        if row is None:
+            return None
+        return {r[0] for r in con.execute("SELECT trade_id FROM seen_trades WHERE trader = ?", (key,))}, row[0]
+
+
+def _seen_keep(looked: dict[str, list[WhaleTrade]], watching: set[str] | None, now: float) -> None:
+    """What this round looked at, kept after its alerts went out (so a crash in between can only alert them on the
+    next start, never skip them; the dedupe above stops a second message). ``watching``: everyone followed now, so
+    a trader nobody follows any more is forgotten, and following them again later starts fresh (only noted)."""
+    with _db() as con:
+        con.executemany("INSERT INTO watched VALUES (?, ?) ON CONFLICT (trader) DO UPDATE SET seen_at = excluded.seen_at",
+                        [(k, now) for k in looked])  # fmt: skip
+        con.executemany("INSERT OR IGNORE INTO seen_trades VALUES (?, ?, ?)",
+                        [(k, t.trade_id, t.at.timestamp()) for k, ts in looked.items() for t in ts])  # fmt: skip
+        con.execute("DELETE FROM seen_trades WHERE at < ?", (now - SEEN_KEEP_S,))
+        if watching is not None:
+            gone = [r[0] for r in con.execute("SELECT trader FROM watched WHERE trader != ?", (BIG_TRADES_KEY,))
+                    if r[0] not in watching]  # fmt: skip
+            con.executemany("DELETE FROM watched WHERE trader = ?", [(k,) for k in gone])
+            con.executemany("DELETE FROM seen_trades WHERE trader = ?", [(k,) for k in gone])
+
+
 def alert_pass(now: float | None = None) -> int:
     """One round: each followed trader's trades, read once however many people follow them, and for each new
     buy or sell, whatever the amount and whoever the trader, a message to every connected follower (grouped when 2+ traders they follow
     bought the same outcome; sells never are), then big trades in people's chosen markets. A trader's trades from before their
-    first round are only noted, never alerted. No alert for a buy with no price now (no open position to read it
+    first round are only noted, never alerted; after a restart a trader already watched carries on (_seen_load), so
+    a trade made meanwhile is alerted, once. No alert for a buy with no price now (no open position to read it
     from: there's no saying how far the price moved), nor when the price now is settled (2¢ or less, 98¢ or more).
     Returns how many messages went out."""
     users = {uid: u for uid, u in _load_follows()["users"].items() if u.get("chat")}
@@ -2755,12 +2805,24 @@ def alert_pass(now: float | None = None) -> int:
     now = time.time() if now is None else now
     new_buys: list[NewBuy] = []
     new_sells: list[NewSell] = []
+    looked: dict[str, list[WhaleTrade]] = {}
     for w in to:
         try:  # what the poller keeps (it reads everyone followed first, each round); read here only if it hasn't yet
             d = hit[1] if (hit := _live_kept(w)) else _live_read(w, LIVE_ALERT_S)
         except VenueError:
             continue
-        first, seen = w not in _seen, _seen.setdefault(w, set())
+        first = w not in _seen
+        if first and (kept := _seen_load(w)) is not None:  # watched before a restart: carry on from there
+            first, (_seen[w], last) = False, kept
+            # a whole read of trades all made since a while before its last round: there may be more in between
+            if len(d.trades) >= LIVE_TRADES and min(t.at.timestamp() for t in d.trades) > last - ALERT_MAX_AGE_S:
+                try:  # more trades while it was down than one read holds: further back, so none is missed
+                    d = TraderDetail(d.trader, d.visibility, d.stats, d.positions,
+                                     reads.whales.trades("polymarket", w, limit=LIVE_GAP_TRADES))  # fmt: skip
+                except VenueError:
+                    pass
+        seen = _seen.setdefault(w, set())
+        looked[w] = list(d.trades)
         new = [t for t in d.trades if t.trade_id not in seen]
         seen.update(t.trade_id for t in d.trades)
         if len(seen) > 2000:
@@ -2803,6 +2865,7 @@ def alert_pass(now: float | None = None) -> int:
             if _send(uid, users[uid]["chat"], "sell", sell.text, trader=sell.wallet, outcome=sell.outcome,
                      trade_at=sell.at, stop=sell.wallet):  # fmt: skip
                 sent += 1
+    _seen_keep(looked, set(to), now)
     return sent + whale_pass(users, now)
 
 
@@ -2839,13 +2902,25 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
         return 0
     rows = [t for t in rows if t.venue == "polymarket" and t.action == "buy" and t.trader and t.usd >= WHALE_USD]
     seen: set[str] = _whale["seen"]
+    if not _whale["started"] and (kept := _seen_load(BIG_TRADES_KEY)) is not None:  # carry on after a restart
+        _whale["started"] = True
+        seen |= kept[0]
     new = [t for t in rows if t.trade_id not in seen and now - t.at.timestamp() <= ALERT_MAX_AGE_S]
     seen.update(t.trade_id for t in rows)
     if len(seen) > 5000:
         _whale["seen"] = {t.trade_id for t in rows}
     if not _whale["started"]:
         _whale["started"] = True
+        _seen_keep({BIG_TRADES_KEY: rows}, None, now)
         return 0
+    try:
+        return _whale_send(new, wants, now)
+    finally:
+        _seen_keep({BIG_TRADES_KEY: rows}, None, now)  # after they went out
+
+
+def _whale_send(new: list[WhaleTrade], wants: dict[str, dict[str, Any]], now: float) -> int:
+    """whale_pass's messages: each new big trade to everyone who picked its market and doesn't follow the trader."""
     try:
         cats = _categories([t.market for t in new]) if new else {}
     except VenueError:
