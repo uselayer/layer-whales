@@ -6,6 +6,7 @@ owner's /api/monitoring with its warnings (no network: reads are stand-ins)."""
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -107,7 +108,7 @@ def test_every_request_the_sdks_client_sends_is_counted_by_host_and_how_it_ended
         client.get("https://data-api.polymarket.com/down")
     client.get("https://api.telegram.org/ok")
     got = api_counts(u.since_launch("api_sent"), u.since_launch("api"))
-    assert got == {"data-api.polymarket.com": {"requests": 6, "2xx": 2, "429": 1, "4xx": 1, "5xx": 1, "error": 1},
+    assert got == {"data-api.polymarket.com": {"requests": 6, "2xx": 2, "429": 1, "404": 1, "503": 1, "error": 1},
                    "api.telegram.org": {"requests": 1, "2xx": 1, "error": 0}}  # fmt: skip
 
 
@@ -137,6 +138,7 @@ def test_the_sampler_counts_cpu_memory_and_the_volume(tmp_path: Any, monkeypatch
     u = Usage(clock=lambda: NOW)
     clock = iter([0.0, 60.0, 120.0])
     monkeypatch.setattr(monitoring, "_rss_bytes", lambda: monitoring.GB // 2)
+    monkeypatch.setattr(monitoring, "_container_bytes", lambda: None)  # not Linux: the process's own memory
     s = monitoring.Sampler(tmp_path, u, clock=lambda: next(clock))
     s.sample()
     s.sample()
@@ -148,7 +150,26 @@ def test_the_sampler_counts_cpu_memory_and_the_volume(tmp_path: Any, monkeypatch
 def test_the_bytes_the_engine_serves_are_counted(counts: Usage, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
     r = TestClient(engine.app).get("/favicon.ico")
-    assert r.status_code == 200 and counts.since_launch("infra")["egress_bytes"] == len(r.content)
+    assert r.status_code == 200 and counts.since_launch("infra")["served_bytes"] == len(r.content)
+
+
+def test_memory_is_the_containers_as_railway_bills_it_and_egress_every_byte_sent(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    dev = tmp_path / "dev"
+    dev.write_text("Inter-|   Receive  |  Transmit\n face |bytes packets errs drop fifo frame compressed multicast|bytes ...\n"
+                   "    lo: 900 9 0 0 0 0 0 0 5000 9 0 0 0 0 0 0\n  eth0: 100 1 0 0 0 0 0 0 2000 3 0 0 0 0 0 0\n")  # fmt: skip
+    assert monitoring._tx_bytes(str(dev)) == 2000  # loopback left out
+    sent = iter([2000, 2600, 2900])
+    monkeypatch.setattr(monitoring, "_tx_bytes", lambda: next(sent))
+    monkeypatch.setattr(monitoring, "_container_bytes", lambda: monitoring.GB)  # the file cache too
+    monkeypatch.setattr(monitoring, "_rss_bytes", lambda: monitoring.GB // 2)
+    u = Usage(clock=lambda: NOW)
+    clock = iter([0.0, 60.0, 120.0])
+    s = monitoring.Sampler(tmp_path, u, clock=lambda: next(clock))
+    s.sample()
+    s.sample()
+    infra = u.since_launch("infra")
+    assert infra["egress_bytes"] == 900 and infra["ram_gb_s"] == pytest.approx(120.0)
+    assert cost({"served_bytes": monitoring.GB})["egress"] == 0.05  # off Linux, the pages served stand in
 
 
 # ---- what the directory says ----
@@ -229,6 +250,8 @@ def test_the_report_has_every_part_in_counts_only(api: TestClient, counts: Usage
     counts.add("api", "data-api.polymarket.com 2xx", 9)
     counts.add("lane", "background", 4)
     counts.add("evaluated", "new:dormant", 3, at=time.time())
+    counts.add("evaluated_lane", "board:dormant", 2, at=time.time())
+    counts.add("evaluated_lane", "sample:dormant", 1, at=time.time())
     counts.add("infra", "cpu_s", 864, at=time.time())
     engine._monitor_flush()
     r = api.get("/api/monitoring?days=2").json()
@@ -238,6 +261,7 @@ def test_the_report_has_every_part_in_counts_only(api: TestClient, counts: Usage
     assert r["api"]["polymarket_reads_since_launch"] == {"background": 4, "feed_and_pages": 6}
     today = r["by_day"][0]
     assert today["screened"] == 3 and today["evaluated"] == {"dormant": 3}
+    assert today["evaluated_by_lane"] == {"board": {"dormant": 2}, "sample": {"dormant": 1}}
     assert today["infra"]["cost_usd"]["cpu"] == pytest.approx(864 / monitoring.MONTH_S * 20, abs=1e-4)
     assert all(w not in repr(r) for w in (AMY, BEN, CAL, DAN, EVE))
 
@@ -256,3 +280,54 @@ def test_the_report_is_the_owners_only(monkeypatch: pytest.MonkeyPatch, tmp_path
     c = TestClient(engine.app, client=("10.0.0.1", 50000))
     assert c.get("/api/monitoring").status_code == 404
     assert c.get("/api/monitoring", headers={"Authorization": "Bearer nope"}).status_code == 404
+
+
+def test_the_discovery_funnel_leads_the_report_in_explores_words(api: TestClient) -> None:
+    directory_of_five(engine.directory())
+    r = api.get("/api/monitoring?days=2").json()
+    assert list(r)[:3] == ["discovery_funnel", "health", "data"]
+    f = r["discovery_funnel"]
+    assert list(f["overall"]) == ["found", "screened", "scored", "passed_our_checks", "coverage", "yield"]
+    assert f["overall"]["coverage"] == {"screened_of_found": 0.8, "scored_of_screened": 0.75, "never_looked_at": 1}
+    y = f["overall"]["yield"]  # 1 of 3 scored passed: a wide range, and too few scored to know the yield
+    assert y["passed_of_scored"] == 0.3333 and y["yield_known"] is False
+    assert y["passed_of_scored_range"][0] < 0.3333 < y["passed_of_scored_range"][1]
+    assert set(f) >= {"by_source", "by_source_only", "by_first_source", "by_leaderboard", "by_best_rank", "by_category"}
+    assert f["by_source"]["market"]["found"] == 2 and "Sports" in f["by_category"]
+
+
+def test_days_before_live_counting_say_not_counted_rather_than_zero(api: TestClient, counts: Usage) -> None:
+    directory_of_five(engine.directory())  # wallets found days ago: history, from directory.db
+    counts.add("evaluated", "new:dormant", 1, at=time.time())
+    engine._monitor_flush()
+    days = api.get("/api/monitoring?days=4").json()["by_day"]
+    assert days[0]["live_counts"] is True and days[0]["screened"] == 1
+    assert all(d["live_counts"] is False and d["screened"] is None and d["api"] is None for d in days[1:])
+    assert sum(d["new_wallets"] for d in days) >= 3  # history is there for every day
+
+
+def test_a_sweep_a_restart_cut_off_says_so_and_errors_leave_addresses_out(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    d = engine.directory()
+    d.sweep_finished(d.sweep_started(at=time.time() - 7200), error=f"VenueError: GET /positions?user={AMY} failed")
+    d.sweep_started(at=time.time() - 3600)  # cut off: never finished
+    monkeypatch.setitem(engine._directory_state, "running", False)
+    r = api.get("/api/monitoring?days=1").json()
+    assert [s["status"] for s in r["sweeps"]] == ["cut_off_by_restart", "failed"]
+    assert AMY not in repr(r) and "user=0x…" in r["sweeps"][1]["error"]
+
+
+def test_a_deploy_stopping_the_app_isnt_a_failed_try(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
+
+    class Shutdown:
+        def trades(self, *a: Any, **k: Any) -> Any:
+            raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+
+    monkeypatch.setattr(engine, "background", lambda: Shutdown())
+    engine.directory().add([Seen(AMY, "search")])
+    stop = threading.Event()
+    stop.set()
+    monkeypatch.setattr(engine, "_directory_stop", stop)
+    with pytest.raises(RuntimeError):
+        engine.evaluate_one({"wallet": AMY, "kind": "new", "scored_at": None, "on_leaderboard": False})
+    assert engine.directory().wallet(AMY)["status"] == "found"  # type: ignore[index]  # still due, not "failed"
