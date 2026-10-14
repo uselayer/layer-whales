@@ -2208,16 +2208,20 @@ def connect_telegram(response: Response, uid: str = Depends(signed_in)) -> dict[
 
 class TelegramError(RuntimeError):
     """A Telegram Bot API call that failed, in Telegram's own words (never the token). ``code``: its error code
-    (None when it didn't answer at all); ``retry_after``: how long it asked us to wait, if it did."""
+    (None when it never got the request); ``retry_after``: how long it asked us to wait, if it did;
+    ``maybe_sent``: whether it may have done what was asked anyway (a 5xx, or the request went out and no answer
+    came back): Telegram can't tell a repeat, so that one is never asked again."""
 
-    def __init__(self, message: str, code: int | None = None, retry_after: float | None = None) -> None:
+    def __init__(self, message: str, code: int | None = None, retry_after: float | None = None,
+                 maybe_sent: bool = False) -> None:  # fmt: skip
         super().__init__(message)
-        self.code, self.retry_after = code, retry_after
+        self.code, self.retry_after, self.maybe_sent = code, retry_after, maybe_sent
 
     @property
     def temporary(self) -> bool:
-        """Worth trying again: no answer, too many requests (429), or Telegram's own trouble (5xx)."""
-        return self.code is None or self.code == 429 or self.code >= 500
+        """Safe to try again: Telegram surely didn't take it, and later may work (it never got the request, or it
+        said too many requests, 429)."""
+        return not self.maybe_sent and (self.code is None or self.code == 429)
 
     @property
     def chat_gone(self) -> bool:
@@ -2226,25 +2230,36 @@ class TelegramError(RuntimeError):
 
 
 def tg(method: str, **params: Any) -> Any:
-    """One Telegram Bot API call. A failure raises TelegramError with Telegram's own words, never the token."""
+    """One Telegram Bot API call. A failure raises TelegramError with Telegram's own words, never the token, saying
+    whether Telegram may have done it anyway: urllib wraps a failure to connect or to send the request in URLError
+    (it never got it), and raises one while waiting for or reading the answer as it is (it may have)."""
     req = urllib.request.Request(f"https://api.telegram.org/bot{TG_TOKEN}/{method}", data=json.dumps(params).encode(),
                                  headers={"content-type": "application/json"})  # fmt: skip
     code = None
     try:
         with urllib.request.urlopen(req, timeout=float(params.get("timeout", 0)) + 15) as r:
-            body = json.loads(r.read())
+            raw = r.read()
     except urllib.error.HTTPError as e:
         code = e.code
         try:
             body = json.loads(e.read())
-        except ValueError:
+        except (ValueError, OSError):
             body = {"description": f"HTTP {e.code}"}
-    except OSError as e:  # no answer: URLError, a timeout, a dropped connection
-        raise TelegramError(f"Telegram didn't answer ({type(e).__name__})") from None
+    except urllib.error.URLError as e:  # couldn't connect, or couldn't send the request: Telegram never got it
+        raise TelegramError(f"Telegram couldn't be reached ({type(e.reason).__name__})") from None
+    except OSError as e:  # the request went out and no answer came back (a timeout, a dropped connection)
+        raise TelegramError(f"Telegram didn't answer ({type(e).__name__})", maybe_sent=True) from None
+    else:
+        try:
+            body = json.loads(raw)
+        except ValueError:  # it answered 200 in a way we can't read: it may well have done it
+            raise TelegramError("Telegram's answer couldn't be read", maybe_sent=True) from None
     if not body.get("ok"):
         wait = (body.get("parameters") or {}).get("retry_after")
-        raise TelegramError(f"Telegram: {body.get('description') or 'refused'}", body.get("error_code") or code,
-                            float(wait) if isinstance(wait, int | float) else None)  # fmt: skip
+        err_code = body.get("error_code") or code
+        raise TelegramError(f"Telegram: {body.get('description') or 'refused'}", err_code,
+                            float(wait) if isinstance(wait, int | float) else None,
+                            maybe_sent=isinstance(err_code, int) and err_code >= 500)  # fmt: skip
     return body.get("result")
 
 
@@ -2490,10 +2505,12 @@ def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, tra
     (its links can name it). ``trade_at``: when the alert's buys began (a group's first buy); ``trigger_at``: when
     the buy that sent it was made (defaults to ``trade_at``).
 
-    At most once, never twice, across any crash: the alert is kept (queued, with its message) before Telegram is
-    asked and marked sending just before it is, so after a restart a queued one is sent and one caught mid-request
-    is left as unknown, never asked again (Telegram can't tell a repeat). A temporary failure is tried again
-    (_retry_due); a refusal for good is failed, and a chat that's gone is disconnected (_chat_gone)."""
+    Never twice, across any crash or failure (Telegram can't tell a repeat): the alert is kept (queued, with its
+    message) before Telegram is asked and marked sending just before it is. Tried again only when Telegram surely
+    didn't take it (it was never reached, or it said 429: TelegramError.temporary): after a restart a queued one is
+    sent. When it may have (a 5xx, no answer once the request went out, the engine stopping mid-request) it's
+    recorded as unknown, with why, and never asked again: not silently lost, not sent twice. A refusal for good is
+    failed, and a chat that's gone is disconnected (_chat_gone)."""
     if _sent_today(uid) >= DAILY_CAP:
         if not _sent_today(uid, ("cap",)):
             try:
@@ -2532,7 +2549,9 @@ def _attempt(aid: str, now: float | None = None) -> bool:
     except RuntimeError as e:
         err = e if isinstance(e, TelegramError) else TelegramError(str(e))
         wait = err.retry_after if err.retry_after is not None else RETRY_S[min(tries, len(RETRY_S) - 1)]
-        if err.chat_gone:
+        if err.maybe_sent:  # it may have reached the chat: asking again could send it twice, so it's left as unknown
+            state = "unknown"
+        elif err.chat_gone:
             state = "failed"
             _chat_gone(uid, chat)
         elif err.temporary and now + wait - (queued_at or now) <= ALERT_MAX_AGE_S:
@@ -2560,7 +2579,8 @@ def _retry_due(now: float | None = None) -> int:
     now = time.time() if now is None else now
     with _db() as con:
         if not _retry_state["started"]:
-            con.execute("UPDATE alerts SET state = 'unknown' WHERE state = 'sending'")
+            con.execute("UPDATE alerts SET state = 'unknown', error = 'the engine stopped while asking Telegram'"
+                        " WHERE state = 'sending'")  # fmt: skip
             con.execute("UPDATE alerts SET next_at = ? WHERE state = 'queued'", (now,))
             _retry_state["started"] = True
         con.execute("UPDATE alerts SET state = 'failed', error = COALESCE(error, '') || ' (too late to send)'"

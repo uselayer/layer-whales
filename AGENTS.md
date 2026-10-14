@@ -80,9 +80,11 @@ behind Vercel (see README, "Hosting").
   now is settled (2¢ or less, 98¢ or more), or a sell's price is. A restart (a deploy) neither skips nor repeats one:
   what each round looked at is kept in alerts.db (`watched`, `seen_trades`), so a trade made while it was down is
   alerted once after; only a new follow's existing trades are just noted. Delivery (`_send`, `_attempt`): each
-  alert is kept with its message before Telegram is asked, so at most once across any crash; a temporary failure
-  (429, 5xx, no answer) is tried again after Telegram's wait or 30 s, 1, 2, 4 min, for up to 30 minutes, after a
-  restart too; a refusal fails it, and a chat that blocked the bot is disconnected. At most
+  alert is kept with its message before Telegram is asked, and never sent twice. It's tried again (after Telegram's
+  wait or 30 s, 1, 2, 4 min, for up to 30 minutes, after a restart too) only when Telegram surely didn't take it:
+  it was never reached, or it said 429. When it may have (a 5xx, no answer once the request went out, the engine
+  stopping mid-request) it's recorded as unknown, with why, never asked again. A refusal fails it, and a chat that
+  blocked the bot is disconnected. At most
   20 alerts per person per UTC day, then one "You've reached today's alert limit; more tomorrow" and nothing until
   the next day. When 2+ traders you follow buy the same outcome, each within 6 hours of the one before (1 hour in
   Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the price now, how

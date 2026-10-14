@@ -4,6 +4,7 @@ Useful / Not useful, saved interests and big-trade alerts. No network: Telegram 
 from __future__ import annotations
 
 import base64
+import json
 import time
 import urllib.parse
 from datetime import UTC, datetime, timedelta
@@ -988,8 +989,7 @@ def _one_alert(monkeypatch: pytest.MonkeyPatch, tg: Any) -> str | None:
 
 @pytest.mark.parametrize("error, wait", [
     (engine.TelegramError("Telegram: Too Many Requests: retry after 7", 429, 7.0), 7.0),  # as long as it asks
-    (engine.TelegramError("Telegram: Bad Gateway", 502), engine.RETRY_S[0]),
-    (engine.TelegramError("Telegram didn't answer (TimeoutError)"), engine.RETRY_S[0]),  # no answer at all
+    (engine.TelegramError("Telegram couldn't be reached (ConnectionRefusedError)"), engine.RETRY_S[0]),  # never got it
 ])  # fmt: skip
 def test_a_temporary_failure_is_tried_again_after_a_wait_and_sent_once(
     api: TestClient, monkeypatch: pytest.MonkeyPatch, error: Exception, wait: float
@@ -1009,7 +1009,7 @@ def test_a_temporary_failure_is_tried_again_after_a_wait_and_sent_once(
 
 
 def test_a_waiting_alert_survives_a_restart_and_is_sent_once_after(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    tg = FlakyTelegram(engine.TelegramError("Telegram: Internal Server Error", 500))
+    tg = FlakyTelegram(engine.TelegramError("Telegram: Too Many Requests: retry after 20", 429, 20.0))
     _one_alert(monkeypatch, tg)
     restart(monkeypatch)
     assert engine._retry_due(time.time() + 31) == 1  # its message was kept: sent as it was meant
@@ -1021,7 +1021,7 @@ def test_a_waiting_alert_survives_a_restart_and_is_sent_once_after(api: TestClie
 def test_a_retry_that_would_arrive_too_late_fails_and_frees_its_place_in_the_cap(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    tg = FlakyTelegram(engine.TelegramError("Telegram: Bad Gateway", 502), failures=99)
+    tg = FlakyTelegram(engine.TelegramError("Telegram couldn't be reached (gaierror)"), failures=99)
     _one_alert(monkeypatch, tg)
     assert engine._sent_today("user_1") == 1  # on its way: it counts
     t0 = t = time.time()
@@ -1032,6 +1032,92 @@ def test_a_retry_that_would_arrive_too_late_fails_and_frees_its_place_in_the_cap
         state, err = con.execute("SELECT state, error FROM alerts").fetchone()
     assert state == "failed" and "too late" in err and tg.sent == []  # never more than 30 minutes after: not news
     assert engine._sent_today("user_1") == 0  # it never went out: today's 20 are still all there
+
+
+@pytest.mark.parametrize("error", [
+    engine.TelegramError("Telegram: Bad Gateway", 502, maybe_sent=True),
+    engine.TelegramError("Telegram didn't answer (TimeoutError)", maybe_sent=True),  # the request went out
+    engine.TelegramError("Telegram's answer couldn't be read", maybe_sent=True),
+])  # fmt: skip
+def test_when_telegram_may_have_taken_it_its_recorded_as_unknown_never_sent_again(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    """A 5xx, or no answer after the request went out: it may be in the chat already, and Telegram can't tell a
+    repeat. So it's never asked again (no duplicate), and it's recorded as unknown with why (not silently lost);
+    it counts toward the day's 20, as it may have arrived."""
+    tg = FlakyTelegram(error)
+    assert _one_alert(monkeypatch, tg) is None
+    with engine._db() as con:
+        state, err = con.execute("SELECT state, error FROM alerts").fetchone()
+    assert state == "unknown" and err == str(error)
+    assert engine._retry_due(time.time() + 3600) == 0 and tg.tried == 1  # never asked again
+    assert engine._sent_today("user_1") == 1
+    d = _owner_metrics(monkeypatch)["alerts"]["delivery"]
+    assert (d["unknown"], d["sent"], d["failed"], d["waiting"]) == (1, 0, 0, 0)
+
+
+def test_tg_says_whether_telegram_may_have_taken_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """How each way a call can fail is read: urllib wraps a failure to connect or send in URLError (Telegram never
+    got it: safe to try again), and raises one while waiting for the answer as it is (it may have: never again)."""
+    import io
+    import socket
+    import urllib.error
+
+    real = engine.tg  # the fixture-free module function
+
+    def failing(exc: BaseException | None = None, body: bytes = b"") -> Any:
+        def urlopen(req: Any, timeout: float = 0) -> Any:
+            if exc is not None:
+                raise exc
+            return io.BytesIO(body)
+        return urlopen
+
+    def http(code: int, body: dict[str, Any]) -> urllib.error.HTTPError:
+        return urllib.error.HTTPError("u", code, "x", {}, io.BytesIO(json.dumps(body).encode()))  # type: ignore[arg-type]
+
+    cases = {
+        "refused": urllib.error.URLError(ConnectionRefusedError()),
+        "dns": urllib.error.URLError(socket.gaierror()),
+        "connect timeout": urllib.error.URLError(TimeoutError()),
+        "read timeout": TimeoutError(),
+        "reset after send": ConnectionResetError(),
+        "429": http(429, {"ok": False, "error_code": 429, "description": "Too Many Requests: retry after 9",
+                          "parameters": {"retry_after": 9}}),  # fmt: skip
+        "502": http(502, {"ok": False, "error_code": 502, "description": "Bad Gateway"}),
+        "403": http(403, {"ok": False, "error_code": 403, "description": "Forbidden: bot was blocked by the user"}),
+        "400": http(400, {"ok": False, "error_code": 400, "description": "Bad Request: can't parse entities"}),
+    }
+    got = {}
+    for name, exc in cases.items():
+        monkeypatch.setattr(engine.urllib.request, "urlopen", failing(exc))
+        with pytest.raises(engine.TelegramError) as e:
+            real("sendMessage", chat_id="1", text="x")
+        got[name] = (e.value.temporary, e.value.maybe_sent, e.value.chat_gone, e.value.retry_after)
+    monkeypatch.setattr(engine.urllib.request, "urlopen", lambda req, timeout=0: _Ctx(b"<html>oops</html>"))
+    with pytest.raises(engine.TelegramError) as e:
+        real("sendMessage", chat_id="1", text="x")
+    got["200 unreadable"] = (e.value.temporary, e.value.maybe_sent, e.value.chat_gone, e.value.retry_after)
+    #                    try again, may have sent, chat gone, wait
+    assert got == {"refused": (True, False, False, None), "dns": (True, False, False, None),
+                   "connect timeout": (True, False, False, None),
+                   "read timeout": (False, True, False, None), "reset after send": (False, True, False, None),
+                   "429": (True, False, False, 9.0), "502": (False, True, False, None),
+                   "403": (False, False, True, None), "400": (False, False, False, None),
+                   "200 unreadable": (False, True, False, None)}  # fmt: skip
+
+
+class _Ctx:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self) -> Any:
+        return self
+
+    def __exit__(self, *a: Any) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self.body
 
 
 def test_a_chat_that_blocked_the_bot_is_disconnected_not_retried(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
