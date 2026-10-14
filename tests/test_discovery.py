@@ -170,16 +170,18 @@ def test_the_latest_score_is_shown_whoever_worked_it_out(api: TestClient) -> Non
     assert (s["segment"], s["section"], s["via"]) == ("no_edge", None, "background")
 
 
-def test_a_score_kept_by_an_older_uselayer_waits_to_be_scored_again(api: TestClient) -> None:
-    # tiered here by today's rules it could say Rising while the directory (Explore, the evaluation) says
-    # "Edge not proven": left out until it's scored again, so both always say the same
-    old = score(AMY, "no_edge", format=7)
-    assert segment_of(old) != "no_edge"  # today's rules would re-tier it
-    scored(old, score(BEN, "rising"))
-    assert wallets(api) == [BEN]
-    assert api.get("/api/discovery").json()["pool"]["older_format_left_out"] == 1
+def test_an_older_score_is_shown_only_when_todays_rules_give_it_the_tier_the_directory_kept(api: TestClient) -> None:
+    # re-tiered by today's rules it could say Rising while the directory (Explore, the evaluation) says "Edge not
+    # proven": left out until it's scored again, so both always say the same
+    differs = score(AMY, "no_edge", format=7)
+    assert segment_of(differs) != "no_edge"
+    agrees = score(CAL, "no_edge", format=8)
+    agrees["segment"] = segment_of(agrees)  # an older score today's rules tier the same: shown as it is
+    scored(differs, agrees, score(BEN, "proven", z=3.0))
+    assert wallets(api) == [BEN, CAL]
+    assert api.get("/api/discovery").json()["pool"]["tier_differs_left_out"] == 1
     scored(score(AMY, "no_edge"), at=NOW - 60)  # the evaluation scores it again
-    assert wallets(api) == [BEN, AMY] and result(api)["scores"][1]["segment"] == "no_edge"
+    assert AMY in wallets(api) and next(s for s in result(api)["scores"] if s["wallet"] == AMY)["segment"] == "no_edge"
 
 
 def test_a_trader_without_a_username_takes_the_one_the_directory_saw(api: TestClient) -> None:
@@ -269,7 +271,7 @@ def test_the_owner_sees_the_check_and_the_directory_compared(api: TestClient, mo
     assert d["scored_by"] == {"background": 2, "page": 1, "check": 1} and d["recommended_on_no_board"] == 1
     assert d["recommended_by_category"] == {"Sports": 2} and d["recommended_older_than_12h"] == 0
     assert d["age_hours"]["newest"] == pytest.approx(2.0, abs=0.1) and d["age_hours"]["oldest"] == pytest.approx(4.0, abs=0.1)
-    assert r["pool"] == {"scores": 4, "older_format_left_out": 0, "recommended": 2, "recommended_over_limit": 0, "seen_on_any_board": 1, "recommended_seen_on_any_board": 1,
+    assert r["pool"] == {"scores": 4, "tier_differs_left_out": 0, "recommended": 2, "recommended_over_limit": 0, "seen_on_any_board": 1, "recommended_seen_on_any_board": 1,
                          "scored_by": {"background": 2, "page": 1, "check": 1}, "recommended_by_category": {"Sports": 2}}  # fmt: skip
     assert r["by_interest"]["Sports"] == {"check": 2, "directory": 2} and r["by_interest"]["Esports"] == {"check": 0, "directory": 0}
     assert (r["flag"], r["serving"], r["error"]) == ("directory", "directory", None)
