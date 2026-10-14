@@ -6,6 +6,7 @@ owner's /api/monitoring with its warnings (no network: reads are stand-ins)."""
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -256,3 +257,50 @@ def test_the_report_is_the_owners_only(monkeypatch: pytest.MonkeyPatch, tmp_path
     c = TestClient(engine.app, client=("10.0.0.1", 50000))
     assert c.get("/api/monitoring").status_code == 404
     assert c.get("/api/monitoring", headers={"Authorization": "Bearer nope"}).status_code == 404
+
+
+def test_the_discovery_funnel_leads_the_report_in_explores_words(api: TestClient) -> None:
+    directory_of_five(engine.directory())
+    r = api.get("/api/monitoring?days=2").json()
+    assert list(r)[:3] == ["discovery_funnel", "health", "data"]
+    f = r["discovery_funnel"]
+    assert list(f["overall"]) == ["found", "screened", "scored", "passed_our_checks", "passed_per_1000_found"]
+    assert set(f) >= {"by_source", "by_source_only", "by_first_source", "by_leaderboard", "by_best_rank", "by_category"}
+    assert f["by_source"]["market"]["found"] == 2 and "Sports" in f["by_category"]
+
+
+def test_days_before_live_counting_say_not_counted_rather_than_zero(api: TestClient, counts: Usage) -> None:
+    directory_of_five(engine.directory())  # wallets found days ago: history, from directory.db
+    counts.add("evaluated", "new:dormant", 1, at=time.time())
+    engine._monitor_flush()
+    days = api.get("/api/monitoring?days=4").json()["by_day"]
+    assert days[0]["live_counts"] is True and days[0]["screened"] == 1
+    assert all(d["live_counts"] is False and d["screened"] is None and d["api"] is None for d in days[1:])
+    assert sum(d["new_wallets"] for d in days) >= 3  # history is there for every day
+
+
+def test_a_sweep_a_restart_cut_off_says_so_and_errors_leave_addresses_out(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    d = engine.directory()
+    d.sweep_finished(d.sweep_started(at=time.time() - 7200), error=f"VenueError: GET /positions?user={AMY} failed")
+    d.sweep_started(at=time.time() - 3600)  # cut off: never finished
+    monkeypatch.setitem(engine._directory_state, "running", False)
+    r = api.get("/api/monitoring?days=1").json()
+    assert [s["status"] for s in r["sweeps"]] == ["cut_off_by_restart", "failed"]
+    assert AMY not in repr(r) and "user=0x…" in r["sweeps"][1]["error"]
+
+
+def test_a_deploy_stopping_the_app_isnt_a_failed_try(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
+
+    class Shutdown:
+        def trades(self, *a: Any, **k: Any) -> Any:
+            raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+
+    monkeypatch.setattr(engine, "background", lambda: Shutdown())
+    engine.directory().add([Seen(AMY, "search")])
+    stop = threading.Event()
+    stop.set()
+    monkeypatch.setattr(engine, "_directory_stop", stop)
+    with pytest.raises(RuntimeError):
+        engine.evaluate_one({"wallet": AMY, "kind": "new", "scored_at": None, "on_leaderboard": False})
+    assert engine.directory().wallet(AMY)["status"] == "found"  # type: ignore[index]  # still due, not "failed"

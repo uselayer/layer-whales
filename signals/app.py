@@ -18,6 +18,7 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 import threading
 import time
 import urllib.error
@@ -723,6 +724,8 @@ def evaluate_one(item: dict[str, Any]) -> str:
                 return look.reason  # type: ignore[return-value]
         scored = background().score(w, on_leaderboard=item["on_leaderboard"]).to_dict()
     except Exception as e:  # VenueError mostly (the read's retries already spent)
+        if _directory_stop.is_set() or sys.is_finalizing():  # a deploy stopping the app, not the wallet: it stays due
+            raise
         d.score_failed(w, f"{type(e).__name__}: {e}")
         return "failed"
     d.keep_scores([_with_odds(scored) | {"format": WORTH_FORMAT}], "background")
@@ -1095,9 +1098,16 @@ def _monitor_loop() -> None:
 SCREENED_KINDS = ("new", "recheck")  # what the evaluation quick-checks first (recommended traders are rescored)
 
 
-def _day_view(day: dict[str, Any]) -> dict[str, Any]:
-    """One day of the report: the directory's facts, and its tallies turned into what they mean."""
+LIVE_FIELDS = ("screened", "screened_never_looked_at_before", "evaluated", "api", "polymarket_reads_by_budget", "infra")
+
+
+def _day_view(day: dict[str, Any], counted_from: str | None) -> dict[str, Any]:
+    """One day of the report: the directory's facts (``history``: rebuilt from what directory.db keeps), and its
+    tallies turned into what they mean (``live``: counted as it happened, from ``counted_from`` on; a day before
+    that has them as None, never counted, rather than 0)."""
     t = day.pop("tallies")
+    if counted_from is None or day["day"] < counted_from:
+        return day | dict.fromkeys(LIVE_FIELDS) | {"live_counts": False}
     evaluated: Counter[str] = Counter()
     screened = new_screened = 0
     for key, n in t.get("evaluated", {}).items():
@@ -1117,6 +1127,7 @@ def _day_view(day: dict[str, Any]) -> dict[str, Any]:
                   "peak_ram_mb": round(peaks["ram_bytes"] / 2**20) if "ram_bytes" in peaks else None,
                   "volume_gb": round(peaks["volume_bytes"] / monitoring.GB, 2) if "volume_bytes" in peaks else None,
                   "cost_usd": monitoring.cost(infra) if infra else None},  # fmt: skip
+        "live_counts": True,
     }  # fmt: skip
 
 
@@ -1139,7 +1150,7 @@ def _health(r: dict[str, Any], now: float) -> list[str]:
     if late is not None and late > 1:
         out.append(f"Rescoring traders people are shown is {late:.1f} h behind.")
     today = r["by_day"][0] if r["by_day"] else None
-    if today:
+    if today and today["live_counts"]:
         looked = sum(today["evaluated"].values())
         failed = today["evaluated"].get("failed", 0)
         if looked >= 20 and failed / looked > 0.1:
@@ -1152,6 +1163,49 @@ def _health(r: dict[str, Any], now: float) -> list[str]:
     out += [f"{what}: {errors[what]}" for what in ("discovery", "directory_writes", "feed", "monitoring") if errors[what]]
     if str(errors["leaderboards"] or "").startswith("stale"):  # "sweep" and "read" are fine
         out.append(f"leaderboards: {errors['leaderboards']}")
+    return [_scrub(x) for x in out]
+
+
+_ADDRESS = re.compile(r"0x[0-9a-fA-F]{6,}")
+
+
+def _scrub(text: Any) -> Any:
+    """An error as the report shows it: any wallet or market id in it (a URL's, mostly) left out."""
+    return _ADDRESS.sub("0x…", text) if isinstance(text, str) else text
+
+
+# The discovery funnel, in the words Explore uses: a wallet found, screened (a quick check or a score), scored (a
+# full score), passed our checks (a recommended tier, scored in the last 48 h). The report's own names, mapped.
+FUNNEL_STAGES = {"found": "found", "screened": "screened", "scored": "fully_evaluated", "passed_our_checks": "qualified"}
+
+
+def _stages(f: dict[str, Any]) -> dict[str, Any]:
+    return {k: f[v] for k, v in FUNNEL_STAGES.items()} | {"passed_per_1000_found": f["qualified_per_1000_found"]}
+
+
+def _discovery_funnel(r: dict[str, Any]) -> dict[str, Any]:
+    """found → screened → scored → passed our checks: overall, by where wallets were seen (and seen only there, and
+    first found), by best leaderboard rank, and by category."""
+    src = r["sources"]
+    return {
+        "stages": "found → screened (a quick check or a score) → scored → passed our checks (a recommended tier, "
+                  "scored in the last 48 h)",
+        "overall": _stages(r["funnel"]),
+        **{f"by_{k}": {s: _stages(v) for s, v in src[part].items()} for k, part in (
+            ("source", "seen_in"), ("source_only", "only_seen_in"), ("first_source", "first_found_by"),
+            ("leaderboard", "leaderboards"), ("best_rank", "best_rank"))},
+        "by_category": {c: _stages(v) for c, v in r["by_category"].items()},
+    }  # fmt: skip
+
+
+def _sweep_status(sweeps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Each sweep with how it ended: finished, failed, running (the latest, while the sweep runs), or cut off by a
+    restart (a deploy: it never got to say; the next sweep picked up from the board it was on)."""
+    out = []
+    for i, s in enumerate(sweeps):
+        status = ("failed" if s["error"] else "finished") if s["finished"] is not None else (
+            "running" if i == 0 and _directory_state["running"] else "cut_off_by_restart")  # fmt: skip
+        out.append(s | {"status": status, "error": _scrub(s["error"])})
     return out
 
 
@@ -1161,11 +1215,16 @@ def monitoring_report(days: int = 14) -> dict[str, Any]:
     def build() -> dict[str, Any]:
         t0, now = time.monotonic(), time.time()
         r = directory().monitoring(presented_wallets(), days, now)
-        r["by_day"] = [_day_view(d) for d in r["by_day"]]
+        r["by_day"] = [_day_view(d, r["counted_from"]) for d in r["by_day"]]
+        r["sweeps"] = _sweep_status(r["sweeps"])
+        r["failures"]["why"] = {_scrub(k): n for k, n in r["failures"]["why"].items()}
         launch = {m: monitoring.usage.since_launch(m) for m in ("api_sent", "api", "lane", "infra")}
         poly_reads = sum(n for h, n in launch["api_sent"].items() if h in POLYMARKET_HOSTS)
         lanes = {k: int(v) for k, v in launch["lane"].items()}
         full = r["by_day"][1] if len(r["by_day"]) > 1 else None  # yesterday: the last whole day
+        # None until a whole day was counted (the first day counted is partial: counting began partway through it)
+        whole = full is not None and r["counted_from"] is not None and full["day"] > r["counted_from"]
+        full_cost = full["infra"]["cost_usd"] if whole else None  # type: ignore[index]
         sampler = _monitor_state["sampler"]
         r["api"] = {
             "since_launch": monitoring.api_counts(launch["api_sent"], launch["api"]),
@@ -1174,27 +1233,38 @@ def monitoring_report(days: int = 14) -> dict[str, Any]:
             "budgets": {"background": _background["budget"].state() if "budget" in _background else None,
                         "check": _check_budget.state()},  # fmt: skip
             "feed": feed_stats(),
-            "errors": {"sweep": (directory().last_error() or {}).get("error"), "evaluation": _evaluate_state["error"],
-                       "leaderboards": _evaluate_state["leaderboards"], "discovery": _discovery_state["error"],
-                       "directory_writes": _directory_state.get("note_error"), "feed": _worth.get("live_error"),
-                       "monitoring": _monitor_state["error"]},  # fmt: skip
+            "errors": {k: _scrub(v) for k, v in {
+                "sweep": (directory().last_error() or {}).get("error"), "evaluation": _evaluate_state["error"],
+                "leaderboards": _evaluate_state["leaderboards"], "discovery": _discovery_state["error"],
+                "directory_writes": _directory_state.get("note_error"), "feed": _worth.get("live_error"),
+                "monitoring": _monitor_state["error"]}.items()},  # fmt: skip
         }
         r["infrastructure"] = {
             "uptime_h": round((now - monitoring.usage.started) / 3600, 1),
             "now": sampler.now() if sampler else None,
             "since_launch_usd": monitoring.cost(launch["infra"]),
-            "last_full_day_usd": full["infra"]["cost_usd"] if full else None,
-            "month_at_last_full_day_usd": round(full["infra"]["cost_usd"]["total"] * 30, 2)
-            if full and full["infra"]["cost_usd"] else None,
+            "last_full_day_usd": full_cost,
+            "month_at_last_full_day_usd": round(full_cost["total"] * 30, 2) if full_cost else None,
             "rates": monitoring.RATES,
             "note": "An estimate of the engine's own Railway usage at list prices; Railway's usage page is the bill. "
                     "Vercel, Clerk and PostHog aren't included.",
         }  # fmt: skip
         r["flags"] = {"directory": DIRECTORY_ON, "evaluate": EVALUATE_ON, "discovery": DISCOVERY}
         r["health"] = _health(r, now)
+        # which numbers go back as far as directory.db does, and which were only counted from Phase 6 on
+        r["data"] = {
+            "history": "Rebuilt from what directory.db keeps, back to when the directory began (2026-10-13): the "
+                       "funnel, categories, sources, each day's new wallets and scores, freshness, failures, sweeps.",
+            "live": "Counted as it happens since monitoring shipped (counted_from; that first day is partial): each "
+                    "day's screened wallets and evaluation outcomes, requests, reads by budget, CPU, memory, volume, "
+                    "egress and cost. A day before counted_from has them as null (not counted), never 0.",
+            "since_launch": "api.since_launch, api.polymarket_reads_since_launch and infrastructure.since_launch_usd "
+                            "start again at each restart (infrastructure.uptime_h).",
+            "counted_from": r["counted_from"],
+        }  # fmt: skip
         r["as_of"] = datetime.fromtimestamp(now, UTC).isoformat()
         r["took_s"] = round(time.monotonic() - t0, 2)
-        return r
+        return {"discovery_funnel": _discovery_funnel(r), "health": r.pop("health"), "data": r.pop("data")} | r
 
     return cached(f"monitoring:{days}", MONITOR_TTL_S, build)  # type: ignore[no-any-return]
 
