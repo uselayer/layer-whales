@@ -313,28 +313,56 @@ def test_the_page_says_unknown_for_what_we_never_read(run_js: Any) -> None:
     assert run_js(("boardText",), 'boardText("VOL ALL OVERALL", 1500)') == "#1,500 on the all-time volume board"
 
 
-def test_a_passed_row_says_profit_skill_and_copying_as_three_answers(run_js: Any) -> None:
-    got = run_js(("pl", "usd", "centsSigned", "passedFacts"),
-                 'passedFacts({trading_pnl_window: 4200, edge: 0.03, edge_z: 2.44, bets_checked: 31, copy_label: "Copy not proven"})')
-    assert got == ["profit, 30 days +$4.2K", "skill: price +3¢ their way after buying (z 2.4), 31 bets", "copying: Copy not proven"]
-    unknown = run_js(("pl", "usd", "centsSigned", "passedFacts"), "passedFacts({})")
-    assert unknown == ["profit unknown", "skill: unknown bets checked", "copying: unknown"]  # never a made-up 0
 
 
-def test_picking_whales_sets_its_filters_and_leaving_puts_the_others_back(run_js: Any) -> None:
-    got = run_js(("ex", "EX_WHALES", "exBefore", "exPick"), """(() => {
-      Object.assign(ex, { group: "checked", active: 7, size: 100, sort: "new" });
-      exPick("whales"); const whale = { ...ex };
-      exPick("limited");
-      return [[whale.group, whale.active, whale.size, whale.sort], [ex.group, ex.active, ex.size, ex.sort]];
+STATS = ("usd", "pl", "centsSigned", "ago", "exCount", "exStats")
+
+
+def kv(stats: list[dict[str, Any]]) -> list[list[Any]]:
+    return [[x["k"], x["v"], x.get("sub")] for x in stats]
+
+
+def test_a_passed_row_keeps_profit_the_price_move_and_copying_apart_and_leaves_the_z_to_their_page(run_js: Any) -> None:
+    row = '{group: "passed", trading_pnl_window: 4200, edge: 0.031, edge_z: 2.44, bets_checked: 31, copy_label: "Copy not proven"}'
+    got = run_js(STATS, f"exStats({row})")
+    assert kv(got) == [["Profit, 30d", "+$4.2K", None], ["Price after buys", "+3.1¢", "31 bets"], ["Copying", "Copy not proven", None]]
+    assert "2.4" not in str(got)  # the z is on their page, not the row
+    unknown = run_js(STATS, 'exStats({group: "passed"})')
+    assert [x["v"] for x in unknown] == ["unknown", "unknown", "unknown"]  # never a made-up 0
+
+
+def test_each_group_shows_figures_for_what_its_for(run_js: Any) -> None:
+    quick = '{group: "limited", evidence: "quick", market_usd: 12000, buys_30d: 5, evidence_cut: true}'
+    assert kv(run_js(STATS, f"exStats({quick})")) == [["Markets, 30d", "5+", None], ["Usual bet", "$12K", "a market"], ["Last trade", "unknown", None]]
+    checked = '{group: "checked", evidence: "scored", typical_usd: 50, bets_checked: 12}'
+    assert kv(run_js(STATS, f"exStats({checked})")) == [["Usual bet", "$50", "a trade"], ["Last trade", "unknown", None], ["Bets checked", "12", "30d"]]
+    # Whales: size and recency first, whatever the group; then profit when scored, a quick look's count when not
+    passed = '{group: "passed", typical_usd: 40000, trading_pnl_window: -900}'
+    assert kv(run_js(STATS, f"exStats({passed}, true)")) == [["Usual bet", "$40K", "a trade"], ["Last trade", "unknown", None], ["Profit, 30d", "−$900", None]]
+    assert kv(run_js(STATS, f"exStats({quick}, true)"))[2] == ["Markets, 30d", "5+", None]
+
+
+DEFAULTS = ("ex", "EX_DEFAULTS", "exDefaults", "EX_EMPTY", "exPick", "usd", "EX_CHIP", "exChips", "exChanged")
+
+
+def test_each_group_has_its_own_defaults_and_the_market_carries_across(run_js: Any) -> None:
+    got = run_js(DEFAULTS, """(() => {
+      const at = () => [ex.group, ex.active, ex.size, ex.sort, ex.category];
+      const out = [at(), exChips(), exChanged()];
+      ex.category = "Politics"; exPick("limited"); out.push(at(), exChips());
+      exPick("whales"); ex.board = "on"; out.push(at(), exChips(), exChanged());
+      return out;
     })()""")
-    assert got == [["whales", 30, 1000, "size"], ["limited", 7, 100, "new"]]
+    assert got[0] == ["whales", 30, 1000, "size", ""]  # Explore opens on Whales
+    assert got[1] == [["active", "Traded in 30 days"], ["size", "Bets $1K+"]] and got[2] is False  # what it shows, said
+    assert got[3] == ["limited", 0, 0, "recent", "Politics"] and got[4] == [["category", "Politics"]]
+    assert got[5] == ["whales", 30, 1000, "size", "Politics"]
+    assert got[6][-1] == ["board", "On a leaderboard"] and got[7] is True
 
 
-def test_every_whale_row_says_how_big_they_bet(run_js: Any) -> None:
-    names = ("pl", "usd", "centsSigned", "passedFacts", "exCount", "exFacts")
-    row = '{group: "passed", category: "Sports", typical_usd: 40000, trading_pnl_window: 4200, bets_checked: 31}'
-    assert "usually $40K a trade" in run_js(names, f"exFacts({row}, true)")
-    assert "usually $40K a trade" not in run_js(names, f"exFacts({row}, false)")  # Passed shows profit, skill, copying
-    quick = '{group: "limited", evidence: "quick", market_usd: 12000, buys_30d: 5, evidence_cut: false}'
-    assert run_js(names, f"exFacts({quick}, true)") == ["about $12K a market", "last trade unknown", "5 markets bought in 30 days"]
+def test_search_looks_through_every_trader_we_found_whatever_the_filters(run_js: Any) -> None:
+    url = run_js(("ex", "exSearching", "exQuery"), """(() => {
+      Object.assign(ex, { q: "sam", category: "Politics", board: "on" }); return exQuery();
+    })()""")
+    assert "q=sam" in url and "unchecked=1" in url
+    assert "category" not in url and "min_usd" not in url and "board" not in url and "active" not in url

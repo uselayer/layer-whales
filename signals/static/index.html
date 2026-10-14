@@ -289,9 +289,56 @@
   .tr-tabs { display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--line); }
   .tr-tabs a { padding: 8px 4px 10px; margin-right: 18px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .tr-tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--fg); }
-  .ex-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
-  .ex-row .facts { color: var(--muted); font-size: 13px; }
-  .ex-row .badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  /* Explore: search first, then the groups beside Filters and Sort, then rows of a few named figures */
+  .ex-search { position: relative; display: flex; align-items: center; margin: 0 0 14px; }
+  .ex-search svg { position: absolute; left: 16px; width: 18px; height: 18px; color: var(--faint); pointer-events: none; }
+  .ex-search input { box-sizing: border-box; width: 100%; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 14px; padding: 12px 16px 12px 44px; font: inherit; font-size: 16px; box-shadow: var(--shadow); }
+  .ex-search input::placeholder { color: var(--faint); }
+  .ex-search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .ex-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 10px; }
+  .ex-groups { display: inline-flex; background: var(--soft); border-radius: 999px; padding: 3px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .ex-groups::-webkit-scrollbar { display: none; }
+  .ex-groups button { flex: none; border: 0; background: none; padding: 6px 14px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .ex-groups button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .ex-groups .n, .ex-title .n { color: var(--faint); font-weight: 500; }
+  .ex-tools { display: flex; align-items: center; gap: 8px; }
+  .ex-tool { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .ex-tool svg { width: 15px; height: 15px; color: var(--muted); flex: none; }
+  .ex-tool .n { background: var(--accent); color: var(--on-accent); border-radius: 999px; font-size: 11.5px; min-width: 18px; padding: 1px 5px; text-align: center; box-sizing: border-box; }
+  .ex-sort select { border: 0; background: none; color: inherit; font: inherit; padding: 0; cursor: pointer; }
+  .ex-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+  .ex-chips .link { font-size: 13px; margin-left: 4px; }
+  .ex-chip { display: inline-flex; align-items: center; gap: 6px; border: 0; background: color-mix(in srgb, var(--accent) 10%, var(--card)); color: color-mix(in srgb, var(--accent) 85%, var(--fg)); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 13px; font-weight: 500; }
+  button.ex-chip { cursor: pointer; } .ex-chip span { opacity: .7; font-size: 15px; line-height: 1; }
+  .ex-about { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+  .ex-about .link { font-size: 13px; }
+  .ex-results { margin: 0; font-size: 14px; color: var(--muted); } .ex-results .link { font-size: 14px; }
+  .ex-title { margin: 0; justify-content: flex-start; gap: 8px; }
+
+  .ex-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) 384px 156px; grid-template-areas: "av who stats badges"; align-items: center; gap: 14px; padding: 14px 18px; border-top: 1px solid var(--line); color: inherit; }
+  .ex-row:first-child { border-top: 0; }
+  .ex-row:hover { background: var(--soft); }
+  .ex-row > .av { grid-area: av; }
+  .ex-who { grid-area: who; display: grid; gap: 3px; min-width: 0; }
+  .ex-sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ex-badges { grid-area: badges; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .ex-stats { grid-area: stats; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .ex-stat { display: grid; gap: 2px; min-width: 0; }
+  .ex-stat .k { font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ex-stat .v { font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .ex-stat .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .ex-stat .v.u { color: var(--faint); font-weight: 500; }
+  .ex-all { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 14px 18px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; color: inherit; }
+  .ex-all:hover { background: var(--soft); }
+  .ex-all > span:first-child { display: grid; gap: 2px; } .ex-all .muted { font-size: 13px; } .ex-all .n { color: var(--faint); font-weight: 500; margin-left: 4px; }
+  #sheet .ex-fset h3 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 18px 0 8px; }
+  .ex-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ex-opts button { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 7px 13px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .ex-opts button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .ex-factions { display: flex; justify-content: space-between; gap: 10px; margin-top: 22px; }
+  @media (max-width: 1040px) {
+    .ex-row { grid-template-columns: 40px minmax(0, 1fr) 330px auto; }
+  }
   .lb-board { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
   .lb-cols { display: grid; grid-template-columns: 28px minmax(0, 1fr) 180px 120px 96px 104px 116px 136px; gap: 12px; align-items: center; padding: 14px 18px; }
   .lb-groups { padding-block: 10px 0; background: var(--soft); font-size: 12px; color: var(--muted); font-weight: 500; }
@@ -483,6 +530,15 @@
     .trade-title { font-size: 18px; }
     .trow { grid-template-columns: 18px 36px minmax(0, 1fr) auto; gap: 10px; padding: 13px 14px; }
     .trow.norank { grid-template-columns: 36px minmax(0, 1fr) auto; }
+    .ex-row { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "av who badges" "stats stats stats"; gap: 10px; padding: 14px; align-items: start; }
+    .ex-stats { gap: 8px; padding-top: 2px; }
+    .ex-stat .v small { display: block; }
+    .ex-sub { white-space: normal; }
+    .ex-bar { flex-direction: column; align-items: stretch; }
+    .ex-groups { display: flex; }
+    .ex-groups button { flex: 1 0 auto; padding: 6px 12px; }
+    .ex-tools > * { flex: 1; justify-content: center; }
+    .ex-factions .btn { flex: 1; }
     .row { padding: 12px 14px; }
     .hero .big { font-size: 38px; }
     .th h1 { font-size: 22px; }
@@ -1451,6 +1507,7 @@ async function tradersPage(view) {
   const app = $("#app");
   if (view === "worth") { app.innerHTML = `${trTabs("worth")}<div id="tview">${skelRows(7)}</div>`; return worthView(); }
   if (view === "explore") { app.innerHTML = `${trTabs("explore")}<div id="tview">${skelRows(7)}</div>`; return exploreView(); }
+  if (view === "passed") { app.innerHTML = `${trTabs("worth")}<div id="tview">${skelRows(7)}</div>`; return passedView(); }
   app.innerHTML = `<a class="back" href="#/traders">← Traders</a><h2 class="h2" style="margin-top:0">Top profit</h2>
     <div id="tview">${skelRows(7)}</div>`;
   return topView(); // Big trades moved to the Feed (#/big)
@@ -1462,6 +1519,7 @@ const worthUrl = (picked) => picked?.length ? `/api/worth?markets=${encodeURICom
 async function worthView() {
   clearTimeout(worthTimer);
   const box = $("#tview");
+  if (exploreOn) api("/api/traders?group=passed").then((x) => { const n = x.counts?.passed ?? null; if (n !== passedCount) { passedCount = n; renderWorth(); } }).catch(() => {});
   let r;
   try { r = await api(worthUrl(interests)); } catch (e) { box.innerHTML = errorState(e.message); bindActions(box); return; }
   if (routeName() !== "traders:worth") return;
@@ -1533,9 +1591,9 @@ function renderWorth() {
   if (!box || !r || routeName() !== "traders:worth") return;
   const st = r.status, res = r.result;
   if (!res) {
-    box.innerHTML = st.running
+    box.innerHTML = (st.running
       ? emptyState("Checking traders", `Reading about 200 Polymarket traders' last 30 days of trades${st.total ? ` (${st.done} of ${st.total} done)` : ""}. The first check takes 20–30 minutes; after that the last result shows at once.`)
-      : emptyState("No traders checked yet", st.error ? esc(st.error) : "", `<button class="btn" id="wrefresh">Check traders</button>`);
+      : emptyState("No traders checked yet", st.error ? esc(st.error) : "", `<button class="btn" id="wrefresh">Check traders</button>`)) + passedLink();
     const b = $("#wrefresh"); if (b) b.onclick = async () => { await api("/api/worth/refresh", { method: "POST" }); worthView(); };
     return;
   }
@@ -1628,6 +1686,7 @@ function renderWorth() {
     ${sample ? `<p class="lb-note">Sample profit history (SIGNALS_MOCK=1): weeks in profit, trend and 7D/90D are made up here, to review the page. They never show on the hosted app.</p>` : ""}
     ${paused ? pausedNote(`We don't loosen the checks to fill this list. <button class="link" id="howpaused">Why it's paused</button>`) : ""}
     ${body}
+    ${passedLink()}
     <p class="lb-foot">${st.running ? `Checking again${st.total ? ` (${st.done} of ${st.total})` : ""}…` : `Checked ${plural(scores.length, "trader")} ${ago(res.finished)} · <button class="link" id="wrefresh">Check again</button>`}
       · <button class="link" id="how">How we pick traders</button>
       ${sort === "consistent" ? " · Most consistent ranks by weeks up out of the weeks they've traded (of the last 12), from 4 weeks" : ""}
@@ -1658,35 +1717,54 @@ function renderWorth() {
 }
 
 // ---- Explore: every trader the directory found somewhere public (SIGNALS_EXPLORE) ----
-// Four groups, never ranked: Passed our checks (a recommended tier from a score in the last 48 hours, with profit,
-// skill and copying as three separate answers), Limited evidence (too few bets to judge, from a quick look at their
-// trades or a full check), Checked (what a check found) and, only when asked for, Not checked yet (nothing measured).
-// Whales is a view across them: a usual bet of $1K or more, whatever our checks found, each row with its own label;
-// picking it sets its own filters (active in 30 days, biggest bet first) and leaving it puts the others' back.
-// The Recommended tab stays the check's own list.
-// A figure we haven't read shows as unknown, never 0; a count from a read that stopped early is "N+".
-const ex = { group: "passed", q: "", category: "", active: 0, size: 0, board: "", sort: "recent", unchecked: false, rows: [], more: false, offset: 0, counts: null, others: null };
+// Search first: a name or a wallet, across every trader we've found (filters don't apply to it). Then three groups,
+// never ranked: Whales (a usual bet of $1K or more, whatever our checks found, each row with its own label), Limited
+// evidence (too few bets to judge, from a quick look at their trades or a full check) and Checked (what a check
+// found); and, only when asked for in Filters, Not checked yet (nothing measured). Each group has its own defaults
+// (EX_DEFAULTS: Whales is active in 30 days, $1K+, biggest bet first); market and leaderboards carry across. Every
+// filter that narrows the list shows as a chip under the bar. Traders who pass our checks are Recommended's: its
+// list, and from it every one of them (#/traders/passed), however many the list has room for.
+// A row is a few figures, each with its name; a figure we haven't read shows as unknown, never 0; a count from a
+// read that stopped early is "N+". The price move after their buys is what we saw; the tier says whether it's more
+// than chance (the z and the checks are on their page).
+const ex = { group: "whales", q: "", category: "", active: 30, size: 1000, board: "", sort: "size", unchecked: false, rows: [], more: false, offset: 0, counts: null };
 const EX_GROUPS = [
-  ["passed", "Passed our checks", "Traders our directory found who pass the same checks as the Recommended list, scored in the last 48 hours. Profit, skill and copying are separate answers: passing on skill doesn't mean buying after them pays."],
+  ["whales", "Whales", "Big bettors, whatever our checks found. A big bet isn't a sign of skill: the label on each says what we found."],
   ["limited", "Limited evidence", "Too few bets in the last 30 days to judge their skill either way. Their record so far, not a recommendation."],
-  ["checked", "Checked", "We've looked at their trades: the label says what we found. Only the Recommended tab recommends anyone."],
-  ["whales", "Whales", "Big bettors: a usual bet of $1K or more, whatever our checks found. A big bet isn't a sign of skill: the label on each says what we found."],
-  ["unchecked", "Not checked yet", "Found on a leaderboard or trading in a market, and not looked at yet: nothing about them has been measured."],
+  ["checked", "Checked", "We've looked at their trades: the label says what we found. Only Recommended recommends anyone."],
+  ["unchecked", "Not checked yet", "Found on a leaderboard or trading in a market, not looked at yet: nothing about them has been measured."],
 ];
+const EX_DEFAULTS = { whales: { active: 30, size: 1000, sort: "size" } }; // any other group: any time, any size, recently active
+const exDefaults = (group) => EX_DEFAULTS[group] || { active: 0, size: 0, sort: "recent" };
 const EX_SORTS = [["recent", "Recently active"], ["size", "Biggest usual bet"], ["new", "Recently found"]];
-const EX_SIZES = [[0, "Any bet size"], [100, "Bets $100+"], [1000, "Bets $1K+"], [10000, "Bets $10K+"]];
-const EX_WHALES = { active: 30, size: 1000, sort: "size" }; // what picking Whales sets; its sizes start at $1K
-let exBefore = null; // the filters set before Whales, put back after it
+const EX_CATS = ["Politics", "Sports", "Crypto", "Esports", "Economy", "Culture", "Weather", "Tech", "Other"];
+// Filters: [key, title, options as [value, label]] (Whales' bet sizes start at its own $1K)
+const exFilters = (group) => [
+  ["category", "Market", [["", "Any"], ...EX_CATS.map((c) => [c, c])]],
+  ["active", "Last trade", [[0, "Any time"], [7, "This week"], [30, "30 days"], [90, "90 days"]]],
+  ["size", "Usual bet", [[0, "Any"], [100, "$100+"], [1000, "$1K+"], [10000, "$10K+"]].filter(([v]) => v >= (EX_DEFAULTS[group]?.size || 0))],
+  ["board", "Leaderboards", [["", "Either"], ["on", "On a leaderboard"], ["off", "Off them"]]],
+];
+// The chip a filter that narrows the list shows (null when it doesn't)
+const EX_CHIP = {
+  category: (v) => v || null,
+  active: (v) => v ? (v === 7 ? "Traded this week" : `Traded in ${v} days`) : null,
+  size: (v) => v ? `Bets ${usd(v)}+` : null,
+  board: (v) => v === "on" ? "On a leaderboard" : v === "off" ? "Off the leaderboards" : null,
+};
+const EX_EMPTY = { category: "", active: 0, size: 0, board: "" };
 function exPick(group) {
   if (group === ex.group) return;
-  if (group === "whales") { exBefore = { active: ex.active, size: ex.size, sort: ex.sort }; Object.assign(ex, EX_WHALES); }
-  else if (ex.group === "whales" && exBefore) { Object.assign(ex, exBefore); exBefore = null; }
+  Object.assign(ex, exDefaults(group)); // market and leaderboards carry across
   ex.group = group;
 }
-const EX_CATS = ["Politics", "Sports", "Crypto", "Esports", "Economy", "Culture", "Weather", "Tech", "Other"];
+const exChips = () => Object.keys(EX_CHIP).map((k) => [k, EX_CHIP[k](ex[k])]).filter(([, l]) => l);
+const exChanged = () => ["active", "size", "category", "board"].some((k) => ex[k] !== ({ ...EX_EMPTY, ...exDefaults(ex.group) })[k]);
 let exTimer = null, exOpen = null; // exOpen: the wallet a row was tapped for, so its page doesn't check it unasked
 // a count we read ("12"), one from a read that stopped early ("12+"), or one we never read ("unknown")
 const exCount = (n, cut) => n == null ? "unknown" : cut ? `${n}+` : String(n);
+// 18,398 → "18K", 6,326 → "6.3K"
+const compact = (n) => n == null ? "" : n < 1000 ? String(n) : `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, "")}K`;
 // "PNL MONTH POLITICS" #312 → "#312 on the monthly profit board, Politics"
 function boardText(place, rank) {
   const [order, period, cat] = String(place || "").split(" ");
@@ -1697,104 +1775,159 @@ function boardText(place, rank) {
 }
 const foundText = (r) => r.board ? `Found ${boardText(r.board.place, r.board.rank)}` : r.seen_in ? `Seen trading in “${r.seen_in}”`
   : r.first_source === "feed" ? "Seen in the Feed's big trades" : "Found by our checks";
-// The label of a row: what we know about them, and how we know it.
+// The label of a row: what our checks found.
 function exBadges(r) {
   if (r.group === "unchecked") return `<span class="tier t2">Not checked yet</span>`;
-  if (r.group === "passed") return `${tier(r.segment)}${r.on_recommended ? `<span class="tier t2">On Recommended</span>` : ""}`;
+  if (r.group === "passed") return tier(r.segment);
   if (r.group === "recommended") return `${tier(r.segment)}<span class="tier t2">Due for a recheck</span>`; // a search: older than 48 hours
-  if (r.group === "limited") return `<span class="tier t3">Limited evidence</span><span class="tier t2">${r.evidence === "quick" ? "Quick look" : "Checked"}</span>`;
-  if (r.evidence === "quick") return `<span class="tier t3">${r.not_recommended === "dormant" ? "Dormant" : "Not trading lately"}</span><span class="tier t2">Quick look</span>`;
+  if (r.group === "limited") return `<span class="tier t3">Limited evidence</span>`;
+  if (r.evidence === "quick") return `<span class="tier t3">${r.not_recommended === "dormant" ? "Dormant" : "Not trading lately"}</span>`;
   return tier(r.segment) || `<span class="tier t3">Checked</span>`;
 }
-// The facts under their name. Nothing for a wallet not checked yet but where it was found. In Whales (``whale``),
-// every row says how big they bet and when they last traded, first.
-function exFacts(r, whale = false) {
-  const unknown = "unknown";
-  const active = r.last_active ? `active ${ago(r.last_active * 1000)}` : "last trade unknown";
-  const size = r.typical_usd != null ? `usually ${usd(r.typical_usd)} a trade` : r.market_usd != null ? `about ${usd(r.market_usd)} a market` : `bet size ${unknown}`;
-  // not checked yet: where we found them, and a quick look's counts if one was read (its full check is to come)
-  if (r.group === "unchecked") return [r.category, ...(whale ? [size, active] : []), foundText(r), r.buys_30d != null ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days` : "nothing measured yet"].filter(Boolean);
-  // a recommended tier: profit, skill and copying, each its own answer, and when we last scored them
-  if (r.group === "passed" || r.group === "recommended") return [r.category, ...(whale ? [size] : []), active, ...passedFacts(r), r.scored_at ? `scored ${ago(r.scored_at * 1000)}` : null].filter(Boolean);
-  if (whale) return [r.category, size, active, r.evidence === "quick" ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days` : `${r.bets_checked ?? unknown} bets checked, 30 days`].filter(Boolean);
-  const bets = r.evidence === "quick" ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days, ${exCount(r.buys_90d, r.evidence_cut)} in 90`
-    : `${r.bets_checked ?? unknown} bets checked, 30 days`;
-  return [r.category, active, bets, size];
+// Under their name: their market, and how we know what the row says (a quick look at their trades, a full check,
+// when a tier was scored, or where we found them).
+function exSub(r) {
+  const how = r.group === "unchecked" ? foundText(r) : r.group === "passed" || r.group === "recommended" ? (r.scored_at ? `scored ${ago(r.scored_at * 1000)}` : null)
+    : r.evidence === "quick" ? "quick look" : "full check";
+  return [r.category, how].filter(Boolean);
 }
-// Profit (trading, the score's 30 days), skill (the tier's evidence: the price move after their buys over the bets
-// checked) and copying (the Recommended list's own copy status), kept apart: none of them stands in for another.
-function passedFacts(r) {
-  const profit = r.trading_pnl_window != null ? `profit, 30 days ${usd(r.trading_pnl_window, true)}` : "profit unknown";
-  const skill = r.edge != null ? `skill: price ${centsSigned(r.edge)} their way after buying${r.edge_z != null ? ` (z ${r.edge_z.toFixed(1)})` : ""}, ${r.bets_checked ?? "unknown"} bets`
-    : `skill: ${r.bets_checked ?? "unknown"} bets checked`;
-  return [profit, skill, `copying: ${r.copy_label || "unknown"}`];
+// A row's figures, each { k: what it is, v: the value, sub: its unit, sign: green or red }. Which ones depend on what
+// the row is for: Whales, size and recency first; a tier, profit, the price move we saw and copying, each its own
+// answer; limited evidence, how much there is to judge. Unknown stays "unknown".
+function exStats(r, whale = false) {
+  const U = "unknown";
+  const bet = r.typical_usd != null ? { k: "Usual bet", v: usd(r.typical_usd), sub: "a trade" } : r.market_usd != null ? { k: "Usual bet", v: usd(r.market_usd), sub: "a market" } : { k: "Usual bet", v: U };
+  const last = { k: "Last trade", v: r.last_active ? ago(r.last_active * 1000) : U };
+  const profit = { k: "Profit, 30d", v: r.trading_pnl_window != null ? usd(r.trading_pnl_window, true) : U, sign: r.trading_pnl_window };
+  const record = r.evidence === "quick" ? { k: "Markets, 30d", v: exCount(r.buys_30d, r.evidence_cut) } : { k: "Bets checked", v: r.bets_checked != null ? String(r.bets_checked) : U, sub: "30d" };
+  const tiered = r.group === "passed" || r.group === "recommended";
+  if (whale) return [bet, last, r.group === "unchecked" ? { k: "Checked", v: "not yet" } : r.evidence === "quick" ? record : profit];
+  if (tiered) return [profit, { k: "Price after buys", v: r.edge != null ? centsSigned(r.edge) : U, sub: r.bets_checked != null ? `${r.bets_checked} bets` : "", sign: r.edge },
+    { k: "Copying", v: r.copy_label || U }];
+  if (r.group === "unchecked") return [last, { k: "Markets, 30d", v: exCount(r.buys_30d, r.evidence_cut) }, bet];
+  if (r.group === "limited") return [record, bet, last];
+  return [bet, last, record];
 }
+const exStat = (s) => `<span class="ex-stat"><span class="k">${esc(s.k)}</span><span class="v${s.v === "unknown" ? " u" : ""}">${s.sign ? pl(s.sign, esc(s.v)) : esc(s.v)}${s.sub ? ` <small>${esc(s.sub)}</small>` : ""}</span></span>`;
 function exRow(r, whale = false) {
-  return `<a class="trow norank ex-row" href="#/worth/${esc(r.wallet)}" data-exopen="${esc(r.wallet)}">${avatar(r.wallet, 40)}
-    <span class="tmain"><span class="line"><span class="name">${esc(displayName(r.name, r.wallet))}</span></span>
-      <span class="facts">${exFacts(r, whale).map(esc).join(" · ")}</span></span>
-    <span class="badges">${exBadges(r)}</span></a>`;
+  return `<a class="ex-row" href="#/worth/${esc(r.wallet)}" data-exopen="${esc(r.wallet)}">${avatar(r.wallet, 40)}
+    <span class="ex-who"><span class="name">${esc(displayName(r.name, r.wallet))}</span><span class="ex-sub">${exSub(r).map(esc).join(" · ")}</span></span>
+    <span class="ex-badges">${exBadges(r)}</span>
+    <span class="ex-stats">${exStats(r, whale).map(exStat).join("")}</span></a>`;
 }
+const exSearching = () => ex.q.trim().length >= 2;
 function exQuery(offset = 0) {
   const p = new URLSearchParams({ group: ex.group, sort: ex.sort, offset: String(offset) });
-  if (ex.q.trim().length >= 2) p.set("q", ex.q.trim());
+  if (exSearching()) { p.set("q", ex.q.trim()); p.set("unchecked", "1"); return `/api/traders?${p}`; } // every trader we've found
   if (ex.category) p.set("category", ex.category);
   if (ex.active) p.set("active", String(ex.active));
   if (ex.size) p.set("min_usd", String(ex.size));
   if (ex.board) p.set("board", ex.board);
-  if (ex.unchecked) p.set("unchecked", "1");
   return `/api/traders?${p}`;
 }
+const SEARCH_ICON = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M14 14l4 4"/></svg>`;
+const FILTER_ICON = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>`;
+const SORT_ICON = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 4v12M3 13l3 3 3-3M14 16V4M11 7l3-3 3 3"/></svg>`;
 async function exploreView(more = false) {
   const box = $("#tview");
   if (!box) return;
+  if (!$("#exbody", box)) exploreShell(box);
   if (!more) { ex.offset = 0; ex.rows = []; }
+  const asked = exQuery(ex.offset);
   let r;
-  try { r = await api(exQuery(ex.offset)); } catch (e) { box.innerHTML = errorState(e.message); bindActions(box); return; }
-  if (routeName() !== "traders:explore") return;
-  ex.rows = [...ex.rows, ...r.rows]; ex.more = r.more; ex.counts = r.counts; ex.others = r.unchecked_matches;
+  try { r = await api(asked); } catch (e) { $("#exbody").innerHTML = errorState(e.message); bindActions($("#exbody")); return; }
+  if (routeName() !== "traders:explore" || asked !== exQuery(ex.offset)) return; // gone, or asked again since
+  ex.rows = [...ex.rows, ...r.rows]; ex.more = r.more; ex.counts = r.counts;
   renderExplore();
 }
+// The search box is drawn once, so typing never loses it (or a phone's keyboard); the rest is drawn below it.
+function exploreShell(box) {
+  box.innerHTML = `<label class="ex-search" for="exq">${SEARCH_ICON}<input id="exq" type="search" enterkeyhint="search" placeholder="Search any trader or 0x wallet" value="${esc(ex.q)}" autocomplete="off" aria-label="Search every trader by name or wallet address"></label>
+    <div id="exbody">${skelRows(7)}</div>`;
+  $("#exq").oninput = (e) => {
+    const was = exSearching();
+    ex.q = e.target.value; clearTimeout(exTimer);
+    if (!exSearching() && !was) return; // one letter: nothing to search yet
+    exTimer = setTimeout(() => exploreView(), 300);
+  };
+}
 function renderExplore() {
+  const body = $("#exbody");
+  if (!body) return;
+  const c = ex.counts || {}, searching = exSearching(), whale = ex.group === "whales" && !searching;
+  const groups = EX_GROUPS.filter(([k]) => k !== "unchecked" || ex.unchecked || ex.group === "unchecked");
+  const chips = searching ? [] : exChips();
+  const about = EX_GROUPS.find(([k]) => k === ex.group)[2];
+  body.innerHTML = `
+    <div class="ex-bar">
+      ${searching ? `<p class="ex-results">Every trader we've found, by name or by wallet · <button class="link" id="exclearq">Clear search</button></p>`
+        : `<div class="ex-groups" role="group" aria-label="Which traders">${groups.map(([k, l]) => `<button type="button" data-exgroup="${k}" aria-pressed="${ex.group === k}">${l}${c[k] != null ? ` <span class="n">${compact(c[k])}</span>` : ""}</button>`).join("")}</div>`}
+      <div class="ex-tools">
+        ${searching ? "" : `<button type="button" class="ex-tool" id="exfilters" aria-haspopup="dialog">${FILTER_ICON}Filters${chips.length ? ` <span class="n">${chips.length}</span>` : ""}</button>`}
+        <label class="ex-tool ex-sort">${SORT_ICON}<select id="exsort" aria-label="Sort">${EX_SORTS.map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      </div>
+    </div>
+    ${chips.length ? `<div class="ex-chips">${chips.map(([k, l]) => {
+      const floor = k === "size" && ex.size === (EX_DEFAULTS[ex.group]?.size || 0); // Whales' own $1K: not removable
+      return floor ? `<span class="ex-chip">${esc(l)}</span>` : `<button type="button" class="ex-chip" data-exdrop="${k}" aria-label="Remove ${esc(l)}">${esc(l)}<span aria-hidden="true">×</span></button>`;
+    }).join("")}${exChanged() ? `<button type="button" class="link" id="exreset">Reset</button>` : ""}</div>` : ""}
+    ${searching ? "" : `<p class="ex-about">${esc(about)} <button class="link" id="how">How we pick traders</button></p>`}
+    ${ex.rows.length ? `<div class="list ex-list">${ex.rows.map((r) => exRow(r, whale)).join("")}${ex.more ? `<button type="button" class="lb-more" id="exmore">Show more</button>` : ""}</div>`
+      : searching ? emptyState("No trader matches", isWalletQuery(ex.q) ? "We haven't found that wallet yet. We can still check its trades." : `Nobody called “${esc(ex.q.trim())}” among the traders we've found.`,
+        isWalletQuery(ex.q) ? `<a class="btn" href="#/worth/${esc(ex.q.trim().toLowerCase())}">Check this wallet</a>` : "")
+      : emptyState("No traders here yet", "Nobody matches these filters yet. We look at more traders every hour.", exChanged() ? `<button class="btn ghost" id="exreset2">Reset filters</button>` : "")}
+    <p class="lb-foot">Every trader here was found on Polymarket's leaderboards, trading in its markets, or in the Feed's big trades. We list them by facts, never by a score of how good they are.</p>`;
+  $$("[data-exgroup]", body).forEach((b) => (b.onclick = () => { exPick(b.dataset.exgroup); exploreView(); }));
+  $("#exsort").onchange = (e) => { ex.sort = e.target.value; exploreView(); };
+  const f = $("#exfilters"); if (f) f.onclick = () => exFilterSheet();
+  $$("[data-exdrop]", body).forEach((b) => (b.onclick = () => { const k = b.dataset.exdrop; ex[k] = k === "size" ? (EX_DEFAULTS[ex.group]?.size || 0) : EX_EMPTY[k]; exploreView(); }));
+  [$("#exreset"), $("#exreset2")].forEach((b) => { if (b) b.onclick = () => { Object.assign(ex, EX_EMPTY, exDefaults(ex.group)); exploreView(); }; });
+  const cq = $("#exclearq"); if (cq) cq.onclick = () => { ex.q = ""; $("#exq").value = ""; exploreView(); };
+  const mo = $("#exmore"); if (mo) mo.onclick = () => { ex.offset = ex.rows.length; exploreView(true); };
+  $$("[data-exopen]", body).forEach((a) => (a.onclick = () => { exOpen = a.dataset.exopen; }));
+  const how = $("#how"); if (how) how.onclick = () => howSheet();
+}
+// Filters, in a sheet (a bottom sheet on a phone): each tap applies at once, and the list behind it follows.
+function exFilterSheet() {
+  const opt = (k, v, l) => `<button type="button" data-exf="${k}" data-v="${esc(String(v))}" aria-pressed="${String(ex[k]) === String(v)}">${esc(l)}</button>`;
+  const panel = sheet(`<h2>Filters</h2>
+    ${exFilters(ex.group).map(([k, title, opts]) => `<div class="ex-fset"><h3>${title}</h3><div class="ex-opts">${opts.map(([v, l]) => opt(k, v, l)).join("")}</div></div>`).join("")}
+    <div class="ex-fset"><h3>Traders we haven't checked yet</h3><div class="ex-opts">${[[false, "Hide"], [true, "Show them as a group"]].map(([v, l]) => opt("unchecked", v, l)).join("")}</div></div>
+    <div class="ex-factions"><button type="button" class="btn ghost" id="exfreset">Reset</button><button type="button" class="btn" id="exfdone">Done</button></div>`);
+  $$("[data-exf]", panel).forEach((b) => (b.onclick = () => {
+    const k = b.dataset.exf, raw = b.dataset.v;
+    ex[k] = k === "unchecked" ? raw === "true" : ["active", "size"].includes(k) ? Number(raw) : raw;
+    if (k === "unchecked" && !ex.unchecked && ex.group === "unchecked") exPick("limited");
+    $$(`[data-exf="${k}"]`, panel).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    exploreView();
+  }));
+  $("#exfreset").onclick = () => { Object.assign(ex, EX_EMPTY, exDefaults(ex.group)); exploreView(); exFilterSheet(); };
+  $("#exfdone").onclick = closeSheet;
+}
+
+// Everyone who passes our checks (#/traders/passed, from Recommended): a recommended tier scored in the last 48
+// hours, however many there are, so none is out of reach when Recommended's list has no room for them. The same
+// rows as Explore's, paged, sorted by facts only.
+const pv = { sort: "recent", rows: [], more: false, offset: 0, count: null };
+let passedCount = null; // for Recommended's "All N traders who pass our checks"
+const passedLink = () => exploreOn && passedCount ? `<a class="ex-all" href="#/traders/passed"><span><b>Every trader who passes our checks <span class="n">${passedCount.toLocaleString("en-US")}</span></b><span class="muted">Including any this list has no room for, sortable by bet size and activity</span></span><span aria-hidden="true">→</span></a>` : "";
+async function passedView(more = false) {
   const box = $("#tview");
   if (!box) return;
-  const c = ex.counts || {}, searching = ex.q.trim().length >= 2, whale = ex.group === "whales" && !searching;
-  const groups = EX_GROUPS.filter(([k]) => k !== "unchecked" || ex.unchecked);
-  const sel = (id, label, opts, val) => `<select id="${id}" class="lb-sort" aria-label="${label}">${opts.map(([v, l]) => `<option value="${v}" ${String(val) === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
-  const about = searching ? `Searching ${ex.unchecked ? "every trader we've found" : "the traders we've looked at"} by name, or by wallet if you type one that starts with 0x.`
-    : EX_GROUPS.find(([k]) => k === ex.group)[2];
-  const others = searching && ex.others ? `<p class="lb-note">${ex.others >= 20 ? "20 or more" : ex.others} more match among traders we haven't checked yet · <button class="link" id="exothers">Show them</button></p>` : "";
-  box.innerHTML = `
-    <div class="lb-toolbar">
-      <div class="lb-filters" role="group" aria-label="Which traders">${searching ? "" : groups.map(([k, l]) => `<button type="button" class="lb-chip" data-exgroup="${k}" aria-pressed="${ex.group === k}">${l}${c[k] != null ? ` · ${c[k].toLocaleString("en-US")}` : ""}</button>`).join("")}</div>
-      <div class="lb-view"><label class="lb-search" for="exq"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M14 14l4 4"/></svg><input id="exq" type="search" placeholder="Search every trader" value="${esc(ex.q)}" autocomplete="off" aria-label="Search traders by name or wallet"></label></div>
-    </div>
-    <div class="ex-bar">
-      ${sel("excat", "Category", [["", "Any market"], ...EX_CATS.map((x) => [x, x])], ex.category)}
-      ${sel("exactive", "Active", [[0, "Any time"], [7, "Active this week"], [30, "Active in 30 days"], [90, "Active in 90 days"]], ex.active)}
-      ${sel("exsize", "Usual bet", whale ? EX_SIZES.filter(([v]) => v >= EX_WHALES.size) : EX_SIZES, ex.size)}
-      ${sel("exboard", "Leaderboards", [["", "On or off the leaderboards"], ["on", "On a leaderboard"], ["off", "Off the leaderboards"]], ex.board)}
-      ${sel("exsort", "Sort", EX_SORTS, ex.sort)}
-      <button type="button" class="lb-chip" id="exunchecked" aria-pressed="${ex.unchecked}">Include not checked yet</button>
-    </div>
-    <p class="lb-note">${esc(about)}</p>${others}
-    ${ex.rows.length ? `<div class="list">${ex.rows.map((r) => exRow(r, whale)).join("")}${ex.more ? `<button type="button" class="lb-more" id="exmore">Show more</button>` : ""}</div>`
-      : searching ? emptyState("No trader matches", isWalletQuery(ex.q) ? "We haven't found that wallet yet. We can still check its trades." : `Nobody called “${esc(ex.q.trim())}” among ${ex.unchecked ? "the traders we've found" : "the traders we've looked at"}.`,
-        isWalletQuery(ex.q) ? `<a class="btn" href="#/worth/${esc(ex.q.trim().toLowerCase())}">Check this wallet</a>` : "")
-      : emptyState("No traders here yet", "Nobody matches these filters yet. We look at more traders every hour.")}
-    <p class="lb-foot">Every trader here was found on Polymarket's leaderboards, trading in its markets, or in the Feed's big trades. We list them by facts, never by a score of how good they are. · <button class="link" id="how">How we pick traders</button></p>`;
-  $$("[data-exgroup]", box).forEach((b) => (b.onclick = () => { exPick(b.dataset.exgroup); exploreView(); }));
-  $("#exq").oninput = (e) => {
-    ex.q = e.target.value; clearTimeout(exTimer);
-    if (ex.q.trim().length === 1) return;
-    exTimer = setTimeout(() => exploreView().then(() => { const i = $("#exq"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }), 300);
-  };
-  [["excat", "category"], ["exactive", "active"], ["exsize", "size"], ["exboard", "board"], ["exsort", "sort"]].forEach(([id, k]) => {
-    $(`#${id}`).onchange = (e) => { ex[k] = ["active", "size"].includes(k) ? Number(e.target.value) : e.target.value; exploreView(); };
-  });
-  $("#exunchecked").onclick = () => { ex.unchecked = !ex.unchecked; if (!ex.unchecked && ex.group === "unchecked") ex.group = "limited"; exploreView(); };
-  const oth = $("#exothers"); if (oth) oth.onclick = () => { ex.unchecked = true; exploreView(); };
-  const mo = $("#exmore"); if (mo) mo.onclick = () => { ex.offset = ex.rows.length; exploreView(true); };
+  if (!more) { pv.offset = 0; pv.rows = []; }
+  let r;
+  try { r = await api(`/api/traders?${new URLSearchParams({ group: "passed", sort: pv.sort, offset: String(pv.offset) })}`); }
+  catch (e) { box.innerHTML = errorState(e.message); bindActions(box); return; }
+  if (routeName() !== "traders:passed") return;
+  pv.rows = [...pv.rows, ...r.rows]; pv.more = r.more; pv.count = r.counts?.passed ?? null;
+  box.innerHTML = `<a class="back" href="#/traders">← Recommended</a>
+    <div class="ex-bar"><h2 class="h2 ex-title">Every trader who passes our checks${pv.count != null ? ` <span class="n">${pv.count.toLocaleString("en-US")}</span>` : ""}</h2>
+      <div class="ex-tools"><label class="ex-tool ex-sort">${SORT_ICON}<select id="pvsort" aria-label="Sort">${EX_SORTS.map(([v, l]) => `<option value="${v}" ${pv.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div></div>
+    <p class="ex-about">Every trader scored in the last 48 hours who passes the same checks as Recommended, including any its list has no room for. Price after buys is the move we saw; the tier says whether it's more than chance. <button class="link" id="how">How we pick traders</button></p>
+    ${pv.rows.length ? `<div class="list ex-list">${pv.rows.map((x) => exRow(x)).join("")}${pv.more ? `<button type="button" class="lb-more" id="pvmore">Show more</button>` : ""}</div>`
+      : emptyState("No trader passed the checks in the last 48 hours", "We don't loosen the checks to fill this list.")}`;
+  $("#pvsort").onchange = (e) => { pv.sort = e.target.value; passedView(); };
+  const mo = $("#pvmore"); if (mo) mo.onclick = () => { pv.offset = pv.rows.length; passedView(true); };
   $$("[data-exopen]", box).forEach((a) => (a.onclick = () => { exOpen = a.dataset.exopen; }));
   $("#how").onclick = () => howSheet();
 }
@@ -2082,7 +2215,7 @@ function worthDetails(s) {
       ${readDays(s) < 30 ? `<li>They trade a lot: we read their last 5,000 fills, which go back ${readDays(s)} days, not 30.</li>` : ""}
     </ul>
     <h3>The checks</h3><ul class="checks">${s.checks.map((c) => `<li><b>${mark(c.passed)}</b><div><b>${esc(sdkText(c.title))}.</b> ${esc(sdkText(c.detail))}</div></li>`).join("")}</ul>
-    <h3>How the price moved after they bought</h3><p class="note">Average over their trades, in cents a contract, with the 95% margin. Positive means it moved their way.</p>
+    <h3>How the price moved after they bought</h3><p class="note">Average over their trades, in cents a contract, with the 95% margin. Positive means it moved their way.${s.edge?.z != null ? ` How sure we are it's more than chance: z ${s.edge.z.toFixed(1)}, the average move in standard errors away from zero.` : ""}</p>
     <div class="scroll"><table class="tbl"><thead><tr><th>After</th><th class="n">Their way</th><th class="n">± margin</th><th class="n">Trades</th></tr></thead><tbody>
       ${delays.map(([k, l]) => { const d = s.edge_by_delay[k]; return `<tr><td>${l}</td><td class="n">${pl(d?.mean, centsSigned(d?.mean))}</td><td class="n">${d ? centsSigned(d.margin).replace("+", "") : "—"}</td><td class="n">${d?.n ?? "—"}</td></tr>`; }).join("")}
     </tbody></table></div>
@@ -2183,6 +2316,7 @@ function routeName() {
   if (h === "#/traders") return "traders:worth";
   if (h === "#/traders/top") return "traders:top";
   if (h === "#/traders/explore") return exploreOn ? "traders:explore" : "traders:worth";
+  if (h === "#/traders/passed") return exploreOn ? "traders:passed" : "traders:worth";
   return h;
 }
 function venueOffPage(venue) {
