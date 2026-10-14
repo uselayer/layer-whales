@@ -18,6 +18,7 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 import threading
 import time
 import urllib.error
@@ -740,11 +741,14 @@ def evaluate_one(item: dict[str, Any]) -> str:
                 return look.reason  # type: ignore[return-value]
         scored = background().score(w, on_leaderboard=item["on_leaderboard"]).to_dict()
     except Exception as e:  # VenueError mostly (the read's retries already spent)
+        if _directory_stop.is_set() or sys.is_finalizing():  # a deploy stopping the app, not the wallet: it stays due
+            raise
         d.score_failed(w, f"{type(e).__name__}: {e}")
         return "failed"
     d.keep_scores([_with_odds(scored) | {"format": WORTH_FORMAT}], "background")
-    if item.get("lane") in LANES and scored.get("segment") in RECOMMENDED:
-        _evaluate_state["lane_outcomes"][item["lane"]]["recommended"] += 1
+    if (lane := item.get("lane")) in LANES and scored.get("segment") in RECOMMENDED:  # each queue lane's yield
+        _evaluate_state["lane_outcomes"][lane]["recommended"] += 1  # since launch, in /api/directory
+        monitoring.usage.add("evaluated_lane", f"{lane}:recommended")  # by day, in /api/monitoring
     return "scored"
 
 
@@ -778,6 +782,8 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
             done[got] += 1
             _evaluate_state["since_launch"][got] += 1
             monitoring.usage.add("evaluated", f"{item['kind']}:{got}")
+            if lane := item.get("lane"):  # the queue's lane a never-looked-at wallet came from (#88), when it has one
+                monitoring.usage.add("evaluated_lane", f"{lane}:{got}")
             in_a_row = in_a_row + 1 if got == "failed" else 0
 
     with ThreadPoolExecutor(max_workers=EVALUATE_WORKERS, thread_name_prefix="evaluate") as pool:
@@ -1119,9 +1125,26 @@ def _monitor_loop() -> None:
 SCREENED_KINDS = ("new", "recheck")  # what the evaluation quick-checks first (recommended traders are rescored)
 
 
-def _day_view(day: dict[str, Any]) -> dict[str, Any]:
-    """One day of the report: the directory's facts, and its tallies turned into what they mean."""
+LIVE_FIELDS = ("screened", "screened_never_looked_at_before", "evaluated", "api", "polymarket_reads_by_budget",
+               "evaluated_by_lane", "infra")  # fmt: skip
+
+
+def _by_lane(tally: dict[str, float]) -> dict[str, dict[str, int]]:
+    """``{"board:scored": 3, ...}`` as ``{"board": {"scored": 3, ...}}``: what each queue lane's wallets came to."""
+    out: dict[str, dict[str, int]] = {}
+    for key, n in tally.items():
+        lane, _, outcome = key.partition(":")
+        out.setdefault(lane, {})[outcome] = int(n)
+    return out
+
+
+def _day_view(day: dict[str, Any], counted_from: str | None) -> dict[str, Any]:
+    """One day of the report: the directory's facts (``history``: rebuilt from what directory.db keeps), and its
+    tallies turned into what they mean (``live``: counted as it happened, from ``counted_from`` on; a day before
+    that has them as None, never counted, rather than 0)."""
     t = day.pop("tallies")
+    if counted_from is None or day["day"] < counted_from:
+        return day | dict.fromkeys(LIVE_FIELDS) | {"live_counts": False}
     evaluated: Counter[str] = Counter()
     screened = new_screened = 0
     for key, n in t.get("evaluated", {}).items():
@@ -1136,11 +1159,14 @@ def _day_view(day: dict[str, Any]) -> dict[str, Any]:
         "screened": screened, "screened_never_looked_at_before": new_screened, "evaluated": dict(evaluated),
         "api": monitoring.api_counts(t.get("api_sent", {}), t.get("api", {})),
         "polymarket_reads_by_budget": {k: int(v) for k, v in t.get("lane", {}).items()},
+        "evaluated_by_lane": _by_lane(t.get("evaluated_lane", {})),
         "infra": {"cpu_s": round(infra.get("cpu_s", 0)), "ram_gb_h": round(infra.get("ram_gb_s", 0) / 3600, 2),
-                  "egress_mb": round(infra.get("egress_bytes", 0) / 2**20, 1),
+                  "egress_mb": round(infra.get("egress_bytes", infra.get("served_bytes", 0)) / 2**20, 1),
+                  "served_mb": round(infra.get("served_bytes", 0) / 2**20, 1),
                   "peak_ram_mb": round(peaks["ram_bytes"] / 2**20) if "ram_bytes" in peaks else None,
                   "volume_gb": round(peaks["volume_bytes"] / monitoring.GB, 2) if "volume_bytes" in peaks else None,
                   "cost_usd": monitoring.cost(infra) if infra else None},  # fmt: skip
+        "live_counts": True,
     }  # fmt: skip
 
 
@@ -1163,19 +1189,96 @@ def _health(r: dict[str, Any], now: float) -> list[str]:
     if late is not None and late > 1:
         out.append(f"Rescoring traders people are shown is {late:.1f} h behind.")
     today = r["by_day"][0] if r["by_day"] else None
-    if today:
+    if today and today["live_counts"]:
         looked = sum(today["evaluated"].values())
         failed = today["evaluated"].get("failed", 0)
         if looked >= 20 and failed / looked > 0.1:
             out.append(f"{failed} of {looked} wallets looked at today failed.")
         for host, c in today["api"].items():
-            if host in POLYMARKET_HOSTS and c["requests"] >= 100 and (c.get("429", 0) + c.get("error", 0) + c.get("5xx", 0)) / c["requests"] > 0.02:
-                out.append(f"{host}: {c.get('429', 0)} rate limits, {c.get('5xx', 0)} server errors and {c.get('error', 0)} "
+            server = sum(n for k, n in c.items() if k.startswith("5"))
+            if host in POLYMARKET_HOSTS and c["requests"] >= 100 and (c.get("429", 0) + c.get("error", 0) + server) / c["requests"] > 0.02:
+                out.append(f"{host}: {c.get('429', 0)} rate limits, {server} server errors and {c.get('error', 0)} "
                            f"unanswered of {c['requests']} requests today.")  # fmt: skip
+    stuck = [f for f in r["api"]["feed"].get("failing", []) if f["failing_for_s"] > 600]  # (#109's)
+    if stuck:
+        out.append(f"{len(stuck)} Feed traders haven't been read for over 10 minutes (Polymarket: "
+                   f"{', '.join(sorted({str(f['status'] or f['code']) for f in stuck}))}); the logs name them.")  # fmt: skip
     errors = r["api"]["errors"]
     out += [f"{what}: {errors[what]}" for what in ("discovery", "directory_writes", "feed", "monitoring") if errors[what]]
     if str(errors["leaderboards"] or "").startswith("stale"):  # "sweep" and "read" are fine
         out.append(f"leaderboards: {errors['leaderboards']}")
+    return [_scrub(x) for x in out]
+
+
+_ADDRESS = re.compile(r"0x[0-9a-fA-F]{6,}")
+
+
+def _scrub(text: Any) -> Any:
+    """An error as the report shows it: any wallet or market id in it (a URL's, mostly) left out."""
+    return _ADDRESS.sub("0x…", text) if isinstance(text, str) else text
+
+
+# The discovery funnel, in the words Explore uses: a wallet found, screened (a quick check or a score), scored (a
+# full score), passed our checks (a recommended tier, scored in the last 48 h). The report's own names, mapped.
+FUNNEL_STAGES = {"found": "found", "screened": "screened", "scored": "fully_evaluated", "passed_our_checks": "qualified"}
+
+
+YIELD_MIN_SCORED = 30  # fewer scored than this and a source's yield isn't known yet, however it looks
+
+
+def _share(a: int, b: int) -> float | None:
+    return round(a / b, 4) if b else None
+
+
+def _wilson(k: int, n: int, z: float = 1.96) -> list[float] | None:
+    """The 95% range of a share k of n (Wilson's, which stays sensible near 0 and with few)."""
+    if not n:
+        return None
+    p, d = k / n, 1 + z * z / n
+    mid, half = (p + z * z / (2 * n)) / d, z * (p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5 / d
+    return [round(max(0.0, mid - half), 4), round(min(1.0, mid + half), 4)]
+
+
+def _stages(f: dict[str, Any]) -> dict[str, Any]:
+    """One row of the funnel, with coverage (how far evaluation has got: screened of found, scored of screened) kept
+    apart from yield (how good the traders it found are: passed of those actually scored, with its 95% range). A
+    source few of whose wallets were scored yet has an unknown yield, not a poor one (``yield_known``). Scored
+    wallets are those a quick check found enough recent evidence for, in the queue's order, not a random sample."""
+    found, screened, scored, passed = (f[v] for v in FUNNEL_STAGES.values())
+    return {k: f[v] for k, v in FUNNEL_STAGES.items()} | {
+        "coverage": {"screened_of_found": _share(screened, found), "scored_of_screened": _share(scored, screened),
+                     "never_looked_at": found - screened},
+        "yield": {"passed_per_1000_found": f["qualified_per_1000_found"], "passed_of_scored": _share(passed, scored),
+                  "passed_of_scored_range": _wilson(passed, scored), "yield_known": scored >= YIELD_MIN_SCORED},
+    }  # fmt: skip
+
+
+def _discovery_funnel(r: dict[str, Any]) -> dict[str, Any]:
+    """found → screened → scored → passed our checks: overall, by where wallets were seen (and seen only there, and
+    first found), by best leaderboard rank, and by category."""
+    src = r["sources"]
+    return {
+        "stages": "found → screened (a quick check or a score) → scored → passed our checks (a recommended tier, "
+                  "scored in the last 48 h)",
+        "reading_it": "coverage says how far evaluation has got through a source; yield.passed_of_scored says how good "
+                      "the traders it has scored are. A low passed_per_1000_found with little coverage is unknown, not "
+                      f"poor: yield_known needs {YIELD_MIN_SCORED}+ scored.",
+        "overall": _stages(r["funnel"]),
+        **{f"by_{k}": {s: _stages(v) for s, v in src[part].items()} for k, part in (
+            ("source", "seen_in"), ("source_only", "only_seen_in"), ("first_source", "first_found_by"),
+            ("leaderboard", "leaderboards"), ("best_rank", "best_rank"))},
+        "by_category": {c: _stages(v) for c, v in r["by_category"].items()},
+    }  # fmt: skip
+
+
+def _sweep_status(sweeps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Each sweep with how it ended: finished, failed, running (the latest, while the sweep runs), or cut off by a
+    restart (a deploy: it never got to say; the next sweep picked up from the board it was on)."""
+    out = []
+    for i, s in enumerate(sweeps):
+        status = ("failed" if s["error"] else "finished") if s["finished"] is not None else (
+            "running" if i == 0 and _directory_state["running"] else "cut_off_by_restart")  # fmt: skip
+        out.append(s | {"status": status, "error": _scrub(s["error"])})
     return out
 
 
@@ -1185,11 +1288,16 @@ def monitoring_report(days: int = 14) -> dict[str, Any]:
     def build() -> dict[str, Any]:
         t0, now = time.monotonic(), time.time()
         r = directory().monitoring(presented_wallets(), days, now)
-        r["by_day"] = [_day_view(d) for d in r["by_day"]]
+        r["by_day"] = [_day_view(d, r["counted_from"]) for d in r["by_day"]]
+        r["sweeps"] = _sweep_status(r["sweeps"])
+        r["failures"]["why"] = {_scrub(k): n for k, n in r["failures"]["why"].items()}
         launch = {m: monitoring.usage.since_launch(m) for m in ("api_sent", "api", "lane", "infra")}
         poly_reads = sum(n for h, n in launch["api_sent"].items() if h in POLYMARKET_HOSTS)
         lanes = {k: int(v) for k, v in launch["lane"].items()}
         full = r["by_day"][1] if len(r["by_day"]) > 1 else None  # yesterday: the last whole day
+        # None until a whole day was counted (the first day counted is partial: counting began partway through it)
+        whole = full is not None and r["counted_from"] is not None and full["day"] > r["counted_from"]
+        full_cost = full["infra"]["cost_usd"] if whole else None  # type: ignore[index]
         sampler = _monitor_state["sampler"]
         r["api"] = {
             "since_launch": monitoring.api_counts(launch["api_sent"], launch["api"]),
@@ -1198,27 +1306,38 @@ def monitoring_report(days: int = 14) -> dict[str, Any]:
             "budgets": {"background": _background["budget"].state() if "budget" in _background else None,
                         "check": _check_budget.state()},  # fmt: skip
             "feed": feed_stats(),
-            "errors": {"sweep": (directory().last_error() or {}).get("error"), "evaluation": _evaluate_state["error"],
-                       "leaderboards": _evaluate_state["leaderboards"], "discovery": _discovery_state["error"],
-                       "directory_writes": _directory_state.get("note_error"), "feed": _worth.get("live_error"),
-                       "monitoring": _monitor_state["error"]},  # fmt: skip
+            "errors": {k: _scrub(v) for k, v in {
+                "sweep": (directory().last_error() or {}).get("error"), "evaluation": _evaluate_state["error"],
+                "leaderboards": _evaluate_state["leaderboards"], "discovery": _discovery_state["error"],
+                "directory_writes": _directory_state.get("note_error"), "feed": _worth.get("live_error"),
+                "monitoring": _monitor_state["error"]}.items()},  # fmt: skip
         }
         r["infrastructure"] = {
             "uptime_h": round((now - monitoring.usage.started) / 3600, 1),
             "now": sampler.now() if sampler else None,
             "since_launch_usd": monitoring.cost(launch["infra"]),
-            "last_full_day_usd": full["infra"]["cost_usd"] if full else None,
-            "month_at_last_full_day_usd": round(full["infra"]["cost_usd"]["total"] * 30, 2)
-            if full and full["infra"]["cost_usd"] else None,
+            "last_full_day_usd": full_cost,
+            "month_at_last_full_day_usd": round(full_cost["total"] * 30, 2) if full_cost else None,
             "rates": monitoring.RATES,
             "note": "An estimate of the engine's own Railway usage at list prices; Railway's usage page is the bill. "
                     "Vercel, Clerk and PostHog aren't included.",
         }  # fmt: skip
         r["flags"] = {"directory": DIRECTORY_ON, "evaluate": EVALUATE_ON, "discovery": DISCOVERY}
         r["health"] = _health(r, now)
+        # which numbers go back as far as directory.db does, and which were only counted from Phase 6 on
+        r["data"] = {
+            "history": "Rebuilt from what directory.db keeps, back to when the directory began (2026-10-13): the "
+                       "funnel, categories, sources, each day's new wallets and scores, freshness, failures, sweeps.",
+            "live": "Counted as it happens since monitoring shipped (counted_from; that first day is partial): each "
+                    "day's screened wallets and evaluation outcomes, requests, reads by budget, CPU, memory, volume, "
+                    "egress and cost. A day before counted_from has them as null (not counted), never 0.",
+            "since_launch": "api.since_launch, api.polymarket_reads_since_launch and infrastructure.since_launch_usd "
+                            "start again at each restart (infrastructure.uptime_h).",
+            "counted_from": r["counted_from"],
+        }  # fmt: skip
         r["as_of"] = datetime.fromtimestamp(now, UTC).isoformat()
         r["took_s"] = round(time.monotonic() - t0, 2)
-        return r
+        return {"discovery_funnel": _discovery_funnel(r), "health": r.pop("health"), "data": r.pop("data")} | r
 
     return cached(f"monitoring:{days}", MONITOR_TTL_S, build)  # type: ignore[no-any-return]
 
@@ -1758,6 +1877,12 @@ LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; fu
 POSITIONS_PER_READ = 20  # conditionIds per read of the positions a trader's 50 biggest left out
 _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
+# wallet -> its failures in a row since its last good read: how many, since when (monotonic), and the last error, so
+# the owner sees what's failing (/api/discovery's "feed") and a Recommended trader that keeps failing is tried less
+# often (LIVE_FAIL_BACKOFF_S) instead of every round. Someone followed is still read every round: alerts come first.
+_live_errors: dict[str, dict[str, Any]] = {}
+LIVE_FAIL_MAX_S = 900  # a failing Recommended trader is tried at least this often
+_ADDRESS_IN = re.compile(r"0x[0-9a-fA-F]{6,}")
 _live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
 _live_round: dict[str, float] = {"ended": float("-inf")}  # when (monotonic) the poller's last round ended
 # the last hour of rounds, for the owner (/api/discovery's "feed"): how long each took, how many it read, and how
@@ -1781,10 +1906,38 @@ def feed_stats() -> dict[str, Any]:
         xs = sorted(r[key] for r in rounds if r[key] is not None)
         return {"median": xs[len(xs) // 2], "max": xs[-1]} if xs else None
 
+    mono = time.monotonic()
+    failing = sorted(({"failures_in_a_row": e["count"], "failing_for_s": round(mono - e["since"]), "status": e["status"],
+                       "code": e["code"], "error": _ADDRESS_IN.sub("0x…", e["error"])} for e in _live_errors.values()),
+                     key=lambda x: -x["failing_for_s"])  # fmt: skip
     return {"rounds": len(rounds), "round_s": spread("seconds"), "oldest_followed_s": spread("oldest_followed_s"),
             "oldest_recommended_s": spread("oldest_recommended_s"),
             "rate_limited_rounds": sum(1 for r in rounds if r["rate_limited"]),
+            # traders whose reads keep failing (no wallet: the logs name them), and reads saved by trying them less
+            "failing": failing, "skipped_backing_off": sum(r.get("backing_off", 0) for r in rounds),
             "live_error": _worth.get("live_error"), "last": rounds[-1] if rounds else None}  # fmt: skip
+
+
+def _live_backoff_s(failures: int) -> float:
+    """How long a Recommended trader whose reads failed ``failures`` times in a row waits before the next try: its
+    usual LIVE_REC_S, doubling with each failure, at most LIVE_FAIL_MAX_S."""
+    return float(min(LIVE_REC_S * 2 ** max(0, failures - 1), LIVE_FAIL_MAX_S))
+
+
+def _live_backing_off(w: str, mono: float) -> bool:
+    e = _live_errors.get(w)
+    return e is not None and mono - _live_failed.get(w, float("-inf")) < _live_backoff_s(e["count"])
+
+
+def _live_fail(w: str, e: VenueError) -> None:
+    """A read of ``w`` failed (not a rate limit): kept for the owner, and named in the logs the first time, the third,
+    and every tenth, with Polymarket's status and message (a trader on Recommended is public)."""
+    now = time.monotonic()
+    _live_failed[w] = now
+    kept = _live_errors.setdefault(w, {"count": 0, "since": now})
+    kept.update(count=kept["count"] + 1, status=e.status, code=e.code, error=str(e)[:300])
+    if kept["count"] in (1, 3) or kept["count"] % 10 == 0:
+        print(f"feed: couldn't read {w} ({kept['count']} in a row, status {e.status}, {e.code}): {str(e)[:300]}", flush=True)
 
 
 def _reading_followed() -> bool:
@@ -1913,7 +2066,11 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
         return hit is None or hit[0] <= _live_round["ended"] or age(w) >= every_round
 
     due = sorted((w for w in followed if due_now(w)), key=lambda w: (-age(w), w))  # oldest first; ties by wallet
-    late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w), w))
+    # a Recommended trader whose reads keep failing waits longer each time (_live_backoff_s), so it doesn't take a
+    # read every round, and its age (it only grows) doesn't keep it first in line
+    backing_off = {w for w in rec if _live_backing_off(w, started)}
+    late = sorted((w for w in rec - backing_off if w in hinted or age(w) >= rec_after),
+                  key=lambda w: (w not in hinted, -age(w), w))  # fmt: skip
     done, limited = 0, False
     def followed_read() -> None:  # alerts' reads are done: the others' full rate back, and the alert pass now
         if _followed_reading.is_set():
@@ -1933,9 +2090,12 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
             try:
                 _live_read(w, 0 if w in hinted or i < len(due) else rec_after)
                 _live_failed.pop(w, None)
+                _live_errors.pop(w, None)
                 done += 1
             except VenueError as e:
                 _live_failed[w] = time.monotonic()
+                if e.code != "rate_limited":  # a rate limit is everyone's, not this trader's
+                    _live_fail(w, e)
                 if e.code == "rate_limited":  # the SDK's retries are spent: more reads now would only add to it
                     _worth["live_error"] = "Polymarket rate limited the Feed's reads; the rest wait for the next round"
                     limited = True
@@ -1945,7 +2105,7 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
     _live_round["ended"] = time.monotonic()
     wanted, mono = followed | rec, time.monotonic()
     _live_stats.append({"at": time.time(), "seconds": round(mono - started, 1), "followed": len(followed),
-                        "recommended": len(rec), "read": done, "rate_limited": limited,
+                        "recommended": len(rec), "read": done, "rate_limited": limited, "backing_off": len(backing_off),
                         "never_read": sum(1 for w in wanted if _live_kept(w) is None),
                         "oldest_followed_s": _oldest(followed, mono), "oldest_recommended_s": _oldest(rec, mono)})  # fmt: skip
     for key in [k for k in list(_cache) if k.startswith("live:")]:
@@ -1955,6 +2115,8 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
             _live_priced.pop(key[5:], None)
     for w in [w for w in _live_failed if w not in wanted]:
         del _live_failed[w]
+    for w in [w for w in _live_errors if w not in wanted]:
+        del _live_errors[w]
     since = time.time() - FEED_HOURS * 3600
     shown = {t.market for w in wanted if (hit := _live_kept(w)) for t in hit[1].trades
              if t.action == "buy" and t.at.timestamp() >= since}  # fmt: skip
@@ -2061,10 +2223,12 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = Fals
     when ``sells`` (``_sells_of``: Following's), newest first, with status (a buy's; None for a sell) and category, from what the poller keeps: a view never waits on Polymarket for dozens of traders. Only
     a trader the poller hasn't read yet (just followed, or just after a restart) is read here, at most
     LIVE_PAGE_READS a view; the rest are ``pending`` until its next round. ``failed``: traders that couldn't be read
-    (or only longer ago than LIVE_SHOW_S). ``as_of``: when the oldest of what's shown was read (epoch ms)."""
+    (or only longer ago than LIVE_SHOW_S). ``stale``: traders shown from an older read because the latest ones failed
+    (``_live_errors``), so the page can say so rather than show them as current. ``as_of``: when the oldest of
+    what's shown was read (epoch ms)."""
     since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
     bets: list[dict[str, Any]] = []
-    failed = pending = 0
+    failed = pending = stale = 0
     reads_left, mono = LIVE_PAGE_READS, time.monotonic()
     oldest = mono
     for s in people:
@@ -2084,6 +2248,7 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = Fals
                 failed += 1
             continue
         oldest, d = min(oldest, hit[0]), hit[1]
+        stale += w in _live_errors
         if not s.get("name"):
             s["name"] = d.trader.name  # a followed wallet we haven't scored: their Polymarket name, as on their cards
         bets += [b for b in _bets_of(d, s, since) + (_sells_of(d, s, since) if sells else []) if b["usd"] >= min_usd]
@@ -2096,7 +2261,7 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = Fals
         b["status"] = None if b.get("side") == "sell" else bet_status(b["price"], b["price_now"])
         b["category"] = cats.get(b["market"])
     as_of = round((time.time() - (time.monotonic() - oldest)) * 1000)
-    return {"bets": bets, "failed": failed, "pending": pending, "as_of": as_of}
+    return {"bets": bets, "failed": failed, "pending": pending, "stale": stale, "as_of": as_of}
 
 
 def _iso_ts(s: str) -> float:
