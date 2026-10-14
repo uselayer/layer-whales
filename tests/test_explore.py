@@ -60,7 +60,7 @@ def test_each_wallet_is_in_one_group_and_says_how_we_know(d: Directory) -> None:
     assert set(limited) == {SEL, PAID}
     assert (limited[SEL]["evidence"], limited[PAID]["evidence"]) == ("quick", "scored")  # a quick look vs a full check
     assert set(wallets(d.browse("checked"))) == {DORM, PRO} and wallets(d.browse("unchecked")) == [NEW]
-    assert d.explore_counts() == {"passed": 0, "limited": 2, "checked": 2, "unchecked": 1}
+    assert d.explore_counts() == {"passed": 0, "limited": 2, "checked": 2, "unchecked": 1, "whales": 2}
 
 
 def test_a_wallet_known_only_from_a_search_or_a_follow_is_never_listed_or_found(d: Directory) -> None:
@@ -156,7 +156,22 @@ def test_a_recommended_tier_from_the_last_48_hours_passed_our_checks_and_an_olde
     assert "trading_pnl_window" in row and "edge" in row and "copyable" in row
     found = {r["wallet"]: r["group"] for r in d.browse("limited", q="o", now=NOW)["rows"] if r["wallet"] in (star, old)}
     assert found == {old: "recommended"} and d.browse("limited", q="starsue", now=NOW)["rows"][0]["group"] == "passed"
-    assert d.explore_counts(now=NOW) == {"passed": 1, "limited": 2, "checked": 2, "unchecked": 1}
+    assert d.explore_counts(now=NOW) == {"passed": 1, "limited": 2, "checked": 2, "unchecked": 1, "whales": 4}
+
+
+def test_whales_are_big_bettors_whatever_our_checks_found_and_each_keeps_its_own_group(d: Directory) -> None:
+    star, maker = "0x" + "7" * 40, "0x" + "9" * 40
+    d.add([Seen(star, "leaderboard", "PNL MONTH OVERALL", name="StarSue", rank=5),
+           Seen(maker, "market", "Crypto", name="MakerMo", category="Crypto")], at=NOW - DAY)  # fmt: skip
+    d.keep_scores([score(star, "rising", typical_usd=40_000.0)], "background", at=NOW)
+    d.keep_scores([score(maker, "no_view", typical_usd=90_000.0)], "background", at=NOW)  # a market maker: left out
+    rows = d.browse("whales", sort="size", now=NOW)["rows"]
+    # $40K a trade (passed), a quick look's $12K a market (limited), $2.5K a trade (limited); $50 PRO isn't one
+    assert [(r["wallet"], r["group"]) for r in rows] == [(star, "passed"), (SEL, "limited"), (PAID, "limited")]
+    assert wallets(d.browse("whales", min_usd=10_000, sort="size", now=NOW)) == [star, SEL]
+    assert wallets(d.browse("whales", board="off", sort="size", now=NOW)) == [SEL]
+    assert d.explore_counts(now=NOW)["whales"] == 3  # counted as listed: the market maker left out
+    assert star in wallets(d.browse("passed", now=NOW))  # still in its own group too
 
 
 # ---- the engine ----
@@ -190,7 +205,7 @@ def test_browsing_and_searching_read_only_the_directory(api: TestClient, monkeyp
     monkeypatch.setattr(engine.reads, "whales", NoReads())
     r = api.get("/api/traders", params={"group": "limited"}).json()
     assert {x["wallet"] for x in r["rows"]} == {SEL, PAID}
-    assert r["counts"] == {"passed": 0, "limited": 2, "checked": 2, "unchecked": 1}
+    assert r["counts"] == {"passed": 0, "limited": 2, "checked": 2, "unchecked": 1, "whales": 2}
     assert r["more"] is False and r["unchecked_matches"] is None
     s = api.get("/api/traders", params={"q": "ned"}).json()
     assert s["rows"] == [] and s["unchecked_matches"] == 1  # "1 more match among traders we haven't checked"
@@ -304,3 +319,22 @@ def test_a_passed_row_says_profit_skill_and_copying_as_three_answers(run_js: Any
     assert got == ["profit, 30 days +$4.2K", "skill: price +3¢ their way after buying (z 2.4), 31 bets", "copying: Copy not proven"]
     unknown = run_js(("pl", "usd", "centsSigned", "passedFacts"), "passedFacts({})")
     assert unknown == ["profit unknown", "skill: unknown bets checked", "copying: unknown"]  # never a made-up 0
+
+
+def test_picking_whales_sets_its_filters_and_leaving_puts_the_others_back(run_js: Any) -> None:
+    got = run_js(("ex", "EX_WHALES", "exBefore", "exPick"), """(() => {
+      Object.assign(ex, { group: "checked", active: 7, size: 100, sort: "new" });
+      exPick("whales"); const whale = { ...ex };
+      exPick("limited");
+      return [[whale.group, whale.active, whale.size, whale.sort], [ex.group, ex.active, ex.size, ex.sort]];
+    })()""")
+    assert got == [["whales", 30, 1000, "size"], ["limited", 7, 100, "new"]]
+
+
+def test_every_whale_row_says_how_big_they_bet(run_js: Any) -> None:
+    names = ("pl", "usd", "centsSigned", "passedFacts", "exCount", "exFacts")
+    row = '{group: "passed", category: "Sports", typical_usd: 40000, trading_pnl_window: 4200, bets_checked: 31}'
+    assert "usually $40K a trade" in run_js(names, f"exFacts({row}, true)")
+    assert "usually $40K a trade" not in run_js(names, f"exFacts({row}, false)")  # Passed shows profit, skill, copying
+    quick = '{group: "limited", evidence: "quick", market_usd: 12000, buys_30d: 5, evidence_cut: false}'
+    assert run_js(names, f"exFacts({quick}, true)") == ["about $12K a market", "last trade unknown", "5 markets bought in 30 days"]
