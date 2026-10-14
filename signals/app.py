@@ -2132,12 +2132,18 @@ def unfollow(wallet: str, response: Response, uid: str = Depends(signed_in)) -> 
 @app.get("/api/me/feed")
 def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
     """The Feed's Following: your followed traders' buys over the last FEED_HOURS, every size. Whoever they are:
-    a trader the last check didn't score has no tier, and copying isn't offered for them (copy_ok False)."""
+    a trader followed from Explore shows the verdict their page shows (the directory's fresh stored score, as
+    ``worth_wallet`` reuses it; no read), and one nobody has scored lately has no tier and copying isn't offered for
+    them (copy_ok False)."""
     _private(response)
     follows = list((_load_follows()["users"].get(uid) or {}).get("follows") or [])
     scores = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
-    people = [{"wallet": w, "name": (s := scores.get(w) or {}).get("name"), "segment": s.get("segment"),
-               "label": s.get("label")} | copy_fields(s or None) for w in follows]  # fmt: skip
+    people = []
+    for w in follows:
+        s = scores.get(w) or _stored_score(w) or {}
+        label = s.get("label") or (SEGMENTS[s["segment"]][0] if s.get("segment") in SEGMENTS else None)
+        people.append({"wallet": w, "name": s.get("name"), "segment": s.get("segment"), "label": label}
+                      | copy_fields(s or None))  # fmt: skip
     return {"traders": people, "hours": FEED_HOURS} | _feed(people)
 
 

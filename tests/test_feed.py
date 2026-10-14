@@ -64,6 +64,57 @@ def test_recommended_is_the_three_sections_and_bigger_trades_only(api: TestClien
     assert {b["wallet"]: b["copy_ok"] for b in r["bets"]} == {COPY: True, RISE: False, WATCH: False}  # neutral cards for the rest
 
 
+def test_following_works_whatever_a_traders_status_and_each_card_says_what_we_know(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Followed from anywhere: a recommended trader, one Explore lists as checked (no edge proven), one with only a
+    quick look, and one nobody has checked. Following shows each one's trades under their Polymarket name, with
+    the verdict their page shows (the directory's fresh stored score, no read) or none, never a copy cue for those
+    copying isn't offered for; and each one's next buy alerts their follower."""
+    from signals.directory import QuickLook, Seen
+
+    checked, quick = "0x" + "6" * 40, "0x" + "7" * 40
+    d = engine.directory()
+    d.add([Seen(checked, "leaderboard", "PNL MONTH OVERALL", rank=5), Seen(quick, "market", "Sports")])
+    d.keep_scores([{"wallet": checked, "segment": "no_edge", "skill": "no", "copyable": "no", "bets": 30,
+                    "format": engine.WORTH_FORMAT, "sample": []}], "background")  # fmt: skip
+    d.quick_checked(quick, QuickLook(False, "not_enough_recent_evidence", 3, 9, None, time.time() - 3600, None, False))
+    for w in (COPY, checked, quick, STRANGER):
+        assert api.post("/api/me/follows", json={"wallet": w}, headers=auth()).status_code == 200
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])
+    engine.live_poll_once()  # its next round: everyone followed, first
+    body = api.get("/api/me/feed", headers=auth()).json()
+    who = {t["wallet"]: t for t in body["traders"]}
+    assert set(who) == {COPY, checked, quick, STRANGER} and (body["pending"], body["failed"]) == (0, 0)
+    assert (who[COPY]["segment"], who[COPY]["copy_ok"]) == ("proven", True)
+    assert (who[checked]["segment"], who[checked]["label"], who[checked]["copy_ok"]) == (
+        "no_edge", engine.SEGMENTS["no_edge"][0], False)  # fmt: skip
+    assert (who[quick]["segment"], who[quick]["copy_ok"]) == (None, False)
+    assert (who[STRANGER]["segment"], who[STRANGER]["copy_ok"]) == (None, False)
+    cards = {b["wallet"]: b for b in body["bets"] if b["usd"] == 2500.0}
+    assert set(cards) == {COPY, checked, quick, STRANGER}  # every one's trades, every size
+    assert {w: c["name"] for w, c in cards.items() if w != COPY} == {checked: "pm-66", quick: "pm-77", STRANGER: "pm-ee"}
+    assert [w for w, c in cards.items() if c["copy_ok"]] == [COPY]  # no copy cue for the rest
+
+    sent: list[str] = []
+    monkeypatch.setattr(engine, "TG_TOKEN", "123:test")
+    monkeypatch.setattr(engine, "tg", lambda method, **p: sent.append(p.get("text", "")) or {"message_id": len(sent)})
+    for d_ in (engine._seen, engine._alerted):
+        d_.clear()
+    u = engine._load_follows()
+    next(iter(u["users"].values()))["chat"] = "555"
+    engine._save_follows(u)
+    engine.alert_pass()  # first round: noted only
+    real = engine.reads.whales.trades
+    later = datetime.now(UTC)
+    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: [
+        WhaleTrade("polymarket", w, f"pm-{w[2:4]}", f"{w[:6]}:0", "yes", "buy", 0.5, 400, 200.0, later, f"{w}new",
+                   title="T")] + real(venue, w, **k))  # fmt: skip
+    engine._cache.clear()
+    assert engine.alert_pass() == 4  # one alert each, whoever they are
+    assert all(t.startswith("<b>") for t in sent[:4])
+
+
 def test_following_is_your_traders_trades_every_size_and_only_yours(api: TestClient) -> None:
     assert api.get("/api/me/feed").status_code == 401  # signed out: the page shows a sign-in prompt
     for w in (WATCH, STRANGER):
