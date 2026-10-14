@@ -695,7 +695,9 @@ function avatar(seed, size = 36) {
 const TIER = {
   proven: ["Proven sharp", "s-proven"], quiet: ["Quiet sharp", "s-quiet"], rising: ["Rising", "s-rising"],
   big_profit: ["Big profit, edge unproven", "t3"], // over $50K from trading, but the price test doesn't show skill
-  lucky: ["Profit rests on one win", "t3"], too_few: ["Not enough data", "t3"], no_edge: ["Edge not proven", "t3"],
+  lucky: ["Profit rests on one win", "t3"], too_few: ["Limited evidence", "t3"], no_edge: ["Edge not proven", "t3"],
+  // uselayer 0.11: an edge kept from sharp only by a losing 30 days, and parlay traders, whose skill can't be measured
+  edge_losing: ["Edge, but lost money lately", "t3"], parlays: ["Parlays: skill unmeasured", "t3"],
   no_view: ["No view", "t3"], inactive: ["Not trading lately", "t3"], // uselayer 0.6: would be recommended, but no buy in 7 days
 };
 // A trader's page: the scored page for a Polymarket wallet, else the venue leaderboard page.
@@ -1205,7 +1207,7 @@ function howSheet(tab = "checks", focus = null) {
       ${HOW_TIERS.map(([k, text]) => `<div class="how-tier" data-howfocus="${k}">${tier(k)}<p>${text}</p></div>`).join("")}
       <h3>Where they're listed</h3>
       <ul>${SECTIONS.map(([, title, sub]) => `<li><b>${title}:</b> ${sub}</li>`).join("")}</ul>
-      ${howMore(["Left out of recommendations", "<b>Big profit, edge unproven</b> (over $50K profit from trading, but the price doesn't clearly move their way after they buy: not shown to be skill, and not shown to be luck either), <b>Profit rests on one win</b> (over $50K profit from trading, but without their biggest win they'd be down), <b>Edge not proven</b> (the price doesn't clearly move their way, or it does but they lost money from trading over 30 days or it rests on a few trades), <b>Not enough data</b> (too few of their trades could be checked), <b>Not trading lately</b>, and market makers and arbitrage (<b>No view</b>)."])}
+      ${howMore(["Left out of recommendations", "<b>Big profit, edge unproven</b> (over $50K profit from trading, but the price doesn't clearly move their way after they buy: not shown to be skill, and not shown to be luck either), <b>Profit rests on one win</b> (over $50K profit from trading, but without their biggest win they'd be down), <b>Edge, but lost money lately</b> (the price moves their way after they buy, but they lost money from trading over 30 days: the edge is real evidence, and a sharp also has to be making money), <b>Edge not proven</b> (the price doesn't clearly move their way, or it does but it rests on a few trades), <b>Parlays: skill unmeasured</b> (they trade mostly parlays, which have no price history, so the price test can't run: their profit is still shown), <b>Limited evidence</b> (fewer than 8 of their trades over 30 days could be checked, too few to measure skill either way: not a verdict, and their profit is still shown), <b>Not trading lately</b>, and market makers and arbitrage (<b>No view</b>)."])}
       <h3>Reading the list</h3>
       <p class="explain" style="margin-top:0"><b>Weeks up</b> (12-week consistency): ${WEEK_COUNTS}</p>
     </div>
@@ -1520,7 +1522,7 @@ function renderWorth() {
       ${sort === "copying" ? " · Copy estimate ranks by the bottom of its range, from 8 trades" : ""}
       ${periods ? " · 7D/30D/90D changes profit and trend only: consistency always covers the last 12 weeks, wins and usual trade the last 30 days" : ""}
       ${history ? "" : " · Weeks in profit, trend and 7D/90D arrive with the next data update"}
-      <br>${lb.all ? `Showing every checked trader except market makers and arbitrage · <button class="link" id="lbrec">Recommended only</button>` : `${left ? `${left} left out: edge not proven, not enough data, big profit with the edge unproven or resting on one win, market makers and arbitrage · <button class="link" id="lbrec">See all checked traders</button>` : ""}`}
+      <br>${lb.all ? `Showing every checked trader except market makers and arbitrage · <button class="link" id="lbrec">Recommended only</button>` : `${left ? `${left} left out: an edge but losing lately, edge not proven, parlays (skill unmeasured), limited evidence, big profit with the edge unproven or resting on one win, market makers and arbitrage ·<button class="link" id="lbrec">See all checked traders</button>` : ""}`}
       · <a class="link" href="#/traders/top">Top profit</a>
       ${st.error ? ` · <span style="color:var(--danger)">Last check failed: ${esc(st.error)}</span>` : ""}</p>`;
 

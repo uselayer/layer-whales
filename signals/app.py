@@ -237,7 +237,7 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
 WORTH_RETRY_S = 30 * 60  # after a failed check
-WORTH_FORMAT = 8  # bump when the kept result gains fields; an older one is re-checked on launch (8: uselayer 0.10, tiers)
+WORTH_FORMAT = 9  # bump when the kept result gains fields; an older one is re-checked on launch (8: uselayer 0.10, tiers; 9: 0.11, edge_verdict, parlays and edge_losing)
 WORTH_MIN_AGE_HOSTED_S = 3600  # hosted: "Check again" only starts a new check once the last is this old
 WORTH_ONE_KEEP = 500  # wallets scored on demand, kept until the next check
 _worth_stop = threading.Event()
@@ -264,8 +264,9 @@ def _worth_upgrade(data: dict[str, Any]) -> dict[str, Any]:
     """A result kept by an older uselayer, shown while the new check runs, judged by today's rules. Before
     0.8.0: its copy range widened to Student's t, ``copyable`` only when that range's bottom is above zero.
     Before 0.10: its tier from skill and track record (the SDK's ``segment_of``), never from copying, so a
-    sharp kept as "too fast" is a sharp again and big profit without a clear edge isn't called luck."""
-    if (data.get("format") or 0) >= 8:
+    sharp kept as "too fast" is a sharp again and big profit without a clear edge isn't called luck. Before 0.11:
+    a measured edge with a losing window isn't "edge not proven", and a parlay trader's skill is unmeasured."""
+    if (data.get("format") or 0) >= 9:
         return data
     for s in data.get("scores", []):
         if (data.get("format") or 0) < 6:

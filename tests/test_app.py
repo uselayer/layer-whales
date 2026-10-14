@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -461,6 +462,28 @@ def test_a_result_kept_by_an_older_uselayer_is_judged_by_todays_rules() -> None:
     assert engine._worth_upgrade(current)["scores"][0]["segment"] == "too_fast"  # a current result is left as given
 
 
+def test_a_losing_trader_with_an_edge_and_a_parlay_trader_are_never_called_edge_less() -> None:
+    # A 0.10 result: a measured edge (z 4 over 30 bets, steady) with a losing 30 days was "Edge not proven", and a
+    # wallet whose 60 bets picked were all parlays was "Not enough data".
+    losing = SHARP | {"segment": "no_edge", "skill": "no",
+                      "checks": [{"rule": "steady", "passed": True}, {"rule": "profitable", "passed": False}]}
+    parlays = SCORE | {"segment": "too_few", "skill": "unknown", "style": "takes_a_side", "edge": None,
+                       "decisions": 2672, "coverage": {"bets": 0, "combos": 60}}  # fmt: skip
+    a, b = engine._worth_upgrade({"format": 8, "scores": [losing, parlays]})["scores"]
+    assert (a["segment"], a["label"]) == ("edge_losing", "Edge, but lost money lately")  # still not a sharp
+    assert (b["segment"], b["label"]) == ("parlays", "Parlays: skill unmeasured")
+    assert engine.section_of(a["segment"]) is None and engine.section_of(b["segment"]) is None  # not recommended
+
+
+def test_the_page_names_every_tier_the_sdk_gives() -> None:
+    from uselayer.whale_scores import SEGMENTS
+
+    page = (Path(engine.__file__).parent / "static" / "index.html").read_text()
+    tiers = page[page.index("const TIER = {") : page.index("};", page.index("const TIER = {"))]
+    for seg in set(SEGMENTS) - {"too_fast"}:  # too_fast: never given since uselayer 0.10
+        assert f"{seg}: [" in tiers, seg
+
+
 # ---- ranking: small samples don't top a sort, and missing weeks aren't losing weeks ----
 
 
@@ -537,7 +560,7 @@ def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offe
     for words in ('"Sharps"', '"Rising"', "Lately, buying after any of these traders hasn't clearly made money after fees.",
                   "Copying never moves it: a Proven sharp can be costly to copy.",
                   '"Copy not proven"', '"Costly to copy"', '"Not offered"', '"Big profit, edge unproven"',
-                  '"Profit rests on one win"', '"Not enough data"', '"Edge not proven"',
+                  '"Profit rests on one win"', '"Limited evidence"', '"Edge not proven"',
                   "not as a signal to buy: we haven't found that buying after them makes money.",
                   "Could you make money buying what they buy?", "If you'd bought after them: ",
                   "How we work out the price",

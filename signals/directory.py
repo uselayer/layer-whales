@@ -63,21 +63,25 @@ SOURCES = ("leaderboard", "market", "feed", "search", "follow", "check")
 STATUSES = ("found", "scored", "checked", "failed")
 # Why a wallet isn't recommended now. The first three are about the evidence (what a quick check or a score saw of
 # their recent trading); the rest are what a score found.
-REASONS = ("not_enough_recent_evidence", "not_trading_lately", "dormant", "too_few", "no_edge", "big_profit", "lucky",
-           "no_view")  # fmt: skip
+REASONS = ("not_enough_recent_evidence", "not_trading_lately", "dormant", "too_few", "parlays", "edge_losing",
+           "no_edge", "big_profit", "lucky", "no_view")  # fmt: skip
 REASON_LABELS = {
     "not_enough_recent_evidence": "Not enough recent evidence: {buys_30d} bets in the last 30 days, and {need} are "
                                   "needed to judge a trader",
     "not_trading_lately": "Not trading lately: no buy in the last {active} days",
     "dormant": "Dormant: no buy in the last {evidence} days",
-    "too_few": "Scored: not enough data, too few of their trades could be checked",
+    "too_few": "Scored: limited evidence, too few of their trades could be checked to measure skill either way",
+    "parlays": "Scored: skill unmeasured, they trade mostly parlays, which have no price history",
+    "edge_losing": "Scored: the price moves their way, but they lost money from trading over 30 days",
     "no_edge": "Scored: edge not proven",
     "big_profit": "Scored: a big profit, but the price test doesn't show skill (and nothing shows luck)",
     "lucky": "Scored: a big profit that rests on one win",
     "no_view": "Scored: a market maker or arbitrage, not views on the outcome",
 }  # fmt: skip
 # uselayer 0.10's tiers (``segment``) are skill and track record only: "too_few" and "big_profit" are new, and a
-# "lucky" or "no_edge" kept before then may be either of them until the wallet is scored again.
+# "lucky" or "no_edge" kept before then may be either of them until the wallet is scored again. uselayer 0.11 adds
+# "parlays" (skill unmeasured, not absent) and "edge_losing" (an edge, kept from sharp by a losing window), both
+# once "too_few" or "no_edge".
 # what kept a score: the Worth following check, a trader page, the import, the background evaluation
 VIA = ("check", "page", "import", "background")
 KINDS = ("recommended", "new", "recheck")  # what ``due`` hands out, in that order
