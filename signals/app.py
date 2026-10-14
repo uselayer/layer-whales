@@ -1573,25 +1573,17 @@ def checker() -> Whales:
 
 
 def _open_positions(wallet: str, markets: list[str] | None = None) -> list[Any]:
-    """A trader's open positions (the SDK's TraderDetail.positions without its profile and stats reads).
-    Stopgap, approved for V1: the SDK has no public positions-only read yet, so this calls its internals (as
-    ``listed_now`` reads its leaderboards). Swap for ``whales.positions`` once uselayer has it:
-    https://github.com/uselayer/uselayer-sdk/issues/23
-
-    Their 50 biggest, plus, in one more read per 20 markets, any of ``markets`` (outcomes they traded lately) that
-    aren't among them: a trader with more open positions than that still gets the price now for every trade they
-    just made (an alert, a Feed card), and a sell isn't called "no longer hold it" when they do."""
-    w = reads.whales
-    rows = w._poly.positions(wallet, 50)
-    have = {w._poly_position(p).market for p in rows}  # each outcome: holding one side doesn't price the other
-    missing = list(dict.fromkeys(m.partition(":")[0] for m in markets or () if m not in have))
+    """A trader's open positions: the SDK's TraderDetail.positions, without its profile and stats. Their 50
+    biggest, plus, in one more read per POSITIONS_PER_READ markets, any of ``markets`` (outcomes they traded
+    lately) the 50 biggest left out, matched by outcome (holding one side of a market doesn't price the other): a
+    trader with more open positions than that still gets the price now for every trade they just made (an alert,
+    a Feed card), and a sell isn't called "no longer hold it" when they do. (Polymarket's positions take several
+    conditionIds at once, comma-separated, and ``whales.positions`` passes ``market`` on as it is.)"""
+    out = {p.market: p for p in reads.whales.positions("polymarket", wallet, limit=50)}
+    missing = list(dict.fromkeys(m.partition(":")[0] for m in markets or () if m not in out))
     for i in range(0, len(missing), POSITIONS_PER_READ):
-        rows += w._poly.positions(wallet, 500, market=",".join(missing[i : i + POSITIONS_PER_READ]))
-    out = {}
-    for p in rows:
-        if not p.get("redeemable") and 0 < float(p.get("curPrice") or 0) < 1:
-            pos = w._poly_position(p)
-            out.setdefault(pos.market, pos)
+        for p in reads.whales.positions("polymarket", wallet, limit=500, market=",".join(missing[i : i + POSITIONS_PER_READ])):
+            out.setdefault(p.market, p)
     return list(out.values())
 
 
