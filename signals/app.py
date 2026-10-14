@@ -1129,8 +1129,10 @@ _live_round: dict[str, float] = {"ended": float("-inf")}  # when (monotonic) the
 
 
 def _open_positions(wallet: str) -> list[Any]:
-    """A trader's open positions (the SDK's TraderDetail.positions without its profile and stats reads). The SDK
-    has no positions-only read yet; this is its own, as ``listed_now`` reads its leaderboards."""
+    """A trader's open positions (the SDK's TraderDetail.positions without its profile and stats reads).
+    Stopgap, approved for V1: the SDK has no public positions-only read yet, so this calls its internals (as
+    ``listed_now`` reads its leaderboards). Swap for ``whales.positions`` once uselayer has it:
+    https://github.com/uselayer/uselayer-sdk/issues/23"""
     w = reads.whales
     return [w._poly_position(p) for p in w._poly.positions(wallet, 50)
             if not p.get("redeemable") and 0 < float(p.get("curPrice") or 0) < 1]  # fmt: skip
@@ -1227,8 +1229,8 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
         hit = _live_kept(w)
         return hit is None or hit[0] <= _live_round["ended"] or age(w) >= every_round
 
-    due = sorted((w for w in followed if due_now(w)), key=age, reverse=True)
-    late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w)))
+    due = sorted((w for w in followed if due_now(w)), key=lambda w: (-age(w), w))  # oldest first; ties by wallet
+    late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w), w))
     done = 0
     for i, w in enumerate(due + late):
         if stop is not None and stop.is_set():

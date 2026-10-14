@@ -720,4 +720,4 @@ def test_a_rate_limit_ends_the_pollers_round(api: TestClient, monkeypatch: pytes
     monkeypatch.setattr(engine.reads.whales, "trades", trades)
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])
     assert engine.live_poll_once() == 1 and len(asked) == 2  # the third waits for the next round
-    assert engine.live_poll_once() == 3 and set(asked[2:4]) == {ANN, BOB} and asked[4] == SAM  # never read first
+    assert engine.live_poll_once() == 3 and asked[2:] == [ANN, BOB, SAM]  # the ones not read yet first
