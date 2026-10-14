@@ -2011,8 +2011,14 @@ ALERT_AGAIN_S = 6 * 3600  # one alert per trader and market in this long, howeve
 # "typically": both vary with load and with how Polymarket's API is answering; the measured line is the real one
 FOLLOW_DELAY = f"Signals typically reads followed traders' trades every {LIVE_POLL_S} seconds."
 BIG_DELAY = "Big trades come from Polymarket's feed of every trade, which typically runs 3–5 minutes behind."
-DAILY_CAP = 20  # alerts per person per UTC day (a group counts once); then one "limit reached" message
-CAP_TEXT = "You've reached today's alert limit; more tomorrow."
+DAILY_CAP = 20  # alerts per person per UTC day (a group counts once, a summary once); then one "limit reached" message
+CAP_TEXT = f"You've reached today's alert limit; more tomorrow. Every buy by traders you follow is still in your Feed: {SITE}/#/"
+# Of the DAILY_CAP, at most this many a day from any one trader you follow (their buys and sells, not a group), so
+# one busy trader can't use up the day. Past it their trades wait for a summary (held), except a sale of something
+# they alerted you about (_told): that still comes right away, within the DAILY_CAP.
+TRADER_DAILY = 5
+SUMMARY_S = 3 * 3600  # held trades go out as one summary per person this long after the first of them was held
+TOLD_S = 30 * 86400  # a sale counts as one they alerted you about when that alert was this recent
 GROUP_S = 6 * 3600  # 2+ traders you follow buying the same outcome within this long make one grouped alert
 GROUP_FAST_S = 3600  # the same, for markets that settle fast
 FAST_CATEGORIES = ("Sports", "Esports")
@@ -2309,7 +2315,9 @@ CONNECTED = (
     f"message, more buys of that outcome (or more sells of it) are left out for {ALERT_AGAIN_S // 3600} hours. When two or "
     "more traders you follow buy the same thing, one message lists them all and is updated as more buy. Nothing comes "
     "for a market that's all but decided (2¢ or less, 98¢ or more). If you've picked markets on Signals, trades of "
-    f"${WHALE_USD:,.0f} or more there come too. At most {DAILY_CAP} alerts a day."
+    f"${WHALE_USD:,.0f} or more there come too. At most {DAILY_CAP} alerts a day, and {TRADER_DAILY} from any one "
+    f"trader: past that, their trades come in one summary every {SUMMARY_S // 3600} hours (a summary counts as one "
+    "alert), except a sale of something they alerted you about, which still comes right away."
     "\n\nFollowing: {names}\n/list: who you follow · /stop: turn alerts off"
 )
 
@@ -2429,6 +2437,7 @@ def _chat_owner(chat: str) -> str | None:
 # pending: a trader's fills not alerted yet, over the last ALERT_MAX_AGE_S, so split buys add up into one alert
 # across rounds and restarts.
 # votes: "Useful" / "Not useful", one per alert and account, changeable.
+# held: trades by a trader you follow past their TRADER_DAILY, per account, until one summary sums them up (_summaries).
 
 _db_lock = threading.RLock()  # re-entrant: a nested read never hangs the alert loop
 _db_ready: set[str] = set()
@@ -2454,6 +2463,8 @@ CREATE TABLE IF NOT EXISTS events (at REAL NOT NULL, kind TEXT NOT NULL, uid TEX
   trader TEXT);
 CREATE TABLE IF NOT EXISTS quotes (at REAL NOT NULL, outcome TEXT NOT NULL, reads INTEGER NOT NULL, ms REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS watched (trader TEXT PRIMARY KEY, seen_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS held (uid TEXT NOT NULL, trader TEXT NOT NULL, outcome TEXT, side TEXT NOT NULL,
+  usd REAL, at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS seen_trades (trader TEXT NOT NULL, trade_id TEXT NOT NULL, at REAL NOT NULL,
   PRIMARY KEY (trader, trade_id));
 """
@@ -2489,15 +2500,19 @@ def _today(now: float | None = None) -> str:
     return datetime.fromtimestamp(time.time() if now is None else now, UTC).date().isoformat()
 
 
-COUNTED = ("buy", "sell", "group", "whale")  # what the daily cap counts: a group once, its edits never
+COUNTED = ("buy", "sell", "group", "whale", "summary")  # what the daily cap counts: a group once, its edits never
+TRADER_KINDS = ("buy", "sell")  # what TRADER_DAILY counts: one trader's own alerts (a group names several)
 
 
-def _sent_today(uid: str, kinds: tuple[str, ...] = COUNTED) -> int:
-    """Today's alerts of these kinds for this account: sent, or still on their way (queued, retrying, unknown);
-    not those that failed for good, so a retry never takes anyone past the cap and a refusal doesn't use it up."""
+def _sent_today(uid: str, kinds: tuple[str, ...] = COUNTED, trader: str | None = None) -> int:
+    """Today's alerts of these kinds for this account (from this trader, if given): sent, or still on their way
+    (queued, retrying, unknown); not those that failed for good, so a retry never takes anyone past the cap and a
+    refusal doesn't use it up."""
     with _db() as con:
         q = (f"SELECT COUNT(*) FROM alerts WHERE uid = ? AND day = ? AND kind IN ({','.join('?' * len(kinds))})"
              " AND COALESCE(state, 'sent') != 'failed'")  # fmt: skip
+        if trader is not None:
+            return int(con.execute(q + " AND trader = ?", (uid, _today(), *kinds, trader)).fetchone()[0])
         return int(con.execute(q, (uid, _today(), *kinds)).fetchone()[0])
 
 
@@ -2514,12 +2529,18 @@ RETRY_S = (30.0, 60.0, 120.0, 240.0)  # waits before each try again of a tempora
 
 def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, trader: str | None = None,
           outcome: str | None = None, trade_at: float | None = None, stop: str | None = None,
-          trigger_at: float | None = None) -> str | None:  # fmt: skip
+          trigger_at: float | None = None, usd: float | None = None, told: bool = False,
+          on_queue: Callable[[sqlite3.Connection], Any] | None = None) -> str | None:  # fmt: skip
     """Send one alert if today's cap allows it; its id when it went out now, else None (not sent, or sent later by
     a retry). At the cap, the first alert that doesn't fit sends CAP_TEXT instead, once a day (a failed send tries
     again with the next one), and the rest are dropped until the next UTC day. ``text_for`` gets the alert's id
     (its links can name it). ``trade_at``: when the alert's buys began (a group's first buy); ``trigger_at``: when
     the buy that sent it was made (defaults to ``trade_at``).
+
+    A buy or sell from a trader who already had TRADER_DAILY alerts today isn't sent: it's held for the next summary
+    (``usd``: its dollars there), unless ``told`` (a sale of something they alerted you about). The alert that
+    reaches TRADER_DAILY says so. ``on_queue`` runs in the transaction that keeps the alert (a summary clears what
+    it sums up there: kept and cleared together, or neither).
 
     Never twice, across any crash or failure (Telegram can't tell a repeat): the alert is kept (queued, with its
     message) before Telegram is asked and marked sending just before it is. Tried again only when Telegram surely
@@ -2537,10 +2558,23 @@ def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, tra
                 con.execute("INSERT INTO alerts (id, uid, chat, kind, sent_at, day, state) VALUES (?, ?, ?, 'cap', ?, ?, 'sent')",
                             (secrets.token_urlsafe(6), uid, chat, time.time(), _today()))  # fmt: skip
         return None
-    aid = secrets.token_urlsafe(6)  # 8 characters: fits Telegram's 64-byte button data with room to spare
     now = time.time()
-    body = json.dumps({"text": text_for(aid), "markup": _keyboard(aid, stop)})
+    last = ""
+    if kind in TRADER_KINDS and trader:
+        n = _sent_today(uid, TRADER_KINDS, trader)
+        if n >= TRADER_DAILY and not told:
+            with _db() as con:
+                con.execute("INSERT INTO held VALUES (?, ?, ?, ?, ?, ?)", (uid, trader, outcome, kind, usd, now))
+            return None
+        if n == TRADER_DAILY - 1:
+            last = (f"\n<i>That's {TRADER_DAILY} alerts from {html.escape(_who(trader))} today. Their next trades come"
+                    f" in one summary every {SUMMARY_S // 3600} hours; a sale of something they alerted you about"
+                    " still comes right away.</i>")  # fmt: skip
+    aid = secrets.token_urlsafe(6)  # 8 characters: fits Telegram's 64-byte button data with room to spare
+    body = json.dumps({"text": text_for(aid) + last, "markup": _keyboard(aid, stop)})
     with _db() as con:
+        if on_queue is not None:
+            on_queue(con)
         con.execute("INSERT INTO alerts (id, uid, chat, kind, trader, outcome, message_id, sent_at, trade_at, day,"
                     " trigger_at, state, tries, queued_at, next_at, body) VALUES"
                     " (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)",
@@ -2633,7 +2667,8 @@ def _copy_offered(wallet: str) -> bool:
 
 
 LINK_TARGETS = {"Buy on Polymarket International": "market", "Open on Polymarket International": "market",
-                "View on Polymarket US": "market_us", "Their record": "record", "Check current price": "check"}  # fmt: skip
+                "View on Polymarket US": "market_us", "Their record": "record", "Check current price": "check",
+                "Open your Feed": "feed"}  # fmt: skip
 
 # Where the trade happened, said on every alert: the traders Signals follows trade on Polymarket International.
 # With a verified Polymarket US twin (us_match), that it's the same market, never the same price.
@@ -2807,11 +2842,23 @@ class NewSell:
 
 
 def _sold_recently(trader: str, outcome: str, now: float) -> bool:
-    """Whether this trader's sell of this outcome was already alerted (to anyone) in the last ALERT_AGAIN_S, from
-    alerts.db, so a restart doesn't alert it again."""
+    """Whether this trader's sell of this outcome was already alerted (to anyone), or held for a summary, in the
+    last ALERT_AGAIN_S, from alerts.db, so a restart doesn't alert it again."""
     with _db() as con:
-        q = "SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ? LIMIT 1"
-        return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S)).fetchone() is not None
+        q = ("SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ?"
+             " UNION ALL SELECT 1 FROM held WHERE side = 'sell' AND trader = ? AND outcome = ? AND at >= ? LIMIT 1")  # fmt: skip
+        return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S) * 2).fetchone() is not None
+
+
+def _told(uid: str, trader: str, outcome: str, now: float) -> bool:
+    """Whether this trader alerted this person to this outcome in the last TOLD_S: a buy alert from them, or a
+    grouped alert with their buy in it. Their sale of it is then still sent past TRADER_DAILY: it may be news
+    about something the person bought because of that alert."""
+    with _db() as con:
+        q = ("SELECT 1 FROM alerts WHERE uid = ? AND outcome = ? AND sent_at >= ? AND COALESCE(state, 'sent') != 'failed'"
+             " AND ((kind = 'buy' AND trader = ?) OR (kind = 'group' AND EXISTS (SELECT 1 FROM buys WHERE"
+             " buys.uid = alerts.uid AND buys.outcome = alerts.outcome AND buys.trader = ?))) LIMIT 1")  # fmt: skip
+        return con.execute(q, (uid, outcome, now - TOLD_S, trader, trader)).fetchone() is not None
 
 
 def _recently(uid: str | None, trader: str, outcome: str, now: float) -> bool:
@@ -2867,7 +2914,7 @@ def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
         aid = _send(uid, chat, "group", lambda aid: _group_text(first, b.t, b.now, b.seen, aid), outcome=b.outcome,
                     trade_at=first[0][2], trigger_at=b.at)  # fmt: skip
         return 1 if aid else 0
-    aid = _send(uid, chat, "buy", b.text, trader=b.wallet, outcome=b.outcome, trade_at=b.at, stop=b.wallet)
+    aid = _send(uid, chat, "buy", b.text, trader=b.wallet, outcome=b.outcome, trade_at=b.at, stop=b.wallet, usd=b.usd)
     return 1 if aid else 0
 
 
@@ -3005,10 +3052,61 @@ def alert_pass(now: float | None = None) -> int:
     for sell in new_sells:  # never grouped
         for uid in to[sell.wallet]:
             if _send(uid, users[uid]["chat"], "sell", sell.text, trader=sell.wallet, outcome=sell.outcome,
-                     trade_at=sell.at, stop=sell.wallet):  # fmt: skip
+                     trade_at=sell.at, stop=sell.wallet, usd=sell.usd,
+                     told=_told(uid, sell.wallet, sell.outcome, now)):  # fmt: skip
                 sent += 1
     _seen_keep(looked, set(to), now)
-    return sent + retried + whale_pass(users, now)
+    return sent + retried + _summaries(users, now) + whale_pass(users, now)
+
+
+# ---- summaries: a busy trader's trades past TRADER_DAILY ----
+
+
+def _summary_text(rows: list[tuple[str, str, float | None, float]], aid: str | None = None) -> str:
+    """One message for everything held for a person: per trader, how many more trades (buys and sells, with their
+    dollars), since the first was held, and a link to the Feed, where every buy is."""
+    e = html.escape
+    per: dict[str, dict[str, list[float]]] = {}
+    for trader, side, usd, _ in rows:
+        per.setdefault(trader, {"buy": [], "sell": []})[side].append(usd or 0.0)
+    lines = [f"More from traders you follow, since {datetime.fromtimestamp(min(r[3] for r in rows), UTC):%H:%M} UTC:"]
+    for trader, sides in sorted(per.items(), key=lambda kv: -sum(map(len, kv[1].values()))):
+        parts = [f"{len(v)} {side}{'s' if len(v) != 1 else ''} (${sum(v):,.0f})" for side, v in sides.items() if v]
+        n = sum(map(len, sides.values()))
+        lines.append(f"• <b>{e(_who(trader))}</b>: {n} more trade{'s' if n != 1 else ''}, {' and '.join(parts)}")
+    lines.append(f"Each came after that trader's {TRADER_DAILY} alerts for the day. Every buy is in your Feed.")
+    return "\n".join([*lines, _links(("Open your Feed", f"{SITE}/#/"), aid=aid)])
+
+
+def _summaries(users: dict[str, dict[str, Any]], now: float) -> int:
+    """For each person whose first held trade was held SUMMARY_S ago or more: one summary of everything held for
+    them, a "summary" alert that counts once toward the DAILY_CAP. It's kept in the alerts outbox in the same
+    transaction that clears what it sums up, so a restart sends it (or a retry does) and never loses or repeats
+    it. A held buy that's since been in a grouped alert is left out (the group told them). Past the DAILY_CAP, it
+    goes like any alert that doesn't fit (CAP_TEXT, once) and what it would have summed up is dropped. Returns
+    messages sent."""
+    with _db() as con:
+        due = [r[0] for r in con.execute("SELECT uid FROM held GROUP BY uid HAVING MIN(at) <= ?", (now - SUMMARY_S,))]
+    sent = 0
+    for uid in due:
+        with _db() as con:
+            rows = con.execute("SELECT rowid, trader, side, usd, at FROM held WHERE uid = ? AND NOT (side = 'buy' AND"
+                               " EXISTS (SELECT 1 FROM alerts WHERE alerts.uid = held.uid AND kind = 'group' AND"
+                               " alerts.outcome = held.outcome AND sent_at >= held.at)) ORDER BY at",
+                               (uid,)).fetchall()  # fmt: skip
+            last = con.execute("SELECT MAX(rowid) FROM held WHERE uid = ?", (uid,)).fetchone()[0]
+        clear = lambda con, uid=uid, last=last: con.execute("DELETE FROM held WHERE uid = ? AND rowid <= ?", (uid, last))  # noqa: E731
+        chat = (users.get(uid) or {}).get("chat")
+        if not rows or not chat:
+            with _db() as con:
+                clear(con)
+            continue
+        summed = [r[1:] for r in rows]
+        if _send(uid, chat, "summary", lambda aid, x=summed: _summary_text(x, aid), on_queue=clear):
+            sent += 1
+        with _db() as con:  # kept (and cleared with it) or past the cap: either way, nothing is held for it now
+            clear(con)
+    return sent
 
 
 # ---- big trades in your markets, whoever the trader ----
