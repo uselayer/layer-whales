@@ -217,6 +217,14 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   - hosted: the owner sets `SIGNALS_METRICS_KEY` in Railway's variables, then
     `curl -H "Authorization: Bearer $SIGNALS_METRICS_KEY" https://usesignals.app/api/metrics`. Without the key
     it answers 404; with no key set it's closed. `?days=7` changes the period (default 30).
+- **Analytics** (how people use the page; off until `SIGNALS_POSTHOG_KEY` is set): PostHog, the same as
+  uselayer.sh. Page views (each `#/…` route is one), clicks, scroll depth and session replay. The page gets the
+  project key (phc_…, public by design) from `/api/config` and sends everything through `/lyr` on usesignals.app
+  (`web/vercel.json` forwards it to PostHog's US region), so ad blockers don't drop it and it only works behind
+  Vercel. A signed-in person is known by their Clerk user id only; signing out starts a new anonymous visitor.
+  Replays mask every field, and the text and pictures in Clerk's sign-in and account menus. To keep visitors' IP
+  addresses out, turn on "Discard client IP data" in the PostHog project's settings. This is separate from
+  Counting below, which stays in `alerts.db`.
 - **Limits**: "Check again" on Worth following only starts a new check when the last one is over an hour old.
   Someone can follow up to 20 traders.
 

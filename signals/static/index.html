@@ -1146,6 +1146,7 @@ async function loadFeed() {
 // Who is signed in (Clerk's user id, or null). Another account, or none: the last one's Following goes.
 function accountIs(uid) {
   if (uid === auth.uid) return;
+  analyticsAccount(uid, auth.uid);
   auth.uid = uid;
   Object.assign(feed, { mine: null, mineAt: 0, mineErr: null });
 }
@@ -2327,6 +2328,31 @@ async function checkPage(wallet, market) {
 // #/check/<wallet>/<market> (an alert's "Check your price").
 // Old links still work: Big trades used to be #/traders/big; My trades (#/mine, #/copied) went with the sandbox.
 const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/", "#/mine": "#/", "#/traders/big": "#/big" };
+// ---- analytics (PostHog): how people use the page, off unless the engine has a project key (/api/config) ----
+// Page views (each hash route counts as one), clicks, scroll depth and session replay. Loaded through /lyr on our
+// domain (web/vercel.json) so ad blockers don't drop it. A signed-in person is known by their Clerk user id only,
+// never a name, email or Telegram account: replays mask every field, and the text and pictures in Clerk's
+// sign-in and account menus.
+let analyticsOn = false;
+const CLERK_UI = ['[class^="cl-"]', '[class*=" cl-"]'];
+function startAnalytics(key) {
+  loadScript("/lyr/static/array.js").then(() => {
+    window.posthog.init(key, {
+      api_host: "/lyr", ui_host: "https://us.posthog.com", defaults: "2026-05-30",
+      capture_pageview: { path: true, hash: true },
+      session_recording: { maskAllInputs: true, maskTextSelector: CLERK_UI.join(", "), blockSelector: CLERK_UI.map((c) => `${c} img`).join(", ") },
+    });
+    analyticsOn = true;
+    if (auth.uid) window.posthog.identify(auth.uid);
+  }).catch(() => {}); // blocked or down: the page works the same without it
+}
+// Signing in links this browser's visits to the account; signing out starts a new anonymous visitor.
+function analyticsAccount(uid, was) {
+  if (!analyticsOn) return;
+  if (uid) window.posthog.identify(uid);
+  else if (was) window.posthog.reset();
+}
+
 function routeName() {
   const h = location.hash || "#/";
   if (h === "#/" || h === "#") return "feed";
@@ -2367,7 +2393,11 @@ function route() {
   else location.replace("#/");
 }
 window.addEventListener("hashchange", route);
-api("/api/config").then((c) => { venuesOn = c.venues; exploreOn = !!c.explore; if (c.clerk_key) startAuth(c.clerk_key, c.alerts); })
+api("/api/config").then((c) => {
+  venuesOn = c.venues; exploreOn = !!c.explore;
+  if (c.clerk_key) startAuth(c.clerk_key, c.alerts);
+  if (c.posthog_key) startAnalytics(c.posthog_key);
+})
   .catch(() => {}).finally(route); // without it: Polymarket only, and no signing in
 </script>
 </body>

@@ -39,6 +39,10 @@ behind Vercel (see README, "Hosting").
   there as traffic grows. Alert
   links go through `/go/<alert id>/<target>`, which redirects to Polymarket or Signals only, and still redirects
   when counting fails. `/api/metrics` is the owner's: locally, or with `SIGNALS_METRICS_KEY`; never public.
+- Analytics (README, "Analytics"): PostHog on the page, off unless `SIGNALS_POSTHOG_KEY` is set, sent through
+  `/lyr` (`web/vercel.json`). A signed-in person is identified by their Clerk user id only: never send PostHog a
+  name, email, Telegram account or anything from `/api/me`, and keep fields and Clerk's menus masked in replays.
+  It's for seeing how the page is used; Counting (above) stays the record of alerts and follows.
 - Signals is a consumer website (usesignals.app); running it locally is for development. It places no orders:
   no sandbox, no in-app trading, no automatic copying, and it never holds anyone's keys or funds. Buying means
   "What buying now costs", then "Buy on Polymarket ↗", where the user buys it themselves. A session never

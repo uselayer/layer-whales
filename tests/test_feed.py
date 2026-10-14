@@ -396,7 +396,7 @@ def test_the_feed_says_what_it_hasnt_read_and_how_old_it_is_never_no_trades(run_
 
 
 def test_the_feed_page_rules(run_js: Any) -> None:
-    got = run_js(("feed", "auth", "accountIs", "LEAD", "leadOf", "oneCardPerTrade"), """(() => {
+    got = run_js(("feed", "auth", "analyticsOn", "analyticsAccount", "accountIs", "LEAD", "leadOf", "oneCardPerTrade"), """(() => {
       Object.assign(feed, { mine: { bets: [1] }, mineAt: 5, mineErr: "x" }); auth.uid = "user_1";
       accountIs("user_1"); const same = feed.mine !== null;
       accountIs("user_2"); const other = feed.mine === null && feed.mineAt === 0 && feed.mineErr === null && auth.uid === "user_2";
@@ -408,6 +408,18 @@ def test_the_feed_page_rules(run_js: Any) -> None:
       return [same, other, out, cards[0].wallet, cards[0].also.map((x) => x.wallet)];
     })()""")
     assert got == [True, True, True, "0xb", ["0xa", "0xc"]]
+
+
+def test_analytics_knows_a_signed_in_person_by_their_clerk_id_only(run_js: Any) -> None:
+    # PostHog hears who is signed in as Clerk's user id and nothing else; signing out starts a new anonymous visitor.
+    got = run_js(("feed", "auth", "analyticsOn", "analyticsAccount", "accountIs"), """(() => {
+      const calls = []; globalThis.window = { posthog: { identify: (...a) => calls.push(["identify", ...a]), reset: () => calls.push(["reset"]) } };
+      accountIs("user_0"); accountIs(null); // analytics off (no key, or blocked): nothing is sent
+      analyticsOn = true;
+      accountIs("user_1"); accountIs("user_1"); accountIs("user_2"); accountIs(null); accountIs(null);
+      return calls;
+    })()""")
+    assert got == [["identify", "user_1"], ["identify", "user_2"], ["reset"]]
 
 
 def test_one_polling_loop_however_often_the_feed_is_loaded(run_js: Any) -> None:

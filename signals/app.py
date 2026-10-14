@@ -157,9 +157,11 @@ def feed_reader(request: Request) -> None:
 
 @app.get("/api/config")
 def config() -> dict[str, Any]:
-    """What the page needs to know before it draws: which venues Signals reads (see VENUES), and Clerk's
-    publishable key when signing in (to follow traders) is switched on. The key is public by design."""
-    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN), "explore": EXPLORE_ON}
+    """What the page needs to know before it draws: which venues Signals reads (see VENUES), Clerk's publishable
+    key when signing in (to follow traders) is switched on, and PostHog's project key when analytics is. Both keys
+    are public by design."""
+    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN), "explore": EXPLORE_ON,
+            "posthog_key": POSTHOG_KEY or None}
 
 
 @app.get("/api/top")
@@ -2018,6 +2020,9 @@ def _quote_outcome(p: Any, changed: bool) -> str:
 # TELEGRAM_BOT_TOKEN is. Nothing here places an order.
 
 CLERK_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+# Product analytics on the page (PostHog: page views, clicks, session replay), off unless the owner sets the project's
+# key (phc_…). The page sends it through /lyr on our domain (web/vercel.json), so it only works behind Vercel.
+POSTHOG_KEY = os.environ.get("SIGNALS_POSTHOG_KEY", "")
 TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 SITE = os.environ.get("SIGNALS_SITE", "https://usesignals.app")
 MAX_FOLLOWS = 20
