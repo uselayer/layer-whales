@@ -158,3 +158,43 @@ Also:
    - The "Selective traders" view with the three statuses.
    - Pace-scaled inactivity.
 5. **Only if D passes:** confirmed selective sharps join recommendations.
+
+## Result of the validation (2026-10-13; `selective-preregistered.md`, `selective-results.txt`)
+
+**Pool:** 250 selective and 150 frequent wallets from markets that closed before 14 Jul, judged on the 91 days
+after.
+
+**Verdict, against the pre-registered bar: the long-record track is not supported for selective traders.**
+
+| Selective band (250) | Result |
+|---|---|
+| `L-settle` (settled z ≥ 2) | picks 1 |
+| `L-move` (12-hour z ≥ 2) | picks 8 |
+| After FDR | 0 and 2 |
+| Next 91 days, the picks with any settled bets | −11¢ a trade (6 events): too few to judge |
+| Baseline, settled edge | +0.91¢ (−1.36 to +2.72) |
+| Baseline, still trading in the next 91 days | 39% |
+| Baseline, a 10th independent bet within 91 days | 10% |
+| Picks reaching 10 bets within 91 days | 0 of 9 |
+| `P-profit` (profitable over the past year), profitable in the next 91 days | 52%, against 39% for all |
+| `P-profit`, edge | not clearly above zero |
+
+**Frequent control (150):**
+
+- `L-settle` picks kept their edge: +5.09¢ (+3.00 to +8.09), 3 wallets. FDR: 2 wallets, +5.97¢.
+- The measure can work where there are bets to measure. It doesn't reach the traders it's meant for.
+
+**Calibration:** the settled z is conservative (z ≥ 2 in 1–2% against 2.3% nominal). The 12-hour z runs a little
+hot (5–6%), so the FDR step matters for it.
+
+**What it means:**
+
+1. **A per-trader skill verdict isn't supportable for most selective traders** with the data available. They
+   make too few settled bets to show anything but a very large edge, and most pause for months.
+2. **"10 more bets before confirming" isn't practical.** 90% of selective traders don't reach 10 in a quarter.
+3. **Keep them discoverable and honestly labelled.** "Limited evidence", their record (bets, profit, settled
+   results with the count) and Follow for research, with no skill verdict. That's what V1 ships.
+4. **Don't build "Selective sharp", or the B track as specified.**
+   - Holders as a discovery source (A) is still worth doing for coverage, as discovery, not as a skill claim.
+   - A settled-outcome edge with its range can be shown as context, labelled "not enough to measure skill" until
+     it reaches the frequent-trader bar.
