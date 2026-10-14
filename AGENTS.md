@@ -50,7 +50,7 @@ behind Vercel (see README, "Hosting").
   Polymarket's market status (the SDK's `preview_copy`), never from the price, and the amount is priced from
   the cheapest price for sale now, up to `BUY_LIMIT` (3¢) above it, a limit the page discloses. It shows the
   estimated cost, what's for sale within the limit, the fee, the estimated slippage and when the book was read
-  (plus the 3–5 minute lag of their trade). Their price is context ("They paid 37¢, 12m ago, for context"),
+  (and that their trade's time is when it was made on Polymarket). Their price is context ("They paid 37¢, 12m ago, for context"),
   never a target. It's always an estimate: never imply a guaranteed fill (it may fill higher, in part, or not
   at all), and no green or "you can still get in" in it. A quote that fails shows no price: when the book moved
   between the reads (`price_changed`) it says "Price changed—refresh quote", never that nothing is for sale;
@@ -96,7 +96,12 @@ behind Vercel (see README, "Hosting").
   (Skip, all markets) means no big-trade alerts. For a trader copying isn't offered for, an alert is never
   "you can still get in" and never green.
   Every alert and trade card keeps the link to the market, whoever the trader. Every alert, and the Feed, says
-  Polymarket's public data runs 3–5 minutes behind. The engine checks Clerk's session token itself (public keys,
+  how late it can be for where its trades come from, never a blanket figure and never "instant": a trader you
+  follow is read on their own about every 30 seconds (Polymarket returns their trades there within seconds), so
+  their alerts say "Signals typically reads followed traders' trades every 30 seconds" (`FOLLOW_DELAY`); big trades
+  come from Polymarket's feed of every trade, which typically runs 3–5 minutes behind (`BIG_DELAY`, and the Feed's Big
+  trades). A trade's time is its Polymarket timestamp (its transaction's block time), and every alert measures
+  from it ("Traded 14:02 UTC, 6 min before this alert."). The engine checks Clerk's session token itself (public keys,
   no Clerk secret). Never let one account see or change another's follows, and never let an answer about a
   signed-in person be cached.
 - Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.

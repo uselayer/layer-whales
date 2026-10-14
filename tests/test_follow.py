@@ -166,12 +166,12 @@ def test_every_new_buy_alerts_with_how_far_the_price_moved(api: TestClient, monk
     assert engine.alert_pass() == 2  # one message for the two fills on 0xcid:0, and one for the moved market
     text, moved = engine.tg.sent[-2]["text"], engine.tg.sent[-1]["text"]
     assert "bought <b>Yes</b> at 40¢ ($400)" in moved and "Now 60¢, price already moved." in moved and "get in" not in moved
-    assert "Buy on Polymarket International" in moved and moved.endswith("Polymarket's public data runs 3–5 minutes behind.")
+    assert "Buy on Polymarket International" in moved and moved.endswith(engine.FOLLOW_DELAY)
     # Copying isn't offered for them: following is research too, so the alert gives the same facts, neutrally.
     assert text.splitlines()[:3] == ["<b>Sharp &lt;Sam&gt;</b> bought <b>Yes</b> at 41¢ ($820)", "Will it &lt;rain&gt;?", "Now 41¢."]
     assert "before this alert." in text and "you can still get in" not in text and engine.COPY_LINE not in text
     assert "Buy on Polymarket International" in text and SHARP in text  # the link only opens the market
-    assert text.endswith("Polymarket's public data runs 3–5 minutes behind.")
+    assert text.endswith(engine.FOLLOW_DELAY)
     keys = engine.tg.sent[-1]["reply_markup"]["inline_keyboard"]
     assert [b["text"] for b in keys[0]] == ["Useful", "Not useful"] and keys[1][0]["callback_data"] == f"unf:{SHARP}"
     trades.insert(0, buy(5, fresh))
@@ -194,11 +194,22 @@ def test_an_alert_gives_the_same_facts_for_every_trader_and_a_copy_line_only_whe
              "Traded 14:02 UTC, 6 min before this alert.", engine.TRADED_INTL]  # fmt: skip
     monkeypatch.setattr(engine, "copy_offer", lambda s: (True, None))
     text = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 40, at, at + 6 * 60 + 10)
-    assert text.splitlines() == [*facts, engine.COPY_LINE, links, "Polymarket's public data runs 3–5 minutes behind."]
+    assert text.splitlines() == [*facts, engine.COPY_LINE, links, engine.FOLLOW_DELAY]
     assert "not a promise" in engine.COPY_LINE and "$" not in engine.COPY_LINE  # secondary, no cost: that's the preview's
     monkeypatch.setattr(engine, "copy_offer", lambda s: (False, "No."))
     neutral = engine._alert_text(SHARP, buy(1, datetime.now(UTC)), 0.40, 0.41, 40, at, at + 6 * 60 + 10)
-    assert neutral.splitlines() == [*facts, links, "Polymarket's public data runs 3–5 minutes behind."]
+    assert neutral.splitlines() == [*facts, links, engine.FOLLOW_DELAY]
+
+
+def test_each_alert_says_how_late_it_can_be_for_where_its_trade_came_from(api: TestClient) -> None:
+    # a trader you follow is read on their own every round: no "3–5 minutes", and never "instant"
+    assert "3–5" not in engine.FOLLOW_DELAY and str(engine.LIVE_POLL_S) in engine.FOLLOW_DELAY
+    # big trades come from Polymarket's feed of every trade, which does run 3–5 minutes behind
+    assert "typically runs 3–5 minutes behind" in engine.BIG_DELAY and "typically" in engine.FOLLOW_DELAY
+    for line in (engine.FOLLOW_DELAY, engine.BIG_DELAY):
+        assert not any(w in line.lower() for w in ("instant", "real time", "real-time", "immediately"))
+    page = api.get("/").text
+    assert "Polymarket's public data runs 3–5 minutes behind" not in page  # no blanket figure on the page either
 
 
 def test_clerk_frontend_api_comes_from_the_publishable_key() -> None:
