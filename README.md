@@ -222,9 +222,9 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   project key (phc_…, public by design) from `/api/config` and sends everything through `/lyr` on usesignals.app
   (`web/vercel.json` forwards it to PostHog's US region), so ad blockers don't drop it and it only works behind
   Vercel. A signed-in person is known by their Clerk user id only; signing out starts a new anonymous visitor.
-  Replays mask every field, and the text and pictures in Clerk's sign-in and account menus. To keep visitors' IP
-  addresses out, turn on "Discard client IP data" in the PostHog project's settings. This is separate from
-  Counting below, which stays in `alerts.db`.
+  Replays mask every field, and the text and pictures in Clerk's sign-in and account menus. PostHog keeps each
+  visitor's IP address and works out where they are from it (country, region, city). This is separate from
+  Counting below, which stays in `alerts.db` and keeps no IPs.
 - **Limits**: "Check again" on Worth following only starts a new check when the last one is over an hour old.
   Someone can follow up to 20 traders.
 
