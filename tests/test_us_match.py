@@ -245,7 +245,7 @@ def test_go_sends_a_tap_to_polymarket_us_and_nowhere_else(api: TestClient) -> No
 
 # ---- the page ----
 
-PAGE_DEFS = ("esc", "INTL", "usLink", "venueNote", "usInline", "usBox")
+PAGE_DEFS = ("esc", "INTL", "usLink", "sitsOut", "venueNote", "usInline", "usBox")
 TWIN = {"found": True, "url": "https://polymarket.us/event/nba-cle-orl", "outcome": "Cavaliers",
         "differences": [{"code": "carveout_differs", "text": "Polymarket US sends a tie to <manual> review."}]}  # fmt: skip
 
@@ -270,6 +270,31 @@ def test_the_trade_sheet_explains_the_twin_its_differences_and_that_their_price_
     none = run_js(PAGE_DEFS, "usBox({us: {found: false}})")
     assert "No verified US match found." in none and "View on Polymarket US" not in none
     assert "couldn't check" in run_js(PAGE_DEFS, "usBox({us: null})")
+
+
+def test_a_player_prop_twin_says_first_that_the_two_can_pay_differently_if_the_player_sits_out() -> None:
+    # 14 NFL prop lines paid differently Oct 4–13: the player sat out, International paid No, Kalshi and US a fair price.
+    # Layer states that once in its docs, never on a match, so the twin has to say it.
+    k = {"venue": "kalshi", "market_id": "KXNFLRECYDS-26OCT18-X-40", "series": "KXNFLRECYDS"}
+    t = built([intl("0xprop", k["market_id"], "tok-prop") | {"kalshi": k}],
+              [us("aec-nfl-prop:long", k["market_id"], "Player 40+ receiving yards", caveats=["definition_differs"])
+               | {"kalshi": k}])  # fmt: skip
+    twin = t.lookup("0xprop:0", "tok-prop", "Yes", now=1.0)
+    assert twin is not None and twin["found"] is True
+    assert [d["code"] for d in twin["differences"]] == ["player_sits_out", "definition_differs"]
+    assert "doesn't play" in twin["differences"][0]["text"] and "fair price" in twin["differences"][0]["text"]
+    game = built().lookup(f"{GAME}:0", "tok-cle", "x", now=1.0)  # a game's winner: no player to sit out
+    assert game is not None and "player_sits_out" not in [d["code"] for d in game["differences"]]
+
+
+def test_the_page_never_calls_a_player_prop_twin_the_same_market(run_js: Any) -> None:
+    prop = TWIN | {"differences": [dict(us_match.SITS_OUT)] + TWIN["differences"]}
+    line = run_js(PAGE_DEFS, f"venueNote({json.dumps(prop)})")
+    assert "Same market" not in line and "can pay differently if the player doesn't play" in line
+    assert "View on Polymarket US ↗" in line
+    box = run_js(PAGE_DEFS, f"usBox({{us: {json.dumps(prop)}}})")
+    assert "the same market" not in box and "this player's line" in box and "doesn&#39;t play" in box  # escaped
+    assert "Same market on Polymarket US" in run_js(PAGE_DEFS, f"venueNote({json.dumps(TWIN)})")  # a game is unchanged
 
 
 def test_the_page_never_says_a_market_is_not_on_polymarket_us_and_scopes_quotes_to_international() -> None:
