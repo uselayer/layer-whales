@@ -88,7 +88,9 @@ REASON_LABELS = {
 # once "too_few" or "no_edge".
 # what kept a score: the Worth following check, a trader page, the import, the background evaluation
 VIA = ("check", "page", "import", "background")
-KINDS = ("recommended", "new", "recheck")  # what ``due`` hands out, in that order
+# what ``due`` hands out, in that order: a recommended trader people are shown (``presented``), any other
+# recommended trader, a wallet never looked at, the rest (``new_first`` puts new ones before other recommended)
+KINDS = ("presented", "recommended", "new", "recheck")
 SAMPLE_KEEP = 30  # checked bets kept with a score, as the Worth following check keeps them
 
 SCORE_DAYS = 30  # the window a score reads, as the Worth following check and a trader page score
@@ -97,7 +99,13 @@ QUICK_TRADES = 500  # the latest trades a quick check reads: one read (Polymarke
 #                     heavily still reach back past the 30 days instead of cutting the read short
 
 # When a wallet is looked at again, by why it isn't recommended (``next_check_at``).
-RESCORE_S = 6 * 3600  # a recommended trader (one of uselayer's RECOMMENDED segments): scored again, as the check is
+# Freshness, one rule for every place a score is shown (Explore, a trader page, the Recommended list): a recommended
+# trader people are shown (``presented``: on the Recommended list, or followed) is scored again every
+# PRESENTED_RESCORE_S, as the check scores its own; any other recommended trader the directory found, once a day.
+# A score counts as fresh for twice its cadence (``fresh_for``): one missed rescore never drops a trader.
+PRESENTED_RESCORE_S = 6 * 3600
+BACKGROUND_RESCORE_S = 24 * 3600
+RESCORE_S = PRESENTED_RESCORE_S  # (the name phase 3 gave the 6 hours)
 RECHECK_EVIDENCE_S = 86400  # not enough recent evidence, or not trading lately: one read a day, so they're scored as
 #                             soon as they have the bets (or buy again)
 RECHECK_SCORED_S = 2 * 86400  # any other score
@@ -154,8 +162,21 @@ CREATE INDEX IF NOT EXISTS wallets_by_reason ON wallets (status, not_recommended
 
 _RECOMMENDED_SQL = ", ".join(f"'{s}'" for s in RECOMMENDED)
 # Which of KINDS a due wallet is: a recommended trader (scored, or failed since), one never looked at, any other.
-_KIND = f"""CASE WHEN segment IN ({_RECOMMENDED_SQL}) AND status IN ('scored', 'failed') THEN 0
-  WHEN status = 'found' THEN 1 ELSE 2 END"""
+_KIND = f"""CASE WHEN segment IN ({_RECOMMENDED_SQL}) AND status IN ('scored', 'failed')
+    THEN CASE WHEN wallet IN (SELECT wallet FROM temp.presented_now) THEN 0 ELSE 1 END
+  WHEN status = 'found' THEN 2 ELSE 3 END"""
+# A recommended trader people are shown is due once its score is PRESENTED_RESCORE_S old, whatever next_check says.
+_DUE = f"""(next_check <= :now OR (status = 'scored' AND segment IN ({_RECOMMENDED_SQL})
+  AND scored_at <= :now - {PRESENTED_RESCORE_S} AND wallet IN (SELECT wallet FROM temp.presented_now)))"""
+
+
+def fresh_for(presented: bool) -> float:
+    """How long a recommended trader's score counts as fresh: twice its cadence, so one missed rescore never drops
+    them (12 hours for one people are shown, 48 for any other)."""
+    return 2 * (PRESENTED_RESCORE_S if presented else BACKGROUND_RESCORE_S)
+
+
+PASSED_FRESH_S = fresh_for(False)  # Explore's "Passed our checks": a recommended tier from the last 48 hours
 # On the boards the Worth following check reads to call a wallet "on the leaderboard" (uselayer's find_candidates,
 # passed to its score as on_leaderboard): the monthly profit board's top 1,000; the weekly and all-time profit and
 # monthly volume boards' top 50; each category's monthly profit top 50.
@@ -186,7 +207,8 @@ def reason_label(reason: str | None, buys_30d: int | None = None) -> str | None:
 
 def next_check_at(status: str, reason: str | None, segment: str | None, at: float, failures: int = 0) -> float:
     """When a wallet is due again after a look at ``at`` that left it ``status``, not recommended for ``reason``
-    (its latest score's ``segment``): a recommended trader in RESCORE_S; one short of evidence or not trading
+    (its latest score's ``segment``): a recommended trader in BACKGROUND_RESCORE_S (one people are shown sooner:
+    ``due``'s ``presented``); one short of evidence or not trading
     lately each day; dormant ones and market makers weekly; a failed try later each time it fails again in a row."""
     if status == "failed":
         return at + RETRY_S[min(max(failures, 1), len(RETRY_S)) - 1]
@@ -196,7 +218,7 @@ def next_check_at(status: str, reason: str | None, segment: str | None, at: floa
         return at + RECHECK_EVIDENCE_S
     if reason in ("dormant", "no_view"):
         return at + RECHECK_QUIET_S
-    return at + (RESCORE_S if segment in RECOMMENDED else RECHECK_SCORED_S)
+    return at + (BACKGROUND_RESCORE_S if segment in RECOMMENDED else RECHECK_SCORED_S)
 
 
 @dataclass(frozen=True)
@@ -248,7 +270,7 @@ def quick_look(trades: list[tuple[Any, ...]], now: float, read_all: bool,
                      None if middle is None else round(middle, 2), covered > evidence)  # fmt: skip
 
 
-EXPLORE_GROUPS = ("limited", "checked", "unchecked")
+EXPLORE_GROUPS = ("passed", "limited", "checked", "unchecked")
 # Listed only when found somewhere public (PUBLIC_SOURCES: the sweep's leaderboards and markets, the Feed's big
 # trades, the check's own reads), which ``listed`` keeps. A wallet known only because someone searched for or
 # followed it stays out of Explore and its search.
@@ -262,6 +284,8 @@ _GROUPS = {
     # looked at, with something to say, short of a recommended tier: a score's verdict, or a quick check's (dormant,
     # paused). Recommended tiers are the Recommended tab's: Explore's search finds them, its lists leave them out.
     "checked": f"((w.scored_at IS NOT NULL OR w.status = 'checked') AND NOT {_LIMITED} AND NOT {_TIERED})",
+    # a recommended tier from the last PASSED_FRESH_S ("Passed our checks"; ``:passed_after``), and any (search)
+    "passed": f"({_TIERED} AND w.scored_at >= {{passed_after}})",
     "recommended": _TIERED,
     # found, never looked at: nothing about them has been measured
     "unchecked": "(w.scored_at IS NULL AND w.status IN ('found', 'failed'))",
@@ -275,7 +299,8 @@ SORTS = {
 _WALLETISH = re.compile(r"0x[0-9a-f]{2,40}")
 _ROW = """w.wallet, w.name, COALESCE(w.category, w.seen_category) AS category, w.last_active, w.status, w.not_recommended,
   w.segment, w.scored_at, w.tried_at, w.buys_30d, w.buys_90d, w.last_buy, w.market_usd, w.evidence_cut, w.typical_usd,
-  w.first_seen, w.first_source, sc.bets AS bets_checked, sc.format AS score_format,
+  w.first_seen, w.first_source, sc.bets AS bets_checked, sc.format AS score_format, sc.skill, sc.copyable,
+  sc.edge, sc.edge_z, sc.copy AS copy_mean, sc.copy_low, sc.trading_pnl_window, sc.window_end,
   (SELECT b.place || '|' || b.rank FROM sightings b WHERE b.wallet = w.wallet AND b.source = 'leaderboard'
     AND b.rank IS NOT NULL ORDER BY b.rank LIMIT 1) AS best_board,
   (SELECT m.example_title FROM sightings m WHERE m.wallet = w.wallet AND m.source IN ('market', 'feed')
@@ -283,20 +308,28 @@ _ROW = """w.wallet, w.name, COALESCE(w.category, w.seen_category) AS category, w
   """ + _PUBLIC + " AS public"
 
 
+def _group(g: str, now: float) -> str:
+    """A group's SQL as of ``now`` (the passed group's cutoff is a number worked out here, never anyone's input)."""
+    return _GROUPS[g].replace("{passed_after}", f"{now - PASSED_FRESH_S:.3f}")
+
+
 def _like(q: str) -> str:
     return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _explore(r: dict[str, Any]) -> dict[str, Any]:
+def _explore(r: dict[str, Any], now: float | None = None) -> dict[str, Any]:
     """A wallet as Explore shows it. ``group`` and ``evidence`` (``quick``: a quick check's counts only; ``scored``:
-    a score; None: never looked at). A figure that wasn't read stays None (unknown), never 0."""
+    a score; None: never looked at). A figure that wasn't read stays None (unknown), never 0. A recommended tier is
+    ``passed`` while its score is fresh (PASSED_FRESH_S), ``recommended`` once it isn't (found by a search only)."""
+    now = time.time() if now is None else now
     limited = (r["status"] == "checked" and r["not_recommended"] == "not_enough_recent_evidence") or (
         r["status"] != "checked" and r["scored_at"] is not None and r["segment"] == "too_few")  # fmt: skip
     looked = r["scored_at"] is not None or r["status"] == "checked"
     tiered = r["status"] != "checked" and r["scored_at"] is not None and r["segment"] in RECOMMENDED
     board, _, rank = (r.pop("best_board") or "").partition("|")
     return r | {
-        "group": "limited" if limited else "recommended" if tiered else "checked" if looked else "unchecked",
+        "group": "limited" if limited else ("passed" if r["scored_at"] >= now - PASSED_FRESH_S else "recommended")
+        if tiered else "checked" if looked else "unchecked",
         "evidence": None if not looked else "quick" if r["status"] == "checked" else "scored",
         "label": reason_label(r["not_recommended"], r["buys_30d"]) if r["status"] == "checked" else None,
         "board": {"place": board, "rank": int(rank)} if board else None,
@@ -589,23 +622,34 @@ class Directory:
                     (look.reason, now, next_check_at("checked", look.reason, segment, now), w),
                 )
 
-    def due(self, limit: int, now: float | None = None) -> list[dict[str, Any]]:
-        """Up to ``limit`` wallets due a look (``next_check`` passed), in the order to take them: recommended
-        traders first (most overdue first), then wallets never looked at (newest found first), then the rest
-        (most overdue first). Within each, the categories take turns (a wallet's from its score, else where it
-        was first seen), so no category waits behind a bigger one. Each with its ``kind`` (one of KINDS),
-        ``status``, ``scored_at``, ``category``, ``name``, and ``on_leaderboard`` as the Worth following check
-        would pass it."""
+    @staticmethod
+    def _presented(con: sqlite3.Connection, presented: Iterable[str]) -> None:
+        con.execute("CREATE TEMP TABLE IF NOT EXISTS presented_now (wallet TEXT PRIMARY KEY)")
+        con.execute("DELETE FROM temp.presented_now")
+        con.executemany("INSERT OR IGNORE INTO temp.presented_now VALUES (?)", [(w.lower(),) for w in presented])
+
+    def due(self, limit: int, now: float | None = None, *, presented: Iterable[str] = (),
+            new_first: bool = False) -> list[dict[str, Any]]:  # fmt: skip
+        """Up to ``limit`` wallets due a look, in the order to take them: recommended traders people are shown
+        (``presented``: due once their score is PRESENTED_RESCORE_S old), any other recommended trader (once a day),
+        wallets never looked at (newest found first), then the rest (as each comes due); most overdue first.
+        ``new_first``: wallets never looked at before other recommended traders (the evaluation's reserve, so the
+        rest of the directory keeps being checked). Within each, the categories take turns (a wallet's from its
+        score, else where it was first seen), so no category waits behind a bigger one. Each with its ``kind`` (one
+        of KINDS), ``status``, ``scored_at``, ``category``, ``name``, and ``on_leaderboard`` as the Worth following
+        check would pass it."""
         now = time.time() if now is None else now
+        rank = "CASE kind WHEN 0 THEN 0 WHEN 2 THEN 1 WHEN 1 THEN 2 ELSE 3 END" if new_first else "kind"
         with self._db() as con:
+            self._presented(con, presented)
             rows = con.execute(
-                f"""SELECT wallet, kind, cat, status, scored_at, name, {_LISTED} FROM (
+                f"""SELECT wallet, kind, cat, status, scored_at, name, {_LISTED.replace("?", ":listed_after")} FROM (
                   SELECT *, ROW_NUMBER() OVER (PARTITION BY kind, cat
-                    ORDER BY CASE WHEN kind = 1 THEN -first_seen ELSE next_check END, wallet) AS turn
+                    ORDER BY CASE WHEN kind = 2 THEN -first_seen ELSE next_check END, wallet) AS turn
                   FROM (SELECT wallet, status, scored_at, name, first_seen, next_check, {_KIND} AS kind,
-                    COALESCE(category, seen_category, 'Other') AS cat FROM wallets WHERE next_check <= ?)) q
-                ORDER BY kind, turn, cat LIMIT ?""",
-                (now - LISTED_FRESH_S, now, limit),
+                    COALESCE(category, seen_category, 'Other') AS cat FROM wallets WHERE {_DUE})) q
+                ORDER BY {rank}, turn, cat LIMIT :limit""",
+                {"listed_after": now - LISTED_FRESH_S, "now": now, "limit": limit},
             ).fetchall()
         return [{"wallet": w, "kind": KINDS[k], "category": c, "status": st, "scored_at": at, "name": n,
                  "on_leaderboard": bool(b)} for w, k, c, st, at, n, b in rows]  # fmt: skip
@@ -617,11 +661,12 @@ class Directory:
                 "SELECT MAX(last_seen) FROM sightings WHERE source = 'leaderboard' AND place = 'PNL MONTH OVERALL'"
             ).fetchone()[0]
 
-    def due_counts(self, now: float | None = None) -> dict[str, int]:
+    def due_counts(self, now: float | None = None, presented: Iterable[str] = ()) -> dict[str, int]:
         """How many wallets are due a look now, by kind."""
         now = time.time() if now is None else now
         with self._db() as con:
-            got = dict(con.execute(f"SELECT {_KIND}, COUNT(*) FROM wallets WHERE next_check <= ? GROUP BY 1", (now,)))
+            self._presented(con, presented)
+            got = dict(con.execute(f"SELECT {_KIND}, COUNT(*) FROM wallets WHERE {_DUE} GROUP BY 1", {"now": now}))
         return {k: got.get(i, 0) for i, k in enumerate(KINDS)}
 
     @staticmethod
@@ -814,9 +859,9 @@ class Directory:
             else:
                 where.append("w.name LIKE ? ESCAPE '\\'")
                 args.append("%" + _like(q) + "%")
-            where.append("(" + " OR ".join(_GROUPS[g] for g in search_in) + ")")
+            where.append("(" + " OR ".join(_group(g, now) for g in search_in) + ")")
         else:
-            where.append(_GROUPS[group])
+            where.append(_group(group, now))
         if category:
             where.append("COALESCE(w.category, w.seen_category) = ?")
             args.append(category)
@@ -839,11 +884,12 @@ class Directory:
                 f"WHERE {' AND '.join(where)} ORDER BY {order}, w.wallet LIMIT ? OFFSET ?",
                 (*args, limit + 1, offset),
             ).fetchall()
-        return {"rows": [_explore(dict(r)) for r in rows[:limit]], "more": len(rows) > limit}
+        return {"rows": [_explore(dict(r), now) for r in rows[:limit]], "more": len(rows) > limit}
 
-    def explore_counts(self) -> dict[str, int]:
+    def explore_counts(self, now: float | None = None) -> dict[str, int]:
         """How many wallets each Explore group lists (public ones only)."""
-        case = " ".join(f"WHEN {_GROUPS[g]} THEN '{g}'" for g in EXPLORE_GROUPS)
+        now = time.time() if now is None else now
+        case = " ".join(f"WHEN {_group(g, now)} THEN '{g}'" for g in EXPLORE_GROUPS)
         with self._db() as con:
             got = dict(con.execute(f"SELECT CASE {case} END, COUNT(*) FROM wallets w WHERE {_PUBLIC} GROUP BY 1"))
         return {g: got.get(g, 0) for g in EXPLORE_GROUPS}
@@ -856,7 +902,7 @@ class Directory:
                 f"SELECT {_ROW} FROM wallets w LEFT JOIN scores sc ON sc.wallet = w.wallet WHERE w.wallet = ?",
                 (wallet.lower(),),
             ).fetchone()
-        return None if r is None else _explore(dict(r))
+        return None if r is None else _explore(dict(r))  # as of now
 
     def wallet(self, wallet: str) -> dict[str, Any] | None:
         with self._db() as con:

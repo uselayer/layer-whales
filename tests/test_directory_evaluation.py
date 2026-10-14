@@ -20,14 +20,16 @@ from signals.budget import COOL_S, RECOVER_S, BackgroundHttp, Budget
 
 REAL_CHECKER = engine.checker  # before conftest stands it in with reads.whales
 from signals.directory import (
+    BACKGROUND_RESCORE_S,
+    PRESENTED_RESCORE_S,
     RECHECK_EVIDENCE_S,
     RECHECK_QUIET_S,
     RECHECK_SCORED_S,
-    RESCORE_S,
     RETRY_S,
     Directory,
     QuickLook,
     Seen,
+    fresh_for,
     next_check_at,
     quick_look,
     reason_label,
@@ -119,15 +121,16 @@ def test_each_reason_reads_as_a_sentence() -> None:
 
 
 def test_each_kind_of_wallet_is_looked_at_again_on_its_own_schedule() -> None:
-    assert next_check_at("scored", None, "proven", T0) == T0 + RESCORE_S == T0 + 6 * 3600
-    assert next_check_at("scored", None, "too_fast", T0) == T0 + RESCORE_S
+    # a recommended trader the directory found: daily (one people are shown: every 6 hours, see the queue's tests)
+    assert next_check_at("scored", None, "proven", T0) == T0 + BACKGROUND_RESCORE_S == T0 + DAY
+    assert next_check_at("scored", None, "too_fast", T0) == T0 + BACKGROUND_RESCORE_S
     assert next_check_at("scored", "no_edge", "no_edge", T0) == T0 + RECHECK_SCORED_S
     assert next_check_at("scored", "no_view", "no_view", T0) == T0 + RECHECK_QUIET_S
     for reason in ("not_enough_recent_evidence", "not_trading_lately"):  # one read a day: scored as soon as they can be
         assert next_check_at("checked", reason, None, T0) == T0 + RECHECK_EVIDENCE_S == T0 + DAY
     assert next_check_at("scored", "not_trading_lately", "inactive", T0) == T0 + DAY
     assert next_check_at("checked", "dormant", "proven", T0) == T0 + RECHECK_QUIET_S
-    assert RESCORE_S < RECHECK_EVIDENCE_S < RECHECK_SCORED_S < RECHECK_QUIET_S
+    assert PRESENTED_RESCORE_S < BACKGROUND_RESCORE_S == RECHECK_EVIDENCE_S < RECHECK_SCORED_S < RECHECK_QUIET_S
     assert [next_check_at("failed", None, None, T0, n) - T0 for n in (1, 2, 3, 9)] == [*RETRY_S[:3], RETRY_S[-1]]
 
 
@@ -136,7 +139,7 @@ def test_a_new_wallet_is_due_at_once_and_a_score_schedules_the_next_and_says_why
     assert d.wallet(AMY)["next_check"] == T0  # type: ignore[index]
     d.keep_scores([score(AMY, "rising")], "background", at=T0 + 10)
     w = d.wallet(AMY)
-    assert (w["next_check"], w["not_recommended"]) == (T0 + 10 + RESCORE_S, None)  # type: ignore[index]
+    assert (w["next_check"], w["not_recommended"]) == (T0 + 10 + BACKGROUND_RESCORE_S, None)  # type: ignore[index]
     assert d.due(10, now=T0 + 20) == []
     d.keep_scores([score(AMY, "inactive")], "background", at=T0 + 30)
     assert d.wallet(AMY)["not_recommended"] == "not_trading_lately"  # type: ignore[index]
@@ -179,12 +182,36 @@ def test_the_check_scoring_a_wallet_after_a_quick_check_doesnt_undo_the_quick_ch
 def test_recommended_traders_come_first_then_the_newest_found_then_the_rest(d: Directory) -> None:
     d.add([Seen(BEN, "search")], at=T0 - 3 * DAY)  # an old find, never looked at
     d.add([Seen(CAL, "search")], at=T0 - DAY)  # a newer one
-    d.keep_scores([score(AMY, "proven")], "check", at=T0 - RESCORE_S - 1)  # recommended, due again
+    d.keep_scores([score(AMY, "proven")], "check", at=T0 - BACKGROUND_RESCORE_S - 1)  # recommended, due again
     d.keep_scores([score(DAN, "no_edge")], "check", at=T0 - RECHECK_SCORED_S - 1)  # a recheck
     got = d.due(10, now=T0)
     assert [(g["wallet"], g["kind"]) for g in got] == [(AMY, "recommended"), (CAL, "new"), (BEN, "new"), (DAN, "recheck")]
-    assert d.due_counts(now=T0) == {"recommended": 1, "new": 2, "recheck": 1}
+    assert d.due_counts(now=T0) == {"presented": 0, "recommended": 1, "new": 2, "recheck": 1}
     assert [g["wallet"] for g in d.due(2, now=T0)] == [AMY, CAL]
+
+
+def test_a_recommended_trader_people_are_shown_is_rescored_every_6_hours_any_other_daily(d: Directory) -> None:
+    d.keep_scores([score(AMY, "rising")], "background", at=T0 - PRESENTED_RESCORE_S - 1)  # 6 h old
+    d.keep_scores([score(BEN, "rising")], "background", at=T0 - PRESENTED_RESCORE_S - 1)
+    d.keep_scores([score(CAL, "no_edge")], "background", at=T0 - PRESENTED_RESCORE_S - 1)  # not a recommended tier
+    assert d.due(10, now=T0) == []  # daily for the directory's own finds
+    got = d.due(10, now=T0, presented={AMY, CAL})
+    assert [(g["wallet"], g["kind"]) for g in got] == [(AMY, "presented")]  # shown: every 6 hours; CAL isn't a tier
+    assert d.due_counts(now=T0, presented={AMY}) == {"presented": 1, "recommended": 0, "new": 0, "recheck": 0}
+    assert [g["wallet"] for g in d.due(10, now=T0 + DAY, presented={AMY})] == [AMY, BEN]
+
+
+def test_new_first_puts_wallets_never_looked_at_before_other_recommended_but_never_before_presented(d: Directory) -> None:
+    d.add([Seen(CAL, "search")], at=T0 - DAY)
+    d.keep_scores([score(AMY, "rising")], "background", at=T0 - DAY - 1)
+    d.keep_scores([score(BEN, "rising")], "background", at=T0 - DAY - 1)
+    kinds = lambda **kw: [(g["wallet"], g["kind"]) for g in d.due(10, now=T0, presented={AMY}, **kw)]  # noqa: E731
+    assert kinds() == [(AMY, "presented"), (BEN, "recommended"), (CAL, "new")]
+    assert kinds(new_first=True) == [(AMY, "presented"), (CAL, "new"), (BEN, "recommended")]
+
+
+def test_a_score_is_fresh_for_twice_its_cadence() -> None:
+    assert fresh_for(True) == 12 * 3600 and fresh_for(False) == 2 * DAY
 
 
 def test_the_categories_take_turns_so_a_big_one_doesnt_hold_up_the_rest(d: Directory) -> None:
@@ -214,7 +241,7 @@ def test_a_phase_2_directory_gets_a_schedule_from_what_it_already_knows(tmp_path
     with sqlite3.connect(path) as con:  # as phase 2 left it: no schedule, no first category
         con.execute("UPDATE wallets SET next_check = NULL, seen_category = NULL")
     again = Directory(path)
-    assert again.wallet(AMY)["next_check"] == T0 - 3600 + RESCORE_S  # type: ignore[index]  # not rescored at once
+    assert again.wallet(AMY)["next_check"] == T0 - 3600 + BACKGROUND_RESCORE_S  # type: ignore[index]  # not at once
     assert again.wallet(BEN)["next_check"] == T0 - DAY and again.wallet(BEN)["seen_category"] == "Weather"  # type: ignore[index]
     assert [g["wallet"] for g in again.due(10, now=T0)] == [BEN]
 
@@ -432,7 +459,7 @@ def test_a_recommended_trader_is_scored_again_without_the_quick_check(store: Any
 
     sdk = FakeSdk({}, {AMY: score(AMY, "proven")})
     monkeypatch.setattr(engine, "background", lambda: sdk)
-    engine.directory().keep_scores([score(AMY, "proven")], "check", at=time.time() - RESCORE_S - 60)
+    engine.directory().keep_scores([score(AMY, "proven")], "check", at=time.time() - BACKGROUND_RESCORE_S - 60)
     assert engine.evaluate_round()["done"]["scored"] == 1
     assert sdk.checked == [] and sdk.scored == [(AMY, False)]
     assert [h["via"] for h in engine.directory().history(AMY)] == ["check", "background"]
@@ -457,6 +484,32 @@ def test_a_wallet_that_cant_be_scored_is_tried_later_and_a_run_of_failures_stops
     assert "Polymarket is down" in w["score_error"] and w["next_check"] == pytest.approx(w["tried_at"] + RETRY_S[0])  # type: ignore[index]
     # the ones not reached are still due, the failed ones later: nothing is lost
     assert {g["wallet"] for g in engine.directory().due(10)} == set(many) - set(failed)
+
+
+def test_while_recommended_rescoring_takes_most_reads_new_wallets_go_first(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    now = time.time()
+    sdk = FakeSdk({CAL: [trade(now - 95 * DAY)]}, {AMY: score(AMY, "rising")})
+    monkeypatch.setattr(engine, "background", lambda: sdk)
+    monkeypatch.setattr(engine, "EVALUATE_BATCH", 1)
+    monkeypatch.setitem(engine._evaluate_state, "reads", {"new": 0.0, "other": 0.0})
+    engine.directory().keep_scores([score(AMY, "rising")], "background", at=now - BACKGROUND_RESCORE_S - 60)
+    engine.directory().add([Seen(CAL, "search")])
+    engine.evaluate_round()  # no reads counted yet: recommended first
+    assert sdk.scored == [(AMY, False)] and sdk.checked == []
+    assert engine._evaluate_state["reads"]["other"] > 0 and engine._reserve_new() is True
+    engine.directory().keep_scores([score(BEN, "rising")], "background", at=now - BACKGROUND_RESCORE_S - 60)
+    engine.evaluate_round()  # new wallets' share is under NEW_SHARE: CAL before BEN
+    assert sdk.checked == [CAL] and sdk.scored == [(AMY, False)]
+
+
+def test_presented_traders_are_the_checks_recommended_and_everyone_followed(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [
+        {"wallet": AMY, "segment": "rising"}, {"wallet": BEN, "segment": "no_edge"}]})  # fmt: skip
+    engine._save_follows({"users": {"u1": {"follows": [DAN], "chat": None}}})
+    engine._cache.clear()
+    assert engine.presented_wallets() == {AMY, DAN}
 
 
 def test_after_a_restart_the_evaluation_carries_on_where_it_was(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -490,7 +543,7 @@ def test_the_owner_sees_how_the_evaluation_is_going_in_counts_only(store: Any, m
     engine.directory().quick_checked(BEN, QuickLook(False, "not_enough_recent_evidence", 2, 9, None, None))
     s = TestClient(engine.app, client=("127.0.0.1", 50000)).get("/api/directory").json()
     e = s["evaluation"]
-    assert e["due_now"] == {"recommended": 0, "new": 1, "recheck": 0}
+    assert e["due_now"] == {"presented": 0, "recommended": 0, "new": 1, "recheck": 0}
     assert e["by_status"]["checked"] == 1 and e["looked_at_last_day"]["checked"] == 1
     assert e["not_recommended"]["not_enough_recent_evidence"] == 1 and e["selective"] == 1
     assert s["evaluating"]["on"] is engine.EVALUATE_ON and "since_launch" in s["evaluating"]

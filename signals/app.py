@@ -56,11 +56,11 @@ from signals.directory import (
     EXPLORE_GROUPS,
     LISTED_FRESH_S,
     QUICK_TRADES,
-    RESCORE_S,
     SORTS,
     Directory,
     QuickLook,
     Seen,
+    fresh_for,
     from_sighting,
     quick_look,
 )  # fmt: skip
@@ -582,8 +582,9 @@ def _directory_loop() -> None:
 
 
 # ---- the directory, phase 3: every wallet evaluated in the background ----
-# Each wallet due a look (Directory.due: recommended traders every 6 hours, then wallets never looked at, newest
-# found first, then the rest as they come due; the categories take turns) gets a quick check first: one read of its
+# Each wallet due a look (Directory.due: recommended traders people are shown every 6 hours, any other one daily,
+# wallets never looked at, newest found first, then the rest as they come due; the categories take turns, and at
+# least NEW_SHARE of the reads go to wallets never looked at while any are left) gets a quick check first: one read of its
 # latest trades, kept as the evidence (markets bought in 30 and 90 days, the last buy). A wallet with too few bets in
 # the last 30 days for a score to say anything, no buy in 90, or no buy this week and none since its last score, is
 # labelled why it isn't recommended and looked at again (daily; weekly when dormant). Every wallet is kept. The rest
@@ -601,8 +602,46 @@ EVALUATE_PAUSE_S = 600  # ...so it waits this long before the next
 EVALUATE_LOG_S = 3600  # a line in the logs this often
 LISTED_KEEP_S = 6 * 3600  # the boards read directly, when the sweep's are stale, are kept this long (31 reads)
 OUTCOMES = ("scored", "not_enough_recent_evidence", "not_trading_lately", "dormant", "failed")
+# Rescoring recommended traders comes first, but it mustn't take everything: while any wallet has never been looked
+# at, at least NEW_SHARE of the evaluation's reads go to those (a round takes them before other recommended traders
+# whenever their share has fallen below it). Reads are estimated: a quick look is 1, a full score SCORE_READS.
+NEW_SHARE = 0.5
+SCORE_READS = 50  # a full score's reads, about (measured 49 over a random 80, 2026-10-14)
+READS_DECAY = 0.98  # each round, older reads count a little less, so the share follows what's due lately
 _evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None, "leaderboards": None,
-                                   "since_launch": dict.fromkeys(OUTCOMES, 0)}  # fmt: skip
+                                   "since_launch": dict.fromkeys(OUTCOMES, 0), "reads": {"new": 0.0, "other": 0.0}}  # fmt: skip
+
+
+def presented_wallets() -> frozenset[str]:
+    """The recommended traders people are shown, whose scores are kept PRESENTED_RESCORE_S fresh: those on the
+    Recommended list (the check's, or the directory's capped at its limit) and every wallet someone follows (its
+    alerts and page). Bounded however big the directory grows, so rescoring them never takes the whole budget;
+    Explore's "Passed our checks" lists the rest, rescored daily."""
+
+    def read() -> frozenset[str]:
+        rec = {s["wallet"] for s in (_check_result() or {}).get("scores", []) if s.get("segment") in RECOMMENDED}
+        return frozenset(rec | {w for u in _load_follows()["users"].values() for w in u.get("follows") or []})
+
+    return cached("presented", 60, read)  # type: ignore[no-any-return]
+
+
+def _check_result() -> dict[str, Any] | None:
+    """The list the Recommended tab shows (``_worth_load``: the check's result, or with SIGNALS_DISCOVERY the
+    directory's, capped)."""
+    return _worth_load()
+
+
+def _reserve_new() -> bool:
+    """Whether wallets never looked at get the next round first: their share of the recent reads is under NEW_SHARE."""
+    r = _evaluate_state["reads"]
+    total = r["new"] + r["other"]
+    return total > 0 and r["new"] / total < NEW_SHARE
+
+
+def _count_reads(kind: str, outcome: str) -> None:
+    quick = 0 if kind in ("presented", "recommended") else 1
+    reads = quick + (SCORE_READS if outcome == "scored" else 0)
+    _evaluate_state["reads"]["new" if kind == "new" else "other"] += reads
 
 
 def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None) -> QuickLook:
@@ -657,7 +696,7 @@ def evaluate_one(item: dict[str, Any]) -> str:
     never holds up the rest: it's tried again later each time it fails again in a row."""
     d, w = directory(), item["wallet"]
     try:
-        if item["kind"] != "recommended":
+        if item["kind"] not in ("presented", "recommended"):
             look = quick_check(w, item.get("scored_at"))
             d.quick_checked(w, look)
             if not look.score:
@@ -675,7 +714,10 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
     failed tries in a row. Returns how many were due, what came of those looked at (by outcome), and how many
     failed in a row at the end."""
     halt = stop or threading.Event()
-    due = directory().due(EVALUATE_BATCH)
+    reads = _evaluate_state["reads"]
+    for k in reads:
+        reads[k] *= READS_DECAY
+    due = directory().due(EVALUATE_BATCH, presented=presented_wallets(), new_first=_reserve_new())
     if due:
         _on_leaderboard(due)
     done = dict.fromkeys(OUTCOMES, 0)
@@ -688,6 +730,7 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
             return
         got = evaluate_one(item)
         with lock:
+            _count_reads(item["kind"], got)
             done[got] += 1
             _evaluate_state["since_launch"][got] += 1
             in_a_row = in_a_row + 1 if got == "failed" else 0
@@ -723,7 +766,7 @@ def _evaluate_loop() -> None:
         if time.time() - logged >= EVALUATE_LOG_S:
             budget = _background["budget"].state() if "budget" in _background else {}
             try:
-                due = directory().due_counts()
+                due = directory().due_counts(presented=presented_wallets())
             except (sqlite3.Error, OSError):
                 due = {}
             print(f"directory evaluation, last {(time.time() - logged) / 60:.0f} min: "
@@ -1050,7 +1093,7 @@ EXPLORE_PAGE = 50
 EXPLORE_MAX_OFFSET = 2000
 EXPLORE_TTL_S = 60  # a page of Explore, kept this long (the directory changes a few wallets a minute)
 EXPLORE_COUNTS_TTL_S = 300
-STORED_FRESH_S = 2 * 86400  # a stored score this new is shown as it is: a recommended tier's only for RESCORE_S
+STORED_FRESH_S = 2 * 86400  # a stored score this new is shown as it is (a recommended tier's: ``fresh_for``)
 CHECKS_AT_ONCE = 3  # "Check now" (a trader page scoring a wallet on the spot): this many at once, site-wide...
 CHECK_WAIT_S = 20  # ...waiting this long for a turn before saying "try again"
 CHECKS_PER_CLIENT = (6, 600)  # hosted: at most 6 checks per 10 minutes from one address
@@ -1067,8 +1110,9 @@ def _explore_row(wallet: str) -> dict[str, Any] | None:
 
 
 def _stored_score(wallet: str, now: float | None = None) -> dict[str, Any] | None:
-    """The directory's score for a wallet while it's fresh and of today's format: a recommended tier's for RESCORE_S
-    (as often as the check and the evaluation score one again), any other's for STORED_FRESH_S. Else None."""
+    """The directory's score for a wallet while it's fresh and of today's format: a recommended tier's for
+    ``fresh_for`` (12 hours for one people are shown, 48 for any other: twice how often each is scored again), any
+    other's for STORED_FRESH_S. Else None."""
     now = time.time() if now is None else now
     try:
         s = directory().score(wallet)
@@ -1076,7 +1120,7 @@ def _stored_score(wallet: str, now: float | None = None) -> dict[str, Any] | Non
         return None
     if s is None or s.get("format") != WORTH_FORMAT:
         return None
-    fresh = RESCORE_S if s.get("segment") in RECOMMENDED else STORED_FRESH_S
+    fresh = fresh_for(wallet.lower() in presented_wallets()) if s.get("segment") in RECOMMENDED else STORED_FRESH_S
     return s | {"stored_at": s["scored_at"]} if now - s["scored_at"] < fresh else None
 
 
@@ -1118,7 +1162,7 @@ def check_now(wallet: str, request: Request | None = None) -> dict[str, Any]:
 
 
 @app.get("/api/traders")
-def explore(group: str = "limited", q: str = "", category: str = "", active: int = 0, min_usd: float = 0,
+def explore(group: str = "passed", q: str = "", category: str = "", active: int = 0, min_usd: float = 0,
             board: str = "", makers: int = 0, unchecked: int = 0, sort: str = "recent",
             offset: int = 0) -> dict[str, Any]:  # fmt: skip
     """A page of Explore (see Directory.browse), with how many each group lists. From directory.db only, never
@@ -1142,7 +1186,26 @@ def explore(group: str = "limited", q: str = "", category: str = "", active: int
     if q and not unchecked:
         others = cached(f"explore:unchecked:{q.lower()}", EXPLORE_TTL_S, lambda: len(directory().browse(
             "unchecked", q=q, limit=20, search_in=("unchecked",))["rows"]))  # fmt: skip
-    return page | {"counts": counts, "offset": offset, "unchecked_matches": others}
+    return page | {"rows": [_passed_row(r) for r in page["rows"]], "counts": counts, "offset": offset,
+                   "unchecked_matches": others}
+
+
+def _passed_row(r: dict[str, Any]) -> dict[str, Any]:
+    """A row of a recommended tier, with its three answers kept apart, each from the stored score: profitability
+    (trading profit over the score's 30 days, in the row), skill (the tier, edge and bets, in the row) and
+    copyability (``copy_status``, the Recommended list's own rule). And whether it's on the Recommended list."""
+    if r["group"] not in ("passed", "recommended"):
+        return r
+    s = _stored_or_none(r["wallet"])
+    rec = {x["wallet"] for x in (_check_result() or {}).get("scores", []) if x.get("segment") in RECOMMENDED}
+    return r | {"copy_label": copy_status(s)[0] if s else None, "on_recommended": r["wallet"] in rec}
+
+
+def _stored_or_none(wallet: str) -> dict[str, Any] | None:
+    try:
+        return directory().score(wallet)
+    except (sqlite3.Error, OSError):
+        return None
 
 
 def _score_of(wallet: str) -> dict[str, Any]:
