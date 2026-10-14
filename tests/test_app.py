@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from uselayer import Trader, TraderDetail, Whales, WhalePosition, WhaleTrade
 from uselayer.whales import CopyPreview
 
+from conftest import live_reads
 from signals import app as engine
 
 AMY = Trader(venue="kalshi", id="amy", name="amy", rank=1, pnl=1000.0, volume=5000.0, volume_unit="contracts")
@@ -129,8 +130,13 @@ def test_trader_pages_ask_for_closed_positions_and_the_feed_does_not(
     assert asked[-1]["closed"] == 50  # the profile's Closed positions (uselayer 0.7)
     monkeypatch.setattr(engine, "_worth_data", {"scores": [SCORE | {"segment": "proven", "label": "Proven sharps"}]})
     monkeypatch.setattr(engine, "_categories", lambda markets: {})
+    feed: list[Any] = []
+    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: feed.append(("trades", k)) or [TRADE])
+    monkeypatch.setattr(engine, "_open_positions", lambda w: feed.append(("positions", {})) or [])
+    n = len(asked)
     api.get("/api/live")
-    assert asked[-1]["closed"] == 0  # the feed polls every 25 s: no closed-positions read
+    assert len(asked) == n  # the feed reads every 30 s: never the profile, stats or closed positions
+    assert feed[0] == ("trades", {"limit": 100})
 
 
 def test_sample_profit_history_is_local_only(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -172,7 +178,7 @@ def test_live_bets_carry_status_and_category(api: TestClient, monkeypatch: pytes
 
     monkeypatch.setattr(engine, "_worth_data", {"scores": [SCORE | {"segment": "proven", "label": "Proven sharps"}]})
     detail = TraderDetail(AMY, "visible", {}, [pos("c1:0", 0.51), pos("c2:0", 0.001)], [buy("c1:0", 0.5), buy("c2:0", 0.5)])
-    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: detail)
+    live_reads(monkeypatch, lambda *a, **k: detail)
 
     class Book:
         def get(self, ids: Any) -> dict[str, Any]:
@@ -223,7 +229,7 @@ def test_signals_reads_polymarket_only_unless_kalshi_is_switched_on(
     monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: asked.append(("trader", a[0])) or None)
     monkeypatch.setattr(engine.reads.whales, "links", lambda *a, **k: asked.append(("links",)) or [])
     assert engine.VENUES == ("polymarket",)  # the default
-    assert api.get("/api/config").json() == {"venues": ["polymarket"], "clerk_key": None, "alerts": False}
+    assert api.get("/api/config").json() == {"venues": ["polymarket"], "clerk_key": None, "alerts": False, "explore": False}
     api.get("/api/trading-now")
     api.get("/api/top")  # "all" means the venues Signals reads
     assert api.get("/api/top?venue=kalshi").status_code == 404
@@ -419,7 +425,7 @@ def test_traders_and_the_feed_carry_the_same_copy_verdict(api: TestClient, monke
     assert board["0xabc"]["copy_ok"] is True and board["0xr"]["copy_ok"] is False and board["0xr"]["copy_why"]
     assert api.get("/api/worth/0xr").json()["copy_ok"] is False  # a trader's page
     buy = WhaleTrade("polymarket", "x", "x", "0xc:0", "yes", "buy", 0.4, 5000, 2000.0, datetime.now(UTC), "t9", title="A")
-    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(AMY, "visible", {}, [], [buy]))
+    live_reads(monkeypatch, lambda *a, **k: TraderDetail(AMY, "visible", {}, [], [buy]))
     monkeypatch.setattr(engine, "_categories", lambda markets: {})
     live = api.get("/api/live").json()
     assert {t["wallet"]: t["copy_ok"] for t in live["traders"]} == {"0xabc": True, "0xr": False}

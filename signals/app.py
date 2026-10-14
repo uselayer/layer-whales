@@ -37,7 +37,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from uselayer import Client, VenueError, Whales, WhaleTrade
+from uselayer import Client, Trader, TraderDetail, VenueError, Whales, WhaleTrade
 from uselayer.whale_finder import all_boards
 from uselayer.whale_scores import (
     CATEGORY_TAGS,
@@ -54,8 +54,11 @@ from signals import us_match
 from signals.budget import BackgroundHttp, Budget
 from signals.directory import (
     CHECK_BOARDS,
+    EXPLORE_GROUPS,
     LISTED_FRESH_S,
     QUICK_TRADES,
+    RESCORE_S,
+    SORTS,
     Directory,
     QuickLook,
     Seen,
@@ -98,6 +101,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _us_stop.set()
     _worth_stop.set()
     _follow_stop.set()
+    _alert_wake.set()
     _live_stop.set()
     _directory_stop.set()
 
@@ -144,11 +148,18 @@ def venue_error(e: VenueError) -> HTTPException:
 # ---- reads ----
 
 
+def feed_reader(request: Request) -> None:
+    """The Feed (Recommended, Big trades, an alert's trade) is for signed-in people; Traders and trader pages need
+    no account. Without signing in switched on (running locally without Clerk's key) it's open like the rest."""
+    if clerk_frontend_api(CLERK_KEY):
+        _session(request, "Sign in to see the Feed.")
+
+
 @app.get("/api/config")
 def config() -> dict[str, Any]:
     """What the page needs to know before it draws: which venues Signals reads (see VENUES), and Clerk's
     publishable key when signing in (to follow traders) is switched on. The key is public by design."""
-    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN)}
+    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN), "explore": EXPLORE_ON}
 
 
 @app.get("/api/top")
@@ -167,10 +178,11 @@ def top(venue: str = "all", by: str = "pnl", limit: int = 25) -> list[dict[str, 
 
 
 @app.get("/api/trading-now")
-def trading_now(min_usd: float = 250) -> list[dict[str, Any]]:
+def trading_now(response: Response, min_usd: float = 250, _: None = Depends(feed_reader)) -> list[dict[str, Any]]:
     """Recent large trades on the venues Signals reads, newest first (the Feed's Big trades). Named Kalshi
     traders here usually show their trades. A Polymarket trade carries its market's category, so the page can
     filter by your markets; the SDK has no categories for Kalshi markets, so theirs is None."""
+    _private(response)
     try:
         rows = cached(f"now:{min_usd}", 20, lambda: reads.whales.big_trades(min_usd, venues=VENUES, kalshi_pages=5))  # type: ignore[arg-type]
     except VenueError as e:
@@ -388,6 +400,9 @@ DIRECTORY_RETRY_S = 3600  # after a sweep that failed
 # those 8, so the Feed and pages always have the other 4 (the Feed's poller reads one trader at a time, 4 reads in
 # ~1.2 s, so it never needs more than ~3.3 a second), and all 8 while the background is idle.
 BACKGROUND_RATE = float(os.environ.get("SIGNALS_BACKGROUND_RATE", "4"))
+# Scoring a wallet on the spot ("Check now", a trader page nobody has scored lately): this many Polymarket reads a
+# second, so with the background's (4 + 3 of the SDK's 8 a host) the Feed's poller always keeps a share of its own.
+CHECK_RATE = float(os.environ.get("SIGNALS_CHECK_RATE", "3"))
 DIRECTORY_BATCH = 2000  # sightings kept per write
 DIRECTORY_STATS_TTL_S = 300
 _directory_stop = threading.Event()
@@ -416,7 +431,7 @@ def background() -> Whales:
     BACKGROUND_RATE a second (signals/budget.py). Its scorer keeps price histories where the check keeps them."""
     with _background_lock:
         if "whales" not in _background:
-            budget = Budget(BACKGROUND_RATE)
+            budget = Budget(BACKGROUND_RATE, yield_to=_reading_followed)  # half rate while alerts' reads run
             whales = Whales(BackgroundHttp(reads._http, budget), reads._layer, reads)  # type: ignore[arg-type]
             whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
             _background.update(budget=budget, whales=whales)
@@ -607,7 +622,7 @@ def quick_check(wallet: str, scored_at: float | None = None, now: float | None =
     """One read of a wallet's latest trades: the evidence, and whether a score is worth its reads (``quick_look``)."""
     now = time.time() if now is None else now
     got = background().trades("polymarket", wallet, limit=QUICK_TRADES)
-    trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0]) for t in got]
+    trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0], t.usd) for t in got]
     return quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
 
 
@@ -740,18 +755,24 @@ def _evaluate_loop() -> None:
 # With SIGNALS_DISCOVERY=directory, Traders, the Feed's Recommended, alerts and trader pages read the traders
 # checked from the directory: each wallet's latest score from the last DISCOVERY_FRESH_S, whoever worked it out (the
 # Worth following check, the background evaluation, a trader page), in the check's order (tier, then the strength
-# of their edge), at most DISCOVERY_LIMIT, in the same shape as the check's result. A score is the same score
-# wherever it's read, so a wallet gets the same tier, section and copy status from either; the directory picks no
-# one itself and its scoring and thresholds are the SDK's, unchanged. /api/worth?markets=… puts the traders in the
-# picked markets (onboarding's interests, matched as the page's matchesInterests) first, so a pick gets the best
-# of the whole directory, not of a list cut for everyone.
+# of their edge), in the same shape as the check's result. Every recommended trader is in it, as every one the
+# check finds is in its result (Explore's lists leave recommended tiers to Traders, so none may be cut); the others
+# ("See all checked traders") up to DISCOVERY_LIMIT in all, those in the picked markets first (/api/worth?markets=…,
+# onboarding's interests, matched as the page's matchesInterests). A score is the same score wherever it's read, so
+# a wallet gets the same tier, section and copy status from either; the directory picks no one itself and its
+# scoring and thresholds are the SDK's, unchanged.
 # For now the check keeps running either way, so going back to it (SIGNALS_DISCOVERY=check, the default) shows a
 # fresh result at once, and with no fresh score in the directory its result is shown anyway. /api/discovery
 # compares the two, for the owner. Once the directory has carried Signals for a while, the check can go.
 
 DISCOVERY = os.environ.get("SIGNALS_DISCOVERY", "check")  # "directory": discovery from the directory
-DISCOVERY_FRESH_S = 2 * WORTH_MAX_AGE_S  # a score older than this isn't shown: twice the check's age, one missed rescore
-# traders served: as many as the check scores, so the page weighs what it did (~5 KB a trader)
+# A score older than this isn't picked: twice the background evaluation's daily rescore of a recommended trader
+# nobody is shown or follows. Once shown, they're rescored every RESCORE_S, so a shown trader's score stays well
+# inside it (/api/discovery counts any shown older than 2 × RESCORE_S). One window for every candidate, so nobody
+# drops out and back in as their score ages.
+DISCOVERY_FRESH_S = 2 * 86400
+# traders served, recommended ones however many: as many as the check scores, so the page weighs what it did
+# (~5 KB a trader) until more than that are recommended
 DISCOVERY_LIMIT = int(os.environ.get("SIGNALS_DISCOVERY_LIMIT", str(WORTH_WALLETS)))
 DISCOVERY_TTL_S = 60
 DISCOVERY_APART_S = WORTH_MAX_AGE_S  # validation: a score worked out apart this close to the check's is compared
@@ -794,7 +815,12 @@ def discovery_result(interests: tuple[str, ...] = ()) -> dict[str, Any] | None:
         def rank(r: dict[str, Any]) -> tuple[int, float]:  # as the check's: by tier, then the strength of their edge
             return order.index(r["segment"]) if r["segment"] in order else len(order), -(r["edge_z"] or 0)
 
-        picked = sorted(rows, key=lambda r: (not _in_markets(r, interests), *rank(r)))[:DISCOVERY_LIMIT]
+        # Every recommended trader, whatever the limit (Explore lists none of them: they're Traders'); the rest,
+        # those in the picked markets first, up to DISCOVERY_LIMIT in all.
+        rec = [r for r in rows if r["segment"] in RECOMMENDED]
+        rest = sorted((r for r in rows if r["segment"] not in RECOMMENDED),
+                      key=lambda r: (not _in_markets(r, interests), *rank(r)))  # fmt: skip
+        picked = rec + rest[: max(0, DISCOVERY_LIMIT - len(rec))]
         kept = d.scores_of(r["wallet"] for r in picked)
         scores = [_upgraded(kept[r["wallet"]]) for r in sorted(picked, key=rank) if r["wallet"] in kept]
         at = [s["scored_at"] for s in scores]
@@ -823,16 +849,6 @@ def discovery_result(interests: tuple[str, ...] = ()) -> dict[str, Any] | None:
     return got  # type: ignore[no-any-return]
 
 
-def _fresh_score(wallet: str) -> dict[str, Any] | None:
-    """A wallet's latest score kept in the directory, judged by today's rules, while it's fresh enough to show
-    (DISCOVERY_FRESH_S); else None. A trader page then shows the same score Traders does."""
-    try:
-        s = directory().score(wallet)
-    except (sqlite3.Error, OSError):
-        return None
-    return _upgraded(s) if s is not None and s["scored_at"] >= time.time() - DISCOVERY_FRESH_S else None
-
-
 def _recommended(data: dict[str, Any] | None) -> set[str]:
     return {s["wallet"] for s in (data or {}).get("scores", []) if s.get("segment") in RECOMMENDED}
 
@@ -846,22 +862,38 @@ def discovery_compare() -> dict[str, Any]:
     view = discovery_result()
     rows = {r["wallet"]: r for r in directory().latest_scores(time.time() - DISCOVERY_FRESH_S)}
 
+    now = time.time()
+
     def summary(data: dict[str, Any] | None) -> dict[str, Any] | None:
         if data is None:
             return None
         scores = data.get("scores", [])
-        return {"traders": len(scores), "recommended": len(_recommended(data)),
+        rec = [s for s in scores if s.get("segment") in RECOMMENDED]
+        boards = directory().on_boards(s["wallet"] for s in scores)
+        done = _iso_ts(data["finished"]) if data.get("finished") else now
+        ages = sorted((now - s.get("scored_at", done)) / 3600 for s in scores)
+        return {"traders": len(scores), "recommended": len(rec),
                 "by_section": {k: sum(1 for s in scores if section_of(s.get("segment")) == k) for k in SECTIONS},
-                "started": data.get("started"), "finished": data.get("finished")}  # fmt: skip
+                "started": data.get("started"), "finished": data.get("finished"),
+                # where they come from: the check's own "on the leaderboard" (the top 1,000 a month and so on),
+                # any board a sweep has seen them on, or none of the 88 at all
+                "on_leaderboard": sum(1 for s in scores if s.get("on_leaderboard")),
+                "seen_on_any_board": len(boards),
+                "recommended_on_leaderboard": sum(1 for s in rec if s.get("on_leaderboard")),
+                "recommended_on_no_board": sum(1 for s in rec if s["wallet"] not in boards),
+                "scored_by": dict(Counter(s.get("via", "check") for s in scores)),
+                "recommended_by_category": dict(Counter(_main(s) or "None" for s in rec).most_common()),
+                "age_hours": None if not ages else {"newest": round(ages[0], 1), "median": round(ages[len(ages) // 2], 1),
+                                                    "oldest": round(ages[-1], 1)},  # fmt: skip
+                # shown recommended traders are rescored every RESCORE_S: older than twice that, rescoring is failing
+                "recommended_older_than_12h": sum(1 for s in rec if now - s.get("scored_at", done) > 2 * RESCORE_S)}  # fmt: skip
 
     in_check, in_view = _recommended(check), _recommended(view)
+    pool_rec = {w for w, r in rows.items() if r["segment"] in RECOMMENDED}
     checked = {s["wallet"]: s for s in (check or {}).get("scores", [])}
 
-    def why_not_in_view(w: str) -> str:
-        r = rows.get(w)
-        if r is None:
-            return "no_fresh_score"
-        return "over_limit" if r["segment"] in RECOMMENDED else "scored_since_another_tier"
+    def why_not_in_view(w: str) -> str:  # every fresh recommended score is in the view
+        return "no_fresh_score" if w not in rows else "scored_since_another_tier"
 
     def why_not_in_check(w: str) -> str:
         return "check_scored_another_tier" if w in checked else "not_in_checks_list"
@@ -897,7 +929,30 @@ def discovery_compare() -> dict[str, Any]:
             "only_directory": dict(Counter(why_not_in_check(w) for w in in_view - in_check)),
         },
         "scored_apart": apart,
+        # everything the directory picks from: every fresh score, before the limit
+        "pool": {"scores": len(rows), "recommended": len(pool_rec),
+                 "recommended_seen_on_any_board": len(directory().on_boards(pool_rec)),
+                 "scored_by": dict(Counter(r["via"] for r in rows.values())),
+                 "recommended_by_category": dict(Counter(r["main"] or "None" for w, r in rows.items()
+                                                         if w in pool_rec).most_common())},  # fmt: skip
+        # each onboarding pick: the recommended traders in those markets the check's list has, and the directory's
+        # list for that pick has (matched as the page matches them)
+        "by_interest": {c: {"check": sum(1 for s in (check or {}).get("scores", []) if s.get("segment") in RECOMMENDED
+                                         and _in_markets(_row(s), (c,))),
+                            "directory": sum(1 for s in (discovery_result((c,)) or {}).get("scores", [])
+                                             if s.get("segment") in RECOMMENDED and _in_markets(_row(s), (c,)))}
+                        for c in INTEREST_CHOICES},  # fmt: skip
     }
+
+
+def _main(s: dict[str, Any]) -> str | None:
+    """A score's most-traded category, as the page reads it (its first)."""
+    return ((s.get("categories") or [{}])[0] or {}).get("category")
+
+
+def _row(s: dict[str, Any]) -> dict[str, Any]:
+    """A whole score as ``_in_markets`` reads a directory row."""
+    return {"main": _main(s), "strong": s.get("strong_categories") or []}
 
 
 @app.get("/api/discovery")
@@ -1112,17 +1167,25 @@ def worth_refresh_route() -> dict[str, Any]:
 
 
 @app.get("/api/worth/{wallet}")
-def worth_wallet(wallet: str) -> dict[str, Any]:
-    """One wallet's score with its checked bets: from the last refresh, or scored now (5–30 s)."""
+def worth_wallet(wallet: str, request: Request, score: int = 1) -> dict[str, Any]:
+    """One wallet's score with its checked bets: from the last refresh, else (Explore on) a fresh one kept in the
+    directory, else scored now (5–30 s, ``check_now``). With ``score=0`` (opened from Explore) a wallet without a
+    fresh score isn't scored: its page shows what's known and a "Check now" button instead. With Explore on, the
+    wallet's directory row comes too (``directory``: the evidence, where it was found)."""
     w = wallet.lower()
     data = _worth_load()
     s = next((x for x in (data or {}).get("scores", []) if x["wallet"] == w), None)
+    row = _explore_row(w) if EXPLORE_ON and _WALLET.fullmatch(w) else None
+    if s is None and EXPLORE_ON and _WALLET.fullmatch(w):
+        s = _stored_score(w)
+    if s is None and not score:
+        return {"wallet": w, "unchecked": True, "name": (row or {}).get("name"), "directory": row}
     if s is None:
         if _WALLET.fullmatch(w):  # a wallet the last check didn't have, opened here: pasted into search, mostly
             _directory_note_later([Seen(w, "search")])
-        s = _score_of(w)
+        s = check_now(w, request)
     b = _board(s)
-    return with_links(s) | b | {"why": why_lines(s | b)}
+    return with_links(s) | b | {"why": why_lines(s | b)} | ({"directory": row} if row is not None else {})
 
 
 # ---- "Why they're here" on a trader's page: plain lines, from what the check kept ----
@@ -1201,6 +1264,113 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
             "listed": listed, "copying": copying}  # fmt: skip
 
 
+# ---- Explore (SIGNALS_EXPLORE=1): the directory on the Traders page ----
+# Every wallet the directory found somewhere public, in three groups: limited evidence (too few bets to judge, from a
+# quick check's count or a score), checked (a score's verdict, or a quick check's: dormant, paused), and, only when
+# asked for, not checked yet. Sorted and filtered by facts only; nothing is ranked or newly recommended. Browsing
+# reads only directory.db, never Polymarket; a trader page reuses a score the directory keeps while it's fresh
+# (STORED_FRESH_S), and "Check now" scores one on the spot, a few at a time (CHECKS_AT_ONCE, CHECKS_PER_CLIENT).
+
+EXPLORE_ON = os.environ.get("SIGNALS_EXPLORE") == "1"
+EXPLORE_PAGE = 50
+EXPLORE_MAX_OFFSET = 2000
+EXPLORE_TTL_S = 60  # a page of Explore, kept this long (the directory changes a few wallets a minute)
+EXPLORE_COUNTS_TTL_S = 300
+STORED_FRESH_S = 2 * 86400  # a stored score this new is shown as it is: a recommended tier's only for RESCORE_S
+CHECKS_AT_ONCE = 3  # "Check now" (a trader page scoring a wallet on the spot): this many at once, site-wide...
+CHECK_WAIT_S = 20  # ...waiting this long for a turn before saying "try again"
+CHECKS_PER_CLIENT = (6, 600)  # hosted: at most 6 checks per 10 minutes from one address
+_checks = threading.BoundedSemaphore(CHECKS_AT_ONCE)
+_check_locks: dict[str, threading.Lock] = {}
+_check_times: dict[str, list[float]] = {}
+
+
+def _explore_row(wallet: str) -> dict[str, Any] | None:
+    try:
+        return directory().explore_row(wallet)
+    except (sqlite3.Error, OSError):
+        return None
+
+
+def _stored_score(wallet: str, now: float | None = None) -> dict[str, Any] | None:
+    """The directory's score for a wallet while it's fresh and of today's format: a recommended tier's for RESCORE_S
+    (as often as the check and the evaluation score one again), any other's for STORED_FRESH_S. Else None."""
+    now = time.time() if now is None else now
+    try:
+        s = directory().score(wallet)
+    except (sqlite3.Error, OSError):
+        return None
+    if s is None or s.get("format") != WORTH_FORMAT:
+        return None
+    fresh = RESCORE_S if s.get("segment") in RECOMMENDED else STORED_FRESH_S
+    return s | {"stored_at": s["scored_at"]} if now - s["scored_at"] < fresh else None
+
+
+def _client(request: Request | None) -> str:
+    if request is None:
+        return "local"
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+
+def check_now(wallet: str, request: Request | None = None) -> dict[str, Any]:
+    """A wallet scored on the spot (``_score_of``), as a trader page does for one nobody has scored lately. One
+    score per wallet at a time (others asking wait for it), CHECKS_AT_ONCE site-wide, and hosted, CHECKS_PER_CLIENT
+    from one address: past those, a 429 with a plain "try again", so pages never queue up the site's reads."""
+    w = wallet.lower()
+    if w in _worth_one:
+        return _worth_one[w]
+    if HOSTED:
+        who, (most, per) = _client(request), CHECKS_PER_CLIENT
+        now = time.time()
+        recent = [t for t in _check_times.get(who, []) if now - t < per]
+        if len(recent) >= most:
+            raise HTTPException(429, detail="You've checked a lot of traders in the last few minutes. Try again in a few minutes.")
+        _check_times[who] = [*recent, now]
+        if len(_check_times) > 5000:
+            _check_times.clear()
+    lock = _check_locks.setdefault(w, threading.Lock())
+    with lock:
+        if w in _worth_one:  # someone else just checked it
+            return _worth_one[w]
+        if not _checks.acquire(timeout=CHECK_WAIT_S):
+            raise HTTPException(429, detail="Lots of traders are being checked right now. Try again in a minute.")
+        try:
+            return _score_of(w)
+        finally:
+            _checks.release()
+            if len(_check_locks) > 5000:
+                _check_locks.clear()
+
+
+@app.get("/api/traders")
+def explore(group: str = "limited", q: str = "", category: str = "", active: int = 0, min_usd: float = 0,
+            board: str = "", makers: int = 0, unchecked: int = 0, sort: str = "recent",
+            offset: int = 0) -> dict[str, Any]:  # fmt: skip
+    """A page of Explore (see Directory.browse), with how many each group lists. From directory.db only, never
+    Polymarket. A search (``q``) looks through the limited-evidence and checked groups, and the not-checked-yet one
+    too with ``unchecked=1``; otherwise ``unchecked_matches`` says how many of those it would find (up to 20)."""
+    if not EXPLORE_ON:
+        raise HTTPException(404, detail="Not found")
+    if group not in EXPLORE_GROUPS or sort not in SORTS or not 0 <= offset <= EXPLORE_MAX_OFFSET:
+        raise HTTPException(400, detail="Unknown group, sort or page.")
+    q = q.strip()[:64]
+    if q and len(q) < 2:
+        raise HTTPException(400, detail="Type at least 2 letters to search.")
+    search_in = ("limited", "checked", "recommended", *(("unchecked",) if unchecked else ()))
+    args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, sort, offset)
+    page = cached(f"explore:{args}", EXPLORE_TTL_S, lambda: directory().browse(
+        group, q=q, category=category or None, active_days=active or None, min_usd=min_usd or None,
+        board=board or None, makers=bool(makers), sort=sort, limit=EXPLORE_PAGE, offset=offset,
+        search_in=search_in))  # fmt: skip
+    counts = cached("explore:counts", EXPLORE_COUNTS_TTL_S, lambda: directory().explore_counts())
+    others = None
+    if q and not unchecked:
+        others = cached(f"explore:unchecked:{q.lower()}", EXPLORE_TTL_S, lambda: len(directory().browse(
+            "unchecked", q=q, limit=20, search_in=("unchecked",))["rows"]))  # fmt: skip
+    return page | {"counts": counts, "offset": offset, "unchecked_matches": others}
+
+
 def _score_of(wallet: str) -> dict[str, Any]:
     """A wallet's score: from the traders checked (with discovery from the directory, any fresh score it keeps),
     or scored now (5–30 s) and kept until the next check."""
@@ -1208,11 +1378,11 @@ def _score_of(wallet: str) -> dict[str, Any]:
     for s in (_worth_load() or {}).get("scores", []):
         if s["wallet"] == w:
             return s  # type: ignore[no-any-return]
-    if DISCOVERY == "directory" and _WALLET.fullmatch(w) and (kept := _fresh_score(w)) is not None:
-        return kept
+    if DISCOVERY == "directory" and _WALLET.fullmatch(w) and (kept := _stored_score(w)) is not None:
+        return kept  # the directory's own, as Explore's pages reuse it
     if w not in _worth_one:
         try:
-            _worth_one[w] = reads.whales.score(w).to_dict()
+            _worth_one[w] = checker().score(w).to_dict()  # its own share of Polymarket's reads, never the Feed's
         except VenueError as e:
             if _WALLET.fullmatch(w):
                 why = f"{type(e).__name__}: {e}"
@@ -1301,41 +1471,187 @@ def _categories(markets: list[str]) -> dict[str, str]:
     return {m: category_of(book[c]) for m in markets if (c := m.partition(":")[0]) in book}
 
 
-LIVE_POLL_S = 30  # the poller refreshes every Recommended and followed trader this often, one at a time
-LIVE_STALE_S = 120  # pages read what the poller keeps up to this old; only a miss reads Polymarket itself
+LIVE_POLL_S = 30  # a round of the poller: everyone followed is read each round (alerts want it fresh)...
+LIVE_REC_S = 60  # ...and a Recommended trader nobody follows this often, as the round's slot allows
+LIVE_PRICE_S = 90  # open positions (the price now) read again once this old, or as soon as their trades change
+LIVE_STALE_S = 120  # a trader's page check (one_bet) reads Polymarket itself when what's kept is older
 LIVE_ALERT_S = 60  # alerts want it fresher
+LIVE_SHOW_S = 1800  # the Feed shows what the poller kept up to this old (saying how old); older, "couldn't be read"
+LIVE_PAGE_READS = 3  # a Feed view reads at most this many traders the poller hasn't read yet; the rest are pending
 LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
+LIVE_REC_FLOOR = 4  # Recommended reads a round even when everyone followed fills the slot, so it never stops
+LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; further back when there's a gap
+_live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
+_live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
+_live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
+_live_round: dict[str, float] = {"ended": float("-inf")}  # when (monotonic) the poller's last round ended
+_followed_reading = threading.Event()  # set while the poller reads followed traders: the background and checks give way
 
 
-def _live_read(wallet: str, max_age: float = LIVE_STALE_S) -> Any:
+def _reading_followed() -> bool:
+    return _followed_reading.is_set()
+
+
+_check_budget = Budget(CHECK_RATE, yield_to=_reading_followed)
+_checker: dict[str, Whales] = {}
+
+
+def checker() -> Whales:
+    """The SDK's reads for scoring a wallet on the spot ("Check now", a trader page): the engine's own client, with
+    each Polymarket read also taken from _check_budget (CHECK_RATE a second, half while followed traders are read),
+    whichever of the SDK's threads makes it, as ``background`` does for the background."""
+    with _background_lock:
+        if "whales" not in _checker:
+            _checker["whales"] = Whales(BackgroundHttp(reads._http, _check_budget), reads._layer, reads)  # type: ignore[arg-type]
+        return _checker["whales"]
+
+
+def _open_positions(wallet: str) -> list[Any]:
+    """A trader's open positions (the SDK's TraderDetail.positions without its profile and stats reads).
+    Stopgap, approved for V1: the SDK has no public positions-only read yet, so this calls its internals (as
+    ``listed_now`` reads its leaderboards). Swap for ``whales.positions`` once uselayer has it:
+    https://github.com/uselayer/uselayer-sdk/issues/23"""
+    w = reads.whales
+    return [w._poly_position(p) for p in w._poly.positions(wallet, 50)
+            if not p.get("redeemable") and 0 < float(p.get("curPrice") or 0) < 1]  # fmt: skip
+
+
+def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
+    """A trader's last 100 trades, and their open positions only when there's a trade to price: one from the last
+    FEED_HOURS (the Feed's and alerts' window), or ``priced``. Positions are reused while their trades haven't
+    changed and they're under LIVE_PRICE_S old. 1–2 reads, never the profile or stats (the name is on the trades);
+    a third, further back, when none of the last 100 were kept before (so a gap between reads never drops a trade)."""
+    hit = _cache.get(f"live:{wallet}")
+    old = hit[1] if hit else None
+    trades = reads.whales.trades("polymarket", wallet, limit=LIVE_TRADES)
+    if old is not None and old.trades and len(trades) >= LIVE_TRADES and not (
+        {t.trade_id for t in trades} & {t.trade_id for t in old.trades}
+    ):  # more trades since the last read than one read holds: read further back, so none is missed
+        trades = reads.whales.trades("polymarket", wallet, limit=LIVE_GAP_TRADES)
+    since = time.time() - FEED_HOURS * 3600
+    positions: list[Any] = []
+    if priced or any(t.at.timestamp() >= since for t in trades):
+        at = _live_priced.get(wallet)
+        same = old is not None and [t.trade_id for t in old.trades] == [t.trade_id for t in trades]
+        if same and at is not None and time.monotonic() - at < LIVE_PRICE_S:
+            positions = old.positions
+        else:
+            positions, _live_priced[wallet] = _open_positions(wallet), time.monotonic()
+    else:
+        _live_priced.pop(wallet, None)
+    name = next((t.name for t in trades if t.name), None)
+    return TraderDetail(Trader(venue="polymarket", id=wallet, name=name), "visible", {}, positions, trades)
+
+
+def _live_read(wallet: str, max_age: float = LIVE_STALE_S, priced: bool = False) -> Any:
     """A trader's last 100 trades and open positions: what the poller keeps (_live_loop), read from Polymarket
-    only when it's missing or older than ``max_age`` (and then once, however many ask at the same time)."""
-    return cached(f"live:{wallet}", max_age, lambda: reads.whales.trader("polymarket", wallet, trades=100, closed=0))
+    only when it's missing or older than ``max_age`` (and then once, however many ask at the same time).
+    ``priced``: their positions too, even with no trade in the last FEED_HOURS (a trade's own price check)."""
+    if priced and wallet not in _live_priced:
+        max_age = 0  # kept without positions: read again, with them
+    return cached(f"live:{wallet}", max_age, lambda: _live_fetch(wallet, priced))
 
 
-def _live_wanted() -> set[str]:
-    """The traders whose trades the Feed and alerts read: Recommended's, and everyone someone follows."""
+def _live_kept(wallet: str) -> tuple[float, Any] | None:
+    """What the poller keeps for a trader: (when it was read, monotonic; their trades and positions), or None."""
+    return _cache.get(f"live:{wallet}")
+
+
+def _live_wanted() -> tuple[set[str], set[str]]:
+    """The traders whose trades the Feed and alerts read: everyone someone follows, and Recommended's."""
     rec = {s["wallet"] for s in (_worth_load() or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS}
-    return rec | {w for u in _load_follows()["users"].values() for w in u.get("follows") or []}
+    return {w for u in _load_follows()["users"].values() for w in u.get("follows") or []}, rec
+
+
+def _live_hints(wallets: set[str]) -> set[str]:
+    """Of ``wallets``, those with a trade in Polymarket's shared feed of RECOMMENDED_MIN_USD-or-more fills that
+    isn't among the trades kept for them: one read for everyone (the one Big trades and big-trade alerts read),
+    so a Recommended trader who just made a big trade is read now rather than on their turn. A hint only: most of
+    Recommended's trades (resting orders, trades in pieces) never show there, so everyone still gets their turn."""
+    try:
+        rows = cached(f"now:{RECOMMENDED_MIN_USD}", 20,
+                      lambda: reads.whales.big_trades(RECOMMENDED_MIN_USD, venues=VENUES, kalshi_pages=5))  # type: ignore[arg-type]  # fmt: skip
+    except VenueError:
+        return set()
+    out = set()
+    for t in rows:
+        w = (t.trader or "").lower()
+        if w in wallets and t.trade_id not in _live_hinted:
+            _live_hinted.add(t.trade_id)  # once: their own trades can show it a little later than this feed
+            hit = _live_kept(w)
+            if hit is None or t.trade_id not in {x.trade_id for x in hit[1].trades}:
+                out.add(w)
+    if len(_live_hinted) > 5000:
+        _live_hinted.intersection_update(t.trade_id for t in rows)
+    return out
 
 
 def live_poll_once(stop: threading.Event | None = None) -> int:
-    """One round of the poller: each wanted trader read in turn (never in a burst: the SDK's Polymarket budget is
-    shared), skipping one read in the last LIVE_POLL_S; then traders nobody wants any more are dropped."""
-    wanted, done = _live_wanted(), 0
-    for w in sorted(wanted):
-        if stop is not None and stop.is_set():
-            break
-        try:
-            _live_read(w, LIVE_POLL_S - 5)
-            done += 1
-        except VenueError:
-            continue
-    now = time.monotonic()
+    """One round of the poller, one read at a time (never in a burst: the SDK's Polymarket budget is shared with
+    pages and the background): everyone followed (each round), then Recommended traders the shared big-trades feed
+    says just traded, then the other Recommended traders (each LIVE_REC_S), oldest (or never read) first, while
+    the round's LIVE_POLL_S lasts (LIVE_REC_FLOOR at least); whoever doesn't fit goes first next round, and a rate
+    limit ends the round. Half a round's slack on each, so a read a little later in one round than the last is
+    still due in the next. Then traders nobody wants any more are dropped. Returns how many were read."""
+    followed, rec = _live_wanted()
+    rec -= followed
+    started = time.monotonic()
+    every_round, rec_after = LIVE_POLL_S / 2, LIVE_REC_S - LIVE_POLL_S / 2
+
+    def age(w: str) -> float:
+        hit = _live_kept(w)
+        return float("inf") if hit is None else started - hit[0]
+
+    hinted = _live_hints(rec) if rec else set()
+    def due_now(w: str) -> bool:  # once a round, however long the last one took; a page's read since then counts
+        hit = _live_kept(w)
+        return hit is None or hit[0] <= _live_round["ended"] or age(w) >= every_round
+
+    due = sorted((w for w in followed if due_now(w)), key=lambda w: (-age(w), w))  # oldest first; ties by wallet
+    late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w), w))
+    done = 0
+    def followed_read() -> None:  # alerts' reads are done: the others' full rate back, and the alert pass now
+        if _followed_reading.is_set():
+            _followed_reading.clear()
+            _alert_wake.set()
+
+    if due:
+        _followed_reading.set()
+    try:
+        for i, w in enumerate(due + late):
+            if i == len(due):
+                followed_read()
+            if stop is not None and stop.is_set():
+                break
+            if i >= len(due) + LIVE_REC_FLOOR and time.monotonic() - started >= LIVE_POLL_S:
+                break  # the rest of Recommended goes first next round
+            try:
+                _live_read(w, 0 if w in hinted or i < len(due) else rec_after)
+                _live_failed.pop(w, None)
+                done += 1
+            except VenueError as e:
+                _live_failed[w] = time.monotonic()
+                if e.code == "rate_limited":  # the SDK's retries are spent: more reads now would only add to it
+                    _worth["live_error"] = "Polymarket rate limited the Feed's reads; the rest wait for the next round"
+                    break
+    finally:
+        followed_read()
+    _live_round["ended"] = time.monotonic()
+    wanted, mono = followed | rec, time.monotonic()
     for key in [k for k in list(_cache) if k.startswith("live:")]:
         hit = _cache.get(key)
-        if key[5:] not in wanted and hit and now - hit[0] > LIVE_KEEP_S:
+        if key[5:] not in wanted and hit and mono - hit[0] > LIVE_KEEP_S:
             _cache.pop(key, None)
+            _live_priced.pop(key[5:], None)
+    for w in [w for w in _live_failed if w not in wanted]:
+        del _live_failed[w]
+    since = time.time() - FEED_HOURS * 3600
+    shown = {t.market for w in wanted if (hit := _live_kept(w)) for t in hit[1].trades
+             if t.action == "buy" and t.at.timestamp() >= since}  # fmt: skip
+    try:
+        _categories(list(shown))  # the SDK keeps each market's category: no Feed view waits on a new market's
+    except VenueError:
+        pass
     return done
 
 
@@ -1372,15 +1688,16 @@ def _bets_of(d: Any, who: dict[str, Any], since: datetime | None = None) -> list
 
 
 @app.get("/api/bet/{wallet}/{market}")
-def one_bet(wallet: str, market: str) -> dict[str, Any]:
+def one_bet(wallet: str, market: str, response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
     """One trader's buy of one outcome, as a Feed card has it (status, price now, copy_ok): what an alert's
     "Check current price" opens. From their last 100 trades; 404 when it isn't among them."""
+    _private(response)
     w = wallet.lower()
     if not _WALLET.fullmatch(w):
         raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
     s = next((x for x in (_worth_load() or {}).get("scores", []) if x["wallet"] == w), None)
     try:
-        d = _live_read(w)
+        d = _live_read(w, priced=True)  # an older trade too: its price now is still wanted
     except VenueError as e:
         if e.code == "not_found":  # a wallet with no Polymarket profile: counted, so we know how often it happens
             count("no_profile", target="check")
@@ -1398,29 +1715,45 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
 
 
 @app.get("/api/live")
-def live() -> dict[str, Any]:
+def live(response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
     """The Feed's Recommended: trades of RECOMMENDED_MIN_USD or more over the last FEED_HOURS from the traders in
     Traders' two sections (Sharps, Rising). Quiet on purpose: fewer, bigger trades."""
+    _private(response)
     data = _worth_load()
     people = [s | copy_fields(s) for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
-    bets, failed = _feed(people, RECOMMENDED_MIN_USD)
+    got = _feed(people, RECOMMENDED_MIN_USD)
     return {"traders": [{k: s[k] for k in ("wallet", "name", "segment", "label", "copy_ok", "copy_label")} for s in people],
-            "failed": failed, "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD, "bets": bets}  # fmt: skip
+            "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD} | got  # fmt: skip
 
 
-def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> tuple[list[dict[str, Any]], int]:
+def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> dict[str, Any]:
     """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), newest first, with
-    status and category; and how many traders couldn't be read."""
+    status and category, from what the poller keeps: a view never waits on Polymarket for dozens of traders. Only
+    a trader the poller hasn't read yet (just followed, or just after a restart) is read here, at most
+    LIVE_PAGE_READS a view; the rest are ``pending`` until its next round. ``failed``: traders that couldn't be read
+    (or only longer ago than LIVE_SHOW_S). ``as_of``: when the oldest of what's shown was read (epoch ms)."""
     since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
     bets: list[dict[str, Any]] = []
-    failed = 0
-
-    for s in people:  # from what the poller keeps: a page view never reads Polymarket for dozens of traders
-        try:
-            d = _live_read(s["wallet"])
-        except VenueError:
-            failed += 1
+    failed = pending = 0
+    reads_left, mono = LIVE_PAGE_READS, time.monotonic()
+    oldest = mono
+    for s in people:
+        w = s["wallet"]
+        hit = _live_kept(w)
+        if hit is None and reads_left > 0 and w not in _live_failed:
+            reads_left -= 1
+            try:
+                _live_read(w)
+            except VenueError:
+                _live_failed[w] = time.monotonic()
+            hit = _live_kept(w)
+        if hit is None or mono - hit[0] > LIVE_SHOW_S:
+            if hit is None and w not in _live_failed:
+                pending += 1
+            else:
+                failed += 1
             continue
+        oldest, d = min(oldest, hit[0]), hit[1]
         if not s.get("name"):
             s["name"] = d.trader.name  # a followed wallet we haven't scored: their Polymarket name, as on their cards
         bets += [b for b in _bets_of(d, s, since) if b["usd"] >= min_usd]
@@ -1431,7 +1764,8 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> tuple[list[dict
         cats = {}  # the trades still show, under All
     for b in bets:
         b["status"], b["category"] = bet_status(b["price"], b["price_now"]), cats.get(b["market"])
-    return bets, failed
+    as_of = round((time.time() - (time.monotonic() - oldest)) * 1000)
+    return {"bets": bets, "failed": failed, "pending": pending, "as_of": as_of}
 
 
 def _iso_ts(s: str) -> float:
@@ -1605,13 +1939,18 @@ def _origins() -> set[str]:
 def signed_in(request: Request) -> str:
     """The signed-in user's Clerk id, from the page's ``Authorization: Bearer`` session token, or 401 with a
     plain sentence. Checked here: the signature (Clerk's public keys, RS256), expiry, issuer, origin."""
+    return _session(request, "Sign in to follow traders.")
+
+
+def _session(request: Request, why: str) -> str:
+    """``signed_in``'s check; ``why`` is what a missing or foreign sign-in is told."""
     fapi = clerk_frontend_api(CLERK_KEY)
     if not fapi:
         raise HTTPException(404, detail="Signing in isn't switched on here.")
     auth = request.headers.get("authorization", "")
     token = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
     if not token:
-        raise HTTPException(401, detail="Sign in to follow traders.")
+        raise HTTPException(401, detail=why)
     try:
         claims = jwt.decode(token, _signing_key(token), algorithms=["RS256"], issuer=f"https://{fapi}",
                             options={"require": ["exp", "iat", "sub"]}, leeway=5)  # fmt: skip
@@ -1620,7 +1959,7 @@ def signed_in(request: Request) -> str:
     except jwt.PyJWTError as e:
         raise HTTPException(401, detail="Your sign-in has expired. Sign in again.") from e
     if claims.get("azp") and claims["azp"] not in _origins():
-        raise HTTPException(401, detail="Sign in on this site to follow traders.")
+        raise HTTPException(401, detail=f"{why[:-1]} on this site.")
     return str(claims["sub"])
 
 
@@ -1734,8 +2073,7 @@ def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]
     scores = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
     people = [{"wallet": w, "name": (s := scores.get(w) or {}).get("name"), "segment": s.get("segment"),
                "label": s.get("label")} | copy_fields(s or None) for w in follows]  # fmt: skip
-    bets, failed = _feed(people)
-    return {"traders": people, "failed": failed, "hours": FEED_HOURS, "bets": bets}
+    return {"traders": people, "hours": FEED_HOURS} | _feed(people)
 
 
 @app.post("/api/me/telegram")
@@ -2301,8 +2639,8 @@ def alert_pass(now: float | None = None) -> int:
     new_buys: list[NewBuy] = []
     new_sells: list[NewSell] = []
     for w in to:
-        try:
-            d = _live_read(w, LIVE_ALERT_S)
+        try:  # what the poller keeps (it reads everyone followed first, each round); read here only if it hasn't yet
+            d = hit[1] if (hit := _live_kept(w)) else _live_read(w, LIVE_ALERT_S)
         except VenueError:
             continue
         first, seen = w not in _seen, _seen.setdefault(w, set())
@@ -2403,7 +2741,8 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
         if not to:
             continue
         try:
-            price_now = next((p.current_price for p in _live_read(w, LIVE_ALERT_S).positions if p.market == t.market), None)
+            price_now = next((p.current_price for p in _live_read(w, LIVE_ALERT_S, priced=True).positions
+                              if p.market == t.market), None)  # fmt: skip
         except VenueError:
             continue
         if price_now is None or _settled(price_now):
@@ -2421,11 +2760,15 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
 
 def _alert_loop() -> None:
     while not _follow_stop.is_set():
+        _alert_wake.clear()
         try:
             alert_pass()
         except Exception as e:  # keep alerting through a bad round
             _tg["error"] = f"{type(e).__name__}: {e}"
-        _follow_stop.wait(ALERT_EVERY_S)
+        _alert_wake.wait(ALERT_EVERY_S)  # or sooner: the poller wakes it once it has read everyone followed
+
+
+_alert_wake = threading.Event()
 
 
 # ---- counting: is any of this useful? ----

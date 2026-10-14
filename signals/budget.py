@@ -8,6 +8,10 @@ every Polymarket read (the data API and Gamma) taking its turn from the budget f
 A rate limit (429) from Polymarket means something read too fast, whatever it was: the background halves its
 rate and pauses every read for as long as Polymarket asks (at least ``COOL_S``), then climbs back to its full
 rate a step every ``RECOVER_S`` without another one.
+
+"Check now" (a trader page scoring a wallet on the spot) has a budget of its own too (the engine's ``checker``), so
+manual checks can't take the Feed's share either. Both budgets give way while the Feed's poller reads followed traders (``yield_to``): half their rate, so alerts
+come first.
 """
 
 from __future__ import annotations
@@ -26,17 +30,20 @@ COOL_S = 30.0  # the least a 429 pauses the background for
 RECOVER_S = 120.0  # after a 429, the rate goes back up a step each time this passes without another
 MIN_RATE = 0.5
 BACKOFF_S = (2.0, 5.0, 15.0, 30.0)  # waits before each retry of a read that failed (a 5xx, a timeout)
+YIELD_SHARE = 0.5  # a budget's rate while what it gives way to (the Feed's followed traders) is being read
 
 
 class Budget:
     """Reads a second for the background, shared by every thread that reads for it. Each read takes the next
-    free slot (``1 / rate`` apart), so the rate holds however many threads ask at once."""
+    free slot (``1 / rate`` apart), so the rate holds however many threads ask at once. While ``yield_to()`` is
+    true, slots are YIELD_SHARE of the rate."""
 
     def __init__(
-        self, rate: float, clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep
+        self, rate: float, clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+        yield_to: Callable[[], bool] | None = None,
     ) -> None:
         self.target = self.rate = rate
-        self._clock, self._sleep = clock, sleep
+        self._clock, self._sleep, self._yield_to = clock, sleep, yield_to
         self._lock = threading.Lock()
         self._next = 0.0  # the next free slot
         self._paused_until = 0.0
@@ -50,7 +57,7 @@ class Budget:
             if self.rate < self.target and now - self._changed >= RECOVER_S:
                 self.rate, self._changed = min(self.target, self.rate * 1.5), now
             slot = max(self._next, now, self._paused_until)
-            self._next = slot + 1 / self.rate
+            self._next = slot + 1 / (self.rate * (YIELD_SHARE if self._yield_to and self._yield_to() else 1.0))
             self.reads += 1
         if slot > now:
             self._sleep(slot - now)
@@ -104,3 +111,4 @@ class BackgroundHttp:
 
     def __getattr__(self, name: str) -> Any:  # anything else the SDK asks of its client
         return getattr(self._http, name)
+

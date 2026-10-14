@@ -30,6 +30,41 @@ def js_defs(*names: str) -> str:
     return "\n".join(out)
 
 
+def live_reads(monkeypatch: pytest.MonkeyPatch, detail: Any) -> None:
+    """Stands ``detail`` (a stand-in for the SDK's ``whales.trader``, called with venue and wallet) in for every
+    read of a trader: their page's full read, and the Feed's poller's two (their trades, then open positions)."""
+    from dataclasses import replace
+
+    from signals import app as engine
+
+    def trades(venue: str, w: str, **k: Any) -> list[Any]:
+        d = detail(venue, w)  # Polymarket's trades carry the trader's name, as their profile has it
+        return [replace(t, name=t.name or d.trader.name) for t in d.trades]
+
+    monkeypatch.setattr(engine.reads.whales, "trader", detail)
+    monkeypatch.setattr(engine.reads.whales, "trades", trades)
+    monkeypatch.setattr(engine, "_open_positions", lambda w: detail("polymarket", w).positions)
+
+
+@pytest.fixture(autouse=True)
+def fresh_poller() -> None:
+    """Every test starts with nothing the Feed's poller kept about traders' positions, failures or hints."""
+    from signals import app as engine
+
+    for kept in (engine._live_priced, engine._live_failed, engine._live_hinted):
+        kept.clear()
+    engine._live_round["ended"] = float("-inf")
+
+
+@pytest.fixture(autouse=True)
+def checks_read_like_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scoring on the spot reads through ``engine.checker()`` (its own budget); tests stand in for it at
+    ``engine.reads.whales``, as for every other read. tests/test_directory_evaluation.py checks the real one."""
+    from signals import app as engine
+
+    monkeypatch.setattr(engine, "checker", lambda: engine.reads.whales)
+
+
 @pytest.fixture(autouse=True)
 def no_us_twins(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test starts with no Polymarket US index (as before Layer's matches are read): no test sees another's."""

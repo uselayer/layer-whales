@@ -42,12 +42,18 @@ The first visit asks one question, which markets interest you (Politics, Sports,
 markets), then opens Traders. The choice is kept in your browser; the market chips on Traders change it, and the Feed
 follows it ("Your markets: … · Change" opens the same picker), so the two always agree. Then two tabs:
 
-- **Feed**: one switch at the top, **Following** (the default) or **Recommended**.
-  - **Following**: signed in, every trade over the last 24 hours from the traders you follow, whoever they are.
-    Signed out, a short prompt to sign in.
+- **Feed** (signed in; signed out it's a sign-in page, while Traders and trader pages need no account): one
+  switch at the top, **Following** (the default) or **Recommended**.
+  - **Following**: every trade over the last 24 hours from the traders you follow, whoever they are.
   - **Recommended**: trades of $1,000 or more over the last 24 hours from the traders in Traders' two sections
     (Sharps, Rising). Quieter on purpose, and never the default. The page says to use their trades to
     learn what they're doing, not as a signal to buy: we haven't found that buying after them makes money.
+  - How fresh: the engine reads each followed trader every 30 seconds and each Recommended trader every minute
+    (less often as the list grows: about every 2½ minutes at 200 traders, every 12 at 1,000), and Polymarket's
+    shared feed of $1,000+ trades moves anyone who just traded to the front. Per trader that's one read of their
+    trades, plus their open positions when there's a trade from the last day to price. "Updated" says when the
+    oldest of what's shown was read. A page never waits on Polymarket for the list: it reads at most 3 traders
+    the engine hasn't read yet, and says "Still reading N traders" for the rest.
   - Both: one card per trade, opened on your markets, three across on a desktop: the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
     paid; **Price moved away** means further either way. A bigger drop means
@@ -132,9 +138,10 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   the store. Set `LAYER_API_KEY` in the service's variables; keys never reach the browser.
 - **Vercel** holds the domain and forwards every request to Railway (`web/vercel.json`, deployed from `web/`).
   Caching is off there.
-- **Signing in, only to follow traders** (off until its keys are set): Clerk, with Google and Telegram. The
-  page loads Clerk from the Frontend API its publishable key names, and sends Clerk's session token with
-  `/api/me` requests; the engine checks it against Clerk's public keys. Follows are kept in
+- **Signing in, for the Feed and to follow traders** (off until its keys are set; while off, nothing is gated):
+  Clerk, with Google and Telegram. The page loads Clerk from the Frontend API its publishable key names, and sends
+  Clerk's session token with `/api/me` and the Feed's requests (`/api/live`, `/api/trading-now`, `/api/bet`); the
+  engine checks it against Clerk's public keys and refuses the Feed's reads without it. Follows are kept in
   `/data/follows.json`, by Clerk user id. Sandboxes kept from before (in `/data/visitors/<id>`) are left on
   the volume, unread, until the owner decides to delete them.
 - **Alerts** on Telegram (off until `TELEGRAM_BOT_TOKEN` is set): "Connect Telegram" on a trader's page gives a
@@ -155,8 +162,12 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   (the SDK's `find_wallets`, uselayer 0.9): about 18,000 reads, roughly 2.5 hours. A restart (a deploy) doesn't start it
   over: each leaderboard, and the markets, is marked once read to its end, and the next sweep reads only what wasn't
   read in the last day. It stays out of the Feed's way:
-  at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one trader at a time, needs
-  at most ~3.3), and none while the Worth following check runs, which can use all 8. Traders in the Feed's big
+  at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one read at a time, needs
+  at most ~3.7, and as little as ~1.5 for today's 24 Recommended and 20 followed traders), and none while the Worth following check runs, which can use all 8.
+  Checking a trader on the spot (Explore's "Check now", a trader page nobody has scored lately) has its own budget
+  too, 3 reads a second (`SIGNALS_CHECK_RATE`), so the background's 4 and the checks' 3 always leave the Feed a
+  share. While the Feed reads the traders people follow, both run at half rate, and the alerts go out as soon as
+  those reads are done. Traders in the Feed's big
   trades, wallets opened that the last check didn't have (pasted into search, mostly) and followed wallets are kept
   too, at no extra reads, by a writer thread so no page waits for the directory; a follow keeps the wallet, never
   who follows it. At full size the file is roughly 300 MB (the volume holds 5 GB).
@@ -170,17 +181,20 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   later check leaves out keeps its last score. On each launch the last check's scores in `worth-following.json`
   are imported, as of when that check finished: the first time adds them, after that it changes nothing.
   **Discovery from the directory** (phase 5) is off until the owner sets `SIGNALS_DISCOVERY=directory`: then
-  Traders, the Feed's Recommended, alerts and trader pages show each wallet's latest score from the last 12 hours,
-  whoever worked it out (the check, the background evaluation, a trader page), in the check's order (tier, then
-  the strength of their edge), at most `SIGNALS_DISCOVERY_LIMIT` (default the check's 200), in the same response
-  as before. A score is the same score wherever it's read, so a trader gets the same tier, section and copy
-  status either way. The picked markets (onboarding's) go with the request, and their traders are picked first,
-  from the whole directory. The check keeps running beside it, so `SIGNALS_DISCOVERY=check` (the default) goes
-  back to it at once, and it's shown anyway while the directory has no fresh score or can't be read. Switch after
-  the Feed's poller update (#78), which keeps the Feed fast however many traders are recommended.
-  `/api/discovery` (the owner's, as `/api/metrics`) compares the two: each one's traders and recommended traders
-  by section, who only one recommends and why, and every wallet the check scored that was also scored apart from
-  it within 6 hours, with how often the tier, section and copy verdict agree, and the differences.
+  Traders, the Feed's Recommended, alerts and trader pages show each wallet's latest score from the last 2 days
+  (twice the background evaluation's daily rescore; a trader shown is rescored every 6 hours), whoever worked it out
+  (the check, the background evaluation, a trader page), in the check's order (tier, then the strength of their
+  edge), in the same response as before. Every recommended trader is in it, however many (Explore's lists leave
+  recommended tiers to Traders, so a cap there would hide them); the other checked traders fill it up to
+  `SIGNALS_DISCOVERY_LIMIT` (default the check's 200), those in the picked markets (onboarding's, sent with the
+  request) first. Explore browses the whole directory either way. A score is the same score wherever it's read, so
+  a trader gets the same tier, section and copy status either way. The check keeps running beside it, so
+  `SIGNALS_DISCOVERY=check` (the default) goes back to it at once, and it's shown anyway while the directory has no
+  fresh score or can't be read. `/api/discovery` (the owner's, as `/api/metrics`) compares the two: each one's
+  traders and recommended traders by section, where they come from (the check's "on the leaderboard", any board
+  a sweep has seen, or none), who scored them, how old the scores are, by category and by each onboarding pick;
+  who only one recommends and why; and every wallet the check scored that was also scored apart from it within 6
+  hours, with how often the tier, section and copy verdict agree, and the differences.
   `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps; scored,
   failed and never scored, by segment and category, active in the last week) to the owner only, as
   `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off; scores are kept either way.

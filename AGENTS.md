@@ -7,7 +7,8 @@ machine (`uv run signals`) and is hosted at usesignals.app: the same engine with
 behind Vercel (see README, "Hosting").
 
 - All venue reads, links and copies go through `client.whales` in the SDK. Don't add venue calls or matching
-  logic here; put it in the SDK.
+  logic here; put it in the SDK. One approved stopgap: `_open_positions` (the Feed's poller) calls the SDK's
+  internals for a positions-only read until uselayer has a public one (uselayer-sdk#23); don't add others.
 - Signals is Polymarket-only for now; the SDK stays multi-venue. `SIGNALS_VENUES` (`VENUES` in `app.py`, default
   `polymarket`; `polymarket,kalshi` adds Kalshi back) is the one switch: every read passes it to the SDK
   (`big_trades(venues=…)`, `top(venue=…)`), and a venue that's off is refused, never read and then hidden. The
@@ -20,12 +21,16 @@ behind Vercel (see README, "Hosting").
   not recommended, and a kept score is a record, not a pick: never say a found wallet is any good, and scoring and
   its thresholds stay as they are. Traders shows the directory only with `SIGNALS_DISCOVERY=directory` (phase 5,
   the owner's flag; `check`, the default, is the Worth following check's own 200): its latest fresh scores in the
-  check's shape and order, through `_worth_load`, so the Feed, alerts and trader pages follow. The check keeps
+  check's shape and order, through `_worth_load`, so the Feed, alerts and trader pages follow. Every recommended
+  trader is in it (the limit only bounds the rest), and Explore is never limited by it. The check keeps
   running beside it, so going back is one switch; `/api/discovery` compares the two (the owner's). Keeping a score
   costs no reads: it's written where a score is already made (`_worth_run`, `_score_of`, the launch import), and
   a score never replaces a newer one. It keeps wallets only (a follow keeps the wallet, never who follows). Its
   sweep reads through the SDK (`find_wallets`) at `DIRECTORY_RATE`, below the per-host limit with room for the
-  Feed's poller, and holds while the Worth following check runs. Pages and the check never write to it
+  Feed's poller, and holds while the Worth following check runs. Scoring a wallet on the spot ("Check now", a
+  trader page) reads through `checker()`, on its own budget (`CHECK_RATE`, 3 a second); never through `reads`
+  directly, so manual checks can't take the Feed's share. The background's and the checks' budgets give way (half
+  rate) while the poller reads followed traders, so alerts come first. Pages and the check never write to it
   themselves: `_directory_note_later` and `_directory_later` (the writer thread; a failed write is never theirs).
 - Counting (README, "Counting"): per alert and per follow, in the store's `alerts.db`, never anything personal
   beyond the signed-in account (no IPs, no user agents; an interest pick is counted with no id at all). Quotes
@@ -51,8 +56,12 @@ behind Vercel (see README, "Hosting").
   between the reads (`price_changed`) it says "Price changed—refresh quote", never that nothing is for sale;
   "Only $X is for sale" is only for an amount bigger than the book holds within the limit. Transparency over a
   quote that always succeeds.
-- Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
-  asked for only to follow a trader, and the button says so ("Follow · get an alert after they trade"). Alerts go
+- Traders (the leaderboard, Top profit) and trader pages need no account; everything in the Feed (Following,
+  Recommended, Big trades, an alert's "Check your price") is behind signing in (Clerk: Google, or Telegram as a
+  custom OpenID Connect provider). Signed out, a Feed page is the sign-in page ("Sign in to see the Feed", Sign in,
+  Browse traders), and the engine refuses its reads (`feed_reader`: `/api/live`, `/api/trading-now`, `/api/bet`)
+  without a valid session. Without Clerk's key (running locally) nothing is gated. On a trader's page the Follow
+  button says why you'd sign in ("Follow · get an alert after they trade"). Alerts go
   to Telegram (`alert_pass` in `app.py`). Signals is trader discovery and trading intelligence first, copying
   second: following is research, so every buy by a trader you follow alerts you, whatever the amount and whoever
   the trader (their buys of one outcome within 30 minutes add up, across rounds and restarts, shown as the total
@@ -147,14 +156,23 @@ behind Vercel (see README, "Hosting").
     nothing moves between tabs. Feed cards are a grid: three across on desktop, one on a phone. Keep loading,
     empty and error states.
   - The Feed has two parts. **Following** (`#/`, the default, `/api/me/feed`): every trade from the last day of
-    the traders you follow, whoever they are (following is also research); signed out it's one short sign-in
-    prompt. **Recommended** (`#/recommended`, `/api/live`): trades of $1,000 or more (`RECOMMENDED_MIN_USD`) from
+    the traders you follow, whoever they are (following is also research). **Recommended** (`#/recommended`, `/api/live`): trades of $1,000 or more (`RECOMMENDED_MIN_USD`) from
     the traders in Sharps and Rising, with neutral cards for anyone not copy_ok. Recommended
     stays quiet (fewer, bigger trades) and never more prominent than Following: second in the switch, never the
     default. Both keep the switch "Only trades I can still get into", one card per outcome with "Also bought
     by", and the delay line. Big trades (`#/big`) is linked from the foot of Recommended. Traders' trades come from
-    one background poller (`_live_loop`: Recommended's and everyone followed, one at a time, every 30 s); pages
-    only read what it keeps, so a busy Feed never adds Polymarket reads.
+    one background poller (`_live_loop`, one read at a time, in 30 s rounds: everyone followed each round,
+    Recommended's every 60 s while the round's slot allows, oldest first, so a bigger pool is read less often,
+    never faster). Per trader it reads their trades, and their open positions only when there's a trade from the
+    last day to price (kept while their trades don't change, for 90 s); never the profile or stats. Polymarket's
+    shared $1,000+ trades feed (one read for everyone) moves a Recommended trader who just traded to the front.
+    Pages only read what it keeps, so a busy Feed never adds Polymarket reads: a view reads at most 3 traders the
+    poller hasn't read yet itself ("Still reading N traders"), and "Updated" is when the oldest of it was read.
+    The Feed never says "None of … traded" for traders it hasn't read: it says it's still reading them, or that
+    they couldn't be read, and notes when some of it was last read over 5 minutes ago. Everyone followed is read
+    once every round however many there are (Recommended keeps a floor of 4 reads a round); alerts read what the
+    poller keeps, never on their own; a gap of more than 100 trades between reads is read further back (500);
+    a rate limit ends the round.
   - Market chips live on Traders only. The Feed follows the same choice and says so in one line ("Your markets:
     Politics, Sports · Change"); Change opens the onboarding picker. Never a second set of filter chips.
   - A trade at 2¢ or less, 98¢ or more, or no longer held is settled (Won / Lost / Closed), never a bargain
