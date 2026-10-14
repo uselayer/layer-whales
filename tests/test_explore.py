@@ -114,6 +114,17 @@ def test_a_quick_look_keeps_the_usual_market_size_and_whether_its_counts_are_at_
     assert quick_look([(NOW, True, "0xa")], NOW, read_all=True).market_usd is None  # no dollars read: unknown
 
 
+def test_recommended_tiers_stay_on_the_recommended_tab_and_a_search_still_finds_them(d: Directory) -> None:
+    star = "0x" + "7" * 40
+    d.add([Seen(star, "leaderboard", "PNL MONTH OVERALL", name="StarSue", rank=5)], at=NOW - DAY)
+    d.keep_scores([score(star, "rising")], "background", at=NOW)
+    for g in ("limited", "checked", "unchecked"):
+        assert star not in wallets(d.browse(g))
+    found = d.browse("limited", q="starsue")["rows"]
+    assert [(r["wallet"], r["group"]) for r in found] == [(star, "recommended")]
+    assert d.explore_counts() == {"limited": 2, "checked": 2, "unchecked": 1}  # not counted in Explore's groups
+
+
 # ---- the engine ----
 
 

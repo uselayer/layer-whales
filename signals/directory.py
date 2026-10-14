@@ -255,11 +255,14 @@ EXPLORE_GROUPS = ("limited", "checked", "unchecked")
 _PUBLIC = "w.listed = 1"
 _LIMITED = ("((w.status = 'checked' AND w.not_recommended = 'not_enough_recent_evidence') "
             "OR (w.status != 'checked' AND w.scored_at IS NOT NULL AND w.segment = 'too_few'))")  # fmt: skip
+_TIERED = f"(w.status != 'checked' AND w.scored_at IS NOT NULL AND w.segment IN ({_RECOMMENDED_SQL}))"
 _GROUPS = {
     # too few bets to judge: a quick check's count (``evidence`` "quick"), or a score that found too few (``scored``)
     "limited": _LIMITED,
-    # looked at, with something to say: a score's verdict (any tier), or a quick check's (dormant, paused)
-    "checked": f"((w.scored_at IS NOT NULL OR w.status = 'checked') AND NOT {_LIMITED})",
+    # looked at, with something to say, short of a recommended tier: a score's verdict, or a quick check's (dormant,
+    # paused). Recommended tiers are the Recommended tab's: Explore's search finds them, its lists leave them out.
+    "checked": f"((w.scored_at IS NOT NULL OR w.status = 'checked') AND NOT {_LIMITED} AND NOT {_TIERED})",
+    "recommended": _TIERED,
     # found, never looked at: nothing about them has been measured
     "unchecked": "(w.scored_at IS NULL AND w.status IN ('found', 'failed'))",
 }
@@ -290,9 +293,10 @@ def _explore(r: dict[str, Any]) -> dict[str, Any]:
     limited = (r["status"] == "checked" and r["not_recommended"] == "not_enough_recent_evidence") or (
         r["status"] != "checked" and r["scored_at"] is not None and r["segment"] == "too_few")  # fmt: skip
     looked = r["scored_at"] is not None or r["status"] == "checked"
+    tiered = r["status"] != "checked" and r["scored_at"] is not None and r["segment"] in RECOMMENDED
     board, _, rank = (r.pop("best_board") or "").partition("|")
     return r | {
-        "group": "limited" if limited else "checked" if looked else "unchecked",
+        "group": "limited" if limited else "recommended" if tiered else "checked" if looked else "unchecked",
         "evidence": None if not looked else "quick" if r["status"] == "checked" else "scored",
         "label": reason_label(r["not_recommended"], r["buys_30d"]) if r["status"] == "checked" else None,
         "board": {"place": board, "rank": int(rank)} if board else None,
@@ -793,7 +797,8 @@ class Directory:
     def browse(self, group: str = "limited", *, q: str = "", category: str | None = None,
                active_days: int | None = None, min_usd: float | None = None, board: str | None = None,
                makers: bool = False, sort: str = "recent", limit: int = 50, offset: int = 0,
-               search_in: tuple[str, ...] = ("limited", "checked"), now: float | None = None) -> dict[str, Any]:  # fmt: skip
+               search_in: tuple[str, ...] = ("limited", "checked", "recommended"),
+               now: float | None = None) -> dict[str, Any]:  # fmt: skip
         """A page of Explore: the wallets in ``group`` (one of EXPLORE_GROUPS), or with ``q``, the wallets in the
         ``search_in`` groups whose name has it in it (or whose wallet starts with it), filtered and sorted by facts
         only (SORTS), never by a ranking of how good they are. Only wallets found in public places (``_PUBLIC``):

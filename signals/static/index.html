@@ -1612,6 +1612,7 @@ const foundText = (r) => r.board ? `Found ${boardText(r.board.place, r.board.ran
 // The label of a row: what we know about them, and how we know it.
 function exBadges(r) {
   if (r.group === "unchecked") return `<span class="tier t2">Not checked yet</span>`;
+  if (r.group === "recommended") return tier(r.segment); // found by a search: their tier, as on Recommended
   if (r.group === "limited") return `<span class="tier t3">Limited evidence</span><span class="tier t2">${r.evidence === "quick" ? "Quick look" : "Checked"}</span>`;
   if (r.evidence === "quick") return `<span class="tier t3">${r.not_recommended === "dormant" ? "Dormant" : "Not trading lately"}</span><span class="tier t2">Quick look</span>`;
   return tier(r.segment) || `<span class="tier t3">Checked</span>`;
@@ -1620,7 +1621,8 @@ function exBadges(r) {
 function exFacts(r) {
   const unknown = "unknown";
   const active = r.last_active ? `active ${ago(r.last_active * 1000)}` : "last trade unknown";
-  if (r.group === "unchecked") return [r.category, foundText(r), "nothing measured yet"].filter(Boolean);
+  // not checked yet: where we found them, and a quick look's counts if one was read (its full check is to come)
+  if (r.group === "unchecked") return [r.category, foundText(r), r.buys_30d != null ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days` : "nothing measured yet"].filter(Boolean);
   const size = r.typical_usd != null ? `usually ${usd(r.typical_usd)} a trade` : r.market_usd != null ? `about ${usd(r.market_usd)} a market` : `bet size ${unknown}`;
   const bets = r.evidence === "quick" ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days, ${exCount(r.buys_90d, r.evidence_cut)} in 90`
     : `${r.bets_checked ?? unknown} bets checked, 30 days`;
@@ -1699,7 +1701,9 @@ function renderExplore() {
 // What Explore knows about a trader nobody has checked lately: the evidence, where they were found, and "Check now".
 function evidenceFacts(r) {
   if (!r) return [];
-  const when = r.status === "checked" && r.tried_at ? `a quick look at their trades, ${ago(r.tried_at * 1000)}` : r.scored_at ? `a full check, ${ago(r.scored_at * 1000)}` : "not checked yet";
+  const when = r.status === "checked" && r.tried_at ? `a quick look at their trades, ${ago(r.tried_at * 1000)}`
+    : r.scored_at ? `a full check, ${ago(r.scored_at * 1000)}`
+    : r.buys_30d != null ? "a quick look at their trades; their full check is still to come" : "nothing yet: not checked";
   return [
     ["Markets bought", r.evidence === "quick" || r.buys_30d != null ? `${exCount(r.buys_30d, r.evidence_cut)} in the last 30 days, ${exCount(r.buys_90d, r.evidence_cut)} in 90` : "unknown"],
     ["Usual bet", r.typical_usd != null ? `${usd(r.typical_usd)} a trade` : r.market_usd != null ? `about ${usd(r.market_usd)} a market, last 90 days` : "unknown"],
@@ -1726,7 +1730,7 @@ function renderUnchecked(s, wallet) {
     let full;
     try { full = await api(`/api/worth/${wallet}`); } catch (err) { e.target.disabled = false; e.target.textContent = "Check now"; return toast(esc(err.message)); }
     if (location.hash !== `#/worth/${wallet}`) return;
-    Object.assign(pf, { s: full, detail: null, account: null, tab: "positions", period: full.periods ? pf.period : "30d" });
+    Object.assign(pf, { s: full, detail: null, account: null, tab: "positions", period: full.periods ? pf.period : "30d", from: "explore" });
     renderProfile(); loadProfileExtras(wallet, full);
   };
   bindActions(app);
@@ -1773,6 +1777,7 @@ async function worthTraderPage(wallet) {
   let s;
   const peek = exploreOn && exOpen === wallet; // opened from Explore: check only when asked ("Check now")
   exOpen = null;
+  pf.from = peek ? "explore" : null;
   try { s = await api(`/api/worth/${wallet}${peek ? "?score=0" : ""}`); } catch (e) { app.innerHTML = back + errorState(e.message); bindActions(app); return; }
   if (location.hash !== `#/worth/${wallet}`) return;
   if (s.unchecked) return renderUnchecked(s, wallet);
@@ -1919,7 +1924,7 @@ function renderProfile() {
       <details class="fold"><summary>How we measure this</summary>${worthDetails(s)}</details>`;
   }
 
-  app.innerHTML = `<a class="back" href="#/traders">← Traders</a>
+  app.innerHTML = `${pf.from === "explore" ? `<a class="back" href="#/traders/explore">← Explore</a>` : `<a class="back" href="#/traders">← Traders</a>`}
     <div class="pf-head">${avatar(s.wallet, 64)}
       <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${tier(s.segment, true)}</div><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null, s.stored_at ? `checked ${ago(s.stored_at * 1000)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy || s.stored_at ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div>${copyStatus}</div></div>

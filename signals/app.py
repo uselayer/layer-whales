@@ -52,12 +52,12 @@ from uselayer.whale_scores import (
 from signals import us_match
 from signals.budget import BackgroundHttp, Budget
 from signals.directory import (
-    EXPLORE_GROUPS,
-    RESCORE_S,
-    SORTS,
     CHECK_BOARDS,
+    EXPLORE_GROUPS,
     LISTED_FRESH_S,
     QUICK_TRADES,
+    RESCORE_S,
+    SORTS,
     Directory,
     QuickLook,
     Seen,
@@ -1119,7 +1119,7 @@ def explore(group: str = "limited", q: str = "", category: str = "", active: int
     q = q.strip()[:64]
     if q and len(q) < 2:
         raise HTTPException(400, detail="Type at least 2 letters to search.")
-    search_in = ("limited", "checked", "unchecked") if unchecked else ("limited", "checked")
+    search_in = ("limited", "checked", "recommended", *(("unchecked",) if unchecked else ()))
     args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, sort, offset)
     page = cached(f"explore:{args}", EXPLORE_TTL_S, lambda: directory().browse(
         group, q=q, category=category or None, active_days=active or None, min_usd=min_usd or None,
