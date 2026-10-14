@@ -142,7 +142,7 @@ def test_twenty_alerts_a_day_then_one_limit_message_then_nothing_until_tomorrow(
     sent = [engine._send("user_1", "555", "buy", lambda aid: f"alert {aid}") for _ in range(engine.DAILY_CAP)]
     assert all(sent) and len(engine.tg.sent) == 20
     assert engine._send("user_1", "555", "whale", lambda aid: "one more") is None
-    assert engine.tg.sent[-1]["text"] == "You've reached today's alert limit; more tomorrow."
+    assert engine.tg.sent[-1]["text"] == engine.CAP_TEXT and "still in your Feed" in engine.CAP_TEXT
     assert "reply_markup" not in engine.tg.sent[-1]
     assert engine._send("user_1", "555", "group", lambda aid: "and another") is None
     assert len(engine.tg.sent) == 21  # nothing more today, not even the limit message again
@@ -1200,3 +1200,146 @@ def test_an_alerts_db_from_before_delivery_states_keeps_its_alerts_as_sent(api: 
     assert engine._retry_due() == 0  # nothing of it is sent again
     m = _owner_metrics(monkeypatch)
     assert m["alerts"]["sent"] == 1 and m["alerts"]["delivery"]["sent"] == 1
+
+
+# ---- one busy trader can't use up the day: TRADER_DAILY each, then a summary ----
+
+
+def _buys(w: str, n: int, start: int = 0) -> list[int]:
+    """``n`` buys by ``w``, each of a different outcome (so none is grouped or left out as a repeat)."""
+    t0 = datetime.now(UTC)
+    return [engine._deliver("user_1", "555", new_buy(w, t0, market=f"0x{w[2]}{i}:0"), "Politics") for i in range(start, start + n)]
+
+
+def _held(uid: str = "user_1") -> list[tuple[Any, ...]]:
+    with engine._db() as con:
+        return con.execute("SELECT trader, outcome, side, usd FROM held WHERE uid = ? ORDER BY rowid", (uid,)).fetchall()
+
+
+def test_five_alerts_a_day_from_one_trader_then_their_trades_are_held_while_others_still_alert(api: TestClient) -> None:
+    user()
+    assert _buys(SAM, 7) == [1, 1, 1, 1, 1, 0, 0]  # the sixth and seventh wait for a summary
+    texts = [m["text"] for m in engine.tg.sent]
+    assert "That's 5 alerts from Sam today" in texts[4] and not any("That's 5" in t for t in texts[:4])
+    assert "one summary every 3 hours" in texts[4] and "still comes right away" in texts[4]
+    assert [(t, s, u) for t, _, s, u in _held()] == [(SAM, "buy", 1000.0), (SAM, "buy", 1000.0)]
+    assert _buys(ANN, 1) == [1]  # another trader isn't held back
+    assert engine._send("user_1", "555", "whale", lambda aid: "big", trader=SAM, outcome="w") is not None  # nor big trades
+    assert engine._sent_today("user_1") == 7 and engine._sent_today("user_1", engine.TRADER_KINDS, SAM) == 5
+    assert "5 from any one trader" in engine.CONNECTED and "a summary counts as one alert" in engine.CONNECTED
+
+
+def test_a_traders_buys_and_sells_share_their_five(api: TestClient) -> None:
+    user()
+    assert _buys(SAM, 3) == [1, 1, 1]
+    for i in range(2):
+        assert engine._send("user_1", "555", "sell", lambda aid: "sold", trader=SAM, outcome=f"s{i}", usd=50) is not None
+    assert _buys(SAM, 1, start=3) == [0]
+    assert engine._send("user_1", "555", "sell", lambda aid: "sold", trader=SAM, outcome="s2", usd=70) is None
+    assert [s for _, _, s, _ in _held()] == ["buy", "sell"]
+
+
+def test_a_sale_of_something_they_alerted_you_about_still_comes_past_their_five(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    markets = [f"0xm{i}:0" for i in range(6)]
+    live_reads(monkeypatch, detail_of(trades, dict.fromkeys(markets, 0.50)))
+    t0 = datetime.now(UTC) - timedelta(minutes=10)
+    engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
+    trades += [trade(SAM, t0, market=m, i=m) for m in markets]
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 60) == 5  # the sixth buy (0xm5) is held
+    assert [o for _, o, _, _ in _held()] == ["tok-0xm5:0"]
+    trades += [sold(SAM, t0 + timedelta(minutes=2), market="0xm0:0"), sold(SAM, t0 + timedelta(minutes=2), market="0xm5:0")]
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 3 * 60) == 1  # the sale of 0xm0, which Sam's alert told you about
+    assert "<b>Sam</b> sold" in engine.tg.sent[-1]["text"] and engine._sent_today("user_1") == 6  # within the 20
+    assert [(o, s) for _, o, s, _ in _held()] == [("tok-0xm5:0", "buy"), ("tok-0xm5:0", "sell")]  # not told: held
+    assert engine._sold_recently(SAM, "tok-0xm5:0", t0.timestamp() + 4 * 60)  # held counts for the 6-hour rule too
+
+
+def test_told_means_their_buy_alert_or_a_group_with_their_buy_in_it(api: TestClient) -> None:
+    user()
+    now = time.time()
+    _buys(SAM, 1)
+    assert engine._told("user_1", SAM, "tok-0xa0:0", now) and not engine._told("user_1", ANN, "tok-0xa0:0", now)
+    assert not engine._told("user_1", SAM, "tok-0xa0:0", now + engine.TOLD_S + 60)  # too long ago
+    t0 = datetime.now(UTC)
+    engine._deliver("user_1", "555", new_buy(ANN, t0, market="0xg:0"), "Politics")
+    engine._deliver("user_1", "555", new_buy(BOB, t0, market="0xg:0"), "Politics")  # the group
+    assert engine._told("user_1", BOB, "tok-0xg:0", now) and not engine._told("user_1", SAM, "tok-0xg:0", now)
+
+
+def test_a_summary_goes_out_three_hours_after_the_first_held_trade_counts_once_and_only_once(api: TestClient) -> None:
+    user()
+    users = {"user_1": {"chat": "555"}}
+    _buys(SAM, 7)
+    _buys(ANN, 6)
+    engine._send("user_1", "555", "sell", lambda aid: "sold", trader=SAM, outcome="s", usd=250)
+    t = time.time()
+    assert engine._summaries(users, t + engine.SUMMARY_S - 60) == 0 and len(_held()) == 4  # not yet
+    assert engine._summaries(users, t + engine.SUMMARY_S + 1) == 1
+    lines = engine.tg.sent[-1]["text"].splitlines()
+    assert lines[0].startswith("More from traders you follow, since ") and lines[0].endswith(" UTC:")
+    assert lines[1:3] == ["• <b>Sam</b>: 3 more trades, 2 buys ($2,000) and 1 sell ($250)", "• <b>Ann</b>: 1 more trade, 1 buy ($1,000)"]
+    assert "Every buy is in your Feed." in lines[3] and ">Open your Feed</a>" in lines[4] and "/go/" in lines[4]
+    assert engine._sent_today("user_1") == 11 and _held() == []  # 5 + 5 + the summary, once
+    assert engine._summaries(users, t + 2 * engine.SUMMARY_S) == 0 and len(engine.tg.sent) == 11
+
+
+def test_a_summary_past_the_daily_cap_isnt_sent_and_the_limit_message_goes_once(api: TestClient) -> None:
+    user()
+    _buys(SAM, 6)
+    for _ in range(engine.DAILY_CAP - 5):
+        engine._send("user_1", "555", "buy", lambda aid: "x")
+    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0
+    assert engine.tg.sent[-1]["text"] == engine.CAP_TEXT and len(engine.tg.sent) == engine.DAILY_CAP + 1 and _held() == []
+
+
+def test_a_summary_waiting_on_telegram_is_kept_across_a_restart_and_sent_once(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user()
+    _buys(SAM, 6)
+    tg = FlakyTelegram(engine.TelegramError("Telegram: Too Many Requests: retry after 20", 429, 20.0))
+    monkeypatch.setattr(engine, "tg", tg)
+    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0
+    with engine._db() as con:
+        assert con.execute("SELECT kind, state FROM alerts WHERE kind = 'summary'").fetchall() == [("summary", "retry")]
+    assert _held() == []  # cleared with it, so it's never summed up twice
+    restart(monkeypatch)
+    assert engine._retry_due(time.time() + 31) == 1 and tg.sent[0]["text"].startswith("More from traders you follow")
+    restart(monkeypatch)
+    assert engine._retry_due(time.time() + 3600) == 0 and len(tg.sent) == 1
+
+
+def test_a_group_still_forms_when_one_trader_is_past_their_five_and_the_summary_leaves_it_out(api: TestClient) -> None:
+    user()
+    _buys(SAM, 5)
+    t0 = datetime.now(UTC)
+    assert engine._deliver("user_1", "555", new_buy(SAM, t0, market="0xg:0"), "Politics") == 0  # held
+    assert engine._deliver("user_1", "555", new_buy(ANN, t0 + timedelta(minutes=5), market="0xg:0"), "Politics") == 1
+    group = engine.tg.sent[-1]["text"].splitlines()
+    assert group[0].startswith("<b>2 traders you follow bought Yes</b>") and group[1].startswith("· Sam paid")  # Sam's held buy
+    assert engine._sent_today("user_1", engine.TRADER_KINDS, SAM) == 5  # a group isn't one of Sam's five
+    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0  # the group told you
+    assert _held() == [] and len(engine.tg.sent) == 6
+
+
+def test_a_failed_alert_doesnt_use_up_one_of_a_traders_five(api: TestClient) -> None:
+    user()
+    _buys(SAM, 5)
+    with engine._db() as con:
+        con.execute("UPDATE alerts SET state = 'failed' WHERE rowid = (SELECT MIN(rowid) FROM alerts)")
+    assert _buys(SAM, 2, start=5) == [1, 0]
+
+
+def test_a_traders_five_start_again_on_the_next_utc_day(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    day = {"d": "2026-10-13"}
+    monkeypatch.setattr(engine, "_today", lambda now=None: day["d"])
+    user()
+    assert _buys(SAM, 6) == [1, 1, 1, 1, 1, 0]
+    day["d"] = "2026-10-14"
+    assert _buys(SAM, 1, start=6) == [1]
