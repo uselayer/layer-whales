@@ -9,6 +9,7 @@ import sqlite3
 import threading
 import time
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -280,6 +281,23 @@ def test_the_report_is_the_owners_only(monkeypatch: pytest.MonkeyPatch, tmp_path
     c = TestClient(engine.app, client=("10.0.0.1", 50000))
     assert c.get("/api/monitoring").status_code == 404
     assert c.get("/api/monitoring", headers={"Authorization": "Bearer nope"}).status_code == 404
+
+
+def test_a_lanes_recommended_traders_are_counted_with_its_outcomes(counts: Usage, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
+
+    class Sdk:
+        def trades(self, *a: Any, **k: Any) -> Any:
+            return []
+
+        def score(self, w: str, on_leaderboard: bool = False) -> Any:
+            return SimpleNamespace(to_dict=lambda: score(w, "proven" if w == AMY else "no_edge"))
+
+    monkeypatch.setattr(engine, "background", lambda: Sdk())
+    for w in (AMY, BEN):  # recommended traders' rescoring needs no quick check, so the lane's score is all there is
+        engine.evaluate_one({"wallet": w, "kind": "recommended", "lane": "board", "scored_at": None, "on_leaderboard": True})
+    engine.evaluate_one({"wallet": CAL, "kind": "recommended", "scored_at": None, "on_leaderboard": True})  # no lane
+    assert counts.since_launch("evaluated_lane") == {"board:recommended": 1}
 
 
 def test_the_discovery_funnel_leads_the_report_in_explores_words(api: TestClient) -> None:
