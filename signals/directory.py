@@ -285,7 +285,9 @@ def quick_look(trades: list[tuple[Any, ...]], now: float, read_all: bool,
                      None if middle is None else round(middle, 2), covered > evidence)  # fmt: skip
 
 
-EXPLORE_GROUPS = ("passed", "limited", "checked", "unchecked")
+CHECK_GROUPS = ("passed", "limited", "checked", "unchecked")  # what our checks found: each listed wallet is in one
+WHALE_USD = 1000  # Explore's Whales: a usual bet (a trade, or a quick look's market) of this much or more
+EXPLORE_GROUPS = (*CHECK_GROUPS, "whales")  # Whales cuts across the others: a fact about size, never a verdict
 # Listed only when found somewhere public (PUBLIC_SOURCES: the sweep's leaderboards and markets, the Feed's big
 # trades, the check's own reads), which ``listed`` keeps. A wallet known only because someone searched for or
 # followed it stays out of Explore and its search.
@@ -304,6 +306,8 @@ _GROUPS = {
     "recommended": _TIERED,
     # found, never looked at: nothing about them has been measured
     "unchecked": "(w.scored_at IS NULL AND w.status IN ('found', 'failed'))",
+    # big bettors, whatever our checks found (each row keeps its own group): their size, not their skill
+    "whales": f"(COALESCE(w.typical_usd, w.market_usd) >= {WHALE_USD})",
 }
 # Facts to sort by, never a judgement: unknowns last.
 SORTS = {
@@ -987,11 +991,14 @@ class Directory:
         return {"rows": [_explore(dict(r), now) for r in rows[:limit]], "more": len(rows) > limit}
 
     def explore_counts(self, now: float | None = None) -> dict[str, int]:
-        """How many wallets each Explore group lists (public ones only)."""
+        """How many wallets each Explore group lists (public ones only). Every whale is in one of the other groups
+        too; they're counted as listed, market makers left out (``browse``'s ``makers``)."""
         now = time.time() if now is None else now
-        case = " ".join(f"WHEN {_group(g, now)} THEN '{g}'" for g in EXPLORE_GROUPS)
+        case = " ".join(f"WHEN {_group(g, now)} THEN '{g}'" for g in CHECK_GROUPS)
         with self._db() as con:
             got = dict(con.execute(f"SELECT CASE {case} END, COUNT(*) FROM wallets w WHERE {_PUBLIC} GROUP BY 1"))
+            got["whales"] = con.execute(f"SELECT COUNT(*) FROM wallets w WHERE {_PUBLIC} AND {_group('whales', now)} "
+                                        "AND COALESCE(w.segment, '') != 'no_view'").fetchone()[0]  # fmt: skip
         return {g: got.get(g, 0) for g in EXPLORE_GROUPS}
 
     def explore_row(self, wallet: str) -> dict[str, Any] | None:

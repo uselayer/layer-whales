@@ -1665,6 +1665,8 @@ function renderWorth() {
 // Four groups, never ranked: Passed our checks (a recommended tier from a score in the last 48 hours, with profit,
 // skill and copying as three separate answers), Limited evidence (too few bets to judge, from a quick look at their
 // trades or a full check), Checked (what a check found) and, only when asked for, Not checked yet (nothing measured).
+// Whales is a view across them: a usual bet of $1K or more, whatever our checks found, each row with its own label;
+// picking it sets its own filters (active in 30 days, biggest bet first) and leaving it puts the others' back.
 // The Recommended tab stays the check's own list.
 // A figure we haven't read shows as unknown, never 0; a count from a read that stopped early is "N+".
 const ex = { group: "passed", q: "", category: "", active: 0, size: 0, board: "", sort: "recent", unchecked: false, rows: [], more: false, offset: 0, counts: null, others: null };
@@ -1672,9 +1674,19 @@ const EX_GROUPS = [
   ["passed", "Passed our checks", "Traders our directory found who pass the same checks as the Recommended list, scored in the last 48 hours. Profit, skill and copying are separate answers: passing on skill doesn't mean buying after them pays."],
   ["limited", "Limited evidence", "Too few bets in the last 30 days to judge their skill either way. Their record so far, not a recommendation."],
   ["checked", "Checked", "We've looked at their trades: the label says what we found. Only the Recommended tab recommends anyone."],
+  ["whales", "Whales", "Big bettors: a usual bet of $1K or more, whatever our checks found. A big bet isn't a sign of skill: the label on each says what we found."],
   ["unchecked", "Not checked yet", "Found on a leaderboard or trading in a market, and not looked at yet: nothing about them has been measured."],
 ];
 const EX_SORTS = [["recent", "Recently active"], ["size", "Biggest usual bet"], ["new", "Recently found"]];
+const EX_SIZES = [[0, "Any bet size"], [100, "Bets $100+"], [1000, "Bets $1K+"], [10000, "Bets $10K+"]];
+const EX_WHALES = { active: 30, size: 1000, sort: "size" }; // what picking Whales sets; its sizes start at $1K
+let exBefore = null; // the filters set before Whales, put back after it
+function exPick(group) {
+  if (group === ex.group) return;
+  if (group === "whales") { exBefore = { active: ex.active, size: ex.size, sort: ex.sort }; Object.assign(ex, EX_WHALES); }
+  else if (ex.group === "whales" && exBefore) { Object.assign(ex, exBefore); exBefore = null; }
+  ex.group = group;
+}
 const EX_CATS = ["Politics", "Sports", "Crypto", "Esports", "Economy", "Culture", "Weather", "Tech", "Other"];
 let exTimer = null, exOpen = null; // exOpen: the wallet a row was tapped for, so its page doesn't check it unasked
 // a count we read ("12"), one from a read that stopped early ("12+"), or one we never read ("unknown")
@@ -1698,15 +1710,17 @@ function exBadges(r) {
   if (r.evidence === "quick") return `<span class="tier t3">${r.not_recommended === "dormant" ? "Dormant" : "Not trading lately"}</span><span class="tier t2">Quick look</span>`;
   return tier(r.segment) || `<span class="tier t3">Checked</span>`;
 }
-// The facts under their name. Nothing for a wallet not checked yet but where it was found.
-function exFacts(r) {
+// The facts under their name. Nothing for a wallet not checked yet but where it was found. In Whales (``whale``),
+// every row says how big they bet and when they last traded, first.
+function exFacts(r, whale = false) {
   const unknown = "unknown";
   const active = r.last_active ? `active ${ago(r.last_active * 1000)}` : "last trade unknown";
-  // not checked yet: where we found them, and a quick look's counts if one was read (its full check is to come)
-  if (r.group === "unchecked") return [r.category, foundText(r), r.buys_30d != null ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days` : "nothing measured yet"].filter(Boolean);
-  // a recommended tier: profit, skill and copying, each its own answer, and when we last scored them
-  if (r.group === "passed" || r.group === "recommended") return [r.category, active, ...passedFacts(r), r.scored_at ? `scored ${ago(r.scored_at * 1000)}` : null].filter(Boolean);
   const size = r.typical_usd != null ? `usually ${usd(r.typical_usd)} a trade` : r.market_usd != null ? `about ${usd(r.market_usd)} a market` : `bet size ${unknown}`;
+  // not checked yet: where we found them, and a quick look's counts if one was read (its full check is to come)
+  if (r.group === "unchecked") return [r.category, ...(whale ? [size, active] : []), foundText(r), r.buys_30d != null ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days` : "nothing measured yet"].filter(Boolean);
+  // a recommended tier: profit, skill and copying, each its own answer, and when we last scored them
+  if (r.group === "passed" || r.group === "recommended") return [r.category, ...(whale ? [size] : []), active, ...passedFacts(r), r.scored_at ? `scored ${ago(r.scored_at * 1000)}` : null].filter(Boolean);
+  if (whale) return [r.category, size, active, r.evidence === "quick" ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days` : `${r.bets_checked ?? unknown} bets checked, 30 days`].filter(Boolean);
   const bets = r.evidence === "quick" ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days, ${exCount(r.buys_90d, r.evidence_cut)} in 90`
     : `${r.bets_checked ?? unknown} bets checked, 30 days`;
   return [r.category, active, bets, size];
@@ -1719,10 +1733,10 @@ function passedFacts(r) {
     : `skill: ${r.bets_checked ?? "unknown"} bets checked`;
   return [profit, skill, `copying: ${r.copy_label || "unknown"}`];
 }
-function exRow(r) {
+function exRow(r, whale = false) {
   return `<a class="trow norank ex-row" href="#/worth/${esc(r.wallet)}" data-exopen="${esc(r.wallet)}">${avatar(r.wallet, 40)}
     <span class="tmain"><span class="line"><span class="name">${esc(displayName(r.name, r.wallet))}</span></span>
-      <span class="facts">${exFacts(r).map(esc).join(" · ")}</span></span>
+      <span class="facts">${exFacts(r, whale).map(esc).join(" · ")}</span></span>
     <span class="badges">${exBadges(r)}</span></a>`;
 }
 function exQuery(offset = 0) {
@@ -1748,7 +1762,7 @@ async function exploreView(more = false) {
 function renderExplore() {
   const box = $("#tview");
   if (!box) return;
-  const c = ex.counts || {}, searching = ex.q.trim().length >= 2;
+  const c = ex.counts || {}, searching = ex.q.trim().length >= 2, whale = ex.group === "whales" && !searching;
   const groups = EX_GROUPS.filter(([k]) => k !== "unchecked" || ex.unchecked);
   const sel = (id, label, opts, val) => `<select id="${id}" class="lb-sort" aria-label="${label}">${opts.map(([v, l]) => `<option value="${v}" ${String(val) === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
   const about = searching ? `Searching ${ex.unchecked ? "every trader we've found" : "the traders we've looked at"} by name, or by wallet if you type one that starts with 0x.`
@@ -1762,18 +1776,18 @@ function renderExplore() {
     <div class="ex-bar">
       ${sel("excat", "Category", [["", "Any market"], ...EX_CATS.map((x) => [x, x])], ex.category)}
       ${sel("exactive", "Active", [[0, "Any time"], [7, "Active this week"], [30, "Active in 30 days"], [90, "Active in 90 days"]], ex.active)}
-      ${sel("exsize", "Usual bet", [[0, "Any bet size"], [100, "Bets $100+"], [1000, "Bets $1K+"], [10000, "Bets $10K+"]], ex.size)}
+      ${sel("exsize", "Usual bet", whale ? EX_SIZES.filter(([v]) => v >= EX_WHALES.size) : EX_SIZES, ex.size)}
       ${sel("exboard", "Leaderboards", [["", "On or off the leaderboards"], ["on", "On a leaderboard"], ["off", "Off the leaderboards"]], ex.board)}
       ${sel("exsort", "Sort", EX_SORTS, ex.sort)}
       <button type="button" class="lb-chip" id="exunchecked" aria-pressed="${ex.unchecked}">Include not checked yet</button>
     </div>
     <p class="lb-note">${esc(about)}</p>${others}
-    ${ex.rows.length ? `<div class="list">${ex.rows.map(exRow).join("")}${ex.more ? `<button type="button" class="lb-more" id="exmore">Show more</button>` : ""}</div>`
+    ${ex.rows.length ? `<div class="list">${ex.rows.map((r) => exRow(r, whale)).join("")}${ex.more ? `<button type="button" class="lb-more" id="exmore">Show more</button>` : ""}</div>`
       : searching ? emptyState("No trader matches", isWalletQuery(ex.q) ? "We haven't found that wallet yet. We can still check its trades." : `Nobody called “${esc(ex.q.trim())}” among ${ex.unchecked ? "the traders we've found" : "the traders we've looked at"}.`,
         isWalletQuery(ex.q) ? `<a class="btn" href="#/worth/${esc(ex.q.trim().toLowerCase())}">Check this wallet</a>` : "")
       : emptyState("No traders here yet", "Nobody matches these filters yet. We look at more traders every hour.")}
     <p class="lb-foot">Every trader here was found on Polymarket's leaderboards, trading in its markets, or in the Feed's big trades. We list them by facts, never by a score of how good they are. · <button class="link" id="how">How we pick traders</button></p>`;
-  $$("[data-exgroup]", box).forEach((b) => (b.onclick = () => { ex.group = b.dataset.exgroup; exploreView(); }));
+  $$("[data-exgroup]", box).forEach((b) => (b.onclick = () => { exPick(b.dataset.exgroup); exploreView(); }));
   $("#exq").oninput = (e) => {
     ex.q = e.target.value; clearTimeout(exTimer);
     if (ex.q.trim().length === 1) return;

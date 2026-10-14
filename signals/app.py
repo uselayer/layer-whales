@@ -1327,7 +1327,8 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
 # ---- Explore (SIGNALS_EXPLORE=1): the directory on the Traders page ----
 # Every wallet the directory found somewhere public, in three groups: limited evidence (too few bets to judge, from a
 # quick check's count or a score), checked (a score's verdict, or a quick check's: dormant, paused), and, only when
-# asked for, not checked yet. Sorted and filtered by facts only; nothing is ranked or newly recommended. Browsing
+# asked for, not checked yet. Whales is a view across them: a usual bet of WHALE_USD or more, whatever the checks
+# found, each row with its own group. Sorted and filtered by facts only; nothing is ranked or newly recommended. Browsing
 # reads only directory.db, never Polymarket; a trader page reuses a score the directory keeps while it's fresh
 # (STORED_FRESH_S), and "Check now" scores one on the spot, a few at a time (CHECKS_AT_ONCE, CHECKS_PER_CLIENT).
 
