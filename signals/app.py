@@ -49,6 +49,7 @@ from uselayer.whale_scores import (
     segment_of,
 )
 
+from signals import us_match
 from signals.budget import BackgroundHttp, Budget
 from signals.directory import (
     CHECK_BOARDS,
@@ -90,7 +91,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if TG_TOKEN:  # alerts: the bot's messages (connecting a chat, /list, /stop), and new buys of followed traders
         threading.Thread(target=_bot_loop, daemon=True).start()
         threading.Thread(target=_alert_loop, daemon=True).start()
+    if LAYER_KEY:  # Polymarket US twins of the International markets, from Layer's matches (us_match)
+        threading.Thread(target=us_match.loop, args=(reads.matches, _us_stop), daemon=True).start()
     yield
+    _us_stop.set()
     _worth_stop.set()
     _follow_stop.set()
     _live_stop.set()
@@ -99,6 +103,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Signals", lifespan=lifespan)
 reads = Client(store=":memory:")  # leaderboards, traders, links, cost previews: reads only
+LAYER_KEY = os.environ.get("LAYER_API_KEY", "")
+_us_stop = threading.Event()
+
+
+def us_of(market: str | None, token: str | None = None, outcome: str | None = None) -> dict[str, Any] | None:
+    """A Polymarket International outcome's verified twin on Polymarket US (``found``), a checked "no verified
+    US match" (``found`` False), or None when Layer's matches can't be read right now: see ``signals.us_match``."""
+    return us_match.twins.lookup(market, token, outcome)
 
 
 # ---- a small cache, so clicking around doesn't re-read the venues ----
@@ -169,7 +181,8 @@ def trading_now(min_usd: float = 250) -> list[dict[str, Any]]:
     except VenueError:
         cats = {}  # the trades still show, under All
     _feed_note(rows[:100], cats)
-    return [t | {"category": cats.get(t["market"]) if t["venue"] == "polymarket" else None} for t in out]
+    return [t | ({"category": cats.get(t["market"]), "us": us_of(t["market"], t.get("token"), t.get("outcome"))}
+                 if t["venue"] == "polymarket" else {"category": None}) for t in out]
 
 
 @app.get("/api/trader/{venue}/{trader_id}")
@@ -185,8 +198,11 @@ def trader(venue: str, trader_id: str) -> dict[str, Any]:
     links = position_links(d.trader.id) if venue == "polymarket" and d.positions else {}
     out["positions"] = [
         p | {"status": bet_status(p["avg_price"], p["current_price"]), "url": links.get(p["market"])}
+        | ({"us": us_of(p["market"], None, p.get("outcome"))} if venue == "polymarket" else {})
         for p in out["positions"]
     ]
+    if venue == "polymarket":
+        out["trades"] = [t | {"us": us_of(t["market"], t.get("token"), t.get("outcome"))} for t in out["trades"]]
     return out
 
 
@@ -1162,7 +1178,8 @@ def _bets_of(d: Any, who: dict[str, Any], since: datetime | None = None) -> list
              "at": t.at, "usd": 0.0, "size": 0.0, "price_now": now.get(t.market), "token": t.token},
         )  # fmt: skip
         b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
-    return [b | {"price": b["usd"] / b["size"], "at": b["at"].isoformat()} for b in one.values()]
+    return [b | {"price": b["usd"] / b["size"], "at": b["at"].isoformat(), "us": us_of(b["market"], b["token"], b["outcome"])}
+            for b in one.values()]  # fmt: skip
 
 
 @app.get("/api/bet/{wallet}/{market}")
@@ -1820,8 +1837,26 @@ def _copy_offered(wallet: str) -> bool:
     return s is not None and copy_offer(s)[0]
 
 
-LINK_TARGETS = {"Buy on Polymarket": "market", "Open on Polymarket": "market", "Their record": "record",
-                "Check current price": "check"}  # fmt: skip
+LINK_TARGETS = {"Buy on Polymarket International": "market", "Open on Polymarket International": "market",
+                "View on Polymarket US": "market_us", "Their record": "record", "Check current price": "check"}  # fmt: skip
+
+# Where the trade happened, said on every alert: the traders Signals follows trade on Polymarket International.
+# With a verified Polymarket US twin (us_match), that it's the same market, never the same price.
+TRADED_INTL = "Traded on Polymarket International."
+US_TWIN_LINE = (f"{TRADED_INTL} The same market is on Polymarket US (matched through Kalshi), where prices and"
+                " liquidity may differ.")  # fmt: skip
+US_DIFFERS = " Some settlement rules differ."
+NO_US_TWIN_LINE = f"{TRADED_INTL} No verified US match found."
+
+
+def _venue_line(t: WhaleTrade) -> tuple[str, str | None]:
+    """The alert's line on where the trade happened, and the Polymarket US link when there's a verified twin."""
+    us = us_of(t.market, t.token, t.outcome)
+    if us is None:
+        return TRADED_INTL, None
+    if not us["found"]:
+        return NO_US_TWIN_LINE, None
+    return US_TWIN_LINE + (US_DIFFERS if us["differences"] else ""), us["url"]
 
 
 def _go(aid: str, target: str, url: str) -> str:
@@ -1856,18 +1891,21 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
                 record: bool, aid: str | None) -> str:  # fmt: skip
     """What happened, the same for every trader: ``head`` (who bought which outcome, at what price, for how much),
     the market, the price now (", price already moved" outside the "can still get in" range, ``bet_status``), and
-    when they traded, measured against this alert (Polymarket shows trades minutes late). Then COPY_LINE, only when
+    when they traded, measured against this alert (Polymarket shows trades minutes late), and where (``_venue_line``:
+    Polymarket International, and its Polymarket US twin when there's a verified one). Then COPY_LINE, only when
     copying is offered for them and the price is still in range. Links: "Check current price" (the trade's own page
-    on Signals, neutral for every trader), their record, "Buy on Polymarket" (it only opens the market: Signals
-    places no orders); then the delay line."""
+    on Signals, neutral for every trader), their record, "Buy on Polymarket International" (it only opens the market:
+    Signals places no orders), "View on Polymarket US" with a twin; then the delay line."""
     e = html.escape
     status = bet_status(paid, now)
+    where, us_url = _venue_line(t)
     lines = [head, e(t.title or "A Polymarket market"), f"Now {_cents(now)}{', price already moved' if status != 'in' else ''}.",
-             _traded(at, seen)]  # fmt: skip
+             _traded(at, seen), where]  # fmt: skip
     if status == "in" and _copy_offered(wallet):
         lines.append(COPY_LINE)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}"),
-                   ("Their record", f"{SITE}/#/worth/{wallet}" if record else None), ("Buy on Polymarket", t.url), aid=aid)  # fmt: skip
+                   ("Their record", f"{SITE}/#/worth/{wallet}" if record else None),
+                   ("Buy on Polymarket International", t.url), ("View on Polymarket US", us_url), aid=aid)  # fmt: skip
     return "\n".join([*lines, links, DATA_DELAY])
 
 
@@ -1892,8 +1930,10 @@ def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: flo
         lines.append(f"· {e(_who(w))} paid {_cents(price)} at {datetime.fromtimestamp(at, UTC):%H:%M} UTC")
     last, _, last_at = members[-1]  # the latest buyer: their price is the closest to now
     moved = bet_status(members[-1][1], now) != "in"
+    where, us_url = _venue_line(t)
     lines += [f"Now {_cents(now)}{', price already moved' if moved else ''}.", f"Latest buy {_lag(last_at, seen)} before this alert.",
-              _links(("Check current price", f"{SITE}/#/check/{last}/{t.market}"), ("Buy on Polymarket", t.url), aid=aid),
+              where, _links(("Check current price", f"{SITE}/#/check/{last}/{t.market}"), ("Buy on Polymarket International", t.url),
+                            ("View on Polymarket US", us_url), aid=aid),
               DATA_DELAY]  # fmt: skip
     return "\n".join(lines)
 
@@ -1939,8 +1979,11 @@ def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool,
     still = ("They still hold some." if now is None else f"Now {_cents(now)}. They still hold some.") if held else "They no longer hold it."
     lines = [f"<b>{e(_who(wallet))}</b> sold <b>{e(t.outcome or 'Yes')}</b> at {_cents(price)} (${usd:,.0f})",
              e(t.title or "A Polymarket market"), still, _traded(at, seen)]  # fmt: skip
+    where, us_url = _venue_line(t)
+    lines.append(where)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}" if held else None),
-                   ("Their record", f"{SITE}/#/worth/{wallet}"), ("Open on Polymarket", t.url), aid=aid)  # fmt: skip
+                   ("Their record", f"{SITE}/#/worth/{wallet}"), ("Open on Polymarket International", t.url),
+                   ("View on Polymarket US", us_url), aid=aid)  # fmt: skip
     return "\n".join([*lines, links, DATA_DELAY])
 
 
@@ -2250,14 +2293,15 @@ def _alert_known(alert_id: str) -> bool:
 
 
 def _allowed(url: str) -> bool:
-    """Where a /go link may send someone: Polymarket, or Signals itself. Nowhere else (no open redirect)."""
+    """Where a /go link may send someone: Polymarket (International or US), or Signals itself. Nowhere else
+    (no open redirect)."""
     try:
         u = urllib.parse.urlsplit(url)
         site = urllib.parse.urlsplit(SITE)
         host = u.hostname
     except ValueError:  # a malformed link (a bad port, a broken IPv6 host): Signals itself, never a 500
         return False
-    return u.scheme == "https" and (host == "polymarket.com" or (u.scheme, u.netloc) == (site.scheme, site.netloc))
+    return u.scheme == "https" and (host in ("polymarket.com", "polymarket.us") or (u.scheme, u.netloc) == (site.scheme, site.netloc))
 
 
 @app.get("/go/{alert_id}/{target}")
@@ -2349,6 +2393,7 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
                    "ms": {"median": _pct([q[2] for q in quotes], 0.5), "p90": _pct([q[2] for q in quotes], 0.9)},
                    "share_rate_limited": ratio(sum(1 for q in quotes if q[0] == "rate_limited"), len(quotes))},
         "no_profile": {"by_page": no_profile, "check_link_taps": taps.get("check", 0)},
+        "us_twins": {"fresh": us_match.twins.fresh(), "counts": us_match.twins.counts, "error": us_match.twins.error},
     }  # fmt: skip
 
 

@@ -564,7 +564,7 @@ def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offe
                   "not as a signal to buy: we haven't found that buying after them makes money.",
                   "Could you make money buying what they buy?", "If you'd bought after them: ",
                   "How we work out the price",
-                  "they paid", "Buy on Polymarket ↗", "weeks up",
+                  "they paid", "Buy on ${INTL} ↗", "weeks up",
                   "A week counts profit taken plus the change in value of trades still open.",
                   "the price you'd actually pay, which is a bit higher than the price on Polymarket's chart",
                   "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip

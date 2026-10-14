@@ -11,6 +11,8 @@ from typing import Any
 
 import pytest
 
+from signals import us_match
+
 PAGE = Path(__file__).parent.parent / "signals" / "static" / "index.html"
 _TOP = re.compile(r"^(?://|const |let |function |async function |setInterval|document\.|window\.|api\(|</script>)")
 
@@ -26,6 +28,12 @@ def js_defs(*names: str) -> str:
         end = next(i for i in range(start + 1, len(lines)) if _TOP.match(lines[i]) or not lines[i].strip())
         out.append("\n".join(lines[start:end]))
     return "\n".join(out)
+
+
+@pytest.fixture(autouse=True)
+def no_us_twins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test starts with no Polymarket US index (as before Layer's matches are read): no test sees another's."""
+    monkeypatch.setattr(us_match, "twins", us_match.UsTwins())
 
 
 @pytest.fixture
