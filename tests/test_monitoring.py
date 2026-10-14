@@ -250,6 +250,8 @@ def test_the_report_has_every_part_in_counts_only(api: TestClient, counts: Usage
     counts.add("api", "data-api.polymarket.com 2xx", 9)
     counts.add("lane", "background", 4)
     counts.add("evaluated", "new:dormant", 3, at=time.time())
+    counts.add("evaluated_lane", "board:dormant", 2, at=time.time())
+    counts.add("evaluated_lane", "sample:dormant", 1, at=time.time())
     counts.add("infra", "cpu_s", 864, at=time.time())
     engine._monitor_flush()
     r = api.get("/api/monitoring?days=2").json()
@@ -259,6 +261,7 @@ def test_the_report_has_every_part_in_counts_only(api: TestClient, counts: Usage
     assert r["api"]["polymarket_reads_since_launch"] == {"background": 4, "feed_and_pages": 6}
     today = r["by_day"][0]
     assert today["screened"] == 3 and today["evaluated"] == {"dormant": 3}
+    assert today["evaluated_by_lane"] == {"board": {"dormant": 2}, "sample": {"dormant": 1}}
     assert today["infra"]["cost_usd"]["cpu"] == pytest.approx(864 / monitoring.MONTH_S * 20, abs=1e-4)
     assert all(w not in repr(r) for w in (AMY, BEN, CAL, DAN, EVE))
 

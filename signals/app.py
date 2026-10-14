@@ -757,6 +757,8 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
             done[got] += 1
             _evaluate_state["since_launch"][got] += 1
             monitoring.usage.add("evaluated", f"{item['kind']}:{got}")
+            if lane := item.get("lane"):  # the queue's lane a never-looked-at wallet came from (#88), when it has one
+                monitoring.usage.add("evaluated_lane", f"{lane}:{got}")
             in_a_row = in_a_row + 1 if got == "failed" else 0
 
     with ThreadPoolExecutor(max_workers=EVALUATE_WORKERS, thread_name_prefix="evaluate") as pool:
@@ -1098,7 +1100,17 @@ def _monitor_loop() -> None:
 SCREENED_KINDS = ("new", "recheck")  # what the evaluation quick-checks first (recommended traders are rescored)
 
 
-LIVE_FIELDS = ("screened", "screened_never_looked_at_before", "evaluated", "api", "polymarket_reads_by_budget", "infra")
+LIVE_FIELDS = ("screened", "screened_never_looked_at_before", "evaluated", "api", "polymarket_reads_by_budget",
+               "evaluated_by_lane", "infra")  # fmt: skip
+
+
+def _by_lane(tally: dict[str, float]) -> dict[str, dict[str, int]]:
+    """``{"board:scored": 3, ...}`` as ``{"board": {"scored": 3, ...}}``: what each queue lane's wallets came to."""
+    out: dict[str, dict[str, int]] = {}
+    for key, n in tally.items():
+        lane, _, outcome = key.partition(":")
+        out.setdefault(lane, {})[outcome] = int(n)
+    return out
 
 
 def _day_view(day: dict[str, Any], counted_from: str | None) -> dict[str, Any]:
@@ -1122,6 +1134,7 @@ def _day_view(day: dict[str, Any], counted_from: str | None) -> dict[str, Any]:
         "screened": screened, "screened_never_looked_at_before": new_screened, "evaluated": dict(evaluated),
         "api": monitoring.api_counts(t.get("api_sent", {}), t.get("api", {})),
         "polymarket_reads_by_budget": {k: int(v) for k, v in t.get("lane", {}).items()},
+        "evaluated_by_lane": _by_lane(t.get("evaluated_lane", {})),
         "infra": {"cpu_s": round(infra.get("cpu_s", 0)), "ram_gb_h": round(infra.get("ram_gb_s", 0) / 3600, 2),
                   "egress_mb": round(infra.get("egress_bytes", infra.get("served_bytes", 0)) / 2**20, 1),
                   "served_mb": round(infra.get("served_bytes", 0) / 2**20, 1),
@@ -1161,6 +1174,10 @@ def _health(r: dict[str, Any], now: float) -> list[str]:
             if host in POLYMARKET_HOSTS and c["requests"] >= 100 and (c.get("429", 0) + c.get("error", 0) + server) / c["requests"] > 0.02:
                 out.append(f"{host}: {c.get('429', 0)} rate limits, {server} server errors and {c.get('error', 0)} "
                            f"unanswered of {c['requests']} requests today.")  # fmt: skip
+    stuck = [f for f in r["api"]["feed"].get("failing", []) if f["failing_for_s"] > 600]  # (#109's)
+    if stuck:
+        out.append(f"{len(stuck)} Feed traders haven't been read for over 10 minutes (Polymarket: "
+                   f"{', '.join(sorted({str(f['status'] or f['code']) for f in stuck}))}); the logs name them.")  # fmt: skip
     errors = r["api"]["errors"]
     out += [f"{what}: {errors[what]}" for what in ("discovery", "directory_writes", "feed", "monitoring") if errors[what]]
     if str(errors["leaderboards"] or "").startswith("stale"):  # "sweep" and "read" are fine
