@@ -854,6 +854,8 @@ def discovery_compare() -> dict[str, Any]:
     shown; each one's traders and recommended traders by section; who is recommended by only one, and why; and
     every wallet the check scored that was also scored apart from it (a trader page, the background evaluation)
     within DISCOVERY_APART_S, compared: the same tier, section and copy verdict, or not, with the differences."""
+    from signals.directory import RESCORE_S  # how often a trader shown is rescored
+
     check, served = _check_load(), _worth_load()
     view = discovery_result()
     rows = {r["wallet"]: r for r in directory().latest_scores(time.time() - DISCOVERY_FRESH_S)}

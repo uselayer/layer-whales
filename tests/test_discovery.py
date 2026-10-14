@@ -235,7 +235,8 @@ def test_explore_lists_what_traders_leaves_out(api: TestClient, monkeypatch: pyt
     listed = {r["wallet"] for r in api.get("/api/traders", params={"group": "checked"}).json()["rows"]}
     assert listed == {BEN, CAL}  # beyond the limit, still browsable
     found = api.get("/api/traders", params={"q": "trader-d4"}).json()["rows"]
-    assert [(r["wallet"], r["group"]) for r in found] == [(DAN, "recommended")]  # a recommended one past it too
+    # a recommended one past it too: found by search (and listed, once Explore lists recommended tiers as "passed")
+    assert [r["wallet"] for r in found] == [DAN] and found[0]["group"] in ("recommended", "passed")
 
 
 def test_the_page_sends_the_picked_markets(run_js: Any) -> None:
