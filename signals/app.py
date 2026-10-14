@@ -52,6 +52,9 @@ from uselayer.whale_scores import (
 from signals import us_match
 from signals.budget import BackgroundHttp, Budget
 from signals.directory import (
+    EXPLORE_GROUPS,
+    RESCORE_S,
+    SORTS,
     CHECK_BOARDS,
     LISTED_FRESH_S,
     QUICK_TRADES,
@@ -147,7 +150,7 @@ def venue_error(e: VenueError) -> HTTPException:
 def config() -> dict[str, Any]:
     """What the page needs to know before it draws: which venues Signals reads (see VENUES), and Clerk's
     publishable key when signing in (to follow traders) is switched on. The key is public by design."""
-    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN)}
+    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN), "explore": EXPLORE_ON}
 
 
 @app.get("/api/top")
@@ -594,7 +597,7 @@ def quick_check(wallet: str, scored_at: float | None = None, now: float | None =
     """One read of a wallet's latest trades: the evidence, and whether a score is worth its reads (``quick_look``)."""
     now = time.time() if now is None else now
     got = background().trades("polymarket", wallet, limit=QUICK_TRADES)
-    trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0]) for t in got]
+    trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0], t.usd) for t in got]
     return quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
 
 
@@ -926,17 +929,25 @@ def worth_refresh_route() -> dict[str, Any]:
 
 
 @app.get("/api/worth/{wallet}")
-def worth_wallet(wallet: str) -> dict[str, Any]:
-    """One wallet's score with its checked bets: from the last refresh, or scored now (5–30 s)."""
+def worth_wallet(wallet: str, request: Request, score: int = 1) -> dict[str, Any]:
+    """One wallet's score with its checked bets: from the last refresh, else (Explore on) a fresh one kept in the
+    directory, else scored now (5–30 s, ``check_now``). With ``score=0`` (opened from Explore) a wallet without a
+    fresh score isn't scored: its page shows what's known and a "Check now" button instead. With Explore on, the
+    wallet's directory row comes too (``directory``: the evidence, where it was found)."""
     w = wallet.lower()
     data = _worth_load()
     s = next((x for x in (data or {}).get("scores", []) if x["wallet"] == w), None)
+    row = _explore_row(w) if EXPLORE_ON and _WALLET.fullmatch(w) else None
+    if s is None and EXPLORE_ON and _WALLET.fullmatch(w):
+        s = _stored_score(w)
+    if s is None and not score:
+        return {"wallet": w, "unchecked": True, "name": (row or {}).get("name"), "directory": row}
     if s is None:
         if _WALLET.fullmatch(w):  # a wallet the last check didn't have, opened here: pasted into search, mostly
             _directory_note_later([Seen(w, "search")])
-        s = _score_of(w)
+        s = check_now(w, request)
     b = _board(s)
-    return with_links(s) | b | {"why": why_lines(s | b)}
+    return with_links(s) | b | {"why": why_lines(s | b)} | ({"directory": row} if row is not None else {})
 
 
 # ---- "Why they're here" on a trader's page: plain lines, from what the check kept ----
@@ -1013,6 +1024,113 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
                if ok else why or f"{LABEL_NOT_PROVEN}.")  # fmt: skip
     return {"trades": trades, "how": how_line[:1].upper() + how_line[1:] + "." if how_line else None,
             "listed": listed, "copying": copying}  # fmt: skip
+
+
+# ---- Explore (SIGNALS_EXPLORE=1): the directory on the Traders page ----
+# Every wallet the directory found somewhere public, in three groups: limited evidence (too few bets to judge, from a
+# quick check's count or a score), checked (a score's verdict, or a quick check's: dormant, paused), and, only when
+# asked for, not checked yet. Sorted and filtered by facts only; nothing is ranked or newly recommended. Browsing
+# reads only directory.db, never Polymarket; a trader page reuses a score the directory keeps while it's fresh
+# (STORED_FRESH_S), and "Check now" scores one on the spot, a few at a time (CHECKS_AT_ONCE, CHECKS_PER_CLIENT).
+
+EXPLORE_ON = os.environ.get("SIGNALS_EXPLORE") == "1"
+EXPLORE_PAGE = 50
+EXPLORE_MAX_OFFSET = 2000
+EXPLORE_TTL_S = 60  # a page of Explore, kept this long (the directory changes a few wallets a minute)
+EXPLORE_COUNTS_TTL_S = 300
+STORED_FRESH_S = 2 * 86400  # a stored score this new is shown as it is: a recommended tier's only for RESCORE_S
+CHECKS_AT_ONCE = 3  # "Check now" (a trader page scoring a wallet on the spot): this many at once, site-wide...
+CHECK_WAIT_S = 20  # ...waiting this long for a turn before saying "try again"
+CHECKS_PER_CLIENT = (6, 600)  # hosted: at most 6 checks per 10 minutes from one address
+_checks = threading.BoundedSemaphore(CHECKS_AT_ONCE)
+_check_locks: dict[str, threading.Lock] = {}
+_check_times: dict[str, list[float]] = {}
+
+
+def _explore_row(wallet: str) -> dict[str, Any] | None:
+    try:
+        return directory().explore_row(wallet)
+    except (sqlite3.Error, OSError):
+        return None
+
+
+def _stored_score(wallet: str, now: float | None = None) -> dict[str, Any] | None:
+    """The directory's score for a wallet while it's fresh and of today's format: a recommended tier's for RESCORE_S
+    (as often as the check and the evaluation score one again), any other's for STORED_FRESH_S. Else None."""
+    now = time.time() if now is None else now
+    try:
+        s = directory().score(wallet)
+    except (sqlite3.Error, OSError):
+        return None
+    if s is None or s.get("format") != WORTH_FORMAT:
+        return None
+    fresh = RESCORE_S if s.get("segment") in RECOMMENDED else STORED_FRESH_S
+    return s | {"stored_at": s["scored_at"]} if now - s["scored_at"] < fresh else None
+
+
+def _client(request: Request | None) -> str:
+    if request is None:
+        return "local"
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+
+def check_now(wallet: str, request: Request | None = None) -> dict[str, Any]:
+    """A wallet scored on the spot (``_score_of``), as a trader page does for one nobody has scored lately. One
+    score per wallet at a time (others asking wait for it), CHECKS_AT_ONCE site-wide, and hosted, CHECKS_PER_CLIENT
+    from one address: past those, a 429 with a plain "try again", so pages never queue up the site's reads."""
+    w = wallet.lower()
+    if w in _worth_one:
+        return _worth_one[w]
+    if HOSTED:
+        who, (most, per) = _client(request), CHECKS_PER_CLIENT
+        now = time.time()
+        recent = [t for t in _check_times.get(who, []) if now - t < per]
+        if len(recent) >= most:
+            raise HTTPException(429, detail="You've checked a lot of traders in the last few minutes. Try again in a few minutes.")
+        _check_times[who] = [*recent, now]
+        if len(_check_times) > 5000:
+            _check_times.clear()
+    lock = _check_locks.setdefault(w, threading.Lock())
+    with lock:
+        if w in _worth_one:  # someone else just checked it
+            return _worth_one[w]
+        if not _checks.acquire(timeout=CHECK_WAIT_S):
+            raise HTTPException(429, detail="Lots of traders are being checked right now. Try again in a minute.")
+        try:
+            return _score_of(w)
+        finally:
+            _checks.release()
+            if len(_check_locks) > 5000:
+                _check_locks.clear()
+
+
+@app.get("/api/traders")
+def explore(group: str = "limited", q: str = "", category: str = "", active: int = 0, min_usd: float = 0,
+            board: str = "", makers: int = 0, unchecked: int = 0, sort: str = "recent",
+            offset: int = 0) -> dict[str, Any]:  # fmt: skip
+    """A page of Explore (see Directory.browse), with how many each group lists. From directory.db only, never
+    Polymarket. A search (``q``) looks through the limited-evidence and checked groups, and the not-checked-yet one
+    too with ``unchecked=1``; otherwise ``unchecked_matches`` says how many of those it would find (up to 20)."""
+    if not EXPLORE_ON:
+        raise HTTPException(404, detail="Not found")
+    if group not in EXPLORE_GROUPS or sort not in SORTS or not 0 <= offset <= EXPLORE_MAX_OFFSET:
+        raise HTTPException(400, detail="Unknown group, sort or page.")
+    q = q.strip()[:64]
+    if q and len(q) < 2:
+        raise HTTPException(400, detail="Type at least 2 letters to search.")
+    search_in = ("limited", "checked", "unchecked") if unchecked else ("limited", "checked")
+    args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, sort, offset)
+    page = cached(f"explore:{args}", EXPLORE_TTL_S, lambda: directory().browse(
+        group, q=q, category=category or None, active_days=active or None, min_usd=min_usd or None,
+        board=board or None, makers=bool(makers), sort=sort, limit=EXPLORE_PAGE, offset=offset,
+        search_in=search_in))  # fmt: skip
+    counts = cached("explore:counts", EXPLORE_COUNTS_TTL_S, lambda: directory().explore_counts())
+    others = None
+    if q and not unchecked:
+        others = cached(f"explore:unchecked:{q.lower()}", EXPLORE_TTL_S, lambda: len(directory().browse(
+            "unchecked", q=q, limit=20, search_in=("unchecked",))["rows"]))  # fmt: skip
+    return page | {"counts": counts, "offset": offset, "unchecked_matches": others}
 
 
 def _score_of(wallet: str) -> dict[str, Any]:

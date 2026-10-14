@@ -113,6 +113,21 @@ def test_every_buy_by_a_followed_trader_alerts_whatever_the_amount(api: TestClie
     assert sorted("($5)" in m["text"] for m in engine.tg.sent) == [False, True]  # a $5 buy is news too
 
 
+def test_a_followed_trader_nobody_recommends_or_has_checked_alerts_too(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Following, and its alerts, never depend on a tier: a trader Explore lists as "Limited evidence" or "Not checked
+    # yet" (in no check, never scored) alerts their followers like any other.
+    quiet = "0x" + "e" * 40
+    user(follows=(quiet,))
+    trades: list[WhaleTrade] = []
+    detail = lambda *a, **k: TraderDetail(Trader(venue="polymarket", id=quiet, name="Quiet"), "visible", {},  # noqa: E731
+                                          [WhalePosition("0xcid:0", None, "Yes", 100, 0.4, 0.40, None, None)], list(trades))  # fmt: skip
+    monkeypatch.setattr(engine.reads.whales, "trader", detail)
+    assert engine.alert_pass() == 0  # first round: noted only
+    trades[:0] = [trade(quiet, datetime.now(UTC), 0.40, 2500, "0xcid:0")]
+    engine._cache.clear()
+    assert engine.alert_pass() == 1 and "bought <b>Yes</b> at 40¢ ($2,500)" in engine.tg.sent[0]["text"]
+
+
 # ---- the daily cap ----
 
 

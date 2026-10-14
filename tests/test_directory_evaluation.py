@@ -319,8 +319,8 @@ def test_too_many_retries_give_up_with_the_error() -> None:
 # ---- the evaluation ----
 
 
-def trade(at: float, action: str = "buy", market: str = "0xm1") -> Any:
-    return SimpleNamespace(at=datetime.fromtimestamp(at, UTC), action=action, market=f"{market}:0")
+def trade(at: float, action: str = "buy", market: str = "0xm1", usd: float = 100.0) -> Any:
+    return SimpleNamespace(at=datetime.fromtimestamp(at, UTC), action=action, market=f"{market}:0", usd=usd)
 
 
 class FakeSdk:

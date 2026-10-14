@@ -2,9 +2,9 @@
 said about each.
 
 Phase 1 is finding; phase 2 keeps every score worked out; phase 3 evaluates every wallet in the background
-(``due``: what to look at next). Nothing here is ranked or shown on the page, and the Worth following check still
-picks its own 200 wallets: a wallet in the directory is *discovered*, and a score kept here is the record of a
-check, never a recommendation.
+(``due``: what to look at next); Explore (``browse``) lets people look through it. Nothing here is ranked, and the
+Worth following check still picks its own 200 wallets: a wallet in the directory is *discovered*, and a score kept
+here is the record of a check, never a recommendation.
 
 Where a wallet can be found (``source``):
 
@@ -28,8 +28,11 @@ Each wallet's evaluation (phases 2 and 3), on its row in ``wallets``:
 - ``not_recommended``: why they aren't recommended now, one of REASONS (None: they are, or nothing's known yet).
   Every wallet is kept, whatever it says: it's about the evidence to recommend them, never whether they're worth
   keeping or looking at again. ``reason_label`` says it in a sentence.
-- ``buys_30d``, ``buys_90d``, ``last_buy``: the evidence, as the last quick check read it: markets bought in the
-  last 30 and 90 days (at least: one read is at most QUICK_TRADES trades) and their latest buy.
+- ``buys_30d``, ``buys_90d``, ``last_buy``, ``market_usd``: the evidence, as the last quick check read it: markets
+  bought in the last 30 and 90 days, their latest buy, and the middle of the dollars they put in a market over the 90
+  days. ``evidence_cut``: the read stopped at QUICK_TRADES trades before reaching back 90 days, so the counts are
+  "at least". Never looked at: all None, which a page says is unknown, never zero.
+- ``typical_usd``: their usual trade, from their latest score (the SDK's ``typical_usd``).
 - ``scored_at``: when its latest score was worked out; ``tried_at``: the last try, whatever came of it.
 - ``next_check``: when it's due to be looked at again (``next_check_at``); ``failures``: tries failed in a row.
 - ``seen_category``: the category it was first seen in, so the evaluation can take each category in turn before
@@ -46,6 +49,7 @@ kept, and ``score_categories`` the latest score's price test in each category. A
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 import time
@@ -139,6 +143,14 @@ _PHASE_3_COLUMNS = (("next_check", "REAL"), ("failures", "INTEGER NOT NULL DEFAU
                     ("not_recommended", "TEXT"), ("buys_30d", "INTEGER"), ("buys_90d", "INTEGER"),
                     ("last_buy", "REAL"))  # fmt: skip
 _PHASE_3_INDEXES = "CREATE INDEX IF NOT EXISTS wallets_by_next_check ON wallets (next_check);"
+# Explore: what a list row shows and filters on, and search by name.
+_EXPLORE_COLUMNS = (("market_usd", "REAL"), ("evidence_cut", "INTEGER"), ("typical_usd", "REAL"),
+                    ("listed", "INTEGER NOT NULL DEFAULT 0"))  # fmt: skip
+PUBLIC_SOURCES = ("leaderboard", "market", "feed", "check")
+_EXPLORE_INDEXES = """
+CREATE INDEX IF NOT EXISTS wallets_by_name ON wallets (name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS wallets_by_reason ON wallets (status, not_recommended);
+"""
 
 _RECOMMENDED_SQL = ", ".join(f"'{s}'" for s in RECOMMENDED)
 # Which of KINDS a due wallet is: a recommended trader (scored, or failed since), one never looked at, any other.
@@ -199,20 +211,26 @@ class QuickLook:
     buys_90d: int
     last_buy: float | None
     last_trade: float | None
+    market_usd: float | None = None  # the middle of the dollars they bought a market with, over EVIDENCE_DAYS
+    cut: bool = False  # the read stopped before reaching back EVIDENCE_DAYS: the counts are "at least"
 
 
-def quick_look(trades: list[tuple[float, bool, str]], now: float, read_all: bool,
+def quick_look(trades: list[tuple[Any, ...]], now: float, read_all: bool,
                scored_at: float | None = None) -> QuickLook:  # fmt: skip
-    """From a wallet's latest trades (``(time, bought, market)``, newest first, as one read gives them), whether a
+    """From a wallet's latest trades (``(time, bought, market[, dollars])``, newest first, as one read gives them), whether a
     score is worth its reads now. Not when there's no buy in the last EVIDENCE_DAYS (``dormant``), or fewer than
     RISING_BETS markets bought in the last SCORE_DAYS (``not_enough_recent_evidence``: a score needs that many bets
     to say anything about skill), or no buy in the last ACTIVE_DAYS and none since their last score
     (``not_trading_lately``: a new score would say the same). Both thresholds are the SDK's own: they decide whether
     there's enough recent evidence to recommend someone, and the wallet is kept and looked at again either way.
     When the read was cut short (``read_all`` False), only the time it covers counts."""
-    covered = float("-inf") if read_all or not trades else min(t for t, _, _ in trades)
+    covered = float("-inf") if read_all or not trades else min(t[0] for t in trades)
     week, window, evidence = (now - d * 86400 for d in (ACTIVE_DAYS, SCORE_DAYS, EVIDENCE_DAYS))
-    bought = [(t, m) for t, b, m in trades if b]
+    bought = [(t[0], t[2]) for t in trades if t[1]]
+    per_market: dict[str, float] = {}
+    for t in trades:
+        if t[1] and t[0] >= evidence and len(t) > 3 and t[3] is not None:
+            per_market[t[2]] = per_market.get(t[2], 0.0) + float(t[3])
     buys_30d = len({m for t, m in bought if t >= window})
     buys_90d = len({m for t, m in bought if t >= evidence})
     last_buy = max((t for t, _ in bought), default=None)
@@ -224,8 +242,63 @@ def quick_look(trades: list[tuple[float, bool, str]], now: float, read_all: bool
     elif covered <= week and (last_buy is None or last_buy < week) and scored_at is not None and (
             last_buy is None or last_buy <= scored_at):  # fmt: skip
         reason = "not_trading_lately"
-    return QuickLook(reason is None, reason, buys_30d, buys_90d, last_buy,
-                     max((t for t, _, _ in trades), default=None))  # fmt: skip
+    usds = sorted(per_market.values())
+    middle = (usds[len(usds) // 2] if len(usds) % 2 else (usds[len(usds) // 2 - 1] + usds[len(usds) // 2]) / 2) if usds else None
+    return QuickLook(reason is None, reason, buys_30d, buys_90d, last_buy, max((t[0] for t in trades), default=None),
+                     None if middle is None else round(middle, 2), covered > evidence)  # fmt: skip
+
+
+EXPLORE_GROUPS = ("limited", "checked", "unchecked")
+# Listed only when found somewhere public (PUBLIC_SOURCES: the sweep's leaderboards and markets, the Feed's big
+# trades, the check's own reads), which ``listed`` keeps. A wallet known only because someone searched for or
+# followed it stays out of Explore and its search.
+_PUBLIC = "w.listed = 1"
+_LIMITED = ("((w.status = 'checked' AND w.not_recommended = 'not_enough_recent_evidence') "
+            "OR (w.status != 'checked' AND w.scored_at IS NOT NULL AND w.segment = 'too_few'))")  # fmt: skip
+_GROUPS = {
+    # too few bets to judge: a quick check's count (``evidence`` "quick"), or a score that found too few (``scored``)
+    "limited": _LIMITED,
+    # looked at, with something to say: a score's verdict (any tier), or a quick check's (dormant, paused)
+    "checked": f"((w.scored_at IS NOT NULL OR w.status = 'checked') AND NOT {_LIMITED})",
+    # found, never looked at: nothing about them has been measured
+    "unchecked": "(w.scored_at IS NULL AND w.status IN ('found', 'failed'))",
+}
+# Facts to sort by, never a judgement: unknowns last.
+SORTS = {
+    "recent": "w.last_active DESC NULLS LAST",
+    "size": "COALESCE(w.typical_usd, w.market_usd) DESC NULLS LAST",
+    "new": "w.first_seen DESC",
+}
+_WALLETISH = re.compile(r"0x[0-9a-f]{2,40}")
+_ROW = """w.wallet, w.name, COALESCE(w.category, w.seen_category) AS category, w.last_active, w.status, w.not_recommended,
+  w.segment, w.scored_at, w.tried_at, w.buys_30d, w.buys_90d, w.last_buy, w.market_usd, w.evidence_cut, w.typical_usd,
+  w.first_seen, w.first_source, sc.bets AS bets_checked, sc.format AS score_format,
+  (SELECT b.place || '|' || b.rank FROM sightings b WHERE b.wallet = w.wallet AND b.source = 'leaderboard'
+    AND b.rank IS NOT NULL ORDER BY b.rank LIMIT 1) AS best_board,
+  (SELECT m.example_title FROM sightings m WHERE m.wallet = w.wallet AND m.source IN ('market', 'feed')
+    AND m.example_title IS NOT NULL ORDER BY m.last_seen DESC LIMIT 1) AS seen_in,
+  """ + _PUBLIC + " AS public"
+
+
+def _like(q: str) -> str:
+    return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _explore(r: dict[str, Any]) -> dict[str, Any]:
+    """A wallet as Explore shows it. ``group`` and ``evidence`` (``quick``: a quick check's counts only; ``scored``:
+    a score; None: never looked at). A figure that wasn't read stays None (unknown), never 0."""
+    limited = (r["status"] == "checked" and r["not_recommended"] == "not_enough_recent_evidence") or (
+        r["status"] != "checked" and r["scored_at"] is not None and r["segment"] == "too_few")  # fmt: skip
+    looked = r["scored_at"] is not None or r["status"] == "checked"
+    board, _, rank = (r.pop("best_board") or "").partition("|")
+    return r | {
+        "group": "limited" if limited else "checked" if looked else "unchecked",
+        "evidence": None if not looked else "quick" if r["status"] == "checked" else "scored",
+        "label": reason_label(r["not_recommended"], r["buys_30d"]) if r["status"] == "checked" else None,
+        "board": {"place": board, "rank": int(rank)} if board else None,
+        "evidence_cut": None if r["evidence_cut"] is None else bool(r["evidence_cut"]),
+        "public": bool(r["public"]),
+    }
 
 
 @dataclass(frozen=True)
@@ -354,10 +427,15 @@ class Directory:
         """A directory.db from an earlier phase gets the columns it lacks; then each wallet without a schedule
         (only ever one from before phase 3) gets one from its last look, and the category it was first seen in."""
         have = {r[1] for r in con.execute("PRAGMA table_info(wallets)")}
-        for col, kind in _PHASE_2_COLUMNS + _PHASE_3_COLUMNS:
+        for col, kind in _PHASE_2_COLUMNS + _PHASE_3_COLUMNS + _EXPLORE_COLUMNS:
             if col not in have:
                 con.execute(f"ALTER TABLE wallets ADD COLUMN {col} {kind}")
-        con.executescript(_PHASE_2_INDEXES + _PHASE_3_INDEXES)
+        con.executescript(_PHASE_2_INDEXES + _PHASE_3_INDEXES + _EXPLORE_INDEXES)
+        if "listed" not in have:  # once: which wallets were already found somewhere public
+            con.execute(
+                "UPDATE wallets SET listed = 1 WHERE wallet IN (SELECT DISTINCT wallet FROM sightings WHERE source IN "
+                f"({', '.join(repr(x) for x in PUBLIC_SOURCES)}))"
+            )
         rows = con.execute(
             "SELECT wallet, status, segment, first_seen, scored_at, tried_at, failures FROM wallets "
             "WHERE next_check IS NULL"
@@ -402,6 +480,8 @@ class Directory:
             [(s.wallet.lower(), s.source, s.place, s.category, s.rank, s.example, s.example_title, s.trades,
               s.usd, now, now) for s in rows],
         )  # fmt: skip
+        con.executemany("UPDATE wallets SET listed = 1 WHERE wallet = ? AND listed = 0",
+                        [(w,) for w in {s.wallet.lower() for s in rows if s.source in PUBLIC_SOURCES}])  # fmt: skip
         return new
 
     def keep_scores(self, scores: Iterable[dict[str, Any]], via: str, at: float | None = None) -> int:
@@ -456,11 +536,11 @@ class Directory:
                     "next_check = CASE WHEN tried_at > ? THEN next_check ELSE ? END, "
                     "not_recommended = CASE WHEN tried_at > ? THEN not_recommended ELSE ? END, "
                     "failures = CASE WHEN tried_at > ? THEN failures ELSE 0 END, "
-                    "tried_at = MAX(COALESCE(tried_at, ?), ?), segment = ?, category = ?, name = COALESCE(name, ?) "
-                    "WHERE wallet = ?",
+                    "tried_at = MAX(COALESCE(tried_at, ?), ?), segment = ?, category = ?, name = COALESCE(name, ?), "
+                    "typical_usd = ? WHERE wallet = ?",
                     (now, now, now, now, next_check_at("scored", reason_for(s.get("segment")), s.get("segment"), now),
                      now, reason_for(s.get("segment")), now, now, now, s.get("segment"), main_category(s),
-                     _username(s), w),
+                     _username(s), s.get("typical_usd"), w),
                 )  # fmt: skip
                 kept += 1
         return kept
@@ -492,9 +572,10 @@ class Directory:
                 self._add(con, [Seen(w, "search")], now)
             con.execute(
                 "UPDATE wallets SET last_active = MAX(COALESCE(?, last_active), COALESCE(last_active, ?)), "
-                "buys_30d = ?, buys_90d = ?, last_buy = MAX(COALESCE(?, last_buy), COALESCE(last_buy, ?)) "
-                "WHERE wallet = ?",
-                (look.last_trade, look.last_trade, look.buys_30d, look.buys_90d, look.last_buy, look.last_buy, w),
+                "buys_30d = ?, buys_90d = ?, last_buy = MAX(COALESCE(?, last_buy), COALESCE(last_buy, ?)), "
+                "market_usd = ?, evidence_cut = ? WHERE wallet = ?",
+                (look.last_trade, look.last_trade, look.buys_30d, look.buys_90d, look.last_buy, look.last_buy,
+                 look.market_usd, int(look.cut), w),
             )
             if not look.score:
                 segment = con.execute("SELECT segment FROM wallets WHERE wallet = ?", (w,)).fetchone()[0]
@@ -708,6 +789,69 @@ class Directory:
                 "SELECT * FROM sightings WHERE wallet = ? ORDER BY last_seen DESC, source, place", (wallet.lower(),)
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def browse(self, group: str = "limited", *, q: str = "", category: str | None = None,
+               active_days: int | None = None, min_usd: float | None = None, board: str | None = None,
+               makers: bool = False, sort: str = "recent", limit: int = 50, offset: int = 0,
+               search_in: tuple[str, ...] = ("limited", "checked"), now: float | None = None) -> dict[str, Any]:  # fmt: skip
+        """A page of Explore: the wallets in ``group`` (one of EXPLORE_GROUPS), or with ``q``, the wallets in the
+        ``search_in`` groups whose name has it in it (or whose wallet starts with it), filtered and sorted by facts
+        only (SORTS), never by a ranking of how good they are. Only wallets found in public places (``_PUBLIC``):
+        one known here only because someone searched for or followed it is never listed or found. Returns ``rows``
+        (``explore_row``) and whether there are ``more``."""
+        now = time.time() if now is None else now
+        where, args = [_PUBLIC], []
+        q = q.strip().lower()
+        if q:
+            if _WALLETISH.fullmatch(q):  # a wallet's start: a range of the key, so the index finds it
+                where.append("w.wallet >= ? AND w.wallet < ?")
+                args += [q, q + "g"]  # wallets are lowercase hex: "g" sorts after every one that starts with q
+            else:
+                where.append("w.name LIKE ? ESCAPE '\\'")
+                args.append("%" + _like(q) + "%")
+            where.append("(" + " OR ".join(_GROUPS[g] for g in search_in) + ")")
+        else:
+            where.append(_GROUPS[group])
+        if category:
+            where.append("COALESCE(w.category, w.seen_category) = ?")
+            args.append(category)
+        if active_days:
+            where.append("w.last_active >= ?")
+            args.append(now - active_days * 86400)
+        if min_usd:
+            where.append("COALESCE(w.typical_usd, w.market_usd) >= ?")
+            args.append(min_usd)
+        if board in ("on", "off"):
+            where.append(f"{'' if board == 'on' else 'NOT '}EXISTS (SELECT 1 FROM sightings b WHERE b.wallet = w.wallet "
+                         "AND b.source = 'leaderboard')")  # fmt: skip
+        if not makers:
+            where.append("COALESCE(w.segment, '') != 'no_view'")
+        order = SORTS.get(sort, SORTS["recent"])
+        with self._db() as con:
+            con.row_factory = sqlite3.Row
+            rows = con.execute(
+                f"SELECT {_ROW} FROM wallets w LEFT JOIN scores sc ON sc.wallet = w.wallet "
+                f"WHERE {' AND '.join(where)} ORDER BY {order}, w.wallet LIMIT ? OFFSET ?",
+                (*args, limit + 1, offset),
+            ).fetchall()
+        return {"rows": [_explore(dict(r)) for r in rows[:limit]], "more": len(rows) > limit}
+
+    def explore_counts(self) -> dict[str, int]:
+        """How many wallets each Explore group lists (public ones only)."""
+        case = " ".join(f"WHEN {_GROUPS[g]} THEN '{g}'" for g in EXPLORE_GROUPS)
+        with self._db() as con:
+            got = dict(con.execute(f"SELECT CASE {case} END, COUNT(*) FROM wallets w WHERE {_PUBLIC} GROUP BY 1"))
+        return {g: got.get(g, 0) for g in EXPLORE_GROUPS}
+
+    def explore_row(self, wallet: str) -> dict[str, Any] | None:
+        """One wallet as an Explore row (for its page: the evidence, where it was found), or None if unknown."""
+        with self._db() as con:
+            con.row_factory = sqlite3.Row
+            r = con.execute(
+                f"SELECT {_ROW} FROM wallets w LEFT JOIN scores sc ON sc.wallet = w.wallet WHERE w.wallet = ?",
+                (wallet.lower(),),
+            ).fetchone()
+        return None if r is None else _explore(dict(r))
 
     def wallet(self, wallet: str) -> dict[str, Any] | None:
         with self._db() as con:
