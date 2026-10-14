@@ -729,6 +729,8 @@ def evaluate_one(item: dict[str, Any]) -> str:
         d.score_failed(w, f"{type(e).__name__}: {e}")
         return "failed"
     d.keep_scores([_with_odds(scored) | {"format": WORTH_FORMAT}], "background")
+    if (lane := item.get("lane")) and scored.get("segment") in RECOMMENDED:  # each queue lane's yield (#88), by day
+        monitoring.usage.add("evaluated_lane", f"{lane}:recommended")
     return "scored"
 
 
