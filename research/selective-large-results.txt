@@ -1,0 +1,122 @@
+wallets scored in all four windows: 382  (errors: 0)
+by source found: {'market': 300, 'lb-profit': 76, 'lb-volume': 6}
+
+=== market (no hindsight): 336 wallets (median $ a market in A: $2,553)
+  all          n=336 | 1 PROFIT  40% up [35%–46%] (vs all z +nan), median $0, -0.03¢/$, $1k+ 32/−$1k 38, $10k+ 8/−$10k 9, total $-7,497, still trading 173
+                     | 2 SKILL  own settle +1.42¢ ±3.42 (z +0.8, 475 ev) | 5-min edge +2.74¢ ±0.90 (z +6.0, 675 ev)
+                     | 3 COPY   copier settle -0.27¢ ±3.16 (z -0.2, 475 ev) | 1-h copy -0.62¢ ±1.37 (z -0.9, 678 ev)
+  R-profit     n=177 | 1 PROFIT  56% up [49%–63%] (vs all z +3.4), median $3, +0.03¢/$, $1k+ 20/−$1k 19, $10k+ 4/−$10k 5, total $7,744, still trading 127  PASS
+                     | 2 SKILL  own settle +1.61¢ ±4.18 (z +0.8, 334 ev) | 5-min edge +3.05¢ ±1.13 (z +5.3, 494 ev)
+                     | 3 COPY   copier settle +0.31¢ ±3.73 (z +0.2, 334 ev) | 1-h copy +0.12¢ ±1.70 (z +0.1, 495 ev)
+  R-profit10k  n= 39 | 1 PROFIT  31% up [19%–46%] (vs all z -1.1), median $0, -0.96¢/$, $1k+ 10/−$1k 9, $10k+ 2/−$10k 5, total $-44,499, still trading 21
+                     | 2 SKILL  own settle -3.29¢ ±8.51 (z -0.8, 72 ev) | 5-min edge +1.14¢ ±1.83 (z +1.2, 98 ev)
+                     | 3 COPY   copier settle -4.68¢ ±8.00 (z -1.1, 72 ev) | 1-h copy -1.23¢ ±3.25 (z -0.7, 99 ev)
+  R-settle     n= 11 | 1 PROFIT  55% up [28%–79%] (vs all z +1.0), median $0, +7.20¢/$, $1k+ 3/−$1k 1, $10k+ 1/−$10k 0, total $27,476, still trading 7
+                     | 2 SKILL  own settle -0.29¢ ±15.32 (z -0.0, 16 ev) | 5-min edge +0.47¢ ±0.86 (z +1.1, 29 ev)
+                     | 3 COPY   copier settle -1.06¢ ±15.25 (z -0.1, 16 ev) | 1-h copy -0.80¢ ±0.77 (z -2.0, 29 ev)
+  R-settle1    n= 22 | 1 PROFIT  36% up [20%–57%] (vs all z -0.4), median $0, -0.17¢/$, $1k+ 4/−$1k 3, $10k+ 1/−$10k 1, total $-1,981, still trading 11
+                     | 2 SKILL  own settle +3.00¢ ±6.85 (z +0.9, 79 ev) | 5-min edge +1.00¢ ±1.64 (z +1.2, 95 ev)
+                     | 3 COPY   copier settle +1.85¢ ±6.89 (z +0.5, 79 ev) | 1-h copy -1.12¢ ±4.02 (z -0.5, 95 ev)
+  R-both       n= 16 | 1 PROFIT  44% up [23%–67%] (vs all z +0.3), median $0, -0.21¢/$, $1k+ 4/−$1k 3, $10k+ 1/−$10k 1, total $-2,283, still trading 10
+                     | 2 SKILL  own settle +1.47¢ ±9.00 (z +0.3, 56 ev) | 5-min edge +1.05¢ ±1.90 (z +1.1, 72 ev)
+                     | 3 COPY   copier settle +0.72¢ ±8.97 (z +0.2, 56 ev) | 1-h copy -1.13¢ ±4.86 (z -0.5, 72 ev)
+  $10k+/market n= 45 | 1 PROFIT  36% up [23%–50%] (vs all z -0.6), median $0, +2.25¢/$, $1k+ 11/−$1k 5, $10k+ 4/−$10k 3, total $99,582, still trading 19
+                     | 2 SKILL  own settle +0.94¢ ±9.43 (z +0.2, 42 ev) | 5-min edge +1.26¢ ±0.74 (z +3.4, 60 ev)
+                     | 3 COPY   copier settle -1.50¢ ±9.32 (z -0.3, 42 ev) | 1-h copy -0.13¢ ±0.80 (z -0.3, 62 ev)
+  persistence A→B own settle return, across wallets (8+ events both): +0.29 [-0.38, +0.76] (n=11)
+  persistence A→B trading P&L, Spearman: +0.12 [+0.02, +0.23] (n=336)
+
+=== lb-volume: 6 wallets (median $ a market in A: $2,765)
+  all          n=  6 | 1 PROFIT  17% up [3%–56%] (vs all z +nan), median $0, +0.13¢/$, $1k+ 1/−$1k 1, $10k+ 1/−$10k 0, total $22,480, still trading 2
+                     | 2 SKILL  own settle +4.08¢ ±36.47 (z +0.2, 3 ev) | 5-min edge +4.73¢ ±9.29 (z +1.0, 3 ev)
+                     | 3 COPY   copier settle +0.32¢ ±34.12 (z +0.0, 3 ev) | 1-h copy -5.84¢ ±14.95 (z -0.8, 3 ev)
+  R-profit     n=  2 | 1 PROFIT  50% up [9%–91%] (vs all z +0.9), median $13,864, +0.16¢/$, $1k+ 1/−$1k 0, $10k+ 1/−$10k 0, total $27,728, still trading 1
+                     | 2 SKILL  own settle — | 5-min edge —
+                     | 3 COPY   copier settle — | 1-h copy —
+  R-profit10k  n=  1 | 1 PROFIT   0% up [0%–79%] (vs all z -0.4), median $-410, -353.00¢/$, $1k+ 0/−$1k 0, $10k+ 0/−$10k 0, total $-410, still trading 0
+                     | 2 SKILL  own settle — | 5-min edge —
+                     | 3 COPY   copier settle — | 1-h copy —
+  R-settle     picks   0
+  R-settle1    picks   0
+  R-both       picks   0
+  $10k+/market picks   0
+  persistence A→B own settle return, across wallets (8+ events both): +nan (n=0)
+  persistence A→B trading P&L, Spearman: -0.03 [-0.82, +0.80] (n=6)
+
+=== lb-profit (leans to hindsight): 76 wallets (median $ a market in A: $4,568)
+  all          n= 76 | 1 PROFIT  41% up [30%–52%] (vs all z +nan), median $0, +12.20¢/$, $1k+ 23/−$1k 18, $10k+ 10/−$10k 8, total $1,513,694, still trading 44
+                     | 2 SKILL  own settle +4.45¢ ±4.78 (z +1.8, 235 ev) | 5-min edge +0.27¢ ±0.75 (z +0.7, 296 ev)
+                     | 3 COPY   copier settle +3.19¢ ±4.74 (z +1.3, 234 ev) | 1-h copy -1.63¢ ±2.08 (z -1.5, 295 ev)
+  R-profit     n= 54 | 1 PROFIT  46% up [34%–59%] (vs all z +0.6), median $0, +11.25¢/$, $1k+ 18/−$1k 10, $10k+ 8/−$10k 4, total $1,234,708, still trading 32
+                     | 2 SKILL  own settle +4.93¢ ±4.99 (z +1.9, 205 ev) | 5-min edge +0.27¢ ±0.85 (z +0.6, 255 ev)
+                     | 3 COPY   copier settle +3.58¢ ±4.94 (z +1.4, 204 ev) | 1-h copy -1.96¢ ±2.28 (z -1.7, 254 ev)
+  R-profit10k  n= 41 | 1 PROFIT  51% up [36%–66%] (vs all z +1.1), median $8, +11.96¢/$, $1k+ 16/−$1k 7, $10k+ 8/−$10k 3, total $1,246,286, still trading 23
+                     | 2 SKILL  own settle +4.80¢ ±5.48 (z +1.7, 184 ev) | 5-min edge +0.18¢ ±0.99 (z +0.4, 216 ev)
+                     | 3 COPY   copier settle +3.40¢ ±5.43 (z +1.2, 183 ev) | 1-h copy -2.17¢ ±2.69 (z -1.6, 215 ev)
+  R-settle     n=  6 | 1 PROFIT  83% up [44%–97%] (vs all z +2.0), median $4,677, +5.42¢/$, $1k+ 5/−$1k 1, $10k+ 2/−$10k 0, total $84,321, still trading 6  PASS
+                     | 2 SKILL  own settle +4.76¢ ±5.97 (z +1.6, 40 ev) | 5-min edge -0.22¢ ±0.34 (z -1.3, 49 ev)
+                     | 3 COPY   copier settle +4.70¢ ±6.03 (z +1.5, 40 ev) | 1-h copy -1.59¢ ±2.62 (z -1.2, 49 ev)
+  R-settle1    n= 11 | 1 PROFIT  73% up [43%–90%] (vs all z +2.0), median $3,397, +4.81¢/$, $1k+ 7/−$1k 1, $10k+ 2/−$10k 0, total $94,709, still trading 9
+                     | 2 SKILL  own settle +4.22¢ ±5.82 (z +1.4, 43 ev) | 5-min edge -0.22¢ ±0.29 (z -1.5, 66 ev)
+                     | 3 COPY   copier settle +4.16¢ ±5.86 (z +1.4, 43 ev) | 1-h copy -1.41¢ ±1.95 (z -1.4, 66 ev)
+  R-both       n= 10 | 1 PROFIT  70% up [40%–89%] (vs all z +1.7), median $2,742, +4.78¢/$, $1k+ 6/−$1k 1, $10k+ 2/−$10k 0, total $89,074, still trading 8
+                     | 2 SKILL  own settle +3.76¢ ±6.20 (z +1.2, 40 ev) | 5-min edge -0.25¢ ±0.32 (z -1.6, 60 ev)
+                     | 3 COPY   copier settle +3.77¢ ±6.25 (z +1.2, 40 ev) | 1-h copy -1.60¢ ±2.13 (z -1.5, 60 ev)
+  $10k+/market n= 31 | 1 PROFIT  55% up [38%–71%] (vs all z +1.3), median $582, +14.47¢/$, $1k+ 15/−$1k 4, $10k+ 7/−$10k 3, total $1,464,428, still trading 16
+                     | 2 SKILL  own settle +6.48¢ ±6.24 (z +2.0, 112 ev)  PASS | 5-min edge +0.05¢ ±0.46 (z +0.2, 125 ev)
+                     | 3 COPY   copier settle +5.84¢ ±6.26 (z +1.8, 111 ev) | 1-h copy -2.35¢ ±2.47 (z -1.9, 124 ev)
+  persistence A→B own settle return, across wallets (8+ events both): -0.23 [-0.88, +0.71] (n=6)
+  persistence A→B trading P&L, Spearman: +0.26 [+0.04, +0.46] (n=76)
+
+=== everyone: 382 wallets (median $ a market in A: $2,594)
+  all          n=382 | 1 PROFIT  41% up [36%–46%] (vs all z +nan), median $0, +4.13¢/$, $1k+ 45/−$1k 48, $10k+ 15/−$10k 14, total $1,412,583, still trading 199
+                     | 2 SKILL  own settle +2.49¢ ±2.90 (z +1.7, 659 ev) | 5-min edge +1.99¢ ±0.70 (z +5.6, 903 ev)
+                     | 3 COPY   copier settle +0.98¢ ±2.75 (z +0.7, 658 ev) | 1-h copy -0.98¢ ±1.20 (z -1.6, 905 ev)
+  R-profit     n=208 | 1 PROFIT  55% up [48%–62%] (vs all z +3.4), median $3, +3.56¢/$, $1k+ 30/−$1k 23, $10k+ 10/−$10k 8, total $1,120,794, still trading 144  PASS
+                     | 2 SKILL  own settle +3.15¢ ±3.37 (z +1.8, 492 ev) | 5-min edge +2.10¢ ±0.85 (z +4.8, 686 ev)
+                     | 3 COPY   copier settle +1.93¢ ±3.13 (z +1.2, 491 ev) | 1-h copy -0.62¢ ±1.45 (z -0.8, 686 ev)
+  R-profit10k  n= 61 | 1 PROFIT  41% up [30%–54%] (vs all z +0.1), median $0, +9.03¢/$, $1k+ 18/−$1k 11, $10k+ 8/−$10k 7, total $1,077,644, still trading 31
+                     | 2 SKILL  own settle +3.18¢ ±5.13 (z +1.2, 210 ev) | 5-min edge +0.06¢ ±0.93 (z +0.1, 253 ev)
+                     | 3 COPY   copier settle +2.01¢ ±5.05 (z +0.8, 209 ev) | 1-h copy -2.28¢ ±2.43 (z -1.8, 253 ev)
+  R-settle     n= 13 | 1 PROFIT  62% up [36%–82%] (vs all z +1.5), median $262, +5.15¢/$, $1k+ 5/−$1k 1, $10k+ 2/−$10k 0, total $84,511, still trading 9
+                     | 2 SKILL  own settle +2.34¢ ±6.14 (z +0.7, 46 ev) | 5-min edge -0.06¢ ±0.48 (z -0.2, 62 ev)
+                     | 3 COPY   copier settle +2.15¢ ±6.14 (z +0.7, 46 ev) | 1-h copy -1.43¢ ±2.10 (z -1.3, 62 ev)
+  R-settle1    n= 27 | 1 PROFIT  44% up [28%–63%] (vs all z +0.4), median $0, +2.49¢/$, $1k+ 7/−$1k 3, $10k+ 2/−$10k 1, total $63,354, still trading 15
+                     | 2 SKILL  own settle +2.96¢ ±5.08 (z +1.1, 111 ev) | 5-min edge +0.51¢ ±1.12 (z +0.9, 141 ev)
+                     | 3 COPY   copier settle +2.18¢ ±5.11 (z +0.8, 111 ev) | 1-h copy -1.29¢ ±2.85 (z -0.9, 141 ev)
+  R-both       n= 20 | 1 PROFIT  50% up [30%–70%] (vs all z +0.8), median $0, +2.42¢/$, $1k+ 6/−$1k 3, $10k+ 2/−$10k 1, total $57,419, still trading 13
+                     | 2 SKILL  own settle +1.68¢ ±6.19 (z +0.5, 85 ev) | 5-min edge +0.46¢ ±1.23 (z +0.7, 112 ev)
+                     | 3 COPY   copier settle +1.27¢ ±6.18 (z +0.4, 85 ev) | 1-h copy -1.43¢ ±3.32 (z -0.8, 112 ev)
+  $10k+/market n= 59 | 1 PROFIT  42% up [31%–55%] (vs all z +0.3), median $0, +12.48¢/$, $1k+ 18/−$1k 7, $10k+ 8/−$10k 5, total $1,432,502, still trading 26
+                     | 2 SKILL  own settle +5.95¢ ±5.23 (z +2.2, 136 ev)  PASS | 5-min edge +0.49¢ ±0.46 (z +2.1, 161 ev)
+                     | 3 COPY   copier settle +4.71¢ ±5.25 (z +1.8, 135 ev) | 1-h copy -1.71¢ ±1.92 (z -1.7, 162 ev)
+  persistence A→B own settle return, across wallets (8+ events both): +0.23 [-0.30, +0.65] (n=16)
+  persistence A→B trading P&L, Spearman: +0.15 [+0.05, +0.25] (n=382)
+
+=== does today's method overlook promising ones?
+  market (no hindsight)            promising   8 of 336 | today's method recommended 1 of them (and 1 of all 336) | M_now bets: median 2.5
+     R-profit     picked 177: 3 promising (precision 2%, recall 38%; everyone's rate 2%)
+     R-profit10k  picked  39: 2 promising (precision 5%, recall 25%; everyone's rate 2%)
+     R-settle     picked  11: 1 promising (precision 9%, recall 12%; everyone's rate 2%)
+     R-settle1    picked  22: 1 promising (precision 5%, recall 12%; everyone's rate 2%)
+     R-both       picked  16: 1 promising (precision 6%, recall 12%; everyone's rate 2%)
+  lb-volume                        promising   0 of   6 | today's method recommended 0 of them (and 0 of all 6) | M_now bets: median —
+     R-profit     picked   2: 0 promising (precision 0%, recall 0%; everyone's rate 0%)
+     R-profit10k  picked   1: 0 promising (precision 0%, recall 0%; everyone's rate 0%)
+     R-settle     picked   0: 0 promising (precision 0%, recall 0%; everyone's rate 0%)
+     R-settle1    picked   0: 0 promising (precision 0%, recall 0%; everyone's rate 0%)
+     R-both       picked   0: 0 promising (precision 0%, recall 0%; everyone's rate 0%)
+  lb-profit (leans to hindsight)   promising   8 of  76 | today's method recommended 0 of them (and 0 of all 76) | M_now bets: median 4.5
+     R-profit     picked  54: 6 promising (precision 11%, recall 75%; everyone's rate 11%)
+     R-profit10k  picked  41: 5 promising (precision 12%, recall 62%; everyone's rate 11%)
+     R-settle     picked   6: 1 promising (precision 17%, recall 12%; everyone's rate 11%)
+     R-settle1    picked  11: 1 promising (precision 9%, recall 12%; everyone's rate 11%)
+     R-both       picked  10: 1 promising (precision 10%, recall 12%; everyone's rate 11%)
+  everyone                         promising  13 of 382 | today's method recommended 1 of them (and 1 of all 382) | M_now bets: median 4
+     R-profit     picked 208: 7 promising (precision 3%, recall 54%; everyone's rate 3%)
+     R-profit10k  picked  61: 5 promising (precision 8%, recall 38%; everyone's rate 3%)
+     R-settle     picked  13: 1 promising (precision 8%, recall 8%; everyone's rate 3%)
+     R-settle1    picked  27: 1 promising (precision 4%, recall 8%; everyone's rate 3%)
+     R-both       picked  20: 1 promising (precision 5%, recall 8%; everyone's rate 3%)
+
+Today's method's segments for promising wallets (13 Oct): {'no_edge': 9, 'rising': 1, 'lucky': 3}
