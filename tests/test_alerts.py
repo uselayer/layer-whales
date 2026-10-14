@@ -787,3 +787,109 @@ def test_a_trader_with_more_open_positions_than_one_read_holds_still_gets_every_
     engine._cache.clear()
     engine.live_poll_once()
     assert asked == [(50, None)]  # all in their 50 biggest: no extra read
+
+
+# ---- a restart (a deploy) neither skips nor repeats an alert ----
+
+
+def restart(monkeypatch: pytest.MonkeyPatch) -> None:
+    """What a restart forgets: everything in memory. alerts.db (the store's volume) stays."""
+    engine._cache.clear()
+    for d in (engine._seen, engine._alerted, engine._whale_alerted, engine._live_priced, engine._live_failed):
+        d.clear()
+    monkeypatch.setattr(engine, "_whale", {"started": False, "seen": set()})
+
+
+def test_a_trade_made_while_the_engine_restarts_is_alerted_once_after(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    trades = [trade(SAM, datetime.now(UTC) - timedelta(days=3), i="old")]
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50, "0xcid:1": 0.50, "0xsold:0": 0.40}))
+    assert engine.alert_pass() == 0  # first round: noted only
+    restart(monkeypatch)
+    trades[:0] = [trade(SAM, datetime.now(UTC), 0.49, 300, "0xcid:1", "during"),
+                  sold(SAM, datetime.now(UTC), 0.41, 90, "0xsold:0", "s")]  # fmt: skip
+    assert engine.alert_pass() == 2  # the buy and the sell made while it was down: alerted, not just noted
+    assert sorted(m["text"].split("</b> ")[1].split()[0] for m in engine.tg.sent) == ["bought", "sold"]
+    restart(monkeypatch)
+    assert engine.alert_pass() == 0  # and after another restart, never again
+    engine._cache.clear()
+    assert engine.alert_pass() == 0
+
+
+def test_an_alert_sent_just_before_a_crash_isnt_sent_again(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    trades = [trade(SAM, datetime.now(UTC) - timedelta(days=3), i="old")]
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50}))
+    engine.alert_pass()
+    keep = engine._seen_keep
+    engine._seen_keep = lambda *a, **k: None  # it went down after the alert went out, before keeping the round
+    try:
+        trades.insert(0, trade(SAM, datetime.now(UTC), i="new"))
+        engine._cache.clear()
+        assert engine.alert_pass() == 1
+    finally:
+        engine._seen_keep = keep
+    restart(monkeypatch)
+    assert engine.alert_pass() == 0 and len(engine.tg.sent) == 1  # alerts.db already has it: one message, ever
+
+
+def test_after_a_restart_a_new_follow_is_still_only_noted_and_an_unfollow_is_forgotten(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user(follows=(SAM,))
+    trades = [trade(SAM, datetime.now(UTC) - timedelta(days=3), i="old"), trade(ANN, datetime.now(UTC), i="ann")]
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50}))
+    engine.alert_pass()
+    restart(monkeypatch)
+    user(follows=(SAM, ANN))  # ANN followed while it was down: nobody watched her before
+    assert engine.alert_pass() == 0  # her trade from before the follow is only noted
+    user(follows=(ANN,))  # SAM unfollowed
+    engine._cache.clear()
+    engine.alert_pass()
+    with engine._db() as con:
+        assert {r[0] for r in con.execute("SELECT trader FROM watched")} == {ANN}
+    trades.insert(0, trade(SAM, datetime.now(UTC), i="later"))
+    restart(monkeypatch)
+    user(follows=(SAM, ANN))  # following SAM again starts fresh: what he did meanwhile is only noted
+    assert engine.alert_pass() == 0
+
+
+def test_a_restart_longer_than_the_alert_window_doesnt_alert_stale_trades(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    trades = [trade(SAM, datetime.now(UTC) - timedelta(days=3), i="old")]
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50}))
+    engine.alert_pass()
+    restart(monkeypatch)
+    trades.insert(0, trade(SAM, datetime.now(UTC) - timedelta(seconds=engine.ALERT_MAX_AGE_S + 60), i="stale"))
+    assert engine.alert_pass() == 0  # first seen over 30 minutes after it was made: as without a restart
+
+
+def test_more_trades_while_down_than_one_read_holds_are_read_further_back(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    trades = [trade(SAM, datetime.now(UTC) - timedelta(days=3), i="old")]
+    asked: list[int] = []
+    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, limit=50, **k: asked.append(limit) or trades[:limit])
+    monkeypatch.setattr(engine, "_open_positions", lambda w, markets=None: [
+        WhalePosition(f"0xm{i}:0", None, "Yes", 1, 0.49, 0.50, None, None) for i in range(150)])  # fmt: skip
+    engine.alert_pass()
+    restart(monkeypatch)
+    trades[:0] = [trade(SAM, datetime.now(UTC), market=f"0xm{i}:0", i=str(i)) for i in range(150)]
+    asked.clear()
+    engine.alert_pass()
+    assert engine.LIVE_GAP_TRADES in asked  # none of the last 100 was seen before: read further back
+    assert len({m for (w, m) in engine._alerted if w == SAM}) == 150  # every one of them (the daily cap limits messages)
+
+
+def test_big_trades_carry_on_after_a_restart_too(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user("politics", "1", follows=(), interests=["Politics"])
+    rows: list[WhaleTrade] = [big(WHALE, i="0")]
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
+    held = [WhalePosition(m, None, "Yes", 1, 0.49, 0.50, None, None) for m in ("0xw:0", "0xw2:0")]
+    monkeypatch.setattr(engine, "_live_read", lambda w, *a, **k: TraderDetail(
+        Trader(venue="polymarket", id=w, name=None), "visible", {}, held, []))  # fmt: skip
+    assert engine.alert_pass() == 0  # first round: noted
+    restart(monkeypatch)
+    rows.insert(0, big(WHALE, market="0xw2:0", i="during"))
+    assert engine.alert_pass() == 1  # made while it was down: alerted
+    restart(monkeypatch)
+    assert engine.alert_pass() == 0  # never twice
