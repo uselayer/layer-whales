@@ -2034,7 +2034,7 @@ ALERT_AGAIN_S = 6 * 3600  # one alert per trader and market in this long, howeve
 FOLLOW_DELAY = f"Signals typically reads followed traders' trades every {LIVE_POLL_S} seconds."
 BIG_DELAY = "Big trades come from Polymarket's feed of every trade, which typically runs 3–5 minutes behind."
 DAILY_CAP = 20  # alerts per person per UTC day (a group counts once, a summary once); then one "limit reached" message
-CAP_TEXT = f"You've reached today's alert limit; more tomorrow. Every buy by traders you follow is still in your Feed: {SITE}/#/"
+CAP_TEXT = f"You've reached today's alert limit; more tomorrow. Every trade by traders you follow is still in your Feed: {SITE}/#/"
 # Of the DAILY_CAP, at most this many a day from any one trader you follow (their buys and sells, not a group), so
 # one busy trader can't use up the day. Past it their trades wait for a summary (held), except a sale of something
 # they alerted you about (_told): that still comes right away, within the DAILY_CAP.
@@ -3086,7 +3086,7 @@ def alert_pass(now: float | None = None) -> int:
 
 def _summary_text(rows: list[tuple[str, str, float | None, float]], aid: str | None = None) -> str:
     """One message for everything held for a person: per trader, how many more trades (buys and sells, with their
-    dollars), since the first was held, and a link to the Feed, where every buy is."""
+    dollars), since the first was held, and a link to the Feed, where every trade is."""
     e = html.escape
     per: dict[str, dict[str, list[float]]] = {}
     for trader, side, usd, _ in rows:
@@ -3096,7 +3096,7 @@ def _summary_text(rows: list[tuple[str, str, float | None, float]], aid: str | N
         parts = [f"{len(v)} {side}{'s' if len(v) != 1 else ''} (${sum(v):,.0f})" for side, v in sides.items() if v]
         n = sum(map(len, sides.values()))
         lines.append(f"• <b>{e(_who(trader))}</b>: {n} more trade{'s' if n != 1 else ''}, {' and '.join(parts)}")
-    lines.append(f"Each came after that trader's {TRADER_DAILY} alerts for the day. Every buy is in your Feed.")
+    lines.append(f"Each came after that trader's {TRADER_DAILY} alerts for the day. Every trade is in your Feed.")
     return "\n".join([*lines, _links(("Open your Feed", f"{SITE}/#/"), aid=aid)])
 
 

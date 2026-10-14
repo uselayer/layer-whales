@@ -1284,7 +1284,7 @@ def test_a_summary_goes_out_three_hours_after_the_first_held_trade_counts_once_a
     lines = engine.tg.sent[-1]["text"].splitlines()
     assert lines[0].startswith("More from traders you follow, since ") and lines[0].endswith(" UTC:")
     assert lines[1:3] == ["• <b>Sam</b>: 3 more trades, 2 buys ($2,000) and 1 sell ($250)", "• <b>Ann</b>: 1 more trade, 1 buy ($1,000)"]
-    assert "Every buy is in your Feed." in lines[3] and ">Open your Feed</a>" in lines[4] and "/go/" in lines[4]
+    assert "Every trade is in your Feed." in lines[3] and ">Open your Feed</a>" in lines[4] and "/go/" in lines[4]
     assert engine._sent_today("user_1") == 11 and _held() == []  # 5 + 5 + the summary, once
     assert engine._summaries(users, t + 2 * engine.SUMMARY_S) == 0 and len(engine.tg.sent) == 11
 
