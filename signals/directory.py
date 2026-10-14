@@ -164,12 +164,15 @@ CREATE INDEX IF NOT EXISTS wallets_by_reason ON wallets (status, not_recommended
 
 _RECOMMENDED_SQL = ", ".join(f"'{s}'" for s in RECOMMENDED)
 # Which of KINDS a due wallet is: a recommended trader (scored, or failed since), one never looked at, any other.
-_KIND = f"""CASE WHEN segment IN ({_RECOMMENDED_SQL}) AND status IN ('scored', 'failed')
-    THEN CASE WHEN wallet IN (SELECT wallet FROM temp.presented_now) THEN 0 ELSE 1 END
+# A trader people are shown (``presented``) is that whatever tier their stored score says: the Recommended list can
+# serve an older-format score re-tiered to a recommended tier the stored segment doesn't have (seen 2026-10-14: a
+# format-7 "no_edge" served as Rising, its score going stale because it was only rechecked every 2 days).
+_KIND = f"""CASE WHEN status IN ('scored', 'failed') AND wallet IN (SELECT wallet FROM temp.presented_now) THEN 0
+  WHEN segment IN ({_RECOMMENDED_SQL}) AND status IN ('scored', 'failed') THEN 1
   WHEN status = 'found' THEN 2 ELSE 3 END"""
-# A recommended trader people are shown is due once its score is PRESENTED_RESCORE_S old, whatever next_check says.
-_DUE = f"""(next_check <= :now OR (status = 'scored' AND segment IN ({_RECOMMENDED_SQL})
-  AND scored_at <= :now - {PRESENTED_RESCORE_S} AND wallet IN (SELECT wallet FROM temp.presented_now)))"""
+# A trader people are shown is due once its score is PRESENTED_RESCORE_S old, whatever next_check says.
+_DUE = f"""(next_check <= :now OR (status = 'scored' AND scored_at <= :now - {PRESENTED_RESCORE_S}
+  AND wallet IN (SELECT wallet FROM temp.presented_now)))"""
 
 
 def fresh_for(presented: bool) -> float:

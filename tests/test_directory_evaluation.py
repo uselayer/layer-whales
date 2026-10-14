@@ -196,8 +196,10 @@ def test_a_recommended_trader_people_are_shown_is_rescored_every_6_hours_any_oth
     d.keep_scores([score(CAL, "no_edge")], "background", at=T0 - PRESENTED_RESCORE_S - 1)  # not a recommended tier
     assert d.due(10, now=T0) == []  # daily for the directory's own finds
     got = d.due(10, now=T0, presented={AMY, CAL})
-    assert [(g["wallet"], g["kind"]) for g in got] == [(AMY, "presented")]  # shown: every 6 hours; CAL isn't a tier
+    # shown: every 6 hours, whatever tier the stored score says (the list may serve an old score re-tiered)
+    assert sorted((g["wallet"], g["kind"]) for g in got) == [(AMY, "presented"), (CAL, "presented")]
     assert d.due_counts(now=T0, presented={AMY}) == {"presented": 1, "recommended": 0, "new": 0, "recheck": 0}
+    assert d.due(10, now=T0, presented={BEN})[0]["kind"] == "presented"
     assert [g["wallet"] for g in d.due(10, now=T0 + DAY, presented={AMY})] == [AMY, BEN]
 
 
