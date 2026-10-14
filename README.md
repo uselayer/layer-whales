@@ -163,7 +163,11 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   over: each leaderboard, and the markets, is marked once read to its end, and the next sweep reads only what wasn't
   read in the last day. It stays out of the Feed's way:
   at most 3 reads a second (the SDK allows 8 per Polymarket host; the Feed's poller, one read at a time, needs
-  at most ~3.7, and as little as ~1.5 for today's 24 Recommended and 20 followed traders), and none while the Worth following check runs, which can use all 8. Traders in the Feed's big
+  at most ~3.7, and as little as ~1.5 for today's 24 Recommended and 20 followed traders), and none while the Worth following check runs, which can use all 8.
+  Checking a trader on the spot (Explore's "Check now", a trader page nobody has scored lately) has its own budget
+  too, 3 reads a second (`SIGNALS_CHECK_RATE`), so the background's 4 and the checks' 3 always leave the Feed a
+  share. While the Feed reads the traders people follow, both run at half rate, and the alerts go out as soon as
+  those reads are done. Traders in the Feed's big
   trades, wallets opened that the last check didn't have (pasted into search, mostly) and followed wallets are kept
   too, at no extra reads, by a writer thread so no page waits for the directory; a follow keeps the wallet, never
   who follows it. At full size the file is roughly 300 MB (the volume holds 5 GB).

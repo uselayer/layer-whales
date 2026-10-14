@@ -17,6 +17,8 @@ from uselayer import VenueError
 
 from signals import app as engine
 from signals.budget import COOL_S, RECOVER_S, BackgroundHttp, Budget
+
+REAL_CHECKER = engine.checker  # before conftest stands it in with reads.whales
 from signals.directory import (
     RECHECK_EVIDENCE_S,
     RECHECK_QUIET_S,
@@ -316,11 +318,45 @@ def test_too_many_retries_give_up_with_the_error() -> None:
     assert len(http.asked) == 5  # the first try and four retries
 
 
+# ---- "Check now" on its own budget; the background and checks give way to followed traders' reads ----
+
+
+def test_a_budget_gives_way_at_half_its_rate_while_followed_traders_are_read() -> None:
+    c, busy = Clock(), {"on": True}
+    b = Budget(4, clock=c, sleep=c.sleep, yield_to=lambda: busy["on"])
+    for _ in range(5):
+        b.take()
+    assert c.t == pytest.approx(1002.0)  # 0.5 s apart: 2 a second while the Feed reads followed traders
+    busy["on"] = False
+    for _ in range(4):
+        b.take()
+    assert c.t == pytest.approx(1003.25)  # the slot booked while giving way, then 4 a second again
+
+
+def test_check_now_scores_on_its_own_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = REAL_CHECKER()  # the engine's own client, each Polymarket read taken from the checks budget
+    assert isinstance(real._poly._http, BackgroundHttp) and real._poly._http.budget is engine._check_budget
+    assert real.scorer()._poly is real._poly  # the scorer's reads too, from whichever of its threads
+    assert real._poly._http._http is engine.reads._http  # under the SDK's per-host pacing, shared with everything
+    assert engine._check_budget.target == engine.CHECK_RATE == 3
+    assert engine._check_budget._yield_to is engine._reading_followed
+    assert engine.background() and engine._background["budget"]._yield_to is engine._reading_followed
+    assert engine.BACKGROUND_RATE + engine.CHECK_RATE < 8  # the SDK's 8 a host: the Feed always keeps a share
+    scored: list[str] = []
+    monkeypatch.setattr(engine, "checker", lambda: SimpleNamespace(score=lambda w, **k: scored.append(w)
+                                                                   or SimpleNamespace(to_dict=lambda: {"wallet": w})))  # fmt: skip
+    monkeypatch.setattr(engine, "_worth_data", {"scores": []})
+    monkeypatch.setattr(engine, "_directory_later", lambda write: None)
+    engine._worth_one.pop("0x" + "7" * 40, None)
+    engine._score_of("0x" + "7" * 40)
+    assert scored == ["0x" + "7" * 40]  # "Check now" and a trader page score through it
+
+
 # ---- the evaluation ----
 
 
-def trade(at: float, action: str = "buy", market: str = "0xm1") -> Any:
-    return SimpleNamespace(at=datetime.fromtimestamp(at, UTC), action=action, market=f"{market}:0")
+def trade(at: float, action: str = "buy", market: str = "0xm1", usd: float = 100.0) -> Any:
+    return SimpleNamespace(at=datetime.fromtimestamp(at, UTC), action=action, market=f"{market}:0", usd=usd)
 
 
 class FakeSdk:

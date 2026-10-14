@@ -169,6 +169,20 @@ def test_positions_are_read_only_with_a_trade_to_price_and_kept_while_the_trades
     assert asked == [("trades", COPY), ("positions", COPY)]  # a new trade: the price now read with it
 
 
+def test_the_others_give_way_only_while_followed_traders_are_read_and_alerts_go_at_once_after(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api.post("/api/me/follows", json={"wallet": STRANGER}, headers=auth())
+    giving_way: dict[str, bool] = {}
+    real = engine.reads.whales.trades
+    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: giving_way.setdefault(
+        w, engine._reading_followed()) is None or real(venue, w, **k))  # fmt: skip
+    engine._alert_wake.clear()
+    engine.live_poll_once()
+    assert giving_way == {STRANGER: True, COPY: False, RISE: False, WATCH: False}
+    assert not engine._reading_followed() and engine._alert_wake.is_set()  # the alert pass runs now, not in 30 s
+
+
 def test_each_round_reads_the_followed_first_then_who_just_traded_then_the_oldest_recommended(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
