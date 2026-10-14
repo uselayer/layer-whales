@@ -36,7 +36,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from uselayer import Client, VenueError, Whales, WhaleTrade
+from uselayer import Client, Trader, TraderDetail, VenueError, Whales, WhaleTrade
 from uselayer.whale_finder import all_boards
 from uselayer.whale_scores import (
     CATEGORY_TAGS,
@@ -1230,41 +1230,156 @@ def _categories(markets: list[str]) -> dict[str, str]:
     return {m: category_of(book[c]) for m in markets if (c := m.partition(":")[0]) in book}
 
 
-LIVE_POLL_S = 30  # the poller refreshes every Recommended and followed trader this often, one at a time
-LIVE_STALE_S = 120  # pages read what the poller keeps up to this old; only a miss reads Polymarket itself
+LIVE_POLL_S = 30  # a round of the poller: everyone followed is read each round (alerts want it fresh)...
+LIVE_REC_S = 60  # ...and a Recommended trader nobody follows this often, as the round's slot allows
+LIVE_PRICE_S = 90  # open positions (the price now) read again once this old, or as soon as their trades change
+LIVE_STALE_S = 120  # a trader's page check (one_bet) reads Polymarket itself when what's kept is older
 LIVE_ALERT_S = 60  # alerts want it fresher
+LIVE_SHOW_S = 1800  # the Feed shows what the poller kept up to this old (saying how old); older, "couldn't be read"
+LIVE_PAGE_READS = 3  # a Feed view reads at most this many traders the poller hasn't read yet; the rest are pending
 LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
+LIVE_REC_FLOOR = 4  # Recommended reads a round even when everyone followed fills the slot, so it never stops
+LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; further back when there's a gap
+_live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
+_live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
+_live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
+_live_round: dict[str, float] = {"ended": float("-inf")}  # when (monotonic) the poller's last round ended
 
 
-def _live_read(wallet: str, max_age: float = LIVE_STALE_S) -> Any:
+def _open_positions(wallet: str) -> list[Any]:
+    """A trader's open positions (the SDK's TraderDetail.positions without its profile and stats reads).
+    Stopgap, approved for V1: the SDK has no public positions-only read yet, so this calls its internals (as
+    ``listed_now`` reads its leaderboards). Swap for ``whales.positions`` once uselayer has it:
+    https://github.com/uselayer/uselayer-sdk/issues/23"""
+    w = reads.whales
+    return [w._poly_position(p) for p in w._poly.positions(wallet, 50)
+            if not p.get("redeemable") and 0 < float(p.get("curPrice") or 0) < 1]  # fmt: skip
+
+
+def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
+    """A trader's last 100 trades, and their open positions only when there's a trade to price: one from the last
+    FEED_HOURS (the Feed's and alerts' window), or ``priced``. Positions are reused while their trades haven't
+    changed and they're under LIVE_PRICE_S old. 1–2 reads, never the profile or stats (the name is on the trades);
+    a third, further back, when none of the last 100 were kept before (so a gap between reads never drops a trade)."""
+    hit = _cache.get(f"live:{wallet}")
+    old = hit[1] if hit else None
+    trades = reads.whales.trades("polymarket", wallet, limit=LIVE_TRADES)
+    if old is not None and old.trades and len(trades) >= LIVE_TRADES and not (
+        {t.trade_id for t in trades} & {t.trade_id for t in old.trades}
+    ):  # more trades since the last read than one read holds: read further back, so none is missed
+        trades = reads.whales.trades("polymarket", wallet, limit=LIVE_GAP_TRADES)
+    since = time.time() - FEED_HOURS * 3600
+    positions: list[Any] = []
+    if priced or any(t.at.timestamp() >= since for t in trades):
+        at = _live_priced.get(wallet)
+        same = old is not None and [t.trade_id for t in old.trades] == [t.trade_id for t in trades]
+        if same and at is not None and time.monotonic() - at < LIVE_PRICE_S:
+            positions = old.positions
+        else:
+            positions, _live_priced[wallet] = _open_positions(wallet), time.monotonic()
+    else:
+        _live_priced.pop(wallet, None)
+    name = next((t.name for t in trades if t.name), None)
+    return TraderDetail(Trader(venue="polymarket", id=wallet, name=name), "visible", {}, positions, trades)
+
+
+def _live_read(wallet: str, max_age: float = LIVE_STALE_S, priced: bool = False) -> Any:
     """A trader's last 100 trades and open positions: what the poller keeps (_live_loop), read from Polymarket
-    only when it's missing or older than ``max_age`` (and then once, however many ask at the same time)."""
-    return cached(f"live:{wallet}", max_age, lambda: reads.whales.trader("polymarket", wallet, trades=100, closed=0))
+    only when it's missing or older than ``max_age`` (and then once, however many ask at the same time).
+    ``priced``: their positions too, even with no trade in the last FEED_HOURS (a trade's own price check)."""
+    if priced and wallet not in _live_priced:
+        max_age = 0  # kept without positions: read again, with them
+    return cached(f"live:{wallet}", max_age, lambda: _live_fetch(wallet, priced))
 
 
-def _live_wanted() -> set[str]:
-    """The traders whose trades the Feed and alerts read: Recommended's, and everyone someone follows."""
+def _live_kept(wallet: str) -> tuple[float, Any] | None:
+    """What the poller keeps for a trader: (when it was read, monotonic; their trades and positions), or None."""
+    return _cache.get(f"live:{wallet}")
+
+
+def _live_wanted() -> tuple[set[str], set[str]]:
+    """The traders whose trades the Feed and alerts read: everyone someone follows, and Recommended's."""
     rec = {s["wallet"] for s in (_worth_load() or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS}
-    return rec | {w for u in _load_follows()["users"].values() for w in u.get("follows") or []}
+    return {w for u in _load_follows()["users"].values() for w in u.get("follows") or []}, rec
+
+
+def _live_hints(wallets: set[str]) -> set[str]:
+    """Of ``wallets``, those with a trade in Polymarket's shared feed of RECOMMENDED_MIN_USD-or-more fills that
+    isn't among the trades kept for them: one read for everyone (the one Big trades and big-trade alerts read),
+    so a Recommended trader who just made a big trade is read now rather than on their turn. A hint only: most of
+    Recommended's trades (resting orders, trades in pieces) never show there, so everyone still gets their turn."""
+    try:
+        rows = cached(f"now:{RECOMMENDED_MIN_USD}", 20,
+                      lambda: reads.whales.big_trades(RECOMMENDED_MIN_USD, venues=VENUES, kalshi_pages=5))  # type: ignore[arg-type]  # fmt: skip
+    except VenueError:
+        return set()
+    out = set()
+    for t in rows:
+        w = (t.trader or "").lower()
+        if w in wallets and t.trade_id not in _live_hinted:
+            _live_hinted.add(t.trade_id)  # once: their own trades can show it a little later than this feed
+            hit = _live_kept(w)
+            if hit is None or t.trade_id not in {x.trade_id for x in hit[1].trades}:
+                out.add(w)
+    if len(_live_hinted) > 5000:
+        _live_hinted.intersection_update(t.trade_id for t in rows)
+    return out
 
 
 def live_poll_once(stop: threading.Event | None = None) -> int:
-    """One round of the poller: each wanted trader read in turn (never in a burst: the SDK's Polymarket budget is
-    shared), skipping one read in the last LIVE_POLL_S; then traders nobody wants any more are dropped."""
-    wanted, done = _live_wanted(), 0
-    for w in sorted(wanted):
+    """One round of the poller, one read at a time (never in a burst: the SDK's Polymarket budget is shared with
+    pages and the background): everyone followed (each round), then Recommended traders the shared big-trades feed
+    says just traded, then the other Recommended traders (each LIVE_REC_S), oldest (or never read) first, while
+    the round's LIVE_POLL_S lasts (LIVE_REC_FLOOR at least); whoever doesn't fit goes first next round, and a rate
+    limit ends the round. Half a round's slack on each, so a read a little later in one round than the last is
+    still due in the next. Then traders nobody wants any more are dropped. Returns how many were read."""
+    followed, rec = _live_wanted()
+    rec -= followed
+    started = time.monotonic()
+    every_round, rec_after = LIVE_POLL_S / 2, LIVE_REC_S - LIVE_POLL_S / 2
+
+    def age(w: str) -> float:
+        hit = _live_kept(w)
+        return float("inf") if hit is None else started - hit[0]
+
+    hinted = _live_hints(rec) if rec else set()
+    def due_now(w: str) -> bool:  # once a round, however long the last one took; a page's read since then counts
+        hit = _live_kept(w)
+        return hit is None or hit[0] <= _live_round["ended"] or age(w) >= every_round
+
+    due = sorted((w for w in followed if due_now(w)), key=lambda w: (-age(w), w))  # oldest first; ties by wallet
+    late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w), w))
+    done = 0
+    for i, w in enumerate(due + late):
         if stop is not None and stop.is_set():
             break
+        if i >= len(due) + LIVE_REC_FLOOR and time.monotonic() - started >= LIVE_POLL_S:
+            break  # the rest of Recommended goes first next round
         try:
-            _live_read(w, LIVE_POLL_S - 5)
+            _live_read(w, 0 if w in hinted or i < len(due) else rec_after)
+            _live_failed.pop(w, None)
             done += 1
-        except VenueError:
-            continue
-    now = time.monotonic()
+        except VenueError as e:
+            _live_failed[w] = time.monotonic()
+            if e.code == "rate_limited":  # the SDK's retries are spent: more reads now would only add to it
+                _worth["live_error"] = "Polymarket rate limited the Feed's reads; the rest wait for the next round"
+                break
+    _live_round["ended"] = time.monotonic()
+    wanted, mono = followed | rec, time.monotonic()
     for key in [k for k in list(_cache) if k.startswith("live:")]:
         hit = _cache.get(key)
-        if key[5:] not in wanted and hit and now - hit[0] > LIVE_KEEP_S:
+        if key[5:] not in wanted and hit and mono - hit[0] > LIVE_KEEP_S:
             _cache.pop(key, None)
+            _live_priced.pop(key[5:], None)
+    for w in [w for w in _live_failed if w not in wanted]:
+        del _live_failed[w]
+    since = time.time() - FEED_HOURS * 3600
+    shown = {t.market for w in wanted if (hit := _live_kept(w)) for t in hit[1].trades
+             if t.action == "buy" and t.at.timestamp() >= since}  # fmt: skip
+    try:
+        _categories(list(shown))  # the SDK keeps each market's category: no Feed view waits on a new market's
+    except VenueError:
+        pass
     return done
 
 
@@ -1309,7 +1424,7 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
         raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
     s = next((x for x in (_worth_load() or {}).get("scores", []) if x["wallet"] == w), None)
     try:
-        d = _live_read(w)
+        d = _live_read(w, priced=True)  # an older trade too: its price now is still wanted
     except VenueError as e:
         if e.code == "not_found":  # a wallet with no Polymarket profile: counted, so we know how often it happens
             count("no_profile", target="check")
@@ -1332,24 +1447,39 @@ def live() -> dict[str, Any]:
     Traders' two sections (Sharps, Rising). Quiet on purpose: fewer, bigger trades."""
     data = _worth_load()
     people = [s | copy_fields(s) for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
-    bets, failed = _feed(people, RECOMMENDED_MIN_USD)
+    got = _feed(people, RECOMMENDED_MIN_USD)
     return {"traders": [{k: s[k] for k in ("wallet", "name", "segment", "label", "copy_ok", "copy_label")} for s in people],
-            "failed": failed, "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD, "bets": bets}  # fmt: skip
+            "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD} | got  # fmt: skip
 
 
-def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> tuple[list[dict[str, Any]], int]:
+def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> dict[str, Any]:
     """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), newest first, with
-    status and category; and how many traders couldn't be read."""
+    status and category, from what the poller keeps: a view never waits on Polymarket for dozens of traders. Only
+    a trader the poller hasn't read yet (just followed, or just after a restart) is read here, at most
+    LIVE_PAGE_READS a view; the rest are ``pending`` until its next round. ``failed``: traders that couldn't be read
+    (or only longer ago than LIVE_SHOW_S). ``as_of``: when the oldest of what's shown was read (epoch ms)."""
     since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
     bets: list[dict[str, Any]] = []
-    failed = 0
-
-    for s in people:  # from what the poller keeps: a page view never reads Polymarket for dozens of traders
-        try:
-            d = _live_read(s["wallet"])
-        except VenueError:
-            failed += 1
+    failed = pending = 0
+    reads_left, mono = LIVE_PAGE_READS, time.monotonic()
+    oldest = mono
+    for s in people:
+        w = s["wallet"]
+        hit = _live_kept(w)
+        if hit is None and reads_left > 0 and w not in _live_failed:
+            reads_left -= 1
+            try:
+                _live_read(w)
+            except VenueError:
+                _live_failed[w] = time.monotonic()
+            hit = _live_kept(w)
+        if hit is None or mono - hit[0] > LIVE_SHOW_S:
+            if hit is None and w not in _live_failed:
+                pending += 1
+            else:
+                failed += 1
             continue
+        oldest, d = min(oldest, hit[0]), hit[1]
         if not s.get("name"):
             s["name"] = d.trader.name  # a followed wallet we haven't scored: their Polymarket name, as on their cards
         bets += [b for b in _bets_of(d, s, since) if b["usd"] >= min_usd]
@@ -1360,7 +1490,8 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> tuple[list[dict
         cats = {}  # the trades still show, under All
     for b in bets:
         b["status"], b["category"] = bet_status(b["price"], b["price_now"]), cats.get(b["market"])
-    return bets, failed
+    as_of = round((time.time() - (time.monotonic() - oldest)) * 1000)
+    return {"bets": bets, "failed": failed, "pending": pending, "as_of": as_of}
 
 
 def _iso_ts(s: str) -> float:
@@ -1663,8 +1794,7 @@ def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]
     scores = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
     people = [{"wallet": w, "name": (s := scores.get(w) or {}).get("name"), "segment": s.get("segment"),
                "label": s.get("label")} | copy_fields(s or None) for w in follows]  # fmt: skip
-    bets, failed = _feed(people)
-    return {"traders": people, "failed": failed, "hours": FEED_HOURS, "bets": bets}
+    return {"traders": people, "hours": FEED_HOURS} | _feed(people)
 
 
 @app.post("/api/me/telegram")
@@ -2230,8 +2360,8 @@ def alert_pass(now: float | None = None) -> int:
     new_buys: list[NewBuy] = []
     new_sells: list[NewSell] = []
     for w in to:
-        try:
-            d = _live_read(w, LIVE_ALERT_S)
+        try:  # what the poller keeps (it reads everyone followed first, each round); read here only if it hasn't yet
+            d = hit[1] if (hit := _live_kept(w)) else _live_read(w, LIVE_ALERT_S)
         except VenueError:
             continue
         first, seen = w not in _seen, _seen.setdefault(w, set())
@@ -2332,7 +2462,8 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
         if not to:
             continue
         try:
-            price_now = next((p.current_price for p in _live_read(w, LIVE_ALERT_S).positions if p.market == t.market), None)
+            price_now = next((p.current_price for p in _live_read(w, LIVE_ALERT_S, priced=True).positions
+                              if p.market == t.market), None)  # fmt: skip
         except VenueError:
             continue
         if price_now is None or _settled(price_now):

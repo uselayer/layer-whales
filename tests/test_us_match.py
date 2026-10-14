@@ -261,3 +261,23 @@ def test_the_page_never_says_a_market_is_not_on_polymarket_us_and_scopes_quotes_
     page = (engine.HERE / "static" / "index.html").read_text()
     assert "Not on Polymarket US" not in page and "US traders" not in page
     assert "This estimate is for ${INTL} only. Polymarket US has its own order book and fees, so it doesn't apply there." in page
+
+
+# ---- the quote: the numbers in view, the working folded ----
+
+QUOTE_DEFS = ("esc", "INTL", "c1", "money", "slipOf", "slippageLine", "readAt", "quoteNote", "quoteFold")
+
+
+def test_the_quote_folds_its_working_and_shows_slippage_only_when_there_is_some(run_js: Any) -> None:
+    p = {"price": 0.948, "best_price": 0.948, "limit": 0.978, "max_spend": 440282.83, "depth_checked": True,
+         "contracts": 10.0, "total": 9.5, "priced_at": None}  # fmt: skip
+    warn, note, fold = run_js(QUOTE_DEFS, f"((p) => [slippageLine(p), quoteNote(p), quoteFold(p)])({json.dumps(p)})")
+    assert warn == ""  # no slippage: nothing in view, a row in the fold
+    assert note == '<p class="qnote">Polymarket International estimate · not a guaranteed fill</p>'
+    assert fold.startswith('<details class="qmore"><summary>How this estimate works</summary>')
+    for words in ("<dt>Best price for sale</dt><dd>94.8¢</dd>", "<dd>94.8¢ (no slippage)</dd>", "<dd>95¢</dd>",
+                  "<dd>97.8¢ at most</dd>", "<dd>$440,282.83, fee included</dd>", "offers above 97.8¢ aren't counted",
+                  "An estimate, not a guaranteed fill", "Polymarket US has its own order book and fees"):  # fmt: skip
+        assert words in fold, words
+    slipped = run_js(QUOTE_DEFS, f"slippageLine({json.dumps(p | {'price': 0.956})})")
+    assert slipped.startswith('<p class="qwarn">Estimated slippage: your average fill, 95.6¢, is 0.8¢ above')

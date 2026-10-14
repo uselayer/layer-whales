@@ -7,7 +7,8 @@ machine (`uv run signals`) and is hosted at usesignals.app: the same engine with
 behind Vercel (see README, "Hosting").
 
 - All venue reads, links and copies go through `client.whales` in the SDK. Don't add venue calls or matching
-  logic here; put it in the SDK.
+  logic here; put it in the SDK. One approved stopgap: `_open_positions` (the Feed's poller) calls the SDK's
+  internals for a positions-only read until uselayer has a public one (uselayer-sdk#23); don't add others.
 - Signals is Polymarket-only for now; the SDK stays multi-venue. `SIGNALS_VENUES` (`VENUES` in `app.py`, default
   `polymarket`; `polymarket,kalshi` adds Kalshi back) is the one switch: every read passes it to the SDK
   (`big_trades(venues=…)`, `top(venue=…)`), and a venue that's off is refused, never read and then hidden. The
@@ -150,8 +151,18 @@ behind Vercel (see README, "Hosting").
     stays quiet (fewer, bigger trades) and never more prominent than Following: second in the switch, never the
     default. Both keep the switch "Only trades I can still get into", one card per outcome with "Also bought
     by", and the delay line. Big trades (`#/big`) is linked from the foot of Recommended. Traders' trades come from
-    one background poller (`_live_loop`: Recommended's and everyone followed, one at a time, every 30 s); pages
-    only read what it keeps, so a busy Feed never adds Polymarket reads.
+    one background poller (`_live_loop`, one read at a time, in 30 s rounds: everyone followed each round,
+    Recommended's every 60 s while the round's slot allows, oldest first, so a bigger pool is read less often,
+    never faster). Per trader it reads their trades, and their open positions only when there's a trade from the
+    last day to price (kept while their trades don't change, for 90 s); never the profile or stats. Polymarket's
+    shared $1,000+ trades feed (one read for everyone) moves a Recommended trader who just traded to the front.
+    Pages only read what it keeps, so a busy Feed never adds Polymarket reads: a view reads at most 3 traders the
+    poller hasn't read yet itself ("Still reading N traders"), and "Updated" is when the oldest of it was read.
+    The Feed never says "None of … traded" for traders it hasn't read: it says it's still reading them, or that
+    they couldn't be read, and notes when some of it was last read over 5 minutes ago. Everyone followed is read
+    once every round however many there are (Recommended keeps a floor of 4 reads a round); alerts read what the
+    poller keeps, never on their own; a gap of more than 100 trades between reads is read further back (500);
+    a rate limit ends the round.
   - Market chips live on Traders only. The Feed follows the same choice and says so in one line ("Your markets:
     Politics, Sports · Change"); Change opens the onboarding picker. Never a second set of filter chips.
   - A trade at 2¢ or less, 98¢ or more, or no longer held is settled (Won / Lost / Closed), never a bargain
