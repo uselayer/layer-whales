@@ -143,6 +143,13 @@ def venue_error(e: VenueError) -> HTTPException:
 # ---- reads ----
 
 
+def feed_reader(request: Request) -> None:
+    """The Feed (Recommended, Big trades, an alert's trade) is for signed-in people; Traders and trader pages need
+    no account. Without signing in switched on (running locally without Clerk's key) it's open like the rest."""
+    if clerk_frontend_api(CLERK_KEY):
+        _session(request, "Sign in to see the Feed.")
+
+
 @app.get("/api/config")
 def config() -> dict[str, Any]:
     """What the page needs to know before it draws: which venues Signals reads (see VENUES), and Clerk's
@@ -166,10 +173,11 @@ def top(venue: str = "all", by: str = "pnl", limit: int = 25) -> list[dict[str, 
 
 
 @app.get("/api/trading-now")
-def trading_now(min_usd: float = 250) -> list[dict[str, Any]]:
+def trading_now(response: Response, min_usd: float = 250, _: None = Depends(feed_reader)) -> list[dict[str, Any]]:
     """Recent large trades on the venues Signals reads, newest first (the Feed's Big trades). Named Kalshi
     traders here usually show their trades. A Polymarket trade carries its market's category, so the page can
     filter by your markets; the SDK has no categories for Kalshi markets, so theirs is None."""
+    _private(response)
     try:
         rows = cached(f"now:{min_usd}", 20, lambda: reads.whales.big_trades(min_usd, venues=VENUES, kalshi_pages=5))  # type: ignore[arg-type]
     except VenueError as e:
@@ -1298,9 +1306,10 @@ def _bets_of(d: Any, who: dict[str, Any], since: datetime | None = None) -> list
 
 
 @app.get("/api/bet/{wallet}/{market}")
-def one_bet(wallet: str, market: str) -> dict[str, Any]:
+def one_bet(wallet: str, market: str, response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
     """One trader's buy of one outcome, as a Feed card has it (status, price now, copy_ok): what an alert's
     "Check current price" opens. From their last 100 trades; 404 when it isn't among them."""
+    _private(response)
     w = wallet.lower()
     if not _WALLET.fullmatch(w):
         raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
@@ -1324,9 +1333,10 @@ def one_bet(wallet: str, market: str) -> dict[str, Any]:
 
 
 @app.get("/api/live")
-def live() -> dict[str, Any]:
+def live(response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
     """The Feed's Recommended: trades of RECOMMENDED_MIN_USD or more over the last FEED_HOURS from the traders in
     Traders' two sections (Sharps, Rising). Quiet on purpose: fewer, bigger trades."""
+    _private(response)
     data = _worth_load()
     people = [s | copy_fields(s) for s in (data or {}).get("scores", []) if s["segment"] in FEED_SEGMENTS]
     got = _feed(people, RECOMMENDED_MIN_USD)
@@ -1547,13 +1557,18 @@ def _origins() -> set[str]:
 def signed_in(request: Request) -> str:
     """The signed-in user's Clerk id, from the page's ``Authorization: Bearer`` session token, or 401 with a
     plain sentence. Checked here: the signature (Clerk's public keys, RS256), expiry, issuer, origin."""
+    return _session(request, "Sign in to follow traders.")
+
+
+def _session(request: Request, why: str) -> str:
+    """``signed_in``'s check; ``why`` is what a missing or foreign sign-in is told."""
     fapi = clerk_frontend_api(CLERK_KEY)
     if not fapi:
         raise HTTPException(404, detail="Signing in isn't switched on here.")
     auth = request.headers.get("authorization", "")
     token = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
     if not token:
-        raise HTTPException(401, detail="Sign in to follow traders.")
+        raise HTTPException(401, detail=why)
     try:
         claims = jwt.decode(token, _signing_key(token), algorithms=["RS256"], issuer=f"https://{fapi}",
                             options={"require": ["exp", "iat", "sub"]}, leeway=5)  # fmt: skip
@@ -1562,7 +1577,7 @@ def signed_in(request: Request) -> str:
     except jwt.PyJWTError as e:
         raise HTTPException(401, detail="Your sign-in has expired. Sign in again.") from e
     if claims.get("azp") and claims["azp"] not in _origins():
-        raise HTTPException(401, detail="Sign in on this site to follow traders.")
+        raise HTTPException(401, detail=f"{why[:-1]} on this site.")
     return str(claims["sub"])
 
 

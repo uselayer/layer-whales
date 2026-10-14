@@ -1,0 +1,122 @@
+wallets collected: 400 (errors 0)
+
+====================================================================================================
+selective: 250 wallets
+
+  all (baseline): 250 wallets
+    1 profitability  O profit > 0: 98/250 = 39% (33%–45%), median $0; still trading in O: 98/250 = 39% (33%–45%)
+    2 skill, settled +0.91¢ (-1.36¢ to +2.72¢) 1394 events, 92 wallets [fail]
+      12-hour move   +1.38¢ (-0.43¢ to +2.87¢) 1480 events, 98 wallets [fail]
+      wallets with a positive settled edge in O: 47/92 = 51% (41%–61%)
+    3 copy (next price, to settlement, after fee) -0.60¢ (-2.52¢ to +0.92¢) 802 events, 84 wallets [fail]
+
+  P-profit: trading profit over S > 0: 103 wallets
+    1 profitability  O profit > 0: 54/103 = 52% (43%–62%), median $0; still trading in O: 42/103 = 41% (32%–50%)
+    2 skill, settled +1.58¢ (-2.78¢ to +6.99¢) 284 events, 41 wallets [fail]  (baseline +0.91¢: above)
+      12-hour move   +2.17¢ (-1.02¢ to +5.74¢) 332 events, 42 wallets [fail]
+      wallets with a positive settled edge in O: 23/41 = 56% (41%–70%)
+    3 copy (next price, to settlement, after fee) -0.64¢ (-4.44¢ to +5.57¢) 209 events, 38 wallets [fail]
+
+  L-settle: settled z>=2, 20+ events, trimmed > 0: 1 wallets  (too few to judge)
+    1 profitability  O profit > 0: 0/1 = 0% (0%–79%), median $-2,489; still trading in O: 1/1 = 100% (21%–100%)
+    2 skill, settled -1.76¢ (-1.76¢ to -1.76¢) 3 events, 1 wallets [fail]  (baseline +0.91¢: NOT above)
+      12-hour move   -3.64¢ (-3.64¢ to -3.64¢) 3 events, 1 wallets [fail]
+      wallets with a positive settled edge in O: 0/1 = 0% (0%–79%)
+    3 copy (next price, to settlement, after fee) +0.71¢ (+0.71¢ to +0.71¢) 3 events, 1 wallets [PASS]
+
+  L-move: 12-hour z>=2, 20+ events, trimmed > 0: 8 wallets  (too few to judge)
+    1 profitability  O profit > 0: 4/8 = 50% (22%–78%), median $0; still trading in O: 2/8 = 25% (7%–59%)
+    2 skill, settled -11.15¢ (-20.53¢ to -1.76¢) 6 events, 2 wallets [fail]  (baseline +0.91¢: NOT above)
+      12-hour move   -3.65¢ (-3.66¢ to -3.64¢) 7 events, 2 wallets [fail]
+      wallets with a positive settled edge in O: 0/2 = 0% (0%–66%)
+    3 copy (next price, to settlement, after fee) -1.61¢ (-3.93¢ to +0.71¢) 6 events, 2 wallets [fail]
+
+  L-both: 1 wallets  (too few to judge)
+    1 profitability  O profit > 0: 0/1 = 0% (0%–79%), median $-2,489; still trading in O: 1/1 = 100% (21%–100%)
+    2 skill, settled -1.76¢ (-1.76¢ to -1.76¢) 3 events, 1 wallets [fail]  (baseline +0.91¢: NOT above)
+      12-hour move   -3.64¢ (-3.64¢ to -3.64¢) 3 events, 1 wallets [fail]
+      wallets with a positive settled edge in O: 0/1 = 0% (0%–79%)
+    3 copy (next price, to settlement, after fee) +0.71¢ (+0.71¢ to +0.71¢) 3 events, 1 wallets [PASS]
+
+  L-settle-FDR (BH q=0.10): 0 wallets  (too few to judge)
+
+  L-move-FDR (BH q=0.10): 2 wallets  (too few to judge)
+    1 profitability  O profit > 0: 2/2 = 100% (34%–100%), median $11; still trading in O: 1/2 = 50% (9%–91%)
+    2 skill, settled -20.53¢ (-20.53¢ to -20.53¢) 3 events, 1 wallets [fail]  (baseline +0.91¢: NOT above)
+      12-hour move   -3.66¢ (-3.66¢ to -3.66¢) 4 events, 1 wallets [fail]
+      wallets with a positive settled edge in O: 0/1 = 0% (0%–79%)
+    3 copy (next price, to settlement, after fee) -3.93¢ (-3.93¢ to -3.93¢) 3 events, 1 wallets [fail]
+
+  -- calibration --
+  settled z over wallets with 20+ events: n=138, mean -0.23, sd 1.01, z>=2 in 1/138 = 1% (0%–4%) (nominal 2.3%)
+  12-hour z over wallets with 20+ events: n=141, mean -0.18, sd 1.18, z>=2 in 8/141 = 6% (3%–11%) (nominal 2.3%)
+  FDR kept: settled 0 of 1 passes; 12-hour 2 of 8
+
+  -- 10 more bets before confirming --
+  L-settle:   1 wallets: 10th O event within 30 d 0/1 = 0% (0%–79%), 60 d 0/1 = 0% (0%–79%), 91 d 0/1 = 0% (0%–79%)
+  L-move: 1   8 wallets: 10th O event within 30 d 0/8 = 0% (0%–32%), 60 d 0/8 = 0% (0%–32%), 91 d 0/8 = 0% (0%–32%)
+  all (base 250 wallets: 10th O event within 30 d 12/250 = 5% (3%–8%), 60 d 20/250 = 8% (5%–12%), 91 d 24/250 = 10% (7%–14%)
+  exploratory: first-10 sign agrees with the rest of O: —
+
+====================================================================================================
+frequent: 150 wallets
+
+  all (baseline): 150 wallets
+    1 profitability  O profit > 0: 27/150 = 18% (13%–25%), median $-16; still trading in O: 100/150 = 67% (59%–74%)
+    2 skill, settled +0.01¢ (-1.22¢ to +1.15¢) 5281 events, 100 wallets [fail]
+      12-hour move   -0.11¢ (-1.15¢ to +0.94¢) 5547 events, 100 wallets [fail]
+      wallets with a positive settled edge in O: 43/100 = 43% (34%–53%)
+    3 copy (next price, to settlement, after fee) -0.49¢ (-1.66¢ to +0.62¢) 2978 events, 95 wallets [fail]
+
+  P-profit: trading profit over S > 0: 66 wallets
+    1 profitability  O profit > 0: 10/66 = 15% (8%–26%), median $-7; still trading in O: 39/66 = 59% (47%–70%)
+    2 skill, settled +0.44¢ (-1.35¢ to +2.16¢) 1797 events, 39 wallets [fail]  (baseline +0.01¢: above)
+      12-hour move   +0.44¢ (-1.02¢ to +2.04¢) 1973 events, 39 wallets [fail]
+      wallets with a positive settled edge in O: 20/39 = 51% (36%–66%)
+    3 copy (next price, to settlement, after fee) -0.44¢ (-2.20¢ to +1.42¢) 1122 events, 37 wallets [fail]
+
+  L-settle: settled z>=2, 20+ events, trimmed > 0: 3 wallets  (too few to judge)
+    1 profitability  O profit > 0: 1/3 = 33% (6%–79%), median $-254; still trading in O: 3/3 = 100% (44%–100%)
+    2 skill, settled +5.09¢ (+3.00¢ to +8.09¢) 337 events, 3 wallets [PASS]  (baseline +0.01¢: above)
+      12-hour move   +5.80¢ (+1.13¢ to +10.16¢) 332 events, 3 wallets [PASS]
+      wallets with a positive settled edge in O: 3/3 = 100% (44%–100%)
+    3 copy (next price, to settlement, after fee) -0.18¢ (-4.90¢ to +4.58¢) 179 events, 3 wallets [fail]
+
+  L-move: 12-hour z>=2, 20+ events, trimmed > 0: 6 wallets  (too few to judge)
+    1 profitability  O profit > 0: 2/6 = 33% (10%–70%), median $-24; still trading in O: 5/6 = 83% (44%–97%)
+    2 skill, settled +2.39¢ (-5.25¢ to +6.06¢) 373 events, 5 wallets [fail]  (baseline +0.01¢: above)
+      12-hour move   +2.84¢ (-2.62¢ to +7.41¢) 386 events, 5 wallets [fail]
+      wallets with a positive settled edge in O: 3/5 = 60% (23%–88%)
+    3 copy (next price, to settlement, after fee) -0.29¢ (-10.25¢ to +6.70¢) 165 events, 5 wallets [fail]
+
+  L-both: 2 wallets  (too few to judge)
+    1 profitability  O profit > 0: 0/2 = 0% (0%–66%), median $-1,610; still trading in O: 2/2 = 100% (34%–100%)
+    2 skill, settled +5.75¢ (+3.00¢ to +8.09¢) 218 events, 2 wallets [PASS]  (baseline +0.01¢: above)
+      12-hour move   +5.92¢ (+1.13¢ to +10.16¢) 213 events, 2 wallets [PASS]
+      wallets with a positive settled edge in O: 2/2 = 100% (34%–100%)
+    3 copy (next price, to settlement, after fee) +1.80¢ (+0.25¢ to +4.58¢) 126 events, 2 wallets [PASS]
+
+  L-settle-FDR (BH q=0.10): 2 wallets  (too few to judge)
+    1 profitability  O profit > 0: 1/2 = 50% (9%–91%), median $262; still trading in O: 2/2 = 100% (34%–100%)
+    2 skill, settled +5.97¢ (+3.87¢ to +8.09¢) 237 events, 2 wallets [PASS]  (baseline +0.01¢: above)
+      12-hour move   +7.81¢ (+5.59¢ to +10.16¢) 232 events, 2 wallets [PASS]
+      wallets with a positive settled edge in O: 2/2 = 100% (34%–100%)
+    3 copy (next price, to settlement, after fee) -1.79¢ (-4.90¢ to +0.25¢) 134 events, 2 wallets [fail]
+
+  L-move-FDR (BH q=0.10): 1 wallets  (too few to judge)
+    1 profitability  O profit > 0: 0/1 = 0% (0%–79%), median $-2,967; still trading in O: 1/1 = 100% (21%–100%)
+    2 skill, settled +8.09¢ (+8.09¢ to +8.09¢) 118 events, 1 wallets [PASS]  (baseline +0.01¢: above)
+      12-hour move   +10.16¢ (+10.16¢ to +10.16¢) 113 events, 1 wallets [PASS]
+      wallets with a positive settled edge in O: 1/1 = 100% (21%–100%)
+    3 copy (next price, to settlement, after fee) +0.25¢ (+0.25¢ to +0.25¢) 81 events, 1 wallets [PASS]
+
+  -- calibration --
+  settled z over wallets with 20+ events: n=121, mean +0.23, sd 1.08, z>=2 in 3/121 = 2% (1%–7%) (nominal 2.3%)
+  12-hour z over wallets with 20+ events: n=121, mean +0.20, sd 1.12, z>=2 in 6/121 = 5% (2%–10%) (nominal 2.3%)
+  FDR kept: settled 2 of 3 passes; 12-hour 1 of 6
+
+  -- 10 more bets before confirming --
+  L-settle:   3 wallets: 10th O event within 30 d 3/3 = 100% (44%–100%), 60 d 3/3 = 100% (44%–100%), 91 d 3/3 = 100% (44%–100%)
+  L-move: 1   6 wallets: 10th O event within 30 d 4/6 = 67% (30%–90%), 60 d 4/6 = 67% (30%–90%), 91 d 4/6 = 67% (30%–90%)
+  all (base 150 wallets: 10th O event within 30 d 51/150 = 34% (27%–42%), 60 d 62/150 = 41% (34%–49%), 91 d 68/150 = 45% (38%–53%)
+  exploratory: first-10 sign agrees with the rest of O: 5/7 = 71% (36%–92%)

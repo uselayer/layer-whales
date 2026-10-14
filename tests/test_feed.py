@@ -56,7 +56,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
 
 
 def test_recommended_is_the_three_sections_and_bigger_trades_only(api: TestClient) -> None:
-    r = api.get("/api/live").json()
+    r = api.get("/api/live", headers=auth()).json()
     assert {t["wallet"] for t in r["traders"]} == {COPY, RISE, WATCH}  # Worth copying, Rising, Worth watching; never Lucky
     assert r["min_usd"] == engine.RECOMMENDED_MIN_USD == 1000
     assert {b["usd"] for b in r["bets"]} == {2500.0}  # the $150 buys stay out of Recommended
@@ -81,7 +81,7 @@ def test_following_is_your_traders_trades_every_size_and_only_yours(api: TestCli
 def test_the_feed_page_has_following_and_recommended(api: TestClient) -> None:
     page = api.get("/").text
     for words in ('"Following"', '"Recommended"', "#/recommended", "Only trades I can still get into", "Also bought by",
-                  "See the trades of traders you follow", "/api/me/feed", "from Sharps and Rising traders", "not as a signal to buy",
+                  "Sign in to see the Feed", "Browse traders", "/api/me/feed", "from Sharps and Rising traders", "not as a signal to buy",
                   "All big trades right now", "3–5 min behind"):  # fmt: skip
         assert words in page, words
     assert '"Traders we follow"' not in page
@@ -124,7 +124,7 @@ def test_the_poller_keeps_recommended_and_followed_traders_and_pages_only_read_i
     assert {kind for kind, _ in asked} == {"trades", "positions"}  # never the profile or stats
     assert f"live:{gone}" not in engine._cache
     asked.clear()
-    api.get("/api/live")
+    api.get("/api/live", headers=auth())
     api.get("/api/me/feed", headers=auth())
     assert asked == []  # the pages read what the poller keeps
     engine.live_poll_once()

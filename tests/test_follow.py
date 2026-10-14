@@ -91,6 +91,22 @@ def test_following_needs_a_valid_clerk_session(api: TestClient) -> None:
     assert r.headers["cache-control"] == "private, no-store"
 
 
+def test_the_feed_needs_signing_in_and_traders_need_no_account(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    for path in ("/api/live", "/api/trading-now", f"/api/bet/{SHARP}/0xm:0"):  # Recommended, Big trades, an alert's
+        r = api.get(path)
+        assert r.status_code == 401 and r.json()["detail"] == "Sign in to see the Feed."
+        assert api.get(path, headers=auth(token(key=OTHER_KEY))).status_code == 401  # not signed by Clerk
+        r = api.get(path, headers=auth(token(azp="https://evil.test")))  # another site's
+        assert r.json()["detail"] == "Sign in to see the Feed on this site."
+    engine._worth_data["scores"][0]["label"] = "Rising"
+    r = api.get("/api/live", headers=auth())
+    assert r.status_code == 200 and [t["wallet"] for t in r.json()["traders"]] == [SHARP]
+    assert r.headers["cache-control"] == "private, no-store"  # never kept in front of us for the signed-out
+    assert api.get("/api/worth").status_code == 200  # Traders and trader pages: no account needed
+    monkeypatch.setattr(engine, "CLERK_KEY", "")
+    assert api.get("/api/live").status_code == 200  # signing in isn't switched on (locally): nothing gated
+
+
 def test_follow_and_unfollow_a_trader(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     r = api.post("/api/me/follows", json={"wallet": SHARP.upper().replace("0X", "0x")}, headers=auth())
     assert r.json()["follows"] == [SHARP]
