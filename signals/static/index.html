@@ -1646,11 +1646,14 @@ function renderWorth() {
 }
 
 // ---- Explore: every trader the directory found somewhere public (SIGNALS_EXPLORE) ----
-// Three groups, never ranked: Limited evidence (too few bets to judge, from a quick look at their trades or a full
-// check), Checked (what a check found, tier and all) and, only when asked for, Not checked yet (nothing measured).
+// Four groups, never ranked: Passed our checks (a recommended tier from a score in the last 48 hours, with profit,
+// skill and copying as three separate answers), Limited evidence (too few bets to judge, from a quick look at their
+// trades or a full check), Checked (what a check found) and, only when asked for, Not checked yet (nothing measured).
+// The Recommended tab stays the check's own list.
 // A figure we haven't read shows as unknown, never 0; a count from a read that stopped early is "N+".
-const ex = { group: "limited", q: "", category: "", active: 0, size: 0, board: "", sort: "recent", unchecked: false, rows: [], more: false, offset: 0, counts: null, others: null };
+const ex = { group: "passed", q: "", category: "", active: 0, size: 0, board: "", sort: "recent", unchecked: false, rows: [], more: false, offset: 0, counts: null, others: null };
 const EX_GROUPS = [
+  ["passed", "Passed our checks", "Traders our directory found who pass the same checks as the Recommended list, scored in the last 48 hours. Profit, skill and copying are separate answers: passing on skill doesn't mean buying after them pays."],
   ["limited", "Limited evidence", "Too few bets in the last 30 days to judge their skill either way. Their record so far, not a recommendation."],
   ["checked", "Checked", "We've looked at their trades: the label says what we found. Only the Recommended tab recommends anyone."],
   ["unchecked", "Not checked yet", "Found on a leaderboard or trading in a market, and not looked at yet: nothing about them has been measured."],
@@ -1673,7 +1676,8 @@ const foundText = (r) => r.board ? `Found ${boardText(r.board.place, r.board.ran
 // The label of a row: what we know about them, and how we know it.
 function exBadges(r) {
   if (r.group === "unchecked") return `<span class="tier t2">Not checked yet</span>`;
-  if (r.group === "recommended") return tier(r.segment); // found by a search: their tier, as on Recommended
+  if (r.group === "passed") return `${tier(r.segment)}${r.on_recommended ? `<span class="tier t2">On Recommended</span>` : ""}`;
+  if (r.group === "recommended") return `${tier(r.segment)}<span class="tier t2">Due for a recheck</span>`; // a search: older than 48 hours
   if (r.group === "limited") return `<span class="tier t3">Limited evidence</span><span class="tier t2">${r.evidence === "quick" ? "Quick look" : "Checked"}</span>`;
   if (r.evidence === "quick") return `<span class="tier t3">${r.not_recommended === "dormant" ? "Dormant" : "Not trading lately"}</span><span class="tier t2">Quick look</span>`;
   return tier(r.segment) || `<span class="tier t3">Checked</span>`;
@@ -1684,10 +1688,20 @@ function exFacts(r) {
   const active = r.last_active ? `active ${ago(r.last_active * 1000)}` : "last trade unknown";
   // not checked yet: where we found them, and a quick look's counts if one was read (its full check is to come)
   if (r.group === "unchecked") return [r.category, foundText(r), r.buys_30d != null ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days` : "nothing measured yet"].filter(Boolean);
+  // a recommended tier: profit, skill and copying, each its own answer, and when we last scored them
+  if (r.group === "passed" || r.group === "recommended") return [r.category, active, ...passedFacts(r), r.scored_at ? `scored ${ago(r.scored_at * 1000)}` : null].filter(Boolean);
   const size = r.typical_usd != null ? `usually ${usd(r.typical_usd)} a trade` : r.market_usd != null ? `about ${usd(r.market_usd)} a market` : `bet size ${unknown}`;
   const bets = r.evidence === "quick" ? `${exCount(r.buys_30d, r.evidence_cut)} markets bought in 30 days, ${exCount(r.buys_90d, r.evidence_cut)} in 90`
     : `${r.bets_checked ?? unknown} bets checked, 30 days`;
   return [r.category, active, bets, size];
+}
+// Profit (trading, the score's 30 days), skill (the tier's evidence: the price move after their buys over the bets
+// checked) and copying (the Recommended list's own copy status), kept apart: none of them stands in for another.
+function passedFacts(r) {
+  const profit = r.trading_pnl_window != null ? `profit, 30 days ${usd(r.trading_pnl_window, true)}` : "profit unknown";
+  const skill = r.edge != null ? `skill: price ${centsSigned(r.edge)} their way after buying${r.edge_z != null ? ` (z ${r.edge_z.toFixed(1)})` : ""}, ${r.bets_checked ?? "unknown"} bets`
+    : `skill: ${r.bets_checked ?? "unknown"} bets checked`;
+  return [profit, skill, `copying: ${r.copy_label || "unknown"}`];
 }
 function exRow(r) {
   return `<a class="trow norank ex-row" href="#/worth/${esc(r.wallet)}" data-exopen="${esc(r.wallet)}">${avatar(r.wallet, 40)}

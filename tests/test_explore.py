@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from signals import app as engine
-from signals.directory import RESCORE_S, Directory, QuickLook, Seen, quick_look
+from signals.directory import PASSED_FRESH_S, Directory, QuickLook, Seen, quick_look
 
 NOW = time.time()
 DAY = 86400
@@ -60,7 +60,7 @@ def test_each_wallet_is_in_one_group_and_says_how_we_know(d: Directory) -> None:
     assert set(limited) == {SEL, PAID}
     assert (limited[SEL]["evidence"], limited[PAID]["evidence"]) == ("quick", "scored")  # a quick look vs a full check
     assert set(wallets(d.browse("checked"))) == {DORM, PRO} and wallets(d.browse("unchecked")) == [NEW]
-    assert d.explore_counts() == {"limited": 2, "checked": 2, "unchecked": 1}
+    assert d.explore_counts() == {"passed": 0, "limited": 2, "checked": 2, "unchecked": 1}
 
 
 def test_a_wallet_known_only_from_a_search_or_a_follow_is_never_listed_or_found(d: Directory) -> None:
@@ -114,15 +114,22 @@ def test_a_quick_look_keeps_the_usual_market_size_and_whether_its_counts_are_at_
     assert quick_look([(NOW, True, "0xa")], NOW, read_all=True).market_usd is None  # no dollars read: unknown
 
 
-def test_recommended_tiers_stay_on_the_recommended_tab_and_a_search_still_finds_them(d: Directory) -> None:
-    star = "0x" + "7" * 40
-    d.add([Seen(star, "leaderboard", "PNL MONTH OVERALL", name="StarSue", rank=5)], at=NOW - DAY)
-    d.keep_scores([score(star, "rising")], "background", at=NOW)
+def test_a_recommended_tier_from_the_last_48_hours_passed_our_checks_and_an_older_one_only_a_search_finds(d: Directory) -> None:
+    star, old = "0x" + "7" * 40, "0x" + "8" * 40
+    d.add([Seen(star, "leaderboard", "PNL MONTH OVERALL", name="StarSue", rank=5),
+           Seen(old, "market", "Sports", name="OldOllie", category="Sports")], at=NOW - 5 * DAY)  # fmt: skip
+    d.keep_scores([score(star, "rising")], "background", at=NOW - PASSED_FRESH_S + 3600)  # 47 hours ago
+    d.keep_scores([score(old, "quiet")], "background", at=NOW - PASSED_FRESH_S - 3600)  # 49: due, not shown as passed
+    assert wallets(d.browse("passed", now=NOW)) == [star]
     for g in ("limited", "checked", "unchecked"):
-        assert star not in wallets(d.browse(g))
-    found = d.browse("limited", q="starsue")["rows"]
-    assert [(r["wallet"], r["group"]) for r in found] == [(star, "recommended")]
-    assert d.explore_counts() == {"limited": 2, "checked": 2, "unchecked": 1}  # not counted in Explore's groups
+        assert star not in wallets(d.browse(g, now=NOW)) and old not in wallets(d.browse(g, now=NOW))
+    row = d.browse("passed", now=NOW)["rows"][0]
+    # the three answers apart: skill (tier, edge, bets), profit (30 days of trading), when it was scored
+    assert (row["segment"], row["bets_checked"], row["scored_at"]) == ("rising", 5, NOW - PASSED_FRESH_S + 3600)
+    assert "trading_pnl_window" in row and "edge" in row and "copyable" in row
+    found = {r["wallet"]: r["group"] for r in d.browse("limited", q="o", now=NOW)["rows"] if r["wallet"] in (star, old)}
+    assert found == {old: "recommended"} and d.browse("limited", q="starsue", now=NOW)["rows"][0]["group"] == "passed"
+    assert d.explore_counts(now=NOW) == {"passed": 1, "limited": 2, "checked": 2, "unchecked": 1}
 
 
 # ---- the engine ----
@@ -154,8 +161,9 @@ def test_explore_is_off_unless_switched_on(api: TestClient, monkeypatch: pytest.
 
 def test_browsing_and_searching_read_only_the_directory(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engine.reads, "whales", NoReads())
-    r = api.get("/api/traders").json()
-    assert {x["wallet"] for x in r["rows"]} == {SEL, PAID} and r["counts"] == {"limited": 2, "checked": 2, "unchecked": 1}
+    r = api.get("/api/traders", params={"group": "limited"}).json()
+    assert {x["wallet"] for x in r["rows"]} == {SEL, PAID}
+    assert r["counts"] == {"passed": 0, "limited": 2, "checked": 2, "unchecked": 1}
     assert r["more"] is False and r["unchecked_matches"] is None
     s = api.get("/api/traders", params={"q": "ned"}).json()
     assert s["rows"] == [] and s["unchecked_matches"] == 1  # "1 more match among traders we haven't checked"
@@ -174,12 +182,32 @@ def test_a_fresh_stored_score_is_shown_as_it_is_and_a_stale_one_is_checked_again
     monkeypatch.setattr(engine.reads, "whales", NoReads())
     r = api.get(f"/api/worth/{PAID}", params={"score": 0}).json()
     assert r["segment"] == "too_few" and r["stored_at"] > 0 and r["directory"]["evidence"] == "scored"
-    engine.directory().keep_scores([score(DORM, "rising")], "background", at=NOW - RESCORE_S - 60)  # a tier: 6 h
-    assert api.get(f"/api/worth/{DORM}", params={"score": 0}).json()["unchecked"] is True
+    # a recommended tier's score: fresh 48 hours for one the directory found, 12 for one people are shown
+    engine.directory().keep_scores([score(DORM, "rising")], "background", at=time.time() - 13 * 3600)
+    assert api.get(f"/api/worth/{DORM}", params={"score": 0}).json()["segment"] == "rising"
+    engine._save_follows({"users": {"u1": {"follows": [DORM], "chat": None}}})
+    engine._cache.clear()
+    assert api.get(f"/api/worth/{DORM}", params={"score": 0}).json()["unchecked"] is True  # followed: 13 h is stale
     checked: list[str] = []
     monkeypatch.setattr(engine.reads, "whales", type("W", (), {"score": lambda self, w: checked.append(w) or
                         type("S", (), {"to_dict": lambda s: score(w, "rising")})()})())  # fmt: skip
     assert api.get(f"/api/worth/{DORM}").json()["segment"] == "rising" and checked == [DORM]  # "Check now"
+
+
+def test_passed_our_checks_rows_keep_profit_skill_and_copying_apart(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(engine.reads, "whales", NoReads())
+    star = "0x" + "7" * 40
+    engine.directory().add([Seen(star, "market", "Politics", name="StarSue", category="Politics")])
+    engine.directory().keep_scores([score(star, "rising", copyable="no", trading_pnl_window=4200.0,
+                                          edge={"mean": 0.03, "margin": 0.02, "n": 30, "z": 2.4})], "background")  # fmt: skip
+    r = api.get("/api/traders").json()  # the default group: Passed our checks
+    assert r["counts"]["passed"] == 1
+    row = r["rows"][0]
+    assert (row["wallet"], row["group"], row["segment"]) == (star, "passed", "rising")  # skill: the tier...
+    assert (row["edge"], row["edge_z"], row["bets_checked"]) == (0.03, 2.4, 5)  # ...and its evidence
+    assert row["trading_pnl_window"] == 4200.0  # profitability, apart
+    assert row["copy_label"] == "Copy not proven" and row["on_recommended"] is False  # copyability, apart
+    assert row["scored_at"] > 0  # when it was last scored
 
 
 def test_check_now_scores_a_wallet_once_however_many_ask(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -241,3 +269,11 @@ def test_the_page_says_unknown_for_what_we_never_read(run_js: Any) -> None:
     assert got == ["unknown", "12+", "0"]
     assert run_js(("boardText",), 'boardText("PNL MONTH POLITICS", 312)') == "#312 on the monthly profit board, Politics"
     assert run_js(("boardText",), 'boardText("VOL ALL OVERALL", 1500)') == "#1,500 on the all-time volume board"
+
+
+def test_a_passed_row_says_profit_skill_and_copying_as_three_answers(run_js: Any) -> None:
+    got = run_js(("pl", "usd", "centsSigned", "passedFacts"),
+                 'passedFacts({trading_pnl_window: 4200, edge: 0.03, edge_z: 2.44, bets_checked: 31, copy_label: "Copy not proven"})')
+    assert got == ["profit, 30 days +$4.2K", "skill: price +3¢ their way after buying (z 2.4), 31 bets", "copying: Copy not proven"]
+    unknown = run_js(("pl", "usd", "centsSigned", "passedFacts"), "passedFacts({})")
+    assert unknown == ["profit unknown", "skill: unknown bets checked", "copying: unknown"]  # never a made-up 0
