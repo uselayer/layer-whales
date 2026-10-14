@@ -132,7 +132,7 @@ def test_trader_pages_ask_for_closed_positions_and_the_feed_does_not(
     monkeypatch.setattr(engine, "_categories", lambda markets: {})
     feed: list[Any] = []
     monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: feed.append(("trades", k)) or [TRADE])
-    monkeypatch.setattr(engine, "_open_positions", lambda w: feed.append(("positions", {})) or [])
+    monkeypatch.setattr(engine, "_open_positions", lambda w, markets=None: feed.append(("positions", {})) or [])
     n = len(asked)
     api.get("/api/live")
     assert len(asked) == n  # the feed reads every 30 s: never the profile, stats or closed positions

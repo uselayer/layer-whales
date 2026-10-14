@@ -43,7 +43,7 @@ def live_reads(monkeypatch: pytest.MonkeyPatch, detail: Any) -> None:
 
     monkeypatch.setattr(engine.reads.whales, "trader", detail)
     monkeypatch.setattr(engine.reads.whales, "trades", trades)
-    monkeypatch.setattr(engine, "_open_positions", lambda w: detail("polymarket", w).positions)
+    monkeypatch.setattr(engine, "_open_positions", lambda w, markets=None: detail("polymarket", w).positions)
 
 
 @pytest.fixture(autouse=True)

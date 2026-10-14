@@ -92,6 +92,33 @@ def test_search_covers_every_public_wallet_by_name_or_wallet_and_takes_wildcards
     assert wallets(d.browse("limited", q="ned", search_in=("limited", "checked", "unchecked"))) == [NEW]
 
 
+def test_traders_scored_before_explore_get_their_usual_trade_from_the_kept_score(tmp_path: Any) -> None:
+    """A directory from before Explore kept scores but not the usual trade on the wallet (all of the hosted one's
+    ~1,500): opened again, it's filled from each wallet's latest kept score, with no read and no new score, so the
+    $100+/$1K+/$10K+ filters find them. A score without one, and a quick look with no dollars, stay unknown."""
+    path = tmp_path / "directory.db"
+    old = Directory(path)
+    sizes = {"0x" + c * 40: usd for c, usd in zip("abcdef", (50.0, 100.0, 999.0, 1000.0, 9999.0, 25000.0))}
+    old.add([Seen(w, "leaderboard", "PNL MONTH OVERALL", rank=9) for w in [*sizes, "0x" + "7" * 40, "0x" + "8" * 40]],
+            at=NOW - DAY)  # fmt: skip
+    old.keep_scores([score(w, "no_edge", typical_usd=usd) for w, usd in sizes.items()]
+                    + [score("0x" + "7" * 40, "no_edge", typical_usd=None)], "background", at=NOW)  # fmt: skip
+    old.quick_checked("0x" + "8" * 40, QuickLook(False, "dormant", 0, 0, None, NOW - 100 * DAY, None, False), at=NOW)
+    with old._db() as con:  # as kept before Explore: the score, but no usual trade on the wallet
+        con.execute("UPDATE wallets SET typical_usd = NULL")
+    scored_at = {w: old.score(w)["scored_at"] for w in sizes}
+
+    d = Directory(path)  # the next launch
+    rows = {r["wallet"]: r for r in d.browse("checked")["rows"]}
+    assert {w: rows[w]["typical_usd"] for w in sizes} == sizes  # exactly the kept score's figure
+    assert rows["0x" + "7" * 40]["typical_usd"] is None and rows["0x" + "8" * 40]["typical_usd"] is None  # unknown
+    for floor, expect in ((100, {"b", "c", "d", "e", "f"}), (1000, {"d", "e", "f"}), (10_000, {"f"})):
+        assert set(wallets(d.browse("checked", min_usd=floor))) == {"0x" + c * 40 for c in expect}, floor
+    assert {w: d.score(w)["scored_at"] for w in sizes} == scored_at  # no score was redone or replaced
+    assert wallets(d.browse("checked", sort="size"))[:2] == ["0x" + "f" * 40, "0x" + "e" * 40]  # unknown last
+    assert set(wallets(d.browse("checked", sort="size"))[-2:]) == {"0x" + "7" * 40, "0x" + "8" * 40}
+
+
 def test_filters_are_facts_and_sorts_put_the_unknown_last(d: Directory) -> None:
     assert set(wallets(d.browse("limited", category="Politics"))) == {SEL, PAID}
     assert wallets(d.browse("checked", category="Sports")) == [DORM]

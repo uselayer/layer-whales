@@ -1552,6 +1552,7 @@ LIVE_PAGE_READS = 3  # a Feed view reads at most this many traders the poller ha
 LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
 LIVE_REC_FLOOR = 4  # Recommended reads a round even when everyone followed fills the slot, so it never stops
 LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; further back when there's a gap
+POSITIONS_PER_READ = 20  # conditionIds per read of the positions a trader's 50 biggest left out
 _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
 _live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
@@ -1601,14 +1602,19 @@ def checker() -> Whales:
         return _checker["whales"]
 
 
-def _open_positions(wallet: str) -> list[Any]:
-    """A trader's open positions (the SDK's TraderDetail.positions without its profile and stats reads).
-    Stopgap, approved for V1: the SDK has no public positions-only read yet, so this calls its internals (as
-    ``listed_now`` reads its leaderboards). Swap for ``whales.positions`` once uselayer has it:
-    https://github.com/uselayer/uselayer-sdk/issues/23"""
-    w = reads.whales
-    return [w._poly_position(p) for p in w._poly.positions(wallet, 50)
-            if not p.get("redeemable") and 0 < float(p.get("curPrice") or 0) < 1]  # fmt: skip
+def _open_positions(wallet: str, markets: list[str] | None = None) -> list[Any]:
+    """A trader's open positions: the SDK's TraderDetail.positions, without its profile and stats. Their 50
+    biggest, plus, in one more read per POSITIONS_PER_READ markets, any of ``markets`` (outcomes they traded
+    lately) the 50 biggest left out, matched by outcome (holding one side of a market doesn't price the other): a
+    trader with more open positions than that still gets the price now for every trade they just made (an alert,
+    a Feed card), and a sell isn't called "no longer hold it" when they do. (Polymarket's positions take several
+    conditionIds at once, comma-separated, and ``whales.positions`` passes ``market`` on as it is.)"""
+    out = {p.market: p for p in reads.whales.positions("polymarket", wallet, limit=50)}
+    missing = list(dict.fromkeys(m.partition(":")[0] for m in markets or () if m not in out))
+    for i in range(0, len(missing), POSITIONS_PER_READ):
+        for p in reads.whales.positions("polymarket", wallet, limit=500, market=",".join(missing[i : i + POSITIONS_PER_READ])):
+            out.setdefault(p.market, p)
+    return list(out.values())
 
 
 def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
@@ -1631,7 +1637,8 @@ def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
         if same and at is not None and time.monotonic() - at < LIVE_PRICE_S:
             positions = old.positions
         else:
-            positions, _live_priced[wallet] = _open_positions(wallet), time.monotonic()
+            traded = [t.market for t in trades if priced or t.at.timestamp() >= since]
+            positions, _live_priced[wallet] = _open_positions(wallet, traded), time.monotonic()
     else:
         _live_priced.pop(wallet, None)
     name = next((t.name for t in trades if t.name), None)
@@ -2167,12 +2174,18 @@ def unfollow(wallet: str, response: Response, uid: str = Depends(signed_in)) -> 
 @app.get("/api/me/feed")
 def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
     """The Feed's Following: your followed traders' buys over the last FEED_HOURS, every size. Whoever they are:
-    a trader the last check didn't score has no tier, and copying isn't offered for them (copy_ok False)."""
+    a trader followed from Explore shows the verdict their page shows (the directory's fresh stored score, as
+    ``worth_wallet`` reuses it; no read), and one nobody has scored lately has no tier and copying isn't offered for
+    them (copy_ok False)."""
     _private(response)
     follows = list((_load_follows()["users"].get(uid) or {}).get("follows") or [])
     scores = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
-    people = [{"wallet": w, "name": (s := scores.get(w) or {}).get("name"), "segment": s.get("segment"),
-               "label": s.get("label")} | copy_fields(s or None) for w in follows]  # fmt: skip
+    people = []
+    for w in follows:
+        s = scores.get(w) or _stored_score(w) or {}
+        label = s.get("label") or (SEGMENTS[s["segment"]][0] if s.get("segment") in SEGMENTS else None)
+        people.append({"wallet": w, "name": s.get("name"), "segment": s.get("segment"), "label": label}
+                      | copy_fields(s or None))  # fmt: skip
     return {"traders": people, "hours": FEED_HOURS} | _feed(people)
 
 

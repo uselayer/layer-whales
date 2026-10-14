@@ -677,7 +677,7 @@ def test_with_hundreds_followed_every_buy_still_alerts_once_within_a_round_and_a
         clock.t += 0.25
 
     monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: read("trades", w) or list(trades[w]))
-    monkeypatch.setattr(engine, "_open_positions", lambda w: read("positions", w) or [
+    monkeypatch.setattr(engine, "_open_positions", lambda w, markets=None: read("positions", w) or [
         WhalePosition(t.market, None, "Yes", 100, 0.49, 0.50, None, None) for t in trades[w]])  # fmt: skip
     buys = {followed[0]: 2, followed[150]: 3, followed[-1]: 3, followed[77]: 5}  # who buys, in which round
     placed: dict[str, float] = {}
@@ -707,7 +707,7 @@ def test_more_trades_between_reads_than_one_read_holds_reads_further_back_so_non
     trades = [trade(SAM, old, i="old")]
     asked: list[int] = []
     monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, limit=50, **k: asked.append(limit) or trades[:limit])
-    monkeypatch.setattr(engine, "_open_positions", lambda w: [WhalePosition(f"0xm{i}:0", None, "Yes", 1, 0.49, 0.50, None, None)
+    monkeypatch.setattr(engine, "_open_positions", lambda w, markets=None: [WhalePosition(f"0xm{i}:0", None, "Yes", 1, 0.49, 0.50, None, None)
                                                               for i in range(150)])  # fmt: skip
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])
     engine.live_poll_once()
@@ -736,3 +736,54 @@ def test_a_rate_limit_ends_the_pollers_round(api: TestClient, monkeypatch: pytes
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])
     assert engine.live_poll_once() == 1 and len(asked) == 2  # the third waits for the next round
     assert engine.live_poll_once() == 3 and asked[2:] == [ANN, BOB, SAM]  # the ones not read yet first
+
+
+def test_a_trader_with_more_open_positions_than_one_read_holds_still_gets_every_buy_and_sell_alerted(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """60 open positions, the 50 biggest read first: a $1 buy in a market outside them still alerts with its price
+    now, and a sell there says they still hold some (never "no longer hold it"), from one more read of just the
+    markets they traded; a trader whose trades are all in their 50 biggest costs no extra read."""
+    user(follows=(SAM,))
+
+    def pos(cid: str, size: float, side: int = 0) -> dict[str, Any]:
+        return {"conditionId": cid, "outcomeIndex": side, "size": size, "curPrice": 0.4, "avgPrice": 0.39,
+                "currentValue": size * 0.4, "redeemable": False, "outcome": "Yes", "title": cid}  # fmt: skip
+
+    book = [pos(f"0xbig{i}", 1000 - i) for i in range(50)] + [pos("0xsmall", 3), pos("0xsold", 2), pos("0xbig2", 1, 1)]
+    asked: list[Any] = []
+
+    def positions(wallet: str, limit: int = 50, market: str | None = None) -> list[dict[str, Any]]:
+        if wallet == SAM:  # the others here are Recommended: read too, not what this is about
+            asked.append((limit, market))
+        rows = book if market is None else [p for p in book if p["conditionId"] in market.split(",")]
+        return rows[:limit]
+
+    monkeypatch.setattr(engine.reads.whales._poly, "positions", positions)
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])
+    trades: list[WhaleTrade] = [trade(SAM, datetime.now(UTC) - timedelta(days=3), market="0xbig0:0", i="old")]
+    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: list(trades))
+    engine.live_poll_once()
+    engine.alert_pass()  # noted
+    now = datetime.now(UTC)
+    trades[:0] = [trade(SAM, now, 0.40, 1, "0xsmall:0", "s1"), sold(SAM, now, 0.41, 20, "0xsold:0", "x1"),
+                  trade(SAM, now, 0.40, 50, "0xbig3:0", "b3"), trade(SAM, now, 0.40, 2, "0xbig2:1", "o1")]  # fmt: skip
+    asked.clear()
+    engine._cache.clear()
+    engine.live_poll_once()
+    # one more read, of just what the 50 biggest left out: two markets, and the other side of one they hold
+    assert asked == [(50, None), (500, "0xsmall,0xsold,0xbig2")]
+    assert engine.alert_pass() == 4
+    text = "\n".join(m["text"] for m in engine.tg.sent)
+    assert "($1)" in text and "Now 40¢" in text  # the $1 buy, with its price now
+    assert "They still hold some." in text and "no longer hold" not in text
+    trades.insert(0, trade(SAM, datetime.now(UTC), 0.40, 70, "0xbig7:0", "b7"))
+    asked.clear()
+    engine._cache.clear()
+    engine.live_poll_once()
+    assert asked == [(50, None), (500, "0xsmall,0xsold,0xbig2")]  # still traded lately: still read with them
+    trades[:] = [trade(SAM, datetime.now(UTC), 0.40, 70, "0xbig8:0", "b8")]
+    asked.clear()
+    engine._cache.clear()
+    engine.live_poll_once()
+    assert asked == [(50, None)]  # all in their 50 biggest: no extra read
