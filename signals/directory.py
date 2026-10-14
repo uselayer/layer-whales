@@ -2,9 +2,10 @@
 said about each.
 
 Phase 1 is finding; phase 2 keeps every score worked out; phase 3 evaluates every wallet in the background
-(``due``: what to look at next). Nothing here is ranked or shown on the page, and the Worth following check still
-picks its own 200 wallets: a wallet in the directory is *discovered*, and a score kept here is the record of a
-check, never a recommendation.
+(``due``: what to look at next). A wallet in the directory is *discovered*, and a score kept here is the record of
+a check, never a recommendation by itself. Phase 5 (``latest_scores``, ``scores_of``) lets the engine serve
+Traders from the latest scores kept here instead of the Worth following check's own 200 (SIGNALS_DISCOVERY, in
+app.py), by the same tiers: the directory picks no one itself.
 
 Where a wallet can be found (``source``):
 
@@ -548,6 +549,70 @@ class Directory:
         with self._db() as con:
             r = con.execute("SELECT result, scored_at, via FROM scores WHERE wallet = ?", (wallet.lower(),)).fetchone()
         return None if r is None else json.loads(zlib.decompress(r[0])) | {"scored_at": r[1], "via": r[2]}
+
+    def latest_scores(self, since: float) -> list[dict[str, Any]]:
+        """Every wallet whose latest score was worked out since ``since``, without reading any score whole: its
+        ``segment``, ``edge_z``, ``format`` and ``scored_at``, the category most of its checked bets were in
+        (``main``: the SDK's first, most bets then name) and the categories it's ``strong`` in. What discovery
+        picks from (phase 5, ``app.discovery_result``)."""
+        with self._db() as con:
+            rows = con.execute(
+                "SELECT wallet, segment, edge_z, format, scored_at FROM scores WHERE scored_at >= ?", (since,)
+            ).fetchall()
+            cats: dict[str, list[tuple[str, int]]] = {}
+            for w, c, strong in con.execute(
+                "SELECT c.wallet, c.category, c.strong FROM score_categories c JOIN scores s ON s.wallet = c.wallet "
+                "WHERE s.scored_at >= ? ORDER BY c.wallet, c.bets DESC, c.category", (since,)
+            ):  # fmt: skip
+                cats.setdefault(w, []).append((c, strong))
+        return [{"wallet": w, "segment": seg, "edge_z": z, "format": f, "scored_at": at,
+                 "main": cats[w][0][0] if cats.get(w) else None, "strong": [c for c, s in cats.get(w, []) if s]}
+                for w, seg, z, f, at in rows]  # fmt: skip
+
+    def scores_of(self, wallets: Iterable[str]) -> dict[str, dict[str, Any]]:
+        """The latest score of each of these wallets, as ``score`` gives it, by wallet. A score without the trader's
+        Polymarket username takes the one the directory has seen them under."""
+        ws = sorted({w.lower() for w in wallets})
+        out: dict[str, dict[str, Any]] = {}
+        with self._db() as con:
+            for i in range(0, len(ws), 500):  # SQLite's limit on ? in one statement
+                part = ws[i : i + 500]
+                for w, result, at, via, name in con.execute(
+                    "SELECT s.wallet, s.result, s.scored_at, s.via, w.name FROM scores s JOIN wallets w "
+                    f"ON w.wallet = s.wallet WHERE s.wallet IN ({', '.join('?' * len(part))})", part
+                ):  # fmt: skip
+                    s = json.loads(zlib.decompress(result)) | {"scored_at": at, "via": via}
+                    if name and not _username(s):
+                        s["name"] = name
+                    out[w] = s
+        return out
+
+    def failed_since(self, since: float) -> int:
+        """How many wallets' last try since ``since`` failed."""
+        with self._db() as con:
+            return con.execute(  # type: ignore[no-any-return]
+                "SELECT COUNT(*) FROM wallets WHERE status = 'failed' AND tried_at >= ?", (since,)
+            ).fetchone()[0]
+
+    def scored_apart(self, wallets: Iterable[str], at: float, within: float) -> dict[str, dict[str, Any]]:
+        """For each wallet, the headline figures of its score worked out apart from the Worth following check (on
+        a trader page, or by the background evaluation) closest in time to ``at``, within ``within`` seconds either
+        way, with ``via``: what validation compares the check's own score with. A wallet without one is left out."""
+        ws = sorted({w.lower() for w in wallets})
+        out: dict[str, dict[str, Any]] = {}
+        with self._db() as con:
+            con.row_factory = sqlite3.Row
+            for i in range(0, len(ws), 500):
+                part = ws[i : i + 500]
+                for r in con.execute(
+                    f"SELECT * FROM score_history WHERE wallet IN ({', '.join('?' * len(part))}) "
+                    "AND via IN ('page', 'background') AND scored_at BETWEEN ? AND ?",
+                    (*part, at - within, at + within),
+                ):  # fmt: skip
+                    best = out.get(r["wallet"])
+                    if best is None or abs(r["scored_at"] - at) < abs(best["scored_at"] - at):
+                        out[r["wallet"]] = dict(r)
+        return out
 
     def history(self, wallet: str) -> list[dict[str, Any]]:
         """The headline figures of every score kept for a wallet, oldest first."""

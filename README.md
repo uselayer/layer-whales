@@ -168,9 +168,20 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   (compressed, 30 checked bets, about 6 KB a wallet), every score's headline figures stay in its history, and the
   latest score's price test in each category in its own table. A score never replaces a newer one, so a wallet a
   later check leaves out keeps its last score. On each launch the last check's scores in `worth-following.json`
-  are imported, as of when that check finished: the first time adds them, after that it changes nothing. Nothing
-  is shown from the directory yet: the Worth following check still picks its own 200 wallets and the page reads
-  its file. `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps; scored,
+  are imported, as of when that check finished: the first time adds them, after that it changes nothing.
+  **Discovery from the directory** (phase 5) is off until the owner sets `SIGNALS_DISCOVERY=directory`: then
+  Traders, the Feed's Recommended, alerts and trader pages show each wallet's latest score from the last 12 hours,
+  whoever worked it out (the check, the background evaluation, a trader page), in the check's order (tier, then
+  the strength of their edge), at most `SIGNALS_DISCOVERY_LIMIT` (default the check's 200), in the same response
+  as before. A score is the same score wherever it's read, so a trader gets the same tier, section and copy
+  status either way. The picked markets (onboarding's) go with the request, and their traders are picked first,
+  from the whole directory. The check keeps running beside it, so `SIGNALS_DISCOVERY=check` (the default) goes
+  back to it at once, and it's shown anyway while the directory has no fresh score or can't be read. Switch after
+  the Feed's poller update (#78), which keeps the Feed fast however many traders are recommended.
+  `/api/discovery` (the owner's, as `/api/metrics`) compares the two: each one's traders and recommended traders
+  by section, who only one recommends and why, and every wallet the check scored that was also scored apart from
+  it within 6 hours, with how often the tier, section and copy verdict agree, and the differences.
+  `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps; scored,
   failed and never scored, by segment and category, active in the last week) to the owner only, as
   `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off; scores are kept either way.
 - **Counting** (is any of this useful?): per alert and per follow, in `/data/alerts.db`, with nothing personal

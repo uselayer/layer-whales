@@ -17,8 +17,11 @@ behind Vercel (see README, "Hosting").
   engine or written to disk.
 - Trader directory (README, "Trader directory"): wallets found, and where, in the store's `directory.db`, with
   each one's evaluation (status, last scored, last active) and every score worked out. Found is not checked and
-  not recommended, and a kept score is a record, not a pick: nothing from the directory is shown until a later
-  phase, never say a found wallet is any good, and scoring and its thresholds stay as they are. Keeping a score
+  not recommended, and a kept score is a record, not a pick: never say a found wallet is any good, and scoring and
+  its thresholds stay as they are. Traders shows the directory only with `SIGNALS_DISCOVERY=directory` (phase 5,
+  the owner's flag; `check`, the default, is the Worth following check's own 200): its latest fresh scores in the
+  check's shape and order, through `_worth_load`, so the Feed, alerts and trader pages follow. The check keeps
+  running beside it, so going back is one switch; `/api/discovery` compares the two (the owner's). Keeping a score
   costs no reads: it's written where a score is already made (`_worth_run`, `_score_of`, the launch import), and
   a score never replaces a newer one. It keeps wallets only (a follow keeps the wallet, never who follows). Its
   sweep reads through the SDK (`find_wallets`) at `DIRECTORY_RATE`, below the per-host limit with room for the
