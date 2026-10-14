@@ -128,7 +128,7 @@ def test_the_poller_keeps_recommended_and_followed_traders_and_pages_only_read_i
     api.get("/api/me/feed", headers=auth())
     assert asked == []  # the pages read what the poller keeps
     engine.live_poll_once()
-    assert asked == []  # read in the last 30 s: not again
+    assert asked == [("trades", STRANGER)]  # followed: every round (positions kept: same trades); Recommended: not yet
 
 
 def _counting(monkeypatch: pytest.MonkeyPatch, trades: Any = None, clock: Any = None, read_s: float = 0.0) -> list[Any]:
@@ -184,7 +184,7 @@ def test_each_round_reads_the_followed_first_then_who_just_traded_then_the_oldes
     asked.clear()
     engine._cache[f"live:{RISE}"] = (now - engine.LIVE_REC_S - 1, engine._cache[f"live:{RISE}"][1])
     engine.live_poll_once()
-    assert [w for kind, w in asked if kind == "trades"] == [RISE]  # a hint counts once; then it's their turn by age
+    assert [w for kind, w in asked if kind == "trades"] == [STRANGER, RISE]  # followed each round; a hint counts once
 
 
 def test_a_feed_view_reads_only_a_few_traders_itself_and_says_the_rest_are_still_being_read(
@@ -255,6 +255,25 @@ def test_the_feed_holds_up_as_the_recommended_pool_grows(
     assert len(asked) == reads_now and r["pending"] == 0 and r["failed"] == 0  # a view reads nothing
     oldest = (time.time() * 1000 - r["as_of"]) / 1000
     assert oldest <= (engine.LIVE_REC_S + engine.LIVE_POLL_S if pool <= 50 else engine.LIVE_SHOW_S)
+
+
+def test_the_feed_says_what_it_hasnt_read_and_how_old_it_is_never_no_trades(run_js: Any) -> None:
+    got = run_js(("plural", "STALE_NOTE_MS", "feedGaps"), """(() => {
+      const t = (n) => Array.from({ length: n }, (_, i) => ({ wallet: "0x" + i }));
+      const now = 10 ** 7;
+      return [
+        feedGaps({ traders: t(3), bets: [], pending: 0, failed: 0 }, now - 30000, now),
+        feedGaps({ traders: t(3), bets: [], pending: 3, failed: 0 }, now, now),
+        feedGaps({ traders: t(3), bets: [], pending: 0, failed: 3 }, now, now),
+        feedGaps({ traders: t(3), bets: [], pending: 1, failed: 1 }, now - 12 * 60000, now),
+      ];
+    })()""")
+    assert got[0] == {"notes": [], "empty": None}  # everyone read, nothing traded: "None of … traded" stands
+    assert got[1]["empty"][0] == "Still reading their trades" and got[1]["notes"] == ["Still reading 3 traders; their trades show in a minute."]
+    assert got[2]["empty"][0] == "Their trades couldn't be read just now"
+    assert got[3]["empty"][0] == "No trades from the traders read so far"
+    assert got[3]["notes"] == ["1 trader couldn't be read just now; retrying.", "Still reading 1 trader; their trades show in a minute.",
+                               "Some of these traders were last read 12 minutes ago."]  # fmt: skip
 
 
 def test_the_feed_page_rules(run_js: Any) -> None:

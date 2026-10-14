@@ -1120,9 +1120,12 @@ LIVE_ALERT_S = 60  # alerts want it fresher
 LIVE_SHOW_S = 1800  # the Feed shows what the poller kept up to this old (saying how old); older, "couldn't be read"
 LIVE_PAGE_READS = 3  # a Feed view reads at most this many traders the poller hasn't read yet; the rest are pending
 LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
+LIVE_REC_FLOOR = 4  # Recommended reads a round even when everyone followed fills the slot, so it never stops
+LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; further back when there's a gap
 _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
 _live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
+_live_round: dict[str, float] = {"ended": float("-inf")}  # when (monotonic) the poller's last round ended
 
 
 def _open_positions(wallet: str) -> list[Any]:
@@ -1136,13 +1139,19 @@ def _open_positions(wallet: str) -> list[Any]:
 def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
     """A trader's last 100 trades, and their open positions only when there's a trade to price: one from the last
     FEED_HOURS (the Feed's and alerts' window), or ``priced``. Positions are reused while their trades haven't
-    changed and they're under LIVE_PRICE_S old. 1–2 reads, never the profile or stats (the name is on the trades)."""
-    trades = reads.whales.trades("polymarket", wallet, limit=100)
+    changed and they're under LIVE_PRICE_S old. 1–2 reads, never the profile or stats (the name is on the trades);
+    a third, further back, when none of the last 100 were kept before (so a gap between reads never drops a trade)."""
+    hit = _cache.get(f"live:{wallet}")
+    old = hit[1] if hit else None
+    trades = reads.whales.trades("polymarket", wallet, limit=LIVE_TRADES)
+    if old is not None and old.trades and len(trades) >= LIVE_TRADES and not (
+        {t.trade_id for t in trades} & {t.trade_id for t in old.trades}
+    ):  # more trades since the last read than one read holds: read further back, so none is missed
+        trades = reads.whales.trades("polymarket", wallet, limit=LIVE_GAP_TRADES)
     since = time.time() - FEED_HOURS * 3600
     positions: list[Any] = []
     if priced or any(t.at.timestamp() >= since for t in trades):
-        hit, at = _cache.get(f"live:{wallet}"), _live_priced.get(wallet)
-        old = hit[1] if hit else None
+        at = _live_priced.get(wallet)
         same = old is not None and [t.trade_id for t in old.trades] == [t.trade_id for t in trades]
         if same and at is not None and time.monotonic() - at < LIVE_PRICE_S:
             positions = old.positions
@@ -1201,9 +1210,9 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
     """One round of the poller, one read at a time (never in a burst: the SDK's Polymarket budget is shared with
     pages and the background): everyone followed (each round), then Recommended traders the shared big-trades feed
     says just traded, then the other Recommended traders (each LIVE_REC_S), oldest (or never read) first, while
-    the round's LIVE_POLL_S lasts; whoever doesn't fit goes first next round. Half a round's slack on each, so a
-    read a little later in one round than the last is still due in the next. Then traders nobody wants any more
-    are dropped. Returns how many were read."""
+    the round's LIVE_POLL_S lasts (LIVE_REC_FLOOR at least); whoever doesn't fit goes first next round, and a rate
+    limit ends the round. Half a round's slack on each, so a read a little later in one round than the last is
+    still due in the next. Then traders nobody wants any more are dropped. Returns how many were read."""
     followed, rec = _live_wanted()
     rec -= followed
     started = time.monotonic()
@@ -1214,20 +1223,28 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
         return float("inf") if hit is None else started - hit[0]
 
     hinted = _live_hints(rec) if rec else set()
-    due = sorted((w for w in followed if age(w) >= every_round), key=age, reverse=True)
+    def due_now(w: str) -> bool:  # once a round, however long the last one took; a page's read since then counts
+        hit = _live_kept(w)
+        return hit is None or hit[0] <= _live_round["ended"] or age(w) >= every_round
+
+    due = sorted((w for w in followed if due_now(w)), key=age, reverse=True)
     late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w)))
     done = 0
     for i, w in enumerate(due + late):
         if stop is not None and stop.is_set():
             break
-        if i >= len(due) and time.monotonic() - started >= LIVE_POLL_S:
+        if i >= len(due) + LIVE_REC_FLOOR and time.monotonic() - started >= LIVE_POLL_S:
             break  # the rest of Recommended goes first next round
         try:
-            _live_read(w, 0 if w in hinted else every_round if i < len(due) else rec_after)
+            _live_read(w, 0 if w in hinted or i < len(due) else rec_after)
             _live_failed.pop(w, None)
             done += 1
-        except VenueError:
+        except VenueError as e:
             _live_failed[w] = time.monotonic()
+            if e.code == "rate_limited":  # the SDK's retries are spent: more reads now would only add to it
+                _worth["live_error"] = "Polymarket rate limited the Feed's reads; the rest wait for the next round"
+                break
+    _live_round["ended"] = time.monotonic()
     wanted, mono = followed | rec, time.monotonic()
     for key in [k for k in list(_cache) if k.startswith("live:")]:
         hit = _cache.get(key)
@@ -2223,8 +2240,8 @@ def alert_pass(now: float | None = None) -> int:
     new_buys: list[NewBuy] = []
     new_sells: list[NewSell] = []
     for w in to:
-        try:
-            d = _live_read(w, LIVE_ALERT_S)
+        try:  # what the poller keeps (it reads everyone followed first, each round); read here only if it hasn't yet
+            d = hit[1] if (hit := _live_kept(w)) else _live_read(w, LIVE_ALERT_S)
         except VenueError:
             continue
         first, seen = w not in _seen, _seen.setdefault(w, set())

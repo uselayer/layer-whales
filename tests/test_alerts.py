@@ -626,3 +626,98 @@ def test_no_alert_for_a_sell_at_a_settled_price(
     trades.append(sold(SAM, datetime.now(UTC), paid))
     engine._cache.clear()
     assert engine.alert_pass() == 0
+
+
+# ---- alerts from the Feed's poller: followed traders first, however many, and no trade missed by scheduling ----
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.t = 1_000_000.0
+
+    def __call__(self) -> float:
+        return self.t
+
+
+def test_with_hundreds_followed_every_buy_still_alerts_once_within_a_round_and_alerts_add_no_reads(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """300 followed traders (more than one 30 s round holds at 0.25 s a read) and 100 Recommended ones: everyone
+    followed is read every round before any Recommended trader, Recommended still gets its floor, each new buy is
+    alerted exactly once by the alert pass after the round that read it, and the alert pass reads nothing itself."""
+    clock = _Clock()
+    monkeypatch.setattr(engine.time, "monotonic", clock)
+    followed = [f"0x{i:040x}" for i in range(300)]
+    rec = [f"0x{i:040x}" for i in range(10**6, 10**6 + 100)]
+    monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": [
+        {"wallet": w, "name": "R", "segment": "proven", "label": "p", "copyable": "no", "copy": None} for w in rec]})  # fmt: skip
+    user(follows=tuple(followed))
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])
+    old = datetime.now(UTC) - timedelta(days=3)
+    trades = {w: [trade(w, old, i="old")] for w in followed + rec}
+    reads: list[tuple[str, str]] = []
+
+    def read(kind: str, w: str) -> None:
+        reads.append((kind, w))
+        clock.t += 0.25
+
+    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: read("trades", w) or list(trades[w]))
+    monkeypatch.setattr(engine, "_open_positions", lambda w: read("positions", w) or [
+        WhalePosition(t.market, None, "Yes", 100, 0.49, 0.50, None, None) for t in trades[w]])  # fmt: skip
+    buys = {followed[0]: 2, followed[150]: 3, followed[-1]: 3, followed[77]: 5}  # who buys, in which round
+    placed: dict[str, float] = {}
+    for rnd in range(8):
+        for w, at_round in buys.items():
+            if rnd == at_round:
+                trades[w].insert(0, trade(w, datetime.now(UTC), market=f"0xm{w[-4:]}:0", i=f"new{rnd}"))  # own market: no group
+                placed[w] = clock.t
+        start, n = clock.t, len(reads)
+        engine.live_poll_once()
+        got = [w for kind, w in reads[n:] if kind == "trades"]
+        first_rec = next((i for i, w in enumerate(got) if w in rec), len(got))
+        assert set(got[:first_rec]) == set(followed) and len(got) - first_rec >= engine.LIVE_REC_FLOOR
+        n, before = len(reads), set(engine._alerted)
+        engine.alert_pass()
+        assert len(reads) == n  # the alert pass reads what the poller kept
+        assert {w for w, _ in set(engine._alerted) - before} == {w for w, r in buys.items() if r == rnd}  # this round's
+        clock.t = max(clock.t, start + engine.LIVE_POLL_S)
+    assert len(engine.tg.sent) == len(buys)  # every buy once, none missed, none twice
+
+
+def test_more_trades_between_reads_than_one_read_holds_reads_further_back_so_none_is_missed(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user(follows=(SAM,))
+    old = datetime.now(UTC) - timedelta(days=3)
+    trades = [trade(SAM, old, i="old")]
+    asked: list[int] = []
+    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, limit=50, **k: asked.append(limit) or trades[:limit])
+    monkeypatch.setattr(engine, "_open_positions", lambda w: [WhalePosition(f"0xm{i}:0", None, "Yes", 1, 0.49, 0.50, None, None)
+                                                              for i in range(150)])  # fmt: skip
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])
+    engine.live_poll_once()
+    engine.alert_pass()  # noted
+    trades[:0] = [trade(SAM, datetime.now(UTC), market=f"0xm{i}:0", i=str(i)) for i in range(150)]  # a burst of 150 fills
+    hit = engine._cache[f"live:{SAM}"]
+    engine._cache[f"live:{SAM}"] = (hit[0] - 60, hit[1])
+    asked.clear()
+    engine.live_poll_once()
+    assert asked == [engine.LIVE_TRADES, engine.LIVE_GAP_TRADES]  # none of the last 100 was kept: read further back
+    engine.alert_pass()
+    assert len({m for (w, m) in engine._alerted if w == SAM}) == 150  # every market of the burst, not only 100
+
+
+def test_a_rate_limit_ends_the_pollers_round(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM, ANN, BOB))
+    asked: list[str] = []
+
+    def trades(venue: str, w: str, **k: Any) -> list[WhaleTrade]:
+        asked.append(w)
+        if len(asked) == 2:
+            raise engine.VenueError("rate_limited", "polymarket said too many requests.", venue="polymarket", status=429)
+        return []
+
+    monkeypatch.setattr(engine.reads.whales, "trades", trades)
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])
+    assert engine.live_poll_once() == 1 and len(asked) == 2  # the third waits for the next round
+    assert engine.live_poll_once() == 3 and asked[2:] == [SAM, ANN, BOB]  # next round: everyone followed again
