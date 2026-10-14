@@ -6,12 +6,17 @@ directory.db itself (``Directory.monitoring``). What it doesn't keep is counted 
 directory.db's ``daily`` table about once a minute (``Directory.tally``), by UTC day:
 
 - ``api``: every request the SDK's client sends (one httpx client for every venue read: the Feed, pages, the
-  background, "Check now"), by host and how it ended (``2xx``, ``4xx``, ``429``, ``5xx``, ``error``: no answer).
+  background, "Check now"), by host and how it ended (``2xx``; anything else by its status, ``404``, ``429``,
+  ``503``; ``error``: no answer).
 - ``lane``: the Polymarket reads taken from each budget (``background``, ``check``); the rest are the Feed's and
   the pages'.
 - ``evaluated``: each wallet the background evaluation looked at, as ``kind:outcome`` (``new:dormant``).
-- ``infra``: CPU seconds, memory GB-seconds, volume GB-seconds and bytes served, from which a day's Railway cost is
-  estimated at Railway's list rates (RATES). ``infra_max``: the most memory and volume used that day.
+- ``infra``: CPU seconds, memory GB-seconds, volume GB-seconds and bytes sent, from which a day's Railway cost is
+  estimated at Railway's list rates (RATES). ``infra_max``: the most memory and volume used that day. Memory is the
+  container's, as Railway bills it (its cgroup: the engine's own memory and the file cache SQLite reads through,
+  which the process's resident memory leaves out: 0.54 GB against Railway's 0.86 GB, 2026-10-14). Egress is every
+  byte the container sends (/proc/net/dev: Polymarket requests and TLS too, not only pages served: 3.7 MB of pages
+  against 20 MB sent). Off Linux, the process's memory and the pages served stand in.
 
 Counting never gets in the way: a tally that can't be written stays in memory for the next try, and a restart
 loses at most the last minute.
@@ -47,9 +52,7 @@ def status_class(status: int | None) -> str:
     """How a request ended, as ``api`` counts it."""
     if status is None:
         return "error"
-    if status == 429:
-        return "429"
-    return f"{status // 100}xx"
+    return "2xx" if 200 <= status < 300 else str(status)  # a failure by its status: a 404 isn't a 400
 
 
 class Usage:
@@ -141,6 +144,36 @@ def _rss_bytes() -> int | None:
         return None
 
 
+CGROUP_MEMORY = ("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory/memory.usage_in_bytes")  # cgroup v2, v1
+
+
+def _container_bytes() -> int | None:
+    """The container's memory now, as Railway bills it (its cgroup: the file cache too), else None (not Linux)."""
+    for path in CGROUP_MEMORY:
+        try:
+            with open(path) as f:
+                return int(f.read().strip())
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def _tx_bytes(path: str = "/proc/net/dev") -> int | None:
+    """Every byte the container has sent, on every interface but loopback, else None (not Linux)."""
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()[2:]
+    except OSError:
+        return None
+    total = 0
+    for line in lines:
+        iface, _, numbers = line.partition(":")
+        fields = numbers.split()
+        if iface.strip() != "lo" and len(fields) >= 9:
+            total += int(fields[8])  # receive's 8 fields, then transmit's bytes
+    return total
+
+
 def _cpu_s() -> float:
     r = resource.getrusage(resource.RUSAGE_SELF)
     return r.ru_utime + r.ru_stime
@@ -152,11 +185,12 @@ def _peak_rss_bytes() -> int:
 
 
 class Sampler:
-    """Reads the engine's CPU time, memory and the volume's use every SAMPLE_S (``sample``), as ``infra`` tallies."""
+    """Reads the engine's CPU time, memory, bytes sent and the volume's use every SAMPLE_S (``sample``), as ``infra``
+    tallies."""
 
     def __init__(self, store: Path, counts: Usage | None = None, clock: Callable[[], float] = time.monotonic) -> None:
         self.store, self._counts, self._clock = store, counts, clock
-        self._at, self._cpu = clock(), _cpu_s()
+        self._at, self._cpu, self._tx = clock(), _cpu_s(), _tx_bytes()
         self._samples = 0
         self.volume: int | None = None
 
@@ -164,13 +198,15 @@ class Sampler:
         return self._counts or usage
 
     def sample(self) -> None:
-        now, cpu = self._clock(), _cpu_s()
+        now, cpu, tx = self._clock(), _cpu_s(), _tx_bytes()
         elapsed = max(0.0, now - self._at)
         self._c().add("infra", "cpu_s", max(0.0, cpu - self._cpu))
-        self._at, self._cpu = now, cpu
-        if (rss := _rss_bytes()) is not None:
-            self._c().add("infra", "ram_gb_s", rss / GB * elapsed)
-            self._c().add("infra_max", "ram_bytes", rss)
+        if tx is not None and self._tx is not None and tx >= self._tx:  # (a reset counter: that minute's left out)
+            self._c().add("infra", "egress_bytes", tx - self._tx)
+        self._at, self._cpu, self._tx = now, cpu, tx
+        if (ram := _container_bytes() or _rss_bytes()) is not None:
+            self._c().add("infra", "ram_gb_s", ram / GB * elapsed)
+            self._c().add("infra_max", "ram_bytes", ram)
         if self._samples % VOLUME_EVERY == 0:
             try:
                 self.volume = shutil.disk_usage(self.store).used
@@ -182,9 +218,14 @@ class Sampler:
             self._c().add("infra_max", "volume_bytes", self.volume)
 
     def now(self) -> dict[str, Any]:
-        """The engine as it is: memory now and at its most since launch, the volume's use, CPU seconds used."""
-        rss = _rss_bytes()
-        return {"ram_mb": None if rss is None else round(rss / 2**20), "peak_ram_mb": round(_peak_rss_bytes() / 2**20),
+        """The engine as it is: the container's memory (as billed) and the process's own (now, and at its most since
+        launch), the volume's use, CPU seconds used."""
+        ram, rss = _container_bytes(), _rss_bytes()
+
+        def mb(b: int | None) -> int | None:
+            return None if b is None else round(b / 2**20)
+
+        return {"ram_mb": mb(ram if ram is not None else rss), "process_mb": mb(rss), "peak_process_mb": mb(_peak_rss_bytes()),
                 "volume_gb": None if self.volume is None else round(self.volume / GB, 2), "cpu_s": round(_cpu_s())}  # fmt: skip
 
 
@@ -194,14 +235,16 @@ def cost(infra: dict[str, float]) -> dict[str, float]:
         "cpu": infra.get("cpu_s", 0.0) / MONTH_S * RATES["cpu_vcpu_month"],
         "ram": infra.get("ram_gb_s", 0.0) / MONTH_S * RATES["ram_gb_month"],
         "volume": infra.get("volume_gb_s", 0.0) / MONTH_S * RATES["volume_gb_month"],
-        "egress": infra.get("egress_bytes", 0.0) / GB * RATES["egress_gb"],
+        # every byte sent; off Linux (no /proc/net/dev), the pages served stand in
+        "egress": infra.get("egress_bytes", infra.get("served_bytes", 0.0)) / GB * RATES["egress_gb"],
     }
     return {k: round(v, 4) for k, v in parts.items()} | {"total": round(sum(parts.values()), 4)}
 
 
 class CountBytesOut:
-    """ASGI middleware: the bytes of every response the engine sends (``infra`` ``egress_bytes``), what Railway
-    bills as egress (Polymarket's answers coming in are free)."""
+    """ASGI middleware: the bytes of every page and answer the engine serves (``infra`` ``served_bytes``): part of
+    what Railway bills as egress (the rest is the engine's own requests out, which the sampler's ``egress_bytes``
+    counts with them)."""
 
     def __init__(self, app: Callable[..., Awaitable[None]], counts: Usage | None = None) -> None:
         self.app, self._counts = app, counts
@@ -216,7 +259,7 @@ class CountBytesOut:
 
         async def counted(message: MutableMapping[str, Any]) -> None:
             if message["type"] == "http.response.body" and message.get("body"):
-                self._c().add("infra", "egress_bytes", len(message["body"]))
+                self._c().add("infra", "served_bytes", len(message["body"]))
             await send(message)
 
         await self.app(scope, receive, counted)

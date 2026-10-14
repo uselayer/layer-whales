@@ -108,7 +108,7 @@ def test_every_request_the_sdks_client_sends_is_counted_by_host_and_how_it_ended
         client.get("https://data-api.polymarket.com/down")
     client.get("https://api.telegram.org/ok")
     got = api_counts(u.since_launch("api_sent"), u.since_launch("api"))
-    assert got == {"data-api.polymarket.com": {"requests": 6, "2xx": 2, "429": 1, "4xx": 1, "5xx": 1, "error": 1},
+    assert got == {"data-api.polymarket.com": {"requests": 6, "2xx": 2, "429": 1, "404": 1, "503": 1, "error": 1},
                    "api.telegram.org": {"requests": 1, "2xx": 1, "error": 0}}  # fmt: skip
 
 
@@ -138,6 +138,7 @@ def test_the_sampler_counts_cpu_memory_and_the_volume(tmp_path: Any, monkeypatch
     u = Usage(clock=lambda: NOW)
     clock = iter([0.0, 60.0, 120.0])
     monkeypatch.setattr(monitoring, "_rss_bytes", lambda: monitoring.GB // 2)
+    monkeypatch.setattr(monitoring, "_container_bytes", lambda: None)  # not Linux: the process's own memory
     s = monitoring.Sampler(tmp_path, u, clock=lambda: next(clock))
     s.sample()
     s.sample()
@@ -149,7 +150,26 @@ def test_the_sampler_counts_cpu_memory_and_the_volume(tmp_path: Any, monkeypatch
 def test_the_bytes_the_engine_serves_are_counted(counts: Usage, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
     r = TestClient(engine.app).get("/favicon.ico")
-    assert r.status_code == 200 and counts.since_launch("infra")["egress_bytes"] == len(r.content)
+    assert r.status_code == 200 and counts.since_launch("infra")["served_bytes"] == len(r.content)
+
+
+def test_memory_is_the_containers_as_railway_bills_it_and_egress_every_byte_sent(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    dev = tmp_path / "dev"
+    dev.write_text("Inter-|   Receive  |  Transmit\n face |bytes packets errs drop fifo frame compressed multicast|bytes ...\n"
+                   "    lo: 900 9 0 0 0 0 0 0 5000 9 0 0 0 0 0 0\n  eth0: 100 1 0 0 0 0 0 0 2000 3 0 0 0 0 0 0\n")  # fmt: skip
+    assert monitoring._tx_bytes(str(dev)) == 2000  # loopback left out
+    sent = iter([2000, 2600, 2900])
+    monkeypatch.setattr(monitoring, "_tx_bytes", lambda: next(sent))
+    monkeypatch.setattr(monitoring, "_container_bytes", lambda: monitoring.GB)  # the file cache too
+    monkeypatch.setattr(monitoring, "_rss_bytes", lambda: monitoring.GB // 2)
+    u = Usage(clock=lambda: NOW)
+    clock = iter([0.0, 60.0, 120.0])
+    s = monitoring.Sampler(tmp_path, u, clock=lambda: next(clock))
+    s.sample()
+    s.sample()
+    infra = u.since_launch("infra")
+    assert infra["egress_bytes"] == 900 and infra["ram_gb_s"] == pytest.approx(120.0)
+    assert cost({"served_bytes": monitoring.GB})["egress"] == 0.05  # off Linux, the pages served stand in
 
 
 # ---- what the directory says ----

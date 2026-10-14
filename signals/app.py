@@ -1123,7 +1123,8 @@ def _day_view(day: dict[str, Any], counted_from: str | None) -> dict[str, Any]:
         "api": monitoring.api_counts(t.get("api_sent", {}), t.get("api", {})),
         "polymarket_reads_by_budget": {k: int(v) for k, v in t.get("lane", {}).items()},
         "infra": {"cpu_s": round(infra.get("cpu_s", 0)), "ram_gb_h": round(infra.get("ram_gb_s", 0) / 3600, 2),
-                  "egress_mb": round(infra.get("egress_bytes", 0) / 2**20, 1),
+                  "egress_mb": round(infra.get("egress_bytes", infra.get("served_bytes", 0)) / 2**20, 1),
+                  "served_mb": round(infra.get("served_bytes", 0) / 2**20, 1),
                   "peak_ram_mb": round(peaks["ram_bytes"] / 2**20) if "ram_bytes" in peaks else None,
                   "volume_gb": round(peaks["volume_bytes"] / monitoring.GB, 2) if "volume_bytes" in peaks else None,
                   "cost_usd": monitoring.cost(infra) if infra else None},  # fmt: skip
@@ -1156,8 +1157,9 @@ def _health(r: dict[str, Any], now: float) -> list[str]:
         if looked >= 20 and failed / looked > 0.1:
             out.append(f"{failed} of {looked} wallets looked at today failed.")
         for host, c in today["api"].items():
-            if host in POLYMARKET_HOSTS and c["requests"] >= 100 and (c.get("429", 0) + c.get("error", 0) + c.get("5xx", 0)) / c["requests"] > 0.02:
-                out.append(f"{host}: {c.get('429', 0)} rate limits, {c.get('5xx', 0)} server errors and {c.get('error', 0)} "
+            server = sum(n for k, n in c.items() if k.startswith("5"))
+            if host in POLYMARKET_HOSTS and c["requests"] >= 100 and (c.get("429", 0) + c.get("error", 0) + server) / c["requests"] > 0.02:
+                out.append(f"{host}: {c.get('429', 0)} rate limits, {server} server errors and {c.get('error', 0)} "
                            f"unanswered of {c['requests']} requests today.")  # fmt: skip
     errors = r["api"]["errors"]
     out += [f"{what}: {errors[what]}" for what in ("discovery", "directory_writes", "feed", "monitoring") if errors[what]]
