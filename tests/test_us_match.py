@@ -280,7 +280,7 @@ def test_the_page_never_says_a_market_is_not_on_polymarket_us_and_scopes_quotes_
 
 # ---- the quote: the numbers in view, the working folded ----
 
-QUOTE_DEFS = ("esc", "INTL", "c1", "money", "slipOf", "slippageLine", "readAt", "quoteNote", "quoteFold")
+QUOTE_DEFS = ("esc", "INTL", "c1", "money", "slipOf", "slippageLine", "readAt", "quoteNote", "TRADE_TIME", "quoteFold")
 
 
 def test_the_quote_folds_its_working_and_shows_slippage_only_when_there_is_some(run_js: Any) -> None:

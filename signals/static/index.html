@@ -697,8 +697,15 @@ const pausedNote = (rest) => `<div class="paused">${PAUSED_ICON}<p><b>Copying is
 const NOT_A_TIP = "Use their trades to learn what they're doing, not as a signal to buy: we haven't found that buying after them makes money.";
 
 // Next to "Updated" on the Feed: the delay in a few words, the full sentence behind the ⓘ (tap or hover).
-const LAG = `<span class="lag"><button type="button" class="lag-btn" aria-describedby="lagtip">3–5 min behind<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><span class="lag-tip" role="tooltip" id="lagtip">Polymarket's public data runs 3–5 minutes behind, so trades show up here a few minutes after they're made.</span></span>`;
-const fresh = (ms) => `<span class="fresh"><span class="updated" id="updated">${updatedAgo(ms)}</span>·${LAG}</span>`;
+// How late a list can be, for where its trades come from: each trader's own trades, read about every 30 seconds
+// (Following, Recommended), or Polymarket's feed of every trade, which runs 3–5 minutes behind (Big trades).
+// "Updated" is measured: when the oldest of what's shown was read. Each card's time is when the trade was made.
+const LAGS = {
+  traders: ["Read every 30–60 s", "Signals reads each of these traders' trades on Polymarket about every 30 seconds (Recommended traders about once a minute). “Updated” is when the oldest of them was last read; each trade's time is when it was made."],
+  big: ["3–5 min behind", "Big trades come from Polymarket's feed of every trade, which runs 3–5 minutes behind, so they show up here a few minutes after they're made."],
+};
+const lag = (kind) => `<span class="lag"><button type="button" class="lag-btn" aria-describedby="lagtip">${LAGS[kind][0]}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><span class="lag-tip" role="tooltip" id="lagtip">${LAGS[kind][1]}</span></span>`;
+const fresh = (ms, kind = "traders") => `<span class="fresh"><span class="updated" id="updated">${updatedAgo(ms)}</span>·${lag(kind)}</span>`;
 function bindLag() {
   const lag = $("#fbar .lag");
   if (!lag) return;
@@ -922,10 +929,11 @@ function slippageLine(p) {
     ? `<p class="qwarn">Estimated slippage: your average fill, ${c1(p.price)}, is ${c1(slip)} above the best price for sale, ${c1(p.best_price)}, because this amount buys into pricier offers.</p>` : "";
 }
 const readAt = (p) => { const at = p.priced_at ? new Date(p.priced_at) : null; return at && !isNaN(at) ? at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }) : null; };
-// Data freshness: when the engine read the book and the market's status; their trade itself runs 3–5 minutes behind.
+// Data freshness: when the engine read the book and the market's status; their trade's time is Polymarket's own.
+const TRADE_TIME = "Their trade's time is when it was made on Polymarket, not when Signals saw it.";
 function freshLine(p) {
   const when = readAt(p) ? `Order book and market status read at ${readAt(p)}. ` : "";
-  return `<p class="fine">${when}Their trade comes from Polymarket's public data, which runs 3–5 minutes behind.</p>`;
+  return `<p class="fine">${when}${TRADE_TIME}</p>`;
 }
 // The one line always shown under a quote: whose book it is, how fresh, and that it's no promise.
 const quoteNote = (p) => `<p class="qnote">${INTL} estimate${readAt(p) ? ` · read ${readAt(p)}` : ""} · not a guaranteed fill</p>`;
@@ -945,7 +953,7 @@ function quoteFold(p) {
     <p>Each contract pays $1 if it wins and nothing if it loses.</p>
     <p>An estimate, not a guaranteed fill: the order book can change before your order reaches ${INTL}, so it may fill higher, only in part, or not at all.</p>
     <p>This estimate is for ${INTL} only. Polymarket US has its own order book and fees, so it doesn't apply there.</p>
-    <p>Their trade comes from Polymarket's public data, which runs 3–5 minutes behind.</p>
+    <p>${TRADE_TIME}</p>
   </details>`;
 }
 // Money you put in or get back, to the cent: "$49.91", "+$42.09".
@@ -1206,7 +1214,7 @@ function renderBig() {
   const where = venuesOn.map((v) => VENUE[v]).join(" and ");
   $("#fbar").innerHTML = `
     <div class="feedtop"><span class="muted" style="font-size:14px">${filtered ? "Trades" : "Every trade"} of $250 or more right now, on ${where}.</span>
-      ${fresh(feed.bigAt)}</div>
+      ${fresh(feed.bigAt, "big")}</div>
     ${filtered ? `<div class="filters">${marketLine()}</div>` : ""}
     ${feed.bigErr ? `<p class="inline-err">Couldn't refresh: ${esc(feed.bigErr)}. Showing the last update.</p>` : ""}`;
   let html;
@@ -2143,11 +2151,10 @@ async function checkPage(wallet, market) {
   try { b = await api(`/api/bet/${wallet}/${encodeURIComponent(market)}`); } catch (e) { app.innerHTML = back + errorState(e.message); bindActions(app); return; }
   if (!location.hash.startsWith(`#/check/${wallet}/`)) return;
   shown = [b];
-  app.innerHTML = `${back}<div class="cards">${tradeCard(b, 0)}</div><p class="foot-note">${DELAY_LINE}</p>`;
+  app.innerHTML = `${back}<div class="cards">${tradeCard(b, 0)}</div><p class="foot-note">${TRADE_TIME}</p>`;
   bindActions(app);
   tradeSheet(b);
 }
-const DELAY_LINE = "Polymarket's public data runs 3–5 minutes behind, so trades show up here a few minutes after they're made.";
 
 // ---- routing ----
 // #/ the Feed's Following · #/recommended its Recommended · #/big Big trades · #/traders[/top|/explore] · #/worth/<wallet> · #/t/<venue>/<id> ·

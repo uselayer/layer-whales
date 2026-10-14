@@ -573,7 +573,7 @@ def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offe
                   "they paid", "Buy on ${INTL} ↗", "weeks up",
                   "A week counts profit taken plus the change in value of trades still open.",
                   "the price you'd actually pay, which is a bit higher than the price on Polymarket's chart",
-                  "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip
+                  "when it was made on Polymarket, not when Signals saw it"):  # fmt: skip
         assert words in page, words
     assert "weeks profitable" not in page
     for gone in ("Worth copying", "Worth watching", "Lucky", "No clear edge", "You can copy it.", "too_fast"):

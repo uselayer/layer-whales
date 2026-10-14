@@ -2003,7 +2003,13 @@ CODE_TTL_S = 15 * 60  # a "Connect Telegram" link works this long, once
 ALERT_EVERY_S = 30
 ALERT_MAX_AGE_S = 30 * 60  # a buy first seen later than this isn't alerted (Polymarket shows trades minutes late)
 ALERT_AGAIN_S = 6 * 3600  # one alert per trader and market in this long, however many fills
-DATA_DELAY = "Polymarket's public data runs 3–5 minutes behind."  # said on every alert, and on the Feed
+# How late an alert can be, for where its trade came from. Every alert also says when the trade was made (its
+# Polymarket timestamp: the block time of the trade's transaction) and how long before the alert that was, measured.
+# A trader you follow is read on their own every round (Polymarket returns a trade there within seconds, measured
+# 1–14 s on 2026-10-14), so their alerts come one round or so after the trade. A big trade comes from Polymarket's
+# feed of every trade, which runs 3–5 minutes behind (its newest trade was 158–299 s old when read).
+FOLLOW_DELAY = f"Signals reads followed traders' trades about every {LIVE_POLL_S} seconds."
+BIG_DELAY = "Big trades come from Polymarket's feed of every trade, which runs about 3–5 minutes behind."
 DAILY_CAP = 20  # alerts per person per UTC day (a group counts once); then one "limit reached" message
 CAP_TEXT = "You've reached today's alert limit; more tomorrow."
 GROUP_S = 6 * 3600  # 2+ traders you follow buying the same outcome within this long make one grouped alert
@@ -2676,14 +2682,15 @@ def _traded(at: float, seen: float) -> str:
 
 
 def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, at: float, seen: float,
-                record: bool, aid: str | None) -> str:  # fmt: skip
+                record: bool, aid: str | None, delay: str = FOLLOW_DELAY) -> str:  # fmt: skip
     """What happened, the same for every trader: ``head`` (who bought which outcome, at what price, for how much),
     the market, the price now (", price already moved" outside the "can still get in" range, ``bet_status``), and
-    when they traded, measured against this alert (Polymarket shows trades minutes late), and where (``_venue_line``:
+    when they traded, measured against this alert, and where (``_venue_line``:
     Polymarket International, and its Polymarket US twin when there's a verified one). Then COPY_LINE, only when
     copying is offered for them and the price is still in range. Links: "Check current price" (the trade's own page
     on Signals, neutral for every trader), their record, "Buy on Polymarket International" (it only opens the market:
-    Signals places no orders), "View on Polymarket US" with a twin; then the delay line."""
+    Signals places no orders), "View on Polymarket US" with a twin; then ``delay``, how late this kind of alert can
+    be (FOLLOW_DELAY, or BIG_DELAY for a big trade)."""
     e = html.escape
     status = bet_status(paid, now)
     where, us_url = _venue_line(t)
@@ -2694,7 +2701,7 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}"),
                    ("Their record", f"{SITE}/#/worth/{wallet}" if record else None),
                    ("Buy on Polymarket International", t.url), ("View on Polymarket US", us_url), aid=aid)  # fmt: skip
-    return "\n".join([*lines, links, DATA_DELAY])
+    return "\n".join([*lines, links, delay])
 
 
 def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, usd: float, at: float, seen: float,
@@ -2722,7 +2729,7 @@ def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: flo
     lines += [f"Now {_cents(now)}{', price already moved' if moved else ''}.", f"Latest buy {_lag(last_at, seen)} before this alert.",
               where, _links(("Check current price", f"{SITE}/#/check/{last}/{t.market}"), ("Buy on Polymarket International", t.url),
                             ("View on Polymarket US", us_url), aid=aid),
-              DATA_DELAY]  # fmt: skip
+              FOLLOW_DELAY]  # fmt: skip
     return "\n".join(lines)
 
 
@@ -2772,7 +2779,7 @@ def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool,
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}" if held else None),
                    ("Their record", f"{SITE}/#/worth/{wallet}"), ("Open on Polymarket International", t.url),
                    ("View on Polymarket US", us_url), aid=aid)  # fmt: skip
-    return "\n".join([*lines, links, DATA_DELAY])
+    return "\n".join([*lines, links, FOLLOW_DELAY])
 
 
 class NewSell:
@@ -3019,7 +3026,7 @@ def _whale_text(t: WhaleTrade, now: float, category: str | None, seen: float, ai
     who = f'<a href="{e(SITE)}/#/worth/{w}">{e(_who(w))}</a>' if _scored(w) else e(_who(w))
     where = f" in {e(category)}" if category else ""
     head = f"<b>Big trade{where}:</b> {who} bought <b>{e(t.outcome or 'Yes')}</b> at {_cents(t.price)} (${t.usd:,.0f})"
-    return _trade_text(head, w, t, t.price, now, t.at.timestamp(), seen, False, aid)
+    return _trade_text(head, w, t, t.price, now, t.at.timestamp(), seen, False, aid, BIG_DELAY)
 
 
 def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:

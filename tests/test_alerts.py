@@ -95,7 +95,7 @@ def test_a_buy_outside_the_range_says_the_price_already_moved_even_for_a_copyabl
                          "Traded 14:02 UTC, 7 min before this alert."]  # fmt: skip
     assert engine.COPY_LINE not in lines and "get in" not in "\n".join(lines)  # no copy cue once the price moved
     assert lines[4] == engine.TRADED_INTL  # where they traded; no US claim while Layer's matches aren't read
-    assert "Check current price" in lines[5] and "Buy on Polymarket International" in lines[5] and lines[6] == engine.DATA_DELAY
+    assert "Check current price" in lines[5] and "Buy on Polymarket International" in lines[5] and lines[6] == engine.FOLLOW_DELAY
     below = engine._alert_text(SAM, t, 0.49, 0.30, 980, at, at)  # the market turned against them: moved too
     assert "Now 30¢, price already moved." in below and "Traded 14:02 UTC, under a minute before this alert." in below
 
@@ -171,7 +171,7 @@ def test_a_second_trader_buying_the_same_outcome_sends_one_grouped_alert_and_lat
     check = urllib.parse.quote(f"{engine.SITE}/#/check/{ANN}/0xcid:0", safe="")  # the latest buyer's trade
     assert lines[5] == engine.TRADED_INTL
     assert f"/check?to={check}" in lines[6] and ">Check current price</a>" in lines[6] and "Buy on Polymarket International" in lines[6]
-    assert lines[7] == engine.DATA_DELAY
+    assert lines[7] == engine.FOLLOW_DELAY
     assert [b["text"] for b in group["reply_markup"]["inline_keyboard"][0]] == ["Useful", "Not useful"]
     # A third trader, over 6 hours after the first but within 6 of the latest (the window slides): no new ping, the
     # grouped message is edited in place
@@ -280,7 +280,7 @@ def test_big_trades_alert_people_who_saved_markets_there_whoever_the_trader(
     check = urllib.parse.quote(f"{engine.SITE}/#/check/{WHALE}/0xw:0", safe="")
     assert lines[4] == engine.TRADED_INTL
     assert f"/check?to={check}" in lines[5] and ">Check current price</a>" in lines[5] and "Buy on Polymarket International" in lines[5]
-    assert "Their record" not in lines[5] and lines[6] == engine.DATA_DELAY
+    assert "Their record" not in lines[5] and lines[6] == engine.BIG_DELAY
     assert "Stop alerts" not in str(engine.tg.sent[-1]["reply_markup"])  # they don't follow them
 
 
@@ -608,7 +608,7 @@ def test_a_sell_alerts_with_the_price_now_while_they_still_hold_some_and_only_on
                          f"Traded {t0:%H:%M} UTC, 6 min before this alert."]  # fmt: skip
     assert lines[4] == engine.TRADED_INTL
     assert ">Check current price</a>" in lines[5] and ">Their record</a>" in lines[5] and ">Open on Polymarket International</a>" in lines[5]
-    assert lines[6] == engine.DATA_DELAY and engine.COPY_LINE not in m["text"] and "get in" not in m["text"]
+    assert lines[6] == engine.FOLLOW_DELAY and engine.COPY_LINE not in m["text"] and "get in" not in m["text"]
     assert m["reply_markup"]["inline_keyboard"][1][0]["callback_data"] == f"unf:{SAM}"  # Stop alerts from Sam
     assert engine._sent_today("user_1") == 1  # counts towards the daily cap
     trades.append(sold(SAM, t0 + timedelta(minutes=1), i="c"))  # sold more soon after: no second alert
