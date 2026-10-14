@@ -56,6 +56,7 @@ import sqlite3
 import threading
 import time
 import zlib
+from collections import Counter
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -140,6 +141,8 @@ CREATE TABLE IF NOT EXISTS score_history (wallet TEXT NOT NULL, scored_at REAL N
 CREATE TABLE IF NOT EXISTS score_categories (wallet TEXT NOT NULL, category TEXT NOT NULL, bets INTEGER NOT NULL,
   edge REAL, edge_z REAL, copy REAL, copy_low REAL, strong INTEGER NOT NULL, PRIMARY KEY (wallet, category));
 CREATE INDEX IF NOT EXISTS score_categories_by_category ON score_categories (category, strong);
+CREATE TABLE IF NOT EXISTS daily (day TEXT NOT NULL, metric TEXT NOT NULL, key TEXT NOT NULL, n REAL NOT NULL,
+  PRIMARY KEY (day, metric, key));
 """
 # A phase 1 directory.db has wallets without these: added when it's first opened, empty (status "found").
 _PHASE_2_COLUMNS = (("last_active", "REAL"), ("status", "TEXT NOT NULL DEFAULT 'found'"), ("scored_at", "REAL"),
@@ -1016,3 +1019,198 @@ class Directory:
             con.row_factory = sqlite3.Row
             r = con.execute("SELECT * FROM wallets WHERE wallet = ?", (wallet.lower(),)).fetchone()
         return None if r is None else dict(r)
+
+    # ---- phase 6: monitoring (the owner's /api/monitoring: counts only, never a wallet) ----
+
+    def tally(self, rows: Iterable[tuple[str, str, str, float]]) -> None:
+        """Adds ``(day, metric, key, n)`` counts to ``daily`` (signals/monitoring.py): summed, except a metric
+        ending in ``_max``, which keeps the day's largest."""
+        rows = list(rows)
+        if not rows:
+            return
+        with self._db() as con:
+            con.executemany(
+                "INSERT INTO daily VALUES (?, ?, ?, ?) ON CONFLICT (day, metric, key) DO UPDATE SET "
+                "n = CASE WHEN metric LIKE '%\\_max' ESCAPE '\\' THEN MAX(n, excluded.n) ELSE n + excluded.n END",
+                rows,
+            )
+
+    @contextmanager
+    def _read(self) -> Iterator[sqlite3.Connection]:
+        """A read-only connection outside the lock (WAL lets it read while the evaluation writes), so the seconds of
+        counting the owner's report takes never hold up a score or a page's sightings."""
+        if not self._upgraded or not self.path.exists():
+            with self._db():
+                pass
+        con = sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True)
+        try:
+            con.create_function("family", 1, _family, deterministic=True)
+            yield con
+        finally:
+            con.close()
+
+    def monitoring(self, presented: Iterable[str] = (), days: int = 14, now: float | None = None) -> dict[str, Any]:
+        """Everything the directory can say about how discovery is going, over the last ``days`` UTC days (today
+        included): the funnel (FUNNEL) overall, by category, by where wallets were found (and first found, and
+        found only there; by leaderboard and best rank); each day's new wallets, scores and ``daily`` tallies; how
+        fresh scores are, what's due and how long the queue of wallets never looked at is; why tries fail; the
+        sweeps. ``presented``: the traders people are shown, whose scores are kept fresher (``fresh_for``)."""
+        now = time.time() if now is None else now
+        first_day = _day(now - (max(1, days) - 1) * 86400)
+        shown = {w.lower() for w in presented}
+        args = {"fresh": now - PASSED_FRESH_S, "now": now, "first_day": first_day, "presented": json.dumps(sorted(shown)),
+                "since": datetime.fromisoformat(first_day + "T00:00:00+00:00").timestamp()}  # fmt: skip
+        kind = _KIND.replace("SELECT wallet FROM temp.presented_now", "SELECT value FROM json_each(:presented)")
+        due = _DUE.replace("SELECT wallet FROM temp.presented_now", "SELECT value FROM json_each(:presented)")
+        with self._read() as con:
+
+            def funnels(sql: str) -> dict[str, dict[str, Any]]:
+                return {k or "None": _funnel(r) for k, *r in con.execute(sql, args)}
+
+            total = _funnel(con.execute(f"SELECT {_FUNNEL} FROM wallets w", args).fetchone())
+            by_cat = funnels(f"SELECT {_CAT}, {_FUNNEL} FROM wallets w GROUP BY 1 ORDER BY 2 DESC")
+            strong = dict(con.execute(
+                f"SELECT c.category, COUNT(*) FROM score_categories c JOIN wallets w ON w.wallet = c.wallet "
+                f"WHERE c.strong = 1 AND {_QUALIFIED} GROUP BY 1", args
+            ))  # fmt: skip
+            seen = funnels(f"SELECT s.source, {_FUNNEL} FROM (SELECT DISTINCT wallet, source FROM sightings) s "
+                           "JOIN wallets w ON w.wallet = s.wallet GROUP BY 1")  # fmt: skip
+            only = funnels(f"SELECT s.source, {_FUNNEL} FROM (SELECT wallet, MIN(source) AS source FROM sightings "
+                           "GROUP BY wallet HAVING COUNT(DISTINCT source) = 1) s JOIN wallets w ON w.wallet = s.wallet "
+                           "GROUP BY 1")  # fmt: skip
+            first = funnels(f"SELECT w.first_source, {_FUNNEL} FROM wallets w GROUP BY 1")
+            boards = funnels(f"SELECT b.board, {_FUNNEL} FROM (SELECT DISTINCT wallet, family(place) AS board "
+                             "FROM sightings WHERE source = 'leaderboard') b JOIN wallets w ON w.wallet = b.wallet "
+                             "GROUP BY 1 ORDER BY 2 DESC")  # fmt: skip
+            bands = funnels(f"SELECT CASE WHEN r.best IS NULL THEN 'no_board' WHEN r.best <= 100 THEN 'top_100' "
+                            f"WHEN r.best <= 1000 THEN '101_1000' ELSE 'beyond_1000' END, {_FUNNEL} FROM wallets w "
+                            "LEFT JOIN (SELECT wallet, MIN(rank) AS best FROM sightings WHERE source = 'leaderboard' "
+                            "GROUP BY wallet) r ON r.wallet = w.wallet GROUP BY 1")  # fmt: skip
+            new = con.execute("SELECT date(first_seen, 'unixepoch'), first_source, COUNT(*) FROM wallets "
+                              "WHERE first_seen >= :since GROUP BY 1, 2", args).fetchall()  # fmt: skip
+            scored = con.execute("SELECT date(scored_at, 'unixepoch'), via, COUNT(*) FROM score_history "
+                                 "WHERE scored_at >= :since GROUP BY 1, 2", args).fetchall()  # fmt: skip
+            scored_wallets = dict(con.execute("SELECT date(scored_at, 'unixepoch'), COUNT(DISTINCT wallet) "
+                                              "FROM score_history WHERE scored_at >= :since GROUP BY 1", args))  # fmt: skip
+            tallies = con.execute("SELECT day, metric, key, n FROM daily WHERE day >= :first_day", args).fetchall()
+            counted_from = con.execute("SELECT MIN(day) FROM daily").fetchone()[0]
+            tiered = con.execute(f"SELECT w.wallet, w.scored_at FROM wallets w WHERE {_TIERED}").fetchall()
+            score_ages = dict(con.execute(f"SELECT {_age('w.scored_at')}, COUNT(*) FROM wallets w "
+                                          "WHERE w.scored_at IS NOT NULL GROUP BY 1", args))  # fmt: skip
+            quick_ages = dict(con.execute(f"SELECT {_age('w.tried_at')}, COUNT(*) FROM wallets w "
+                                          "WHERE w.status = 'checked' GROUP BY 1", args))  # fmt: skip
+            backlog = con.execute(f"SELECT {kind}, COUNT(*), MIN(next_check) FROM wallets WHERE {due} GROUP BY 1",
+                                  args).fetchall()  # fmt: skip
+            unlooked, oldest_found = con.execute("SELECT COUNT(*), MIN(first_seen) FROM wallets WHERE status = 'found'").fetchone()
+            errors = [e for (e,) in con.execute("SELECT score_error FROM wallets WHERE status = 'failed'")]
+            failing = con.execute("SELECT COUNT(*), SUM(tried_at >= :now - 86400), SUM(failures >= 3) FROM wallets "
+                                  "WHERE status = 'failed'", args).fetchone()  # fmt: skip
+            sweeps = con.execute("SELECT started, finished, sightings, new, error FROM sweeps WHERE started >= :since "
+                                 "ORDER BY started DESC", args).fetchall()  # fmt: skip
+        for f in by_cat.values():
+            f["strong_in"] = 0
+        for c, n in strong.items():
+            by_cat.setdefault(c, _funnel((0, 0, 0, 0, 0)) | {"strong_in": 0})["strong_in"] = n
+        due_now = {KINDS[i]: {"wallets": n, "most_overdue_h": round(max(0.0, now - at) / 3600, 1)} for i, n, at in backlog}
+        return {
+            "funnel": total,
+            "by_category": by_cat,
+            "sources": {"seen_in": seen, "only_seen_in": only, "first_found_by": first, "leaderboards": boards,
+                        "best_rank": bands},  # fmt: skip
+            "by_day": _by_day(first_day, now, new, scored, scored_wallets, tallies),
+            "counted_from": counted_from,
+            "freshness": {
+                "recommended": {"shown": _ages([at for w, at in tiered if w in shown], now, fresh_for(True)),
+                                "others": _ages([at for w, at in tiered if w not in shown], now, fresh_for(False))},
+                "score_age": {b: score_ages.get(b, 0) for _, b in AGE_BANDS},
+                "quick_check_age": {b: quick_ages.get(b, 0) for _, b in AGE_BANDS},
+                "due_now": {k: due_now.get(k, {"wallets": 0, "most_overdue_h": None}) for k in KINDS},
+                "never_looked_at": {"wallets": unlooked, "oldest_waiting_days": None if oldest_found is None
+                                    else round((now - oldest_found) / 86400, 1)},  # fmt: skip
+            },
+            "failures": {"failed_now": failing[0], "failed_last_day": failing[1] or 0,
+                         "failing_3_or_more_in_a_row": failing[2] or 0,
+                         "why": dict(Counter(_error_kind(e) for e in errors).most_common(8))},  # fmt: skip
+            "sweeps": [{"started": s, "finished": f, "minutes": None if f is None else round((f - s) / 60),
+                        "sightings": n, "new": nw, "error": e} for s, f, n, nw, e in sweeps],  # fmt: skip
+        }
+
+
+# ---- phase 6: monitoring's definitions ----
+# The lines Explore draws: screened is any look at a wallet (a quick check's evidence, or a score); fully evaluated,
+# a score; recommended, a recommended tier (Explore's _TIERED); qualified, one whose score is fresh (PASSED_FRESH_S,
+# "Passed our checks": what Traders can serve). A wallet's category: its score's, else where it was first seen.
+FUNNEL = ("found", "screened", "fully_evaluated", "recommended", "qualified")
+_CAT = "COALESCE(w.category, w.seen_category, 'Other')"
+_SCREENED = "(w.status = 'checked' OR w.scored_at IS NOT NULL OR w.buys_30d IS NOT NULL)"
+_QUALIFIED = f"({_TIERED} AND w.scored_at >= :fresh)"
+_FUNNEL = f"COUNT(*), SUM({_SCREENED}), SUM(w.scored_at IS NOT NULL), SUM({_TIERED}), SUM({_QUALIFIED})"
+AGE_BANDS = ((86400, "under_1d"), (2 * 86400, "1_2d"), (7 * 86400, "2_7d"), (30 * 86400, "7_30d"),
+             (float("inf"), "over_30d"))  # fmt: skip
+
+
+def _age(col: str) -> str:
+    """SQL naming the AGE_BANDS band a time is in, as of ``:now``."""
+    whens = " ".join(f"WHEN :now - {col} < {s:.0f} THEN '{b}'" for s, b in AGE_BANDS[:-1])
+    return f"CASE {whens} ELSE '{AGE_BANDS[-1][1]}' END"
+
+
+def _day(at: float) -> str:
+    return time.strftime("%Y-%m-%d", time.gmtime(at))
+
+
+def _family(place: str | None) -> str | None:
+    """A leaderboard's kind, without its category: ``"PNL MONTH POLITICS"`` is ``"PNL MONTH"``."""
+    return None if place is None else " ".join(place.split()[:2])
+
+
+def _funnel(row: Iterable[Any]) -> dict[str, Any]:
+    """A funnel's counts, and its yield: qualified traders per 1,000 wallets found, and the share of those fully
+    evaluated who qualified."""
+    f = dict(zip(FUNNEL, (int(x or 0) for x in row), strict=True))
+    return f | {"qualified_per_1000_found": round(1000 * f["qualified"] / f["found"], 2) if f["found"] else None,
+                "qualified_share_of_evaluated": round(f["qualified"] / f["fully_evaluated"], 4)
+                if f["fully_evaluated"] else None}  # fmt: skip
+
+
+def _ages(ats: list[float], now: float, fresh: float) -> dict[str, Any]:
+    """How old these scores are, in hours (middle, 90th percentile, oldest), and how many are past ``fresh``."""
+    hours = sorted((now - at) / 3600 for at in ats)
+    if not hours:
+        return {"traders": 0, "median_h": None, "p90_h": None, "oldest_h": None, "past_fresh": 0, "fresh_h": fresh / 3600}
+    return {"traders": len(hours), "median_h": round(hours[len(hours) // 2], 1),
+            "p90_h": round(hours[min(len(hours) - 1, int(0.9 * len(hours)))], 1), "oldest_h": round(hours[-1], 1),
+            "past_fresh": sum(1 for h in hours if h * 3600 > fresh), "fresh_h": fresh / 3600}  # fmt: skip
+
+
+_NUMBERS = re.compile(r"0x[0-9a-fA-F]+|\d+(?:\.\d+)?")
+
+
+def _error_kind(error: str | None) -> str:
+    """A failed try's error without its numbers and addresses, so tries that failed the same way count together."""
+    return _NUMBERS.sub("…", error or "unknown")[:120]
+
+
+def _by_day(first_day: str, now: float, new: list[tuple[str, str, int]], scored: list[tuple[str, str, int]],
+            scored_wallets: dict[str, int], tallies: list[tuple[str, str, str, float]]) -> list[dict[str, Any]]:  # fmt: skip
+    """Each UTC day from ``first_day`` to today: wallets found (by where first), scores kept (by what kept them, and
+    wallets scored), and the ``daily`` tallies (``{metric: {key: n}}``), newest first."""
+    days: dict[str, dict[str, Any]] = {}
+    at = datetime.fromisoformat(first_day + "T00:00:00+00:00").timestamp()
+    while at <= now:
+        d = _day(at)
+        days[d] = {"day": d, "new_wallets": 0, "new_by_first_source": {}, "scores": 0, "scores_by": {},
+                   "wallets_scored": scored_wallets.get(d, 0), "tallies": {}}  # fmt: skip
+        at += 86400
+    for d, src, n in new:
+        if d in days:
+            days[d]["new_wallets"] += n
+            days[d]["new_by_first_source"][src] = n
+    for d, via, n in scored:
+        if d in days:
+            days[d]["scores"] += n
+            days[d]["scores_by"][via] = n
+    for d, metric, key, n in tallies:
+        if d in days:
+            days[d]["tallies"].setdefault(metric, {})[key] = n
+    return sorted(days.values(), key=lambda x: x["day"], reverse=True)

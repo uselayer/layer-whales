@@ -201,6 +201,19 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps; scored,
   failed and never scored, by segment and category, active in the last week) to the owner only, as
   `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off; scores are kept either way.
+  **Monitoring** (phase 6): `/api/monitoring` (the owner's, the same way; `?days=14`, up to 90) says how discovery
+  is going and what it costs, counts only, never a wallet. The funnel: found, screened (a quick check or a score),
+  fully evaluated (a score), recommended (a recommended tier), qualified (recommended with a score from the last 48 h,
+  Explore's "Passed our checks"), with qualified per 1,000 found. The funnel appears overall, by category (with how
+  many qualified traders are strong in each), and by source: where wallets were seen, seen only there, first found,
+  which leaderboard, best rank. Day by day: new wallets by first source, wallets screened and scored, evaluation
+  outcomes, requests by host and how they ended (2xx, 4xx, 429, 5xx, no answer), Polymarket reads by budget
+  (background, "Check now", the rest are the Feed's and pages'), and the engine's CPU, memory, volume, egress and
+  estimated Railway cost at list prices (an estimate: Railway's usage page is the bill). Also freshness (recommended
+  traders' score ages, shown and not, against 12 h and 48 h; what's due and how late; the queue never looked at),
+  failures by kind, the sweeps, and `health`: what looks wrong, in sentences, which also goes to the logs hourly. The
+  counts the directory doesn't keep itself are kept by day in `directory.db` (`daily`) each minute, so they last
+  across deploys; they start on the day this shipped.
 - **Counting** (is any of this useful?): per alert and per follow, in `/data/alerts.db`, with nothing personal
   beyond the signed-in account (no IPs, no user agents): minutes from their trade to the alert, how each alert was
   delivered (sent, sent after a retry, waiting, failed and why, unknown, chats disconnected), taps on an

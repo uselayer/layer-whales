@@ -50,8 +50,8 @@ from uselayer.whale_scores import (
     segment_of,
 )
 
-from signals import us_match
-from signals.budget import BackgroundHttp, Budget
+from signals import monitoring, us_match
+from signals.budget import POLYMARKET_HOSTS, BackgroundHttp, Budget
 from signals.directory import (
     CHECK_BOARDS,
     EXPLORE_GROUPS,
@@ -97,7 +97,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         threading.Thread(target=_alert_loop, daemon=True).start()
     if LAYER_KEY:  # Polymarket US twins of the International markets, from Layer's matches (us_match)
         threading.Thread(target=us_match.loop, args=(reads.matches, _us_stop), daemon=True).start()
+    threading.Thread(target=_monitor_loop, daemon=True).start()  # resources each minute; the day's counts kept
     yield
+    _monitor_stop.set()
+    _monitor_flush()  # the last minute's counts
     _us_stop.set()
     _worth_stop.set()
     _follow_stop.set()
@@ -107,7 +110,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Signals", lifespan=lifespan)
+app.add_middleware(monitoring.CountBytesOut)  # the bytes served: monitoring's egress
 reads = Client(store=":memory:")  # leaderboards, traders, links, cost previews: reads only
+monitoring.watch(reads._http._client)  # every request the SDK sends, whoever asked: monitoring's ``api``
 LAYER_KEY = os.environ.get("LAYER_API_KEY", "")
 _us_stop = threading.Event()
 
@@ -748,6 +753,7 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
             _count_reads(item["kind"], got)
             done[got] += 1
             _evaluate_state["since_launch"][got] += 1
+            monitoring.usage.add("evaluated", f"{item['kind']}:{got}")
             in_a_row = in_a_row + 1 if got == "failed" else 0
 
     with ThreadPoolExecutor(max_workers=EVALUATE_WORKERS, thread_name_prefix="evaluate") as pool:
@@ -1039,6 +1045,167 @@ def directory_stats(request: Request, response: Response) -> dict[str, Any]:
     return stats | {"sweep_left": {"leaderboards": len(boards), "of": len(all_boards()), "markets": markets},
                     "sweeping": _directory_state["running"], "last_error": directory().last_error(),
                     "evaluating": evaluating}
+
+
+# ---- the directory, phase 6: monitoring and measurement ----
+# /api/monitoring (the owner's, as /api/directory is) says how discovery is going and what it costs, day by day:
+# wallets found (in all, and new each day, by where), screened and fully evaluated (each day too), coverage and
+# qualified traders by category, how fresh scores are and what's waiting, which sources find traders who qualify,
+# and the reads made, how they ended, and what the engine costs on Railway. The directory's own tables answer most
+# of it; what they don't keep is counted as it happens (signals/monitoring.py) and kept by day in directory.db each
+# minute, so it lasts across deploys. ``health`` says in sentences what looks wrong; hourly, it goes to the logs.
+
+MONITOR_TTL_S = 300
+MONITOR_LOG_S = 3600
+_monitor_stop = threading.Event()
+_monitor_state: dict[str, Any] = {"sampler": None, "error": None}
+
+
+def _monitor_flush() -> None:
+    """The counts since the last flush into directory.db; kept in memory for the next try if they can't be written."""
+    rows = monitoring.usage.take()
+    try:
+        directory().tally(rows)
+        _monitor_state["error"] = None
+    except (sqlite3.Error, OSError) as e:
+        monitoring.usage.put_back(rows)
+        _monitor_state["error"] = f"{type(e).__name__}: {e}"
+
+
+def _monitor_loop() -> None:
+    """Each SAMPLE_S, the engine's resources, and the counts kept; each MONITOR_LOG_S, any warning to the logs."""
+    sampler = _monitor_state["sampler"] = monitoring.Sampler(STORE_DIR)
+    logged = time.monotonic()
+    while not _monitor_stop.wait(monitoring.SAMPLE_S):
+        try:
+            sampler.sample()
+        except OSError:
+            pass
+        _monitor_flush()
+        if time.monotonic() - logged >= MONITOR_LOG_S:
+            logged = time.monotonic()
+            try:
+                warnings = monitoring_report()["health"]
+            except Exception as e:  # the report can wait for the next hour
+                warnings = [f"The monitoring report couldn't be worked out: {type(e).__name__}: {e}"]
+            if warnings:
+                print(f"monitoring: {' | '.join(warnings)}", flush=True)
+
+
+SCREENED_KINDS = ("new", "recheck")  # what the evaluation quick-checks first (recommended traders are rescored)
+
+
+def _day_view(day: dict[str, Any]) -> dict[str, Any]:
+    """One day of the report: the directory's facts, and its tallies turned into what they mean."""
+    t = day.pop("tallies")
+    evaluated: Counter[str] = Counter()
+    screened = new_screened = 0
+    for key, n in t.get("evaluated", {}).items():
+        kind, _, outcome = key.partition(":")
+        evaluated[outcome] += int(n)
+        if kind in SCREENED_KINDS and outcome != "failed":
+            screened += int(n)
+            new_screened += int(n) if kind == "new" else 0
+    infra = t.get("infra", {})
+    peaks = t.get("infra_max", {})
+    return day | {
+        "screened": screened, "screened_never_looked_at_before": new_screened, "evaluated": dict(evaluated),
+        "api": monitoring.api_counts(t.get("api_sent", {}), t.get("api", {})),
+        "polymarket_reads_by_budget": {k: int(v) for k, v in t.get("lane", {}).items()},
+        "infra": {"cpu_s": round(infra.get("cpu_s", 0)), "ram_gb_h": round(infra.get("ram_gb_s", 0) / 3600, 2),
+                  "egress_mb": round(infra.get("egress_bytes", 0) / 2**20, 1),
+                  "peak_ram_mb": round(peaks["ram_bytes"] / 2**20) if "ram_bytes" in peaks else None,
+                  "volume_gb": round(peaks["volume_bytes"] / monitoring.GB, 2) if "volume_bytes" in peaks else None,
+                  "cost_usd": monitoring.cost(infra) if infra else None},  # fmt: skip
+    }  # fmt: skip
+
+
+def _health(r: dict[str, Any], now: float) -> list[str]:
+    """What looks wrong, in sentences (an empty list: nothing does)."""
+    out = []
+    sweep = directory().last_sweep()
+    if DIRECTORY_ON and not _directory_state["running"] and (sweep is None or now - sweep["finished"] > DIRECTORY_SWEEP_S + 6 * 3600):
+        out.append("No sweep has finished in the last 30 hours." if sweep else "No sweep has finished yet.")
+    if err := directory().last_error():
+        out.append(f"The last sweep stopped early: {err['error']}")
+    if EVALUATE_ON and _evaluate_state["error"]:
+        out.append(f"The evaluation's last round failed: {_evaluate_state['error']}")
+    fresh = r["freshness"]
+    if n := fresh["recommended"]["shown"]["past_fresh"]:
+        out.append(f"{n} recommended traders people are shown have a score older than {fresh_for(True) / 3600:.0f} h.")
+    if n := fresh["recommended"]["others"]["past_fresh"]:
+        out.append(f"{n} other recommended traders have a score older than {fresh_for(False) / 3600:.0f} h.")
+    late = fresh["due_now"]["presented"]["most_overdue_h"]
+    if late is not None and late > 1:
+        out.append(f"Rescoring traders people are shown is {late:.1f} h behind.")
+    today = r["by_day"][0] if r["by_day"] else None
+    if today:
+        looked = sum(today["evaluated"].values())
+        failed = today["evaluated"].get("failed", 0)
+        if looked >= 20 and failed / looked > 0.1:
+            out.append(f"{failed} of {looked} wallets looked at today failed.")
+        for host, c in today["api"].items():
+            if host in POLYMARKET_HOSTS and c["requests"] >= 100 and (c.get("429", 0) + c.get("error", 0) + c.get("5xx", 0)) / c["requests"] > 0.02:
+                out.append(f"{host}: {c.get('429', 0)} rate limits, {c.get('5xx', 0)} server errors and {c.get('error', 0)} "
+                           f"unanswered of {c['requests']} requests today.")  # fmt: skip
+    errors = r["api"]["errors"]
+    out += [f"{what}: {errors[what]}" for what in ("discovery", "directory_writes", "feed", "monitoring") if errors[what]]
+    if str(errors["leaderboards"] or "").startswith("stale"):  # "sweep" and "read" are fine
+        out.append(f"leaderboards: {errors['leaderboards']}")
+    return out
+
+
+def monitoring_report(days: int = 14) -> dict[str, Any]:
+    """The whole report (see above), kept MONITOR_TTL_S per ``days``."""
+
+    def build() -> dict[str, Any]:
+        t0, now = time.monotonic(), time.time()
+        r = directory().monitoring(presented_wallets(), days, now)
+        r["by_day"] = [_day_view(d) for d in r["by_day"]]
+        launch = {m: monitoring.usage.since_launch(m) for m in ("api_sent", "api", "lane", "infra")}
+        poly_reads = sum(n for h, n in launch["api_sent"].items() if h in POLYMARKET_HOSTS)
+        lanes = {k: int(v) for k, v in launch["lane"].items()}
+        full = r["by_day"][1] if len(r["by_day"]) > 1 else None  # yesterday: the last whole day
+        sampler = _monitor_state["sampler"]
+        r["api"] = {
+            "since_launch": monitoring.api_counts(launch["api_sent"], launch["api"]),
+            # the Feed's and the pages' share is what the budgets didn't take
+            "polymarket_reads_since_launch": {**lanes, "feed_and_pages": max(0, int(poly_reads) - sum(lanes.values()))},
+            "budgets": {"background": _background["budget"].state() if "budget" in _background else None,
+                        "check": _check_budget.state()},  # fmt: skip
+            "feed": feed_stats(),
+            "errors": {"sweep": (directory().last_error() or {}).get("error"), "evaluation": _evaluate_state["error"],
+                       "leaderboards": _evaluate_state["leaderboards"], "discovery": _discovery_state["error"],
+                       "directory_writes": _directory_state.get("note_error"), "feed": _worth.get("live_error"),
+                       "monitoring": _monitor_state["error"]},  # fmt: skip
+        }
+        r["infrastructure"] = {
+            "uptime_h": round((now - monitoring.usage.started) / 3600, 1),
+            "now": sampler.now() if sampler else None,
+            "since_launch_usd": monitoring.cost(launch["infra"]),
+            "last_full_day_usd": full["infra"]["cost_usd"] if full else None,
+            "month_at_last_full_day_usd": round(full["infra"]["cost_usd"]["total"] * 30, 2)
+            if full and full["infra"]["cost_usd"] else None,
+            "rates": monitoring.RATES,
+            "note": "An estimate of the engine's own Railway usage at list prices; Railway's usage page is the bill. "
+                    "Vercel, Clerk and PostHog aren't included.",
+        }  # fmt: skip
+        r["flags"] = {"directory": DIRECTORY_ON, "evaluate": EVALUATE_ON, "discovery": DISCOVERY}
+        r["health"] = _health(r, now)
+        r["as_of"] = datetime.fromtimestamp(now, UTC).isoformat()
+        r["took_s"] = round(time.monotonic() - t0, 2)
+        return r
+
+    return cached(f"monitoring:{days}", MONITOR_TTL_S, build)  # type: ignore[no-any-return]
+
+
+@app.get("/api/monitoring")
+def monitoring_route(request: Request, response: Response, days: int = 14) -> dict[str, Any]:
+    """Discovery's monitoring and measurement (``monitoring_report``) over the last ``days`` (1–90): counts only,
+    never a wallet. The owner's, as /api/directory is."""
+    _owner(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    return monitoring_report(min(90, max(1, days)))
 
 
 # ---- the Traders leaderboard's columns ----
@@ -1600,7 +1767,7 @@ def _reading_followed() -> bool:
     return _followed_reading.is_set()
 
 
-_check_budget = Budget(CHECK_RATE, yield_to=_reading_followed)
+_check_budget = Budget(CHECK_RATE, yield_to=_reading_followed, name="check")
 _checker: dict[str, Whales] = {}
 
 
