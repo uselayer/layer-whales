@@ -912,7 +912,8 @@ const venueNote = (us) => `<p class="venue">${us?.found ? `Traded on ${INTL}. ${
   : "Same market on Polymarket US, where prices and liquidity may differ"}: ${usLink(us)}`
   : us ? `Traded on ${INTL} · No verified US match found` : `Traded on ${INTL}`}</p>`;
 const usInline = (us) => us?.found ? ` · ${usLink(us)}` : us ? " · No verified US match found" : "";
-function usBox(b) {
+// `button: false` when the sheet already leads with "View on Polymarket US" (buyButtons), so it isn't there twice.
+function usBox(b, { button = true } = {}) {
   const us = b.us, diffs = us?.differences || [];
   const head = `<div class="head">Polymarket US</div><p>This trade was made on ${INTL}. Signals follows traders there and doesn't see trades on Polymarket US.</p>`;
   if (!us) return `<div class="card copybox usbox">${head}<p>We couldn't check for a Polymarket US match just now.</p></div>`;
@@ -920,7 +921,18 @@ function usBox(b) {
   return `<div class="card copybox usbox">${head}
     <p>Layer matched ${sitsOut(us) ? "this player's line" : "the same market"} on Polymarket US, through Kalshi${us.outcome ? `: <b>${esc(us.outcome)}</b>` : ""}. Polymarket US has its own order book and fees, so prices and liquidity there may differ, and this trader's price isn't one to expect there.</p>
     ${diffs.length ? `<p>How the two may settle differently:</p><ul>${diffs.map((x) => `<li>${esc(x.text)}</li>`).join("")}</ul>` : "<p>Layer states no differences in how the two settle.</p>"}
-    <a class="btn ghost wide" href="${esc(us.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">View on Polymarket US ↗</a></div>`;
+    ${button ? `<a class="btn ghost wide" href="${esc(us.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">View on Polymarket US ↗</a>` : ""}</div>`;
+}
+// The buttons under "What buying now costs". With a verified US twin, Polymarket US leads ("View", never "Buy": the
+// estimate above is International's and isn't a price to expect there) and International is the second button.
+function buyButtons(b) {
+  const us = b.us?.found ? b.us : null;
+  const intl = (cls) => b.url ? `<a class="${cls}" id="buyon" href="${esc(b.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">Buy on ${INTL} ↗</a>` : "";
+  const none = `<p class="fine">Signals places no orders: you buy on Polymarket yourself.</p>`;
+  if (!us) return b.url ? intl("btn wide") + none : "";
+  return `<a class="btn wide" id="buyus" href="${esc(us.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">View on Polymarket US ↗</a>
+    <p class="fine">This estimate is for ${INTL}. Polymarket US has its own order book and fees, so prices there may differ${sitsOut(us) ? ", and the two can pay differently if the player doesn't play" : ""}.</p>
+    ${intl("btn ghost wide")}${none}`;
 }
 
 // ---- trade cards (feed, and a trader's open trades) ----
@@ -987,7 +999,7 @@ function tradeSheet(b) {
     ${b.copy_ok === false && b.wallet ? `<p class="fine">${copyLabel(b)}. <a class="link" href="#/worth/${esc(b.wallet)}">See their record</a></p>` : ""}
     ${b.wallet && b.market ? `<div class="card copybox" id="copynow"><div class="skel" style="width:70%;height:14px"></div></div>`
       : b.url ? `<p style="text-align:center;margin:16px 0 0"><a class="ext" href="${esc(b.url)}" target="_blank" rel="noopener">${OPEN.has(b.status) ? "Buy on" : "Open on"} ${INTL} ↗</a></p>` : ""}
-    ${b.venue === "kalshi" ? "" : usBox(b)}`);
+    ${b.venue === "kalshi" ? "" : usBox(b, { button: !(b.wallet && b.market) })}`);
   bindActions(panel);
   const box = $("#copynow", panel);
   if (box) costBox(box, b);
@@ -1060,8 +1072,7 @@ async function costBox(box, b, amount = 10) {
     <div class="amount"><label class="box"><span class="muted">$</span><input id="amt" inputmode="decimal" autocomplete="off" aria-label="Amount in dollars" value="${amount}"></label>
       ${PICKS.map((v) => `<button type="button" data-amt="${v}" aria-pressed="${v === amount}">$${v}</button>`).join("")}</div>
     <div id="pv"><div class="skel" style="width:70%;height:14px"></div></div>
-    ${b.url ? `<a class="btn wide" id="buyon" href="${esc(b.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">Buy on ${INTL} ↗</a>
-      <p class="fine">Signals places no orders: you buy on Polymarket yourself.</p>` : ""}`;
+    ${buyButtons(b)}`;
   const input = $("#amt", box), pv = $("#pv", box);
   let seq = 0, timer = null;
   const spendNow = () => { const v = parseFloat(String(input.value).replace(/[$,\s]/g, "")); return Number.isFinite(v) ? Math.round(v * 100) / 100 : null; };
