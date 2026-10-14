@@ -155,6 +155,21 @@ def test_refresh_reads_every_page_of_both_lists_and_a_failure_keeps_the_last_ind
     assert us_match.twins.lookup(f"{GAME}:0", "tok-cle", "x")["found"] is True  # type: ignore[index]  # until it goes stale
 
 
+
+def test_more_matches_than_the_page_cap_keeps_the_last_index_instead_of_part_of_the_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    # On 10/14 Layer served 9,780 International matches against a cap of 10,000: past it, the twins of every
+    # match after the cap would have turned into "no verified US match" with nothing said.
+    monkeypatch.setattr(us_match, "PAGE", 2)
+    a, b = layer()
+    us_match.refresh(lambda *, titles, venue, limit, offset: (a if venue == "polymarket" else b)[offset : offset + limit])
+    assert us_match.twins.error is None and us_match.twins.counts["twins"] == 3
+
+    monkeypatch.setattr(us_match, "MAX_PAGES", 1)  # a full first page and no room for the rest
+    us_match.refresh(lambda *, titles, venue, limit, offset: (a if venue == "polymarket" else b)[offset : offset + limit])
+    assert us_match.twins.error == "RuntimeError: Layer has more than 2 polymarket matches; raise us_match.MAX_PAGES"
+    assert us_match.twins.counts["twins"] == 3  # the last full index, not one built from the first page
+    assert us_match.twins.lookup(f"{GAME}:0", "tok-cle", "x")["found"] is True  # type: ignore[index]
+
 # ---- what the engine sends the page ----
 
 
