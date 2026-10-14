@@ -1546,6 +1546,7 @@ LIVE_PAGE_READS = 3  # a Feed view reads at most this many traders the poller ha
 LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
 LIVE_REC_FLOOR = 4  # Recommended reads a round even when everyone followed fills the slot, so it never stops
 LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; further back when there's a gap
+POSITIONS_PER_READ = 20  # conditionIds per read of the positions a trader's 50 biggest left out
 _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
 _live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
@@ -1571,14 +1572,27 @@ def checker() -> Whales:
         return _checker["whales"]
 
 
-def _open_positions(wallet: str) -> list[Any]:
+def _open_positions(wallet: str, markets: list[str] | None = None) -> list[Any]:
     """A trader's open positions (the SDK's TraderDetail.positions without its profile and stats reads).
     Stopgap, approved for V1: the SDK has no public positions-only read yet, so this calls its internals (as
     ``listed_now`` reads its leaderboards). Swap for ``whales.positions`` once uselayer has it:
-    https://github.com/uselayer/uselayer-sdk/issues/23"""
+    https://github.com/uselayer/uselayer-sdk/issues/23
+
+    Their 50 biggest, plus, in one more read per 20 markets, any of ``markets`` (outcomes they traded lately) that
+    aren't among them: a trader with more open positions than that still gets the price now for every trade they
+    just made (an alert, a Feed card), and a sell isn't called "no longer hold it" when they do."""
     w = reads.whales
-    return [w._poly_position(p) for p in w._poly.positions(wallet, 50)
-            if not p.get("redeemable") and 0 < float(p.get("curPrice") or 0) < 1]  # fmt: skip
+    rows = w._poly.positions(wallet, 50)
+    have = {w._poly_position(p).market for p in rows}  # each outcome: holding one side doesn't price the other
+    missing = list(dict.fromkeys(m.partition(":")[0] for m in markets or () if m not in have))
+    for i in range(0, len(missing), POSITIONS_PER_READ):
+        rows += w._poly.positions(wallet, 500, market=",".join(missing[i : i + POSITIONS_PER_READ]))
+    out = {}
+    for p in rows:
+        if not p.get("redeemable") and 0 < float(p.get("curPrice") or 0) < 1:
+            pos = w._poly_position(p)
+            out.setdefault(pos.market, pos)
+    return list(out.values())
 
 
 def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
@@ -1601,7 +1615,8 @@ def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
         if same and at is not None and time.monotonic() - at < LIVE_PRICE_S:
             positions = old.positions
         else:
-            positions, _live_priced[wallet] = _open_positions(wallet), time.monotonic()
+            traded = [t.market for t in trades if priced or t.at.timestamp() >= since]
+            positions, _live_priced[wallet] = _open_positions(wallet, traded), time.monotonic()
     else:
         _live_priced.pop(wallet, None)
     name = next((t.name for t in trades if t.name), None)
