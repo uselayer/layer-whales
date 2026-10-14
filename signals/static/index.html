@@ -531,8 +531,9 @@ let exploreOn = false; // SIGNALS_EXPLORE: Traders' Explore tab (the directory)
 const kalshiOn = () => venuesOn.includes("kalshi");
 const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
 
+const SIGNED = /^\/api\/(me|live|trading-now|bet)(\/|\?|$)/;
 async function api(path, opts = {}) {
-  if (path.startsWith("/api/me")) { // your follows: sent with Clerk's short-lived session token
+  if (SIGNED.test(path)) { // your follows, and the Feed: sent with Clerk's short-lived session token
     const t = await window.Clerk?.session?.getToken().catch(() => null);
     if (t) opts = { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${t}` } };
   }
@@ -543,10 +544,12 @@ async function api(path, opts = {}) {
 }
 const post = (path, body) => api(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
-// ---- signing in (Clerk: Google or Telegram), only to follow traders ----
-// Browsing needs no account. Clerk loads only when the engine has a publishable key (/api/config), from the
-// Frontend API the key names. `me` is who you follow and whether Telegram alerts are connected.
-const auth = { on: false, alerts: false, ready: false, loading: false, failed: false, me: null, meErr: null, uid: null, then: null };
+// ---- signing in (Clerk: Google or Telegram): for the Feed, and to follow traders ----
+// Traders, Top profit and trader pages need no account; the Feed (Following, Recommended, Big trades, an alert's
+// trade) is for signed-in people. Clerk loads only when the engine has a publishable key (/api/config), from the
+// Frontend API the key names; without one (running locally) nothing is gated. `wanted`: the key names a Frontend
+// API, so the Feed waits for signing in. `me` is who you follow and whether Telegram alerts are connected.
+const auth = { wanted: false, on: false, alerts: false, ready: false, loading: false, failed: false, me: null, meErr: null, uid: null, then: null };
 const signedIn = () => !!window.Clerk?.isSignedIn;
 function loadScript(src, attrs = {}) {
   return new Promise((ok, fail) => {
@@ -561,12 +564,12 @@ async function startAuth(key, alerts) {
   let fapi = "";
   try { fapi = m ? atob(m[2].replace(/-/g, "+").replace(/_/g, "/")).replace(/\$$/, "") : ""; } catch {}
   if (!/^[a-z0-9.-]+$/i.test(fapi)) return;
-  auth.loading = true; // the Feed's Following waits for it rather than asking a signed-in person to sign in
+  Object.assign(auth, { wanted: true, loading: true }); // the Feed waits for it rather than asking a signed-in person to sign in
   try {
     await loadScript(`https://${fapi}/npm/@clerk/ui@1/dist/ui.browser.js`);
     await loadScript(`https://${fapi}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, { "data-clerk-publishable-key": key });
     await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
-  } catch { Object.assign(auth, { loading: false, failed: true }); if (onFeed()) renderFeed(); return; } // sign-in can't load: the page works as before, without Follow
+  } catch { Object.assign(auth, { loading: false, failed: true }); feedGate(); return; } // sign-in can't load: Traders still works, without Follow
   Object.assign(auth, { on: true, alerts, ready: true, loading: false });
   window.Clerk.addListener(async () => {
     accountIs(signedIn() ? window.Clerk.user?.id || null : null);
@@ -575,9 +578,28 @@ async function startAuth(key, alerts) {
     drawAccount();
     if (auth.me && auth.then) { const f = auth.then; auth.then = null; await f(); }
     redrawFollow();
-    if (onFeed() && feedView() === "follow") loadFeed(); // Following is yours: read it once we know who you are
+    if (feedGate()) return; // signed in or out on a Feed page: drawn again
+    if (drawnGate === "open" && onFeed() && feedView() === "follow") loadFeed(); // Following is yours: read it once we know who you are
   });
-  if (onFeed() && feedView() === "follow") loadFeed();
+  feedGate();
+}
+// Where the Feed stands for this visit: "open" (signed in, or nothing to sign in to), "loading", "failed" or "closed".
+const gateState = () => !auth.wanted ? "open" : auth.loading ? "loading" : auth.failed ? "failed" : auth.on && signedIn() ? "open" : "closed";
+let drawnGate = null; // what the Feed page on screen was drawn for (null: not on one)
+// Signing in or out (or Clerk loading) changed what the Feed page on screen should be: draw it again. True when it did.
+function feedGate() {
+  if (drawnGate === null || drawnGate === gateState()) return false;
+  route();
+  return true;
+}
+// The Feed's sign-in page: what the Feed is, Sign in (Clerk's), and the way to what needs no account.
+function signInPage() {
+  const st = gateState(), traders = `<a class="btn ghost" href="#/traders">Browse traders</a>`;
+  $("#app").innerHTML = st === "loading" ? skelCards(3)
+    : st === "failed" ? emptyState("Signing in couldn't load just now", "The Feed needs signing in. Try again in a minute; Traders and trader pages need no account.", traders)
+    : emptyState("Sign in to see the Feed", "The trades of the traders you follow and of the traders we recommend, a few minutes after they're made. Traders and their pages need no account.",
+      `<button class="btn" id="gatesignin">Sign in</button> ${traders}`);
+  const b = $("#gatesignin"); if (b) b.onclick = () => window.Clerk.openSignIn();
 }
 function drawAccount() {
   const el = $("#account");
@@ -999,8 +1021,8 @@ function bindActions(root) {
 }
 
 // ---- feed ----
-// Two parts: Following (#/, the default: trades of the traders you follow, signed in; a short sign-in prompt when
-// signed out) and Recommended (#/recommended: $1,000 or more from Traders' three sections, quieter on purpose and
+// Signed in only (signInPage otherwise). Two parts: Following (#/, the default: trades of the traders you follow)
+// and Recommended (#/recommended: $1,000 or more from Traders' three sections, quieter on purpose and
 // never above Following). Both show your markets, the ones picked at onboarding or with Traders' chips; the chips
 // live on Traders only, the Feed says which markets it shows and Change opens the same picker as onboarding.
 // Big trades (#/big: $250 or more right now) stays reachable from the foot of Recommended.
@@ -1090,20 +1112,15 @@ function renderFeed() {
   });
 }
 
-// Following: the traders you follow, for alerts or research, whoever they are. Signed out, one short prompt.
+// Following: the traders you follow, for alerts or research, whoever they are. Signed out the Feed is the sign-in
+// page; here, signed in while who you follow is read (or couldn't be), or signing in isn't switched on (locally).
 function renderFollowing() {
   if (!canFollowFeed()) {
     $("#fbar").innerHTML = "";
-    const meFailed = auth.on && signedIn() && !auth.me && auth.meErr;
-    const loading = auth.loading || (auth.on && signedIn() && !auth.me && !auth.meErr);
     const rec = `<a class="btn ghost" href="#/recommended">See Recommended</a>`;
-    $("#flist").innerHTML = loading ? skelCards(3)
-      : meFailed ? `<div class="state err"><b>Couldn't load who you follow</b><p>${esc(auth.meErr)}</p><button class="btn ghost" id="meretry">Try again</button></div>`
-      : auth.on ? emptyState("See the trades of traders you follow", "Sign in, then follow traders from their page: their trades show up here, and alerts can go to Telegram.",
-        `<button class="btn" id="feedsignin">Sign in</button> ${rec}`)
-      : auth.failed ? emptyState("Signing in couldn't load just now", "Following needs signing in. Try again in a minute; Recommended shows trades from the traders we recommend.", rec)
-      : emptyState("Following needs signing in", "Signing in isn't switched on here. Recommended shows trades from the traders we recommend.", rec);
-    const b = $("#feedsignin"); if (b) b.onclick = () => window.Clerk.openSignIn();
+    $("#flist").innerHTML = !auth.wanted ? emptyState("Following needs signing in", "Signing in isn't switched on here. Recommended shows trades from the traders we recommend.", rec)
+      : auth.meErr ? `<div class="state err"><b>Couldn't load who you follow</b><p>${esc(auth.meErr)}</p><button class="btn ghost" id="meretry">Try again</button></div>`
+      : skelCards(3);
     const again = $("#meretry"); if (again) again.onclick = async () => { auth.meErr = null; renderFollowing(); await readMe(); loadFeed(); };
     return;
   }
@@ -2144,7 +2161,11 @@ function route() {
   $$("[data-tab]").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   $("#app").classList.toggle("narrow", name === "traders:top" || !!t); // one width everywhere else, header included
   window.scrollTo(0, 0);
-  if (interests === null && (name.startsWith("feed") || name === "traders:worth")) onboardingPage(); // first run; links to a trader skip it
+  const gated = name.startsWith("feed") || !!check; // the Feed's pages: signed in only; the rest needs no account
+  const onboarding = interests === null && (name.startsWith("feed") || name === "traders:worth"); // first run; links to a trader skip it
+  drawnGate = gated && !onboarding ? gateState() : null;
+  if (onboarding) onboardingPage();
+  else if (gated && drawnGate !== "open") signInPage();
   else if (name.startsWith("feed")) feedPage(feedView());
   else if (name.startsWith("traders:")) tradersPage(name.split(":")[1]);
   else if (w) worthTraderPage(w[1].toLowerCase());

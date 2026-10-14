@@ -11,6 +11,7 @@ from typing import Any
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import Response
 from fastapi.testclient import TestClient
 from uselayer import Trader, TraderDetail, WhalePosition, WhaleTrade
 
@@ -56,7 +57,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
 
 
 def test_recommended_is_the_three_sections_and_bigger_trades_only(api: TestClient) -> None:
-    r = api.get("/api/live").json()
+    r = api.get("/api/live", headers=auth()).json()
     assert {t["wallet"] for t in r["traders"]} == {COPY, RISE, WATCH}  # Worth copying, Rising, Worth watching; never Lucky
     assert r["min_usd"] == engine.RECOMMENDED_MIN_USD == 1000
     assert {b["usd"] for b in r["bets"]} == {2500.0}  # the $150 buys stay out of Recommended
@@ -81,7 +82,7 @@ def test_following_is_your_traders_trades_every_size_and_only_yours(api: TestCli
 def test_the_feed_page_has_following_and_recommended(api: TestClient) -> None:
     page = api.get("/").text
     for words in ('"Following"', '"Recommended"', "#/recommended", "Only trades I can still get into", "Also bought by",
-                  "See the trades of traders you follow", "/api/me/feed", "from Sharps and Rising traders", "not as a signal to buy",
+                  "Sign in to see the Feed", "Browse traders", "/api/me/feed", "from Sharps and Rising traders", "not as a signal to buy",
                   "All big trades right now", "3–5 min behind"):  # fmt: skip
         assert words in page, words
     assert '"Traders we follow"' not in page
@@ -124,7 +125,7 @@ def test_the_poller_keeps_recommended_and_followed_traders_and_pages_only_read_i
     assert {kind for kind, _ in asked} == {"trades", "positions"}  # never the profile or stats
     assert f"live:{gone}" not in engine._cache
     asked.clear()
-    api.get("/api/live")
+    api.get("/api/live", headers=auth())
     api.get("/api/me/feed", headers=auth())
     assert asked == []  # the pages read what the poller keeps
     engine.live_poll_once()
@@ -207,19 +208,19 @@ def test_a_feed_view_reads_only_a_few_traders_itself_and_says_the_rest_are_still
     many = [score(f"0x{i:040x}", "proven", name=f"T{i}") for i in range(10)]
     monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": many})
     asked = _counting(monkeypatch)
-    r = api.get("/api/live").json()  # just after a restart: the poller hasn't read anyone yet
+    r = api.get("/api/live", headers=auth()).json()  # just after a restart: the poller hasn't read anyone yet
     assert len({w for _, w in asked}) == engine.LIVE_PAGE_READS
     assert (r["pending"], r["failed"]) == (10 - engine.LIVE_PAGE_READS, 0)
     engine.live_poll_once()
     asked.clear()
-    r = api.get("/api/live").json()
+    r = api.get("/api/live", headers=auth()).json()
     assert asked == [] and (r["pending"], r["failed"]) == (0, 0)
     assert abs(r["as_of"] / 1000 - time.time()) < 5  # when the oldest of it was read: just now
     hit = engine._cache[f"live:{many[0]['wallet']}"]
     engine._cache[f"live:{many[0]['wallet']}"] = (hit[0] - 120, hit[1])
-    assert time.time() - api.get("/api/live").json()["as_of"] / 1000 == pytest.approx(120, abs=5)  # "Updated 2m ago"
+    assert time.time() - api.get("/api/live", headers=auth()).json()["as_of"] / 1000 == pytest.approx(120, abs=5)  # "Updated 2m ago"
     engine._cache[f"live:{many[0]['wallet']}"] = (hit[0] - engine.LIVE_SHOW_S - 1, hit[1])
-    assert api.get("/api/live").json()["failed"] == 1  # too old to show: it says so, and nobody waits on a read
+    assert api.get("/api/live", headers=auth()).json()["failed"] == 1  # too old to show: it says so, and nobody waits on a read
 
 
 class _Clock:
@@ -265,7 +266,7 @@ def test_the_feed_holds_up_as_the_recommended_pool_grows(
         assert all(len(times) >= 3 for times in read_at.values())  # ...and kept up to date
     assert max(per_round) <= engine.LIVE_POLL_S / 0.25 + 1  # at most what the slot holds: never a burst
     reads_now = len(asked)
-    r = engine.live()
+    r = engine.live(Response())
     assert len(asked) == reads_now and r["pending"] == 0 and r["failed"] == 0  # a view reads nothing
     oldest = (time.time() * 1000 - r["as_of"]) / 1000
     assert oldest <= (engine.LIVE_REC_S + engine.LIVE_POLL_S if pool <= 50 else engine.LIVE_SHOW_S)

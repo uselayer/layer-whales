@@ -52,8 +52,12 @@ behind Vercel (see README, "Hosting").
   between the reads (`price_changed`) it says "Price changed—refresh quote", never that nothing is for sale;
   "Only $X is for sale" is only for an amount bigger than the book holds within the limit. Transparency over a
   quote that always succeeds.
-- Browsing needs no account. Signing in (Clerk: Google, or Telegram as a custom OpenID Connect provider) is
-  asked for only to follow a trader, and the button says so ("Follow · get an alert after they trade"). Alerts go
+- Traders (the leaderboard, Top profit) and trader pages need no account; everything in the Feed (Following,
+  Recommended, Big trades, an alert's "Check your price") is behind signing in (Clerk: Google, or Telegram as a
+  custom OpenID Connect provider). Signed out, a Feed page is the sign-in page ("Sign in to see the Feed", Sign in,
+  Browse traders), and the engine refuses its reads (`feed_reader`: `/api/live`, `/api/trading-now`, `/api/bet`)
+  without a valid session. Without Clerk's key (running locally) nothing is gated. On a trader's page the Follow
+  button says why you'd sign in ("Follow · get an alert after they trade"). Alerts go
   to Telegram (`alert_pass` in `app.py`). Signals is trader discovery and trading intelligence first, copying
   second: following is research, so every buy by a trader you follow alerts you, whatever the amount and whoever
   the trader (their buys of one outcome within 30 minutes add up, across rounds and restarts, shown as the total
@@ -148,8 +152,7 @@ behind Vercel (see README, "Hosting").
     nothing moves between tabs. Feed cards are a grid: three across on desktop, one on a phone. Keep loading,
     empty and error states.
   - The Feed has two parts. **Following** (`#/`, the default, `/api/me/feed`): every trade from the last day of
-    the traders you follow, whoever they are (following is also research); signed out it's one short sign-in
-    prompt. **Recommended** (`#/recommended`, `/api/live`): trades of $1,000 or more (`RECOMMENDED_MIN_USD`) from
+    the traders you follow, whoever they are (following is also research). **Recommended** (`#/recommended`, `/api/live`): trades of $1,000 or more (`RECOMMENDED_MIN_USD`) from
     the traders in Sharps and Rising, with neutral cards for anyone not copy_ok. Recommended
     stays quiet (fewer, bigger trades) and never more prominent than Following: second in the switch, never the
     default. Both keep the switch "Only trades I can still get into", one card per outcome with "Also bought
