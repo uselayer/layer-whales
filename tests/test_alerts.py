@@ -317,11 +317,15 @@ def test_connecting_describes_the_alert_rules(api: TestClient, monkeypatch: pyte
     link = api.post("/api/me/telegram", headers=auth()).json()["link"]
     engine._on_update({"message": {"chat": {"id": 555}, "text": "/start " + link.rsplit("=", 1)[1]}})
     text = engine.tg.sent[-1]["text"]
-    for words in ("Connected.", "a few minutes after a trader you follow buys or sells, whatever the amount",
+    for words in ("Connected.", "a few minutes after a trader you follow buys or sells, of any size",
                   "at what price, the price now and when they traded", "alerts are never instant",
-                  "two or more of them buy the same thing", "trades of $10,000 or more", "At most 20 alerts a day", "Following: Sam"):  # fmt: skip
+                  "Not every trade gets its own message", "buys of one outcome within 30 minutes come as one",
+                  "more buys of that outcome (or more sells of it) are left out for 6 hours", "two or more traders you follow buy the same thing",
+                  "all but decided (2¢ or less, 98¢ or more)", "trades of $10,000 or more", "At most 20 alerts a day",
+                  "Following: Sam"):  # fmt: skip
         assert words in text, words
-    assert "$100" not in text
+    assert "$100" not in text and "whatever the amount" not in text and "every trade" not in text.replace("Not every trade", "")
+    assert engine.ALERT_AGAIN_S == 6 * 3600 and engine.ALERT_MAX_AGE_S == 30 * 60  # what it says is what alert_pass does
     assert "something you can still get into" not in text
 
 
