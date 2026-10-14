@@ -1,0 +1,6053 @@
+{
+ "T": 1786665600,
+ "markets": [
+  {
+   "cid": "0x4caea70ba71852f57ad5464f409ad9b2b61f2550a24dfea06ca8b0645b636e17",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x36e33e61257408890642eabde9c67eb1d6f20f18013c65a621a44e3f3c6ca856",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x336a706a26cd9588d547695b10759d649f20d422422d9a89943d2a9e23691791",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x9e8b2b427b71560e007334a93c2878d7f1c3c5ab532687f73ae6ab9df7820735",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xfe868fd18d5a157a1cc81f9a94c23111d1bbde30aa786fbc487acdc304658359",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x645f9a3f97ad749af48c7b674faaa472ab6d63a2770204c860e93d9b9978daf7",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xf67b7e9dea640bbc22331c0ef33d4cd845beb781194f2a65f95f8f2cdda884ad",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x57ce78cf6ba81f62c6a3352b1789e1df2f17c6d0edb2ce07e76ef8ebd5269695",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xadac686f424fd1c09b2710c27d29df627bbaafd0c02c0463a3e311d44dfecfcc",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x5acf06573d8f025607312a0f7457dd533f44feab47439ac3a2fb667c33e0b674",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x8d55172168d3073331b9aeaf346995b00d4686483579f22d53f0869c561a35e2",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xfc8b3392f0bedad689e144a35adae140e439313fba94b2a3a48a3739841a8611",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xb225bc603523e1fd77118c9c3906fbefe1ecb2d6db027118ce44aedd4c33759a",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x2eebb035383e9d598e42f5ee6e3069d4f634a55ccb0f38043c8daf20746159eb",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x0d7a401a89d3c413a4a5d289e02ab887175976ab58a1736803fb44e96f45883d",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x15b2defe18c1f1dce1dfb2a45bf9d7ef5caecf213c15cba4667f847ea9ccabe5",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xa7bae944dc43f93817598f12584047241d1bf908f3ed3e6bcb17fa6dd79c08f4",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x1ab8474847b548936f6020625af535d31a391dda17daec2e06a4f124691fb386",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x30e4627df060ca50511e6903ab7b44d95e32adeef2b63aa8408878adfc416219",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xc9fb56e696522daa6c198b0bd5c83261e19ddc77cddf4d0227b915796b9b4363",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xa3acfaa0e6c32905b5483130c321a7a5c7329628af804f55dd65786302a84f34",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x85a6339bc3e892e5fefe57a797ced329091af1c626d5f52663798eaa54ae406d",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x9929f45d2928424e72b37c8372ccca7ff6ddf3adb5f786bb7e3886a7e3e1e21e",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xe1270e5224bd1f7464e045fc1bb8c7880b63c7968b97aed02d6a8edabfb03803",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x7b7f0e3fd4567680e51699424242303b3cb721091abdfe9f3e60f2baa8042d53",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x414ca07f8900b427b5941f50fcb04563a65402dff6062559e4ffbfe3ba4886d0",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x87d02fa954a7fca006930d1bec1cb4f46d4889206239ec235add2ffc7f7fa6ce",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xcd92a92179bfa3ce42201ee428e7dbadeaa4bc9e4ac1b92c2ccbe99e9170b7ec",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x6de4ad63e01072c86722b3c5e5b253d011a74f0e5a3b8263f0c199c2eeb271d0",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x993cbe065793028a7510feb5ea9f81e74f482560ccdee8375f109866d014d1fd",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x0dd259859924e629d734498b4202b89685b0cb68239786a6a8253aebc8a6776d",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xb87d88ca2a40b9c741fde47487e00cdd2e7fa69d6137867f51f8bd1d6e00f8f4",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x41d0527da134d55f7f93d07a3e8dbd3c199aa6ee08e6fcab57bcb5d63cb559fe",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x7696a0c43b5ed9868b59590324469ffce13f5d1dfcf6f56e0f3c7ac341927774",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xc2e916d4a41e17f2a03f838a49659880597d1b24c49da8219b640e2bac6652f9",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x7cb02bdc0d6d3683c68b7c1a38817b744001dbfaf97f217ad7daa8fbbd964bce",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x649561038f2f62d62af1e67d74105d58469d8c7992a9d3b7d6fedb37f64577ed",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xe8f4b63afd0298b4a55a08c99c97148e695990aad22bad502f59634964263e08",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x8e83dc96f6a187d4e0cd05696db136bfa9e38e66b24b346c2237307e3c18ffa5",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xa2bebc7fe9a34a3e92bb2c9a49b2322c828211418ae25b8398900f7337a28287",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xf6340b88c17dd5f684f7846ecf0286636cba5ffff36337fd3dc72f1e8f41b90f",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x6ed26c0fdc5a82bf0a70104a3bc2892692aa0ff2958ac1442e975353b59c4219",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xa8959e2056e7eefcaea2075909f14a855955471f61e7edc0fb418bf8e5907292",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x3ae5697650bc0adbe10527dddb07cd1c67c5132047563b2fadd70b3317d81b6a",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xfc3e26880e447253c41c9ecb25be760a25c67b12f83f3ca4ad81f6cdd2e95a36",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xa77d6ac359e34aee50f71110ad1fb7c2fdb4a820f0581e0bb7f5fbad846d5aec",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x7bd187bbebdc755447afaf5da7e023a3603caf5fe38c1291750c5c69eb584766",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xfbd0a07a367a3cdefb2d67a60a27f450a322f9e0deb85ff46dac4d0fc47ecb13",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x9f541e28959481d7976d8b6ab3a1b1982bee775d0c7d734a27315b6cd043226b",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xffc418c1bb218ea36d8199fd54d2f344bfb90e5b1c087d31744a2b3e4782e8eb",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xda54caab44ad0a8c24eb50a38acae9aec67a82ca6e8f47a74c3d2a25b72fdb81",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x6cd3c4703a2d3664b52099fe891f11c003d30da62f99b4b8017d716047a47b47",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x095050d8bee24efb85a066113f13190597fc0b3421ca4c96fb287a7aa552f2ce",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x9fd1dc171c922192e9f1ca0df99f741f72d6aecacd9f8ad766c146f10158b8b0",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x07e2e47a6ce685aae0db76498db829f44815ae19fe18aa504fbbce02d6367042",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x1eaf8e1d9ec332ec1823173bb2c6c5c29445466635253ebc5cebf42326eae0c0",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xbfae7df0395a8e3457d826775628cdf2288c67ce7b8043f02e3799c9233e2f0d",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x5212ac4dd30f7b483b4b039cd09fea4a57f022cd91cec6826908dad0e8320fda",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x2719d802a64a80f8074dab78a25c907a7b5279e5439e37d6915fb52c66dda52b",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x465a23297a1249f732d62c9fa81c11fac4da45a9b02510e2afa2afd602dabdf8",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x45b03d673df01a75ce0cf383cf4ef18d98140faf5a88f8eefb57a63c60f97263",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x13e700ac2c9674292f88a05ef0a99fc89e314eda4e3bf590693b4ae0d5ddfa39",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x43d7a80b59391170aa18fe10c8f24a77896d321cca774349cc743ee2d7a36c2e",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x3066cac2d9945fdf00d6d6f4656bb86ff77fb296591b8bdddcd087af2c9c2c58",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x2c3f720115577c736d3c811e291c15b36a51e8a9296ea49189435adbce735df5",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xa0cfe98f53d1a9ad52b12ccffc1de3ba2fbcdc9b50cfeefc2c50c9007f2c1337",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x5d8b576c54615b79531b2209c11a696b116705c034d489bebea61059154ed322",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x8df50c68cad37eaef95f131d51aa5c5c62469b38211aa56bb47710a0f3e650d1",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x7678e794a38da075fef96eb96818d5181094ff6c5b41505621009bbef018df6e",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x4c2b0d7b95c08878580a14702c64088329e3604ab8db58984d548ddf705157bb",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x0fa4fa401f61093c46e8f4ca45129793161bc66c77707958ba71b15749b18ec4",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x27cbc061952617434c843c434973174e1ebe335887258b7867cd3585d78cb1f5",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xe00b6f765b88a31364e3409c04b8af96da29da9aaafbd205e8999b08621e2f4c",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x685bfa8c256563b134eeeb92e09351cf4f836fe0ffe45dc651e9bd85a7a81d5f",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x9ffd0adc2bfdc466b3d77429a862af331f8f47247edfba5e7e6449fae37fc6bb",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x27366724d553cdd3b0434ba118de8e24c61dcf6fb00b2fd04d59665534d70e8b",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x01679068110ba491ed27311f0658846e831b4c332794c93ceb62af577057f956",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x8c1033359779cfdc9ef61ae8a1c152a4422fdbb307b969221b2a31ba921d5bc2",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x2a38923a7340777a928cb5d184eb83d3dc55827f686c4601dceeeef4a8e66b35",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xa3bd8e9da7b77ccaf5f7e96f8a753ad60c12652922218d7746346bbbc7a2bb1a",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x541cdcf83994ab72e13cb5695e3b75f537be8cd29eb19ccaf3503ec80c6f96fc",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xa294488c1793cccbf184f548d34ccb9a4fd7cf7dae86e6aafeead273d77e4dae",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x11811b240a44b7cce3beec31d61223b2fc4bca8752956bdf862e265bd69831f6",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x48656cf28c312bba3b6fa88c53a5c5dce2b87cff1e794041e020e48f6da178df",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xe45894265f66abe1112245a8dba1a4cf1cf4c7e82393c1899253d8692e733829",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x4bf019219fa7808774d81823893e9a008010ecfd6018d4305b515e9a6b5e63fe",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x21efc4b93d0d3dc041a4334a0daf1423234b43191a9e43e818367c727b61ef45",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xb327b5265b02d45ce930041b6f27fa5f435b9d2727f58702357a979f392909c7",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x321fe8eff105889391c928cc3deb9b0902c19082b7dc534840634975a46636ad",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x56a70ff61ebb92358c03f0771e1f357bbe52cc45a2524ea7be589ac0fd41fbae",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x9e0e036b6406f5e3562c99770b3d8dc2ea28954fbbd1de0b3ae3b34eaa611809",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x9dd047573581334867d2b2186b468e1c44aa16273624728f1e5e731ddaf63e30",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xff45f3b7a4fc0c1a1c29fda0bddcd4ab4c96035cb7e956346dbd42f8dcb5dfac",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x2cc24036a0362e9686acd23ddd7cffc8ddd216f74b6391805f17f7bed8f60c58",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xafa6139c937f826025342cb0c4ca07d013d79919d47e12862752d4f792968be2",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x056ca030c8bbcb64fae7163204883fb853999e9ca03e72e1717adf809a5c7cff",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x87e3b2caea39bac32c2768de2c0b295bb8af2050087f422700b37de51a7441d0",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x271a191e8651a20eb53da3a09d59f21a0b948d754ba6f513b0c3ae4332564bb4",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x4436bb5aed60dcd3214f37fdac4fb96e636756b5a203a61096f630531360b285",
+   "band": 10000.0
+  },
+  {
+   "cid": "0xc0b24d3bec98933aae30b0f2b137432df2427a4e65abe8db89c2641594de39a7",
+   "band": 10000.0
+  },
+  {
+   "cid": "0x351ac305eed69f59ef54119beec3781cc3434ecd0836e91aaf2a0a4caa9699eb",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x41b6b8319e2954eaa005bba3a0ac5cd7fd8c37a4079674b6b40bd431062db713",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x559902409510d8db5cf54ccdc96c01568bba2a7a19843d7d815e2c187d868828",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xd3acf5f4fc4063c781f97d501b954eda81454236879c62232411d5696d7261c9",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x7f22fff06f0357be1c5641ffb7a7d7214858973da12866f573bee01dd36f351b",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x7b06f977c3a7b6326caca86c50954c07d183d0f7884e15587d6b2b16badf7647",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x1b037ed847ca38d59efe4b351ea5f0de142bb02eaf7706813fddaccf1b6c0d0f",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x01a03a9bf017a22218be4f640bca8eaad5ea0e25a041477fc8a64b6e0690a630",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xdc524cd704cb0274742b09cfb553462275c23e50b86ea4c10f4899b99d6bb9f7",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb8ae632ab212044f4daa4754d655d24036c8800450bde7caff355aae7d56ed09",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x6a726539729eafa66a1729f8c34c32dc85d75a412a64f76e1069a3a69b591d49",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xe4bff3f50a7f093065d15db9662ba8d7e5aab31fc288c8b161ec394ae1e96662",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x0f1c97ccbbf5ace7ac4d32899a9960bac082c638565ed4a46cdd11d2b85f1b08",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x87321df7f7a024f89543a2f484bb1df886eefe73a0c6cc1cdc086d90b4ad15f6",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x9f888b77eb4bb6aa66ed76efbd1cbd344658606bd87d61b2087428ce44836778",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x0a9007c13018ee184d3f4de550ff79eef28d4a936731950b103e4ecb79fe6d85",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x452f9e53cec1846bd092436b33613c64bcb03cc23e46554c3d163de39b309c52",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xd53490ec73ecbca2118c8c2ff6c4b4acf76b81c1aba575d3c2861f59c42613f6",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x85e2ee437bdbcf5c96bde3f47bf2d9fdf51b9d0b89522004163e0c8e73005286",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x11646181e747f9f60aeecddeadef32c5dd36fc550b87c0af5f7312642573e596",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x962b62543a305b883233862f94d490b7dafd7ad2f845c62b287bd37519782da6",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x68757e3c882f8cc20ca7fb1705451691da14abffac46921c072c58ba92f23d26",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x5e85a440e5c1c2b7b59b8b2f6fed028c6e324d805ad04ad9c9deb30b4630e945",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb21e7fe73ee6a50ca4f3933e3d68e570dfb168e04135bac9d01f94ea0691c9ad",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x608f4b57c0f4304675973a8ad09581c7227fe4dc72c9f1dc921590cd66d056ef",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x50b6deadae2107626418d5d3b6be15da9a47c09d575c7ff3cac60662b55f1c2d",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xbc2cab6671496f760cf7784d22f8f9c70a5231eaffad0108ec8f0b5a616785c8",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x42a55951aef16134e03a2fe5fd316a1fa2382f264a17c0a16f0a7a12cd8a69d0",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x3e627c710cfdb59ccf27c5252b43dab7f84aef4d7e3823e0c2c9521a44bbb835",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x151b13b0d75a282ea864a2835963c0164c03e8fa3064c4d44026e3af5f2ff8d4",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xe61d096d818b247ce0add9caacdbe34dee528471e555c200a98e46184d33a94e",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb3a40e1e7abeab732ed3691d992f49b50d69d09643650710f9b4f7063b50fbae",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xbb8433f070eea2b4b6f2a71a8e4f4dcf9b82d58bf170554639fa7bf9786d16be",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x3f3eca6e4359f5c19eec4f9dfa885ecf048ce92302d41a81d72131e29a69f9cf",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x4e5792401085856790c60868629d257bbf59062b7832e5180ef5ffd8cc6fcdff",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xc1698aa1e89e7db99aafbac2324aeeb2b6e9f368b4b0b0288bc31490f09f232a",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xe49e3a1e70ae6fd491ae0b002201be73b04c5a3a336f949a7a625bc0503953b2",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xeec8502640a87683b60f7a0aa268318b8fa51710aaab28e0057d3a67b4f9e2ad",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xdeb9ac4f714cf4a77b3ad0b51ee660e97d58b63df6d2742355dca69c67a4a42c",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x1de763d30fd5583fa0ab80b3c4ad743727294df5f03172df87ee7f52e17bb24e",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x24e2cbafb2f68197a35f8e8b2191316fe9910864288e12ba4e05beeaa51568e5",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x644a776ecfaf27ed3afdb49e9b2f6c1330e983d8d8371831d6e1cefe660d240e",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x28f98ce6cb26f32aaf79f9257425bbaabd00db1039d1b7a12fb16a315b61b49f",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x11e4780f48d73417a4863618e288e78c8848e2ef4f744dca4cabdff154af5e3c",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xac24ccfbf68ae4e02ae500a8078f72f4403d177279a59a16f0386708d2bd5649",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xba9a25966e61386933732603c7eaa6a32290b5034f35b8c99a27127267e5ea2c",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb3ffc9292cc5a09ad3c95675f4b6b85e55653e34c9ce0cfc7ce49d84e00e8f65",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x0c351aa0657af6a0b1c3168ef437ad040430d718b245be59c98411b212affcb0",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x9ca755fe004a3bd0b32c6f3c5692772abd1772acd0b46d9652798d9eb62d73e5",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x4c3a5fad286fd49fb82baefc2aff5d6703e581adb127eb2d601285fc904e5579",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x2cfbd8aabc3519021dc16ab0c7e0f42b0fdac191e64bcc3c42c2319c4c0117f3",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x19eff468ad0ffce9ade9f41d3d323c42e48981a28772b47618d4ef77c7333c55",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xe2f60d2d25dac9efd80b183238f46717c1519213229dfef09e0b0a8dbd53cb77",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xfb65307b328167baada13f758beabf206be221c7ffcdadecb7470e2cc3d5ad4e",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xa94de658e1bc2a9718153c02b40570fb1cbc779b29e4752e55829b076007f246",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x0200743b501bb76457156e98736b1fd5f65835af8290c3354220773968f237b4",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xd88cbd1c16dc47cf4edb66df252b29056042c6abc9400c6e170b3604b5900f23",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xa0d22b21727d096d650c34bb39941076d0ffdce20618f99122cd3bc3f3f248c7",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x405ad8b0b07bc4296631721c78e94677f65e6f2b2ebd1d550b0e25894752fcff",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb665dad0a25faaa6a6209c4eab2ec10553c40439c17e938963886abda9f80c08",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xfe4531b7aa43541a5724dd2a85e2723aebfc2b909e2b80034533fbface9ab40b",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x79346c74dcea25759feb1360aa1d2477beaefd81bf2401dc1679ab7ddfc1c103",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xa4d0f8471418b33261d02865b5838d344b3dbff250cf75e2981f2d16c85ed09f",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xc577794484ebcaa53bb3ec02e4f497314e74c0b7f90a81b3b7a49569e963dffb",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb53ffde43e35724684bb172626e409c0fe93b57bb82a09264755073d1982f899",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x57511dbf6549dd2d40298bf903ffba7bb341be65616db68585a3d97a10373964",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xef3a95c29d4750a22ec450b6e37aff1cf1b2bda1e21a752cfcc14d482e5ea651",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x129f6ea1165a417e10b0db72a7c59018992df18056d90f395069e6736126c22b",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xf7da86422359832bae8d4771b7adb0235073ddb7451f89a9ef796bc0da3b9867",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x5a5f26f47075e7bc8eb13328ab90f46c1c072b2baf35351c2c2b5ea93ddd284c",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x36ba34011aba34897bb03ced4f88402065e9a7d01942da7f25ad2e7fb51842a6",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x10be1745047799c6e1c253e658fc0b3261ba36a7b1278a51f570a2ad16f0fb3a",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x3107a083adef4e45938a55f966e5bfeb5320a62c5ce67b2af65ce8db1c3dcddc",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x0bda7d19fd1660374bf901a19a3d46d3c910bdfe6f530dcf9f428b2e4a54b41f",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xbd4ce9bd5bb45a9bc37099285159ffcc0f09a1e8091558a5526e4628f67a189a",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x0167879c2b764c835e06d78a4ef878ac40c72cf79fb05b66e86d516d0eea11bd",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x93198e6e432229049f620ab5b09f33720857c8c637ca8250d0d51df9c69a9047",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xa61a8aeadb14792a9bdbfe09b648819a011e2515d7db4c5b0110d660662a34c4",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x9beb4a4cab10c71d79f60beffd4a00a3016b4da7d82d6f18f64d5e80dd1691b2",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb87df3ecfdb937e0d5bd495d7cc7e88062097616e0c59ce478e101eff5020eb7",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xe249dc590f7c1e4157a725993039f3acd09819b6076706f61022a354f88689e3",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x9593b5f31c5a32b4ed218c94ab495a0cf5506800d90f793848ccb8675c7da6a8",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x24e8d428add25d6d86d5fb220979eb0ca82966dd060d42490b4ba10784f5ca46",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x9e59c6756e078eb49b0f85639604b55600728ed7b212d246fdd945f25beb5f6f",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb72ba7fe9872e67cbfb279ff36a46f14fcdfd4caa308892e3d24209185a0d40c",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xd556526a0bed51555cfd55c0e80f8ed9f2e2ea5986714a4a892bd70155cb031a",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x6a01c1687c781829cc90198cfd3c73f9ce64bca2a8960527868b0ad737e53f89",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xaffdb6f8316b7efdbfde2c8b0ec582a28063258895f4314ab36081db0fcd8b36",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x85afab9788db5749a1da9dc68735419bb59c4f102e8f63acaa33656cc0ad76fd",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x0606faf1617005ffacd7776b75c0fa81e251ad5f1f0bcc040acef4c9725d72d4",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x363b640ec7055c71883b4c9e449688d778167efb2cf283ecabb6227987911f25",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x1fad72fae204143ff1c3035e99e7c0f65ea8d5cd9bd1070987bd1a3316f772be",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xe320ce29c87ff6850b72ae81b021d63eb301934b6baeb943add2fdf8e0fadeae",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb25459d0d24fbb8624538fda451f4977dc20d927409f80665d922c229eeb6b4b",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x8dac151ed8001c1957ecab034a10337dcf81ead2777285f6fae2efc7290e6640",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x05386c50bb29520c311e9c639762f2e01b70dc7d7cbdc0bb9740f95cca834244",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x338d12b8285d248ef70728190c8955108eca7141f9d495347564e318fd1dd626",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x6305ecd7daf99884bcac6e4a27a75309fa8d9695f95b8ecb2af2cc444f5cc78d",
+   "band": 100000.0
+  },
+  {
+   "cid": "0xb42fa5db3fbf2cd48892e4487dfae7a155a904542de25fd291840295d4b2ab57",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x2f738e4c227b83c08c490dc6618164d31315a6740b9a5a98c392fc3160810957",
+   "band": 100000.0
+  },
+  {
+   "cid": "0x99d0ce2ab858154ba1ec511863dae5a9fe41731457022cf2ef8b1024cf97405a",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x8e7a03cb1970e2ad6533b01892403516b6b3f5b5fa90ed7d104c28b27e40ba00",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x10b4a49cc233715e3b2154533c654fcbdcac6c03b3b415611c5c014872e80b3b",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x392b0b5b48989e2208978535ce82ed77ceaea60a3e906ffe201c129a6621f2bb",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xb934f70138a5a7e3e59024b2e1a1cd6da7e5c8c18e64a12851bf39955bd13b62",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xc5c075c77d2b8a98606097f5e42c3e907a66debf4a4058131dc0160235fa8fed",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x0fac1fde9bf271efa6a8bcd382db88003f661f051ee7644c85ff96a6a4b2e57a",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xbdb326038e98f139550add22cab891493f7093118096eb005cd7d3224aaf4f5e",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xeec0dcea9df0643a868e9b152752473444ab03d9f6db1440ed66db8e76f93a14",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xbdef8b9cd2d2fa77ded61c7944faa2104e69dcf544cc3eadddf2e1088aad3551",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xfa08848205da5717b79e5bc21e7dbd31264fb01acc98bd1436b95870e8fec409",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xbf19d17cc89d133123d96662c8fb9c2e08a380a32e806233bb8e0ccaaf7a2fdd",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x89f3660355b18cdd0684d129970fbcafbe253427af12a76cd806bc684f240f6a",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xd23b4810d916942c2c7b71d9f0f5e3248adc0e4017d8ffa5dd0b1fe721beb0f2",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x3088733a3d7f03d026035f6dd7df44a82c59eeb95545dda3889b65baa9a36e82",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xeb0de200851ebb80eb722c8b02e2226fe76e91e86a7cfe7e38042632e42d5ae9",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x355ecd5575c79d48729b03b56301b88052e957a74f92c468d2896dc1a2cb82b7",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xf5cc5eb8477c1fc806d38dacd0d2566438d5fba3b70c0aecaacfc97e8c0de442",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x211cc9763666374780fb2878ee245a1cb4e27f867ab6caeed579747a5ebacf1f",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x1f54c5d06e9e7a7a11ed24123ab5743ba5b525745cf1338b7ec23d371e6f55ea",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xe7fa223cd125e6d068d1f5c4fe1aa6a35e395f90915f7b7d983027ca646dc891",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xeea6fafcf500f582bf1999d504b769befcceb645a7ed46c29aeb901d0ea29baf",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x9812b1740a7dc0ec0318f66577bd40305576ad43cfcd732399dc02a328035ef2",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x08ac1bbcff8c6bf57b9744970faf8ef8a97fefa20737480a53af4f8d398f5d26",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x4d39d238893ea8f7e0f4d53822a594129b9a98a1fc18744dab57351742e6a702",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x86f43746cbd692719483aaeedc657eef89d9ffb91d6ffceacb1edf533e049516",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xaf503d0b1bc9cbca253451ad26d5a984aa845a2d229fbe52ad3e09cdc516da9e",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x061b574c09f1ba9d8f7de0d77a0403765b6059a81bcbacbd940a622e5048e613",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xf47e8cc490e9fd5f0ac8bd36aa4bc3b1abf12025dd145baac6cd95ee58e2d286",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xd9933a54c518e773050255ea9dba01a71e1a41f49311ed078ae4a6f7e76b1625",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x344327632a0ab1c28b40003f14bfe75cb7d5bd65c58b4e34199cfc17a77104fe",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xc1714a28decf72cdfa86c4c7421c3002bcfed119f79ad527e5cc96e833738e1b",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x7162118722a6abe965c964e8c694ff0f232221d9bb2263bd92e5902633381893",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xac111edf9fdf6fab06525d9a0216c16a2e54483c0df7ac58f1a83e9fa53b0c72",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xdbe98f3ca185a40a9aa0678a2e79ed3b2ebe0f232e3a7cff4c2018d4e92c4121",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xff981ecb337160d0feba8f71c6f346fc64830d1e0c5ba5476657faff322013aa",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xb196a122933da9aff6cb8b0f3764d0dc5db1859f46c0481c711521eee8524291",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x87348688ee0df7a6842ed6c0c4503836922e16db1741600ec540ae6e7f206bdc",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xfb22501ffce04e5a029bcc79ebb9e6a534cc676677c1354e29d29e3adfd08f46",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x26954c84bed166fa0da034c310e3bd62e7afa32d299314c352bc32eb08e5a210",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x7e88fd883e66a95417ac88e33876c14479a06e7aaae4c23494233622e2ee0467",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x79afea6a94f0b3dffb5e0886fa1dbd740d688029f7aba351dc46911bcb1b1f95",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xa95d48279f55ae3288220263c0eb8a28197828121b878ff91671695ce88df46c",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x2fcf3968f5feff8c544b1be614f1c7aed22f5051949478bc0b39f9e966cab02a",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xc84dfa2ab4a808d1b96a2cf439f8b88a1c5c37762253280deb7663a195d9b859",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x386d1e55e61c1e7c8d86c0d67b580efe4b81a231c78bde9c93bb30f65a38b72d",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x3fc804e4d893f86d49229eb42492cabf6150f5bcbf36c1b66d1e8f22bc15ec6d",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x0b1cbc36ef6e5b8616ab4b64e0fc050343a2e8322a1d3002ef68ee61fdaeeef5",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x34e935db1dd7ea88e677f467fb03a8ee17dabca5964db893746a9107a68d7fdb",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x5e797ecdf30ae80f2dcc79bc1248a9aeb63ef6e7594d20f09bc539984c2f0393",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x26af99aaa2182c11f3f02ea8e9ee5527dd2d0f9680c73ffbd7bd0237cc64d5f2",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xc34b198e91f197098da3f782c066328e199a6342e6798753de2bfa9ae568ae93",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x3773cbfc174f847670c2d98e54ce030d022d7b057f476c2cffb0a52ba09dd0f4",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x3984132d5d0c5be60bc0ad1dff63e44197b5f39a6135329490a0a75c0a372f06",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x6a6255f95ea0e78d9e8d016908e386989e3e92ef5127b56c7234bd5eafbb3dc5",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x5038cb8d1ae39e35eded49cbcb86ccf579de09935ba069050db28f07a05c23c1",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xf656cf9c2390d92527023b97273f8a3279a751135d28f157fe8ad98e856f3f50",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x8b5120790c8f89cfd7a6666fb413990f9ef740d2b0826b2690dbc5fd6788f5c4",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x1a1346d763389455dac46a51e20c4cc25aecef5323f1701a440cc11d4c3f129e",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x4df0608dd27fe2a79cf6ad387b9f0e4ba1df864d8abf275c01273c297ea94942",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x842fd100cc6272e3ad216f8ee386d15c719c719c78ee6d2ccd1544ce6a0aa36f",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x60084cd46b5b91797ad397f4c1ffb5d3fcec7c134b705d2796c0f571eedad3b7",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x43272c02b8407ed3f8d5b04fb4cb132d7a59c5df6ecc423afcf66f1c778d1887",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xe1953a0f479de0ff3efabb7dff6116ff6cb9d7fe2d7ee6526c5d68da9cf09767",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x65670c7c4f3f691833e48aabc9937abb59c92d6c43d6e896ae8cc011870fc166",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x264e6793ab225b8fd861f13934ee8a826a864116e1dd727b38a65e2f7cd3f67c",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x71b9be2e4558d3581e1023a0e0568a7a49fcca8c7f1ba1d1ca73fa1deb05e76f",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x0f8de21a80996a54ced1327cbf4e0702d417e1f49ec6ebe267bc5664c7f36d90",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x21e4b9c78709570a2d0c61c9b12111f73a3c10d10cb682dd8a82dbc2a1ffb230",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xcfa8fd6341f3489fabeb6c57aa9c14ab22571a31fb9b3198b0ba0463cefc8509",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x180bce419c2b5ea2178514571c50c9d5ada7b85fd409e7088ff5d0d42e7fe867",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xa2dbbde3c939a2b2f3511e3fcec68e4f0b7ea698272eee124e0636bf9734aea2",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x4822d1452ba17d280b2c271db0e58df7866c9b494040649ab6c6ae8bb7363b18",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x1f5ed2af66a46fe492001aba482f8196112a6ce4946f5159525b30e9ccc4ac60",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x36b97e8e982e7ffc316526077c0fb30aa97e9ddb32961596e114576a17719df2",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x61b80a4a7a325eba229ccfa35aaef9cf5879a4ad38bee2fef49a0359d823d9ca",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x02103f049a5fe127c4ea03c9531772e82f3b9f5e9f5f30d67fda5b472fb56c17",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x08f597781aae34affe783a26c3ebd70d6e7529ea5832f83cde42d03740f7bf66",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x864d4155b62431499f469772de81ea9b7daa1c87b78047e4aa9cc2fbcd222640",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x4d0c4865bdecc5f7971dbab47bb6c069d93909dec75bdff52fb766ae6094a6d6",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x845d6997f4b60fbcf81e8cac4510bb18988efe56e0318d77e476124c9ce80ce8",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x6cb3ec9e0fb1c258898f648f8b33422f59ba3e8a71aee551449d7cb147bb8ead",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x7ff3ed46b924fc4516f3dd1e918df843c45163e8a064ac023b2c2163f3d16123",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xa05e65c9f1ec3e3cdf6daee18535cf58ebf658188099dbff6edad06b05ba0bae",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xacb0eed77d09803271dbd3c4bd48e36e7db3bce93d9f9e7b41698c5b374ae726",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x6f625933010dd4e8b4744617534de160c52912b91c896aa0199d51fb64af04b3",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x9476673098b7c180d010e84090d5bd0ceffea3a1053b907db4da5a637502ee86",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xd6a5a44e8105c4808ba09d19bce444b22b883330fd6e23e5661988b3583a9d4c",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x85b78ea85ddd6f9b23ee88c1e0ebca096cf44c63a53c1b071fe768f47ff04f42",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xd1c3b0cb17e682fe9637f144d818d4d02911276591ef34aca817a7fa10277541",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x4dd987594593e7e1fca9a4e0bc4301cc9320b3c51255fde088d40763ed01a69d",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x184ca107b54330d8e47c581aebc31426e9063943edd4c98ddafe2eb01307f62b",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x3f9bec31cf8e8550470626fbd15382e20a18e46af27358cad575a5ef5bf660de",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x9623b379f3e25ffa6206f8bc7aedeecd67580944645151350e06cb3efd95c090",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x1671cdf5bcf8748efcee39c259d1d9fe92f811bc7c0016d4de111ff9e505e502",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x3b6cdd4f72cef7f29ff7e054444095564dc582266b7230be3c2b5f194d89f37d",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xc112ff35c760ee66738e288067c3de90a2b44a28a9e2f4488989d498be03b292",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x7a18c03e9dd79943a25c65a5b696378e54b5b7d236140edb5d157685ce96476a",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x2abb2c5d2a65365c4107904c4d7e04b6eef9cfc6875658bf3327c589cfd20589",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0x73cdf481e0d213e3ad3b2c096ad9dfea604b6587900419d0a214aac966c68988",
+   "band": 1000000.0
+  },
+  {
+   "cid": "0xe5bd80313b8859e3f5761568ac9498866ea9d4419e4d1b6a877a9a9bd2754cb4",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xecba7b1db1c698ab73b3572abfcde327a02b5112676144e049edcc1e1e0f5b0b",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x0c9ea0b1503b95b499975674aefdbd6c235f68885f2a812e97ca96016b207e43",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xdde06286a7b9464d344f410ab0b3d2ebc6469904e72c27fd982f65fdbf78768d",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x51e8c8df709aa78f64d2d9324d9d2556270f81e3966ade308099e5338bb4e4c9",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x2037b257e602784d35e800c8c7880f56331791e03aaacae5864d8a78db303948",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x825bc4151fd9c139c4f0400c1a6f5d60cf67b2d04f12d69fd9fb5de67b13e4bc",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xf5a0c2d5b6bf0a7b9899aaf4c6237b08e1dbf8d17430fac4de8468a6e2df2e0e",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x044863f506fcca9771a47de547fe03e00f5bc2a7070e93158499092a6843a0d2",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xa7b5b123f9fd38f83fbe19773a5d04e38208b370ca66be27b9688155e7b5c60a",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xa5501b4dc0c99c382b1c2871ad9141c7f58509a0f962f70a38bb6566ec570049",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xd86a816093fcd0a0e1ca440bc5ce199bd3c5a8d6139e044b076958164f8c5423",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xf0164e968314bae58a0440248e2abd20ee9e4704df2b24c98c50072006b26315",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xa0b56d7e621c7cbcfa47fe1a9c24f3409e189180fd6bda55b7a8113129839afc",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x796e791e7058571e460278814fc7a3183752285338f1400087b98bef3c447908",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x67443cb1ffb2bf180f7df5b6ca7adff63f7e8e933c7e41405ba118f3e9f8befb",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xa6ae199ce172475dd0e29d7584810a15a1d4608398d2f42d7ca39bfac45ed52b",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xb96585ac41b808bac0bcfa00f39a92990c64dc413804368c7191ad4e1cd299a5",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x7b52405ad0e0d31bfe970940b67d77f24ecedeab8a2361c11148c02a006e325c",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x47a079b62e331859854eedaa3bddbfb41f3f8ed4063481ba956a6ed29b61bb88",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x35155be9ad199e97505970a5dfb2b4bca7a9d1bb7b731389a590091997998a78",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x4ede078cae84a5877ac32d7fb48811e5c23549a1904b7df06ff7935c6d79d831",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x7bed81b0bd1cbe7cae0ad49fcf2d9e068d1ea2da49a36e638712daa55712a184",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x7f481c96a3bf0d8292a2515e3dd0e709e5bdd240189b81fc98f8003480b4eb14",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x6972edb1b3f8cd8192651a665fc424dff846efe1c4a2376f628d4b20c704144c",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xb8e6d129a06d0ccb21d7b32eb529ea455eddba3cf29bfa097112202cbdf5bf21",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x9be56371f6a29d12769b2f196847ee825b9585ebb8bfa042136be031b081eba1",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x9ad06dd68a4075ba2ac99fc138f7c1506f236851233b0ec79a130a348af19a82",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x33a87d02fa01e958929385c74b8627d32cc4474e9ebd312d268865c5207147fa",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x567f1ff714731fafa702d454a105b064a7ec4d10f6fb71ad3221f4918681c709",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x32b09f6390252b37d674501527e709016d55581b2c1e544bd4b8167f5f732f4c",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x0891e4792a016a079765dd25029639cd731f7dc0bde3d65d6002b2b19dae2777",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x7876851632c295043c66536150a304cb785abdf712ba8489d298c6e6926be106",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x232342e2a9200b203703a816f9d99d1c6a872333567af16f43d67a255e1a6aa8",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x20fac1c925b7a2fed6b3b2736f47a800b4d0d4001b9deaeb7b918868eb63d081",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x675bba4df50fd123f7fbfbafa67e9b75f4092d85ce0f9148ce78fc945964c856",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xc5943cca27ce657f519619520b1664829b1209f9a5ef9266be7f2954be1b0260",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xfda648d24cdad32dfe959195bd75ef4c81fbea5130eb6c7a4a0c18607a11ce63",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xb5c0abeecb5502e6e8d83155c27819174d8317af3c425c3afc5a8c45257a3793",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xb8c4eb2bc36fb256ac730f0d1d05cf5ff6649a7d8d5ed779544dfa068da1cd18",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xb6b3d7a2037b3faa7e1306d741840d453432902d73cc9a146a035e40271eae73",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x2cc359648ba6695498c169ceaa44c5444e0479102c453289c47ed9489e7f3e93",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xa0f4c4924ea1a8b410b4ce821c2a9955fad21a1b19bdcfde90816732278b3dd5",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x83f38b0110a93a4e68d2391dc70868ab1f8a9a074de58b0ef50d5312e3fcfcf7",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x9c183f63913cee589ec7a8d584fb7743a541f724edc047837c053c027bdf9074",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x2f00e48e914ba6606867a6347e90c48cc1fd4da66cc196a191786637f40848e9",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x53da62774d757d6a651c69a1aca70f7765ed6b840bd1f4b209692f8d6c0c2d4e",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x106ccc4508432a065a67394837d4c2c529a8d77ed69fa3ba90b81eedf5236598",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x2a28cc33492516116690a20d290f9922acbe0ed367ff52a6082154474c7f2971",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xbaf7780f9059e34b84301fd411f8dc573b4d56adfe6e0cda33daf304b1438da4",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x9779c09fd4dd0a1c82dd82618269c2aa5669d91305293b396d1e0b8a166b566e",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x04b6d6630d49e6513355ff045c96439c929335cb0d18da7792dea6c2fc717ead",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x173be8afaedec7e17be529389b825fa2171aa7e6dff36fc5ad26698195dd2227",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xf95968b1334c35a5c17867680d783d1d592bb8648b014f7365d03e40e37c99fb",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xc851fc5ae688d3d67bccb7c8f0ca475f61ebda796cfcddca7230042de6b48cfd",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x22e7b5e35423e76842dd3a5e1a21d13793811080d5e7b2896d0c001bd5e97d54",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x965ebc5d79eb1ec02cad67245a44b9e45b33359018f013fb6cf81d5bbf7bcc8d",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x43bde2aa4a2067139451beb84649e5acaff989a3a0817fb1c592046c993d4168",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xbce6698c9a61376c0709a2a724a9cf0dd0236d8dea882533073b6bb062efbee0",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x3fb8a8de2ac275882d72b2c4f22d41776fcf033f9e413a77a84dd395c0d5257c",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x8ec1344d38fb55aa4adf043a3d81899bda2762b89bebec5769a81a50c3b9c25f",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x99f0c39e4235d840bd25d2c229b2cda57cc087b6b8c2780f804fffeed0d0c628",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xf374fb58698bccedf29399f9f5548a70370a11c0fece34f2570fb9b3885e8e5a",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xe6f040d202cefefe47bdc9d192303905418223fec440f96eb2abe98f3b701bd4",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xaf767784230a131d5c4dc31e6b3cc4b4e898e03af20a75d5935a75100a76a46f",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xe322faca2a534900680db54e3a4349a61427d347b6f906d2eeb01f81ae1b082c",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x4f3421fb2daf5cca7430ed8d8132463963081572d75434393a1808fdb8829fe8",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xa886b40d69b4733df3086a6b3f106ab783e1ac7fa91fea42ad807a00ed0f6846",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x9e5f9d8c384f8fe368b195fa9a780be58643dff7360588a4e577012df8af00a7",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x6897736d782ce70f47126dfcec6669073f563d6e757e60bc61c0367370d6f73e",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xf8f63bb47b2a7c2e0c1be3cedf4075079b11c07476d76a9469065b0c4791961a",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x2de8d7b9d103366e37f3a448db8289c5c571dec5c0b9eeddbc673546d4bd9322",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xeb348b65a59bb2752d3dd10636d17de501df76a424e978e136d22e76d07c84e9",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x9918c9f426379e48d5e6a6fbf591e75e5b4a9cd33807b097810fdbaf3aebd1b4",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x17b566faa4c085b49020ab355d4b81f01037634c6b17b15f455861f3cfb0ab55",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x9d3f02264a94bafc676afd7add8b11442e6ec72dabaa69cefef835f0672275c7",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x1525f6e38aad87d60dca762113a3bc8bd48baa8563aca8489b12c79330d77a92",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x971eb98daab3a11a1dd3b76e14ae962f8e5980ec6a3d499529b5f19b75108d4a",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x776956c5185fb6e9115e4a52fb0a8386172cae91d6812b447795fb171f478a69",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x08d56195e88cedb87eeff396bd35e8b67d031e586169b3bc937b3095b3cdfe43",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x0d2071920da35396162280a1af346e1f799ed45e019ed43fae0c88dc1ac4b4d6",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x94e50623d3cfdc1256e16ff372062d42c282bec8af620bb732a19fb4b0dce580",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x374d4c9c12e766653de985450899cf2181edf47189894bc9c870216b5c6b1d83",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x44e25f753ae47dbdf2705d35e0a45db24d3a1b2996b82a1350ade2c7e92c4f93",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xc41f543ccb7a1a35a200c28096cc2e5c2351c54546087f4f6cf5c4ef3e0c1aa5",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xa70fc3695a65833b91b45df6db6015096f3e1471b70352ca411b4209010e7633",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x6f05c7bc5ad978f8f9916f05d30a7f752e02b81508c56d82ed7c9245bca163b0",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xae9433e408d779f7aa5b1d3d7eb9ef269fbb6d415d3699c119e60c4445e13159",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xc51a08334e7c0865181a72dd8c94662cacf7fd8129c3e24da5fd0ead4bc0ca43",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xe99cc59f32b10d23acf196d1a0e8264ea30fca198428acadd3464b06ff60e771",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xc58cfb7397c4f3f803f5c20135cafa7f6d2c87cf3bb1e6138042b95d828e1866",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x32cfa52198e85e070d1b17d1b53c5c3a6aaae7736cdc33fa6aa04d353f0c2811",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x16c981b47490212bbb7d70edcccc419a84ff5771bc85c1b7abae37128975953e",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xadf4acda3ae836e6c4f6646eaa940c7934d1b97de2a8f7a51ff585139e8f693a",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xcaaa1338d38b5c614196c9a926dd84babc3984442f2ec9b937a16284a199ec3a",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xbbb20aee74d8d120db212bc10c1fc915a412a758117a64ed6ff6f3948c2f7d66",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0xad3441638abca4aa830cb997b7caea5f3c8b84be06b99173781cb9a47c5cbc5a",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x3a26ca6425e2d98f14935670bc22cdb0744defc6f6d83c65f8c413a921c5c70c",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x84edef36bded182da6a395ac6c785dba8f3e09b6c5ad041385b2042536cbef25",
+   "band": 10000000.0
+  },
+  {
+   "cid": "0x2a7a6ab8f4984f1ae82eacd7fb408832a50e63162ac6b98fff1fe094b8e9d3b5",
+   "band": 10000000.0
+  }
+ ],
+ "counts": {
+  "checked": 14741,
+  "errors": 0,
+  "qualify_market": 462,
+  "qualify_board": 82,
+  "market_wallets": 10768,
+  "board_wallets": 5331
+ },
+ "groups": {
+  "market": [
+   {
+    "wallet": "0xf2fc14b3623b6d61d714fce23cc80baad71b7a15",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 2877.5,
+    "trades": 523,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfcbe0acc4eb7e57831eb405f9dd97d1f149a60bc",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 1998.0,
+    "trades": 56,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb9842e547fbb29465ae935c76d9f256b6a9af511",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1887.0,
+    "trades": 51,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa5d833a23bc19b7d38adcbee7c117a8f421eff3a",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 3660.93,
+    "trades": 96,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x84f0f7e0b96f9055827c2ec619819d90a5e7b11c",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 1026.3,
+    "trades": 55,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa743ca31db3580ce253bb0ec8ed9aad428b7b299",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 8673.58,
+    "trades": 89,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xde5d32c292c66e0b2c6c4906ad09463113a6f4a2",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 1546.05,
+    "trades": 25,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc4fbfd8c2bf090568f8eb207123364a3f0352bfd",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 3519.51,
+    "trades": 250,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbe216a3f27d7e5d9cd7d7234144b8cf895a365e5",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 1100.0,
+    "trades": 34,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe8ff0a56d848954b60e8e8ed99637e3c50ddc93b",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 10328.26,
+    "trades": 124,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfec8b587154a3ff00dfd2773d30a768a50ee50f7",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 3379.43,
+    "trades": 38,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x65323e5b7531fd473471b8bd5a950de88b2c048d",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 1341.87,
+    "trades": 84,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd996c155812aff9cfb316990ba68f9500d206a5d",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 6051.69,
+    "trades": 23,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2614cc6e49127efeb103c55bb7fa77632f31dbc4",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 5259.3,
+    "trades": 982,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x8bc2ae36edd4a06763743bcc2041c3634db4c1ca",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 1560.58,
+    "trades": 218,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x47b5c94d54cfc48f653c8a74ea516d52122113d0",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 1943.09,
+    "trades": 22,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x563fcc1a35a376ff2f28c3218d736c3409d509b0",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 2178.3,
+    "trades": 382,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb9aa79042cf55489599895b16d6b498a8d0deab5",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1297.48,
+    "trades": 42,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x32bd1adec14cd3fdfd3ed1fc71b98f055a067b64",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 82559.08,
+    "trades": 186,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x63e1cc99a0feb50d0edd7f80c1d8a57660bfbdfb",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 1197.09,
+    "trades": 17,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x7c4e7df4ceb66e6391ddea48b77c376667e16cad",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 1005.26,
+    "trades": 21,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbef5ab169458cb47c5d233e067dff4447fad1c5a",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1097.21,
+    "trades": 248,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x1ae35b042a8f2119b6e66a23a62441ba66b3a161",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1518.46,
+    "trades": 12,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x91754280e17dd92c3fcf4cc71b917dab90876acf",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 3335.0,
+    "trades": 25,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x7f6a11e414d0f5d1372791568030da60e962fcad",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 16675.84,
+    "trades": 909,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe03b5978ddb1ea94df10fb69cf4f5114d94932da",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 3182.29,
+    "trades": 153,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x476f4d5e410a33b016e72456e852be047d61f8b9",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 9930.34,
+    "trades": 14,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xec570193a382465a94dec36c05a09e9061bde0ac",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 1010.2,
+    "trades": 33,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2e6cdb6af66e6528a6f8db0a14b51be9134751e0",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 4993.82,
+    "trades": 200,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x88eb0c8d1ec1dfafaf6a8948c0d521b0e6a39394",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 1021.9,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x59f1bead500fca3db9483f76fba8832e3c0ca693",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 3380.66,
+    "trades": 290,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x659e6dd6a3b57bbb154f5dbfbe09a7699f024d33",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 4095.33,
+    "trades": 68,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe8d8e7338e571b82a3863e546d2e0900140ebcc9",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 3296.14,
+    "trades": 30,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd2ef0e128e4cf9b0689ce8f37c37159f635e1829",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 1014.1,
+    "trades": 26,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4b2f12695653edfc9e9d76a62d95d432ba4c4a32",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 5506.98,
+    "trades": 24,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x18f313b92e0aed1ef5c1b22029632ed3a26bb4e9",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1611.38,
+    "trades": 123,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xad9f36ec8cf79f48b53b14a96177d120963017bc",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 1235.21,
+    "trades": 85,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe58060061c54e5b421852c95b0228d2940e2b926",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 2908.62,
+    "trades": 29,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xad7463f0a2812651dfcd44d413c9f5fcb5e12fbf",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 1861.03,
+    "trades": 31,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xae792f852bc123dcac179c457f4ebc4e3b4a6d2a",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 1099.45,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfa5892e1a33f5dd4b449241821e634d25d4d31d6",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 55025.98,
+    "trades": 812,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x992af1472603395d703a29e055ad62d52ba59543",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 15226.56,
+    "trades": 301,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x3f1e1cd502c20f42683fe39d59cf5d786af4f362",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 1550.02,
+    "trades": 62,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x549681816ea50446beb625352ceb672a8d76079c",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 2627.71,
+    "trades": 24,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x3ad572db7867a58d8ff529d69dcec87ddd53aea5",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1388.13,
+    "trades": 24,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfeb827922cc8858d6b3d52bd07139c6f82861c94",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 2270.55,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x54857b3539b36c3928443c02dd21cc49aa1904a0",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 1248.87,
+    "trades": 90,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x5fae6030eee40aecb86dd9624460c13a8a8778f1",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 51140.0,
+    "trades": 36,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x6cc1967ec65b586c92125870ff9b5dec21d2c13f",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 5059.69,
+    "trades": 25,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x7a6bbc024ef64654245b881e5c154c35c93e6704",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 1381.25,
+    "trades": 56,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x70c3838e1f8879bdd44a360debef2ac3e36d3041",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 2399.46,
+    "trades": 33,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe569275fa1cd58c794f6ab3171af06210f8ce9b7",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 2582.5,
+    "trades": 34,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc2c4438c3438026c47a7d52a37dc3616a411bbb5",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 1121.45,
+    "trades": 37,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd43fc4ecfaf5a3d75d79c4d046d2dced9e9ef1fc",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 8755.8,
+    "trades": 183,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x36c35cbcab770a26c28a6102810f9018c7157fc2",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 3396.19,
+    "trades": 11,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x950ffa8a5c67d6fda89f15e2b8479c5e8187a521",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 2516.63,
+    "trades": 25,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x89fd5ad3fb676b67e455de20a1f3ddb62a543101",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 1552.03,
+    "trades": 55,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x3b5a307f9b679922a105fe9f55013b0d05babb9b",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 2357.15,
+    "trades": 137,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x3d84c9478f783c950b6e3259072fa706cc66086b",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 3010.57,
+    "trades": 34,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x661713b724c3fb1e70643da3169260a4d405668f",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 1313.26,
+    "trades": 22,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbcb2bc3d36ae3317ea134b43eae3f18926cc8f61",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1146.65,
+    "trades": 17,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x005c7d76f6d76b9ca43dd2bb7d4414f205838cc2",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 25286.63,
+    "trades": 23,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x06b6cdaf7aad1dc399c5cf0e78f05c843b4d09ce",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 3145.5,
+    "trades": 23,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc4eaee3cdd1e20a75209250dc8c67a6d180262c5",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 1087.39,
+    "trades": 600,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x04aace060ade7531e4fda09841e5112c045109ea",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 3582.99,
+    "trades": 69,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x1be252c495f932e2bf521974ce957f1e44c649e8",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1019.74,
+    "trades": 77,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x06b68112fe2c37e72899a1d2feab994b9f17ce16",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 2683.31,
+    "trades": 32,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x5dd7900dc0da3eb6acaf486b55db1bda4d4d8131",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 1367.4,
+    "trades": 42,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x78c5eac8c4bbd34c7dfb03db8e61623b555efb0f",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 3061.0,
+    "trades": 31,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x8217c870a7393a5d5f0d2d5a30a58f4cd2f99fbb",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1183.33,
+    "trades": 83,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x61009385eca87e000066750f5e9c9cccae7335e2",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 2805.05,
+    "trades": 33,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xcf5a2286a318f6d1f7959db5e8b59f6f65ef9241",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 1884.87,
+    "trades": 29,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x3e8ffd3ea26ee5c87beb00c07625179fdd850d48",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 1336.77,
+    "trades": 22,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x0b20040f2669ee88a0e6836dcb901162cb2a25bb",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 1077.14,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x16581ee7c20cc69496517692a192636485a2d10e",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 6752.34,
+    "trades": 403,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x6e913f0e6cf4020cfd13311d2f7608fd41c26189",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 5300.32,
+    "trades": 23,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x39c5c8726f44fe30b9eb55de3547c6e041b38ff1",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 3572.76,
+    "trades": 97,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xef9b5d5e51eb4987240ed77422352d10604ed5ed",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 18000.0,
+    "trades": 103,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4d5eed9d38d9116ba5aa83c744610e321bd5bc7e",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 1396.6,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x39b9e7422e92c90b7f0c9eb7949b4176ad541957",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1692.47,
+    "trades": 15,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xaf825810e0ce40a275f029aba8035f4b5780aae8",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 1005.8,
+    "trades": 12,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbea109aa700407f4a4f0d9808c86652b7dc9dad3",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 2225.31,
+    "trades": 162,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x03520a5c4f2b8068898f335d46189acc6ce27076",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 1591.87,
+    "trades": 30,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x5607e051300abf498a988eab909dde03c899fd15",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 13713.21,
+    "trades": 132,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe964f985d3da0f173c492d510fc9f6a57fd303cb",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 3139.98,
+    "trades": 262,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4f0e8b2ebadaa5acb3c1f8b14d43608f3fd48775",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 4979.51,
+    "trades": 192,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd4c54b6e47dec269e7ff055d22e173a8d272b9a3",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 1923.03,
+    "trades": 40,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x349cf67ea2f4a2da72088a91e5953c04b5ff21b8",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 2992.11,
+    "trades": 33,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x17d0c5f93320dc9711328f270c8cbfa83cac8449",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 4248.55,
+    "trades": 200,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x293a6ecdf316874ab9b46eae81f72918591eb607",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 1975.01,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x01787658d8e709979d70229d2e6129ae1a41bff1",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 3799.99,
+    "trades": 827,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9604b357e8307b0ccc8eb5812725d2b112c6fc1d",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 12122.68,
+    "trades": 342,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x80b2d2eceab6b3f0d4122042aa8c6ef795475bf7",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1709.53,
+    "trades": 30,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x0aa56b81996a8d47399f7f8b2a6eea0115d12aa1",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 2061.4,
+    "trades": 382,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x696f8458c43028beca4288b77e81f7b795687898",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 1000.05,
+    "trades": 14,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xcfc51c0a1a5a78845127d9d9dcb1236f700dc7cf",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 5474.52,
+    "trades": 408,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4e5533b48f7c65a112e1e23d3d9d7acb785f2ef7",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 5427.64,
+    "trades": 288,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa71916c98b84cf4a824f99fdca027ce62cbed8f3",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1198.84,
+    "trades": 21,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x10b8dd116d59fc787fb41accedd88669a08899fa",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 1958.57,
+    "trades": 34,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa4f1dd2c76f9f0e857236b8077be7779cce7c43d",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 1960.0,
+    "trades": 199,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb9d33c40da4707ec8f153c5886d2a67d6f584101",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 1774.74,
+    "trades": 73,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x37992a5ddc1fa3cf0621de309b58ac8fd9fa2728",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 2019.96,
+    "trades": 38,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb5fbd6e3b7f6bf5e19f9181be047b5418fdf70ee",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 1790.21,
+    "trades": 83,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb04fbbd4937c1e26dd6b5aa85d47286e9633d000",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 2812.02,
+    "trades": 30,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x0b5e60b2296e67b9361d8fdc0bca9897affc1423",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 1407.61,
+    "trades": 36,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x6ccd87bf804ff7a6e81e5ee731a4e5de1ff0a162",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 1026.62,
+    "trades": 21,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x3443cb53b9a4a5e88cfd3e846e0fcbb3db14123b",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 2671.33,
+    "trades": 16,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x631ab9da279e989e8abe014ec98c23fc0421b631",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 4985.64,
+    "trades": 56,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x96b4848bb03cfa9d006c9d5639bd04f368a67e39",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 4507.5,
+    "trades": 46,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xf7877cf614e23e5aec998b88b17e4b3353563c4e",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 11071.64,
+    "trades": 69,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x68fe494c5ca794f3f247f4ec2a8bf95e3ef28792",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 5821.73,
+    "trades": 97,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x277edea1af0a85ee7b76463c1c9d8866d666b7f0",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 2219.57,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2f9731bff9299b9ceb7ed34e7214eb60aa6bd3c3",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1435.75,
+    "trades": 52,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2cf662de1e8b1ccba7c7738d030d0d81d4559af0",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 2978.21,
+    "trades": 31,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x0568c6edff3fa40cf08b36da9636b895582c57e2",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 3235.83,
+    "trades": 40,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe2dd72d7ca976e65495d75b8a16ba9eda62b4a23",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 205917.63,
+    "trades": 1030,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x5f943272e4334fa5c6ccb09a7c91d94b835f7d96",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 3527.85,
+    "trades": 76,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbb550f07b67a7b244cdec69796156f7bf8d9827a",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 4889.37,
+    "trades": 23,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x33d28264066e0b27c044e4cac74e5a4b7e4f9229",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 5500.63,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xcbf3781106aa0e0f391ec39fe841c68bd5301491",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 1560.86,
+    "trades": 29,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9e7a97d193ef0701bf5fcf97d4a75c99abce7045",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 1017.34,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x1ae6dfeed00855fd34512415dcc4a3c0f6635526",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 1011.07,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe665f54d3b82c79f1a29c4c327a21c7128dd7d42",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 3877.97,
+    "trades": 245,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xeec1ec75f982723e71d29701ab998d6e17ef44b4",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 1613.29,
+    "trades": 21,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x8206afa60b5dc5c281279ea65d7afbbddfe8e04f",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 1085.68,
+    "trades": 43,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd92bab9ddf691fba525a9cd60e1092ea7a091b1b",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 4986.55,
+    "trades": 39,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe495714fa11f0afd90f249f7fef874c8531ef0b5",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 1697.8,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x1e9cf1b6ab620b8cba0b82eba008674e8b2c8223",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 1948.19,
+    "trades": 28,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x7beceb045757feb2d94277874795dce7b173947d",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1011.15,
+    "trades": 35,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x6322e412889e0d2c775d7a905383c3222ff90c4a",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 3325.59,
+    "trades": 16,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x3db7f6ffc7c61394d764db19bbbbb8b3ddd88fb6",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 1061.03,
+    "trades": 34,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb59594f185634cd4e3f6720b141970a9ed451890",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 4517.21,
+    "trades": 31,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2480f5c700615e96721c45d2dca278a4ddc3c85d",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 4459.18,
+    "trades": 35,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x17ec5f15430ef9c396556c421f7b549b78c031b1",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 61805.63,
+    "trades": 410,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb7465a3e88685b70ec35a3eed6f1498a1253c8bb",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 1059.22,
+    "trades": 22,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9e3929fb5e1ac2f194a91d6d9fd40297632c3e17",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 1660.0,
+    "trades": 158,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x39cc32916e8d21263101abfe0fa2414a53da8ba2",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 1296.22,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x5236e7900d40b39a8c11129c13fb333ed6f8d9f7",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 1019.69,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfb83a2228c1b4ec7dd84c4bf95c9b7a3883477ee",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 3241.35,
+    "trades": 829,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x54f5b3ec3e30ee652168b59a3468c89a242444b2",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 5090.3,
+    "trades": 23,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x75747822f515804392f589faa1f834ef75b2fcc7",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 2823.55,
+    "trades": 18,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x00d119d63f706d590cbb55ae64d2be560550b883",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 1200.5,
+    "trades": 37,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x02eeb64bf96ff1de2b233ed44ad6a9c1f6a60938",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 2989.17,
+    "trades": 235,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xec83fe5b976e4fd4b3ced824df5b471dad815329",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 1270.43,
+    "trades": 38,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x7c09919dab5fd7d8acfd861af81cf5443612b05d",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 1090.39,
+    "trades": 26,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd584d667c601c0b137114fbd9232fe9858a68107",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 1024.0,
+    "trades": 80,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x66663b39d49009214adb43ce2a36091ed581db92",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 4677.69,
+    "trades": 333,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x74bf179c9ae963857b37ba7b0c22b7a2e3872a6e",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 4796.15,
+    "trades": 917,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xf38091a47e892077628aabfc964a770e78155858",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 1011.1,
+    "trades": 65,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xf941d4bb257add646894770fd9f73096a09c1be7",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 1355.0,
+    "trades": 45,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x519794a3d72e8f18790b3089ac1e75cd74a40ce6",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1020.71,
+    "trades": 81,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9a009fbe1fce83be00a31de66e4ef98ca893d6d0",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 4454.27,
+    "trades": 41,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa797212f18d629348449de5c07739e5675ff3e6e",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 2168.47,
+    "trades": 293,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x1edc9e979bb30983893679a0c2221e7697de77bf",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 3499.98,
+    "trades": 36,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa6f8220dfac596335d6b6719f2a2c7b451cc316d",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 6510.1,
+    "trades": 244,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2d73a48df1fe053b30f22423ca1a0819daa2d63d",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 3400.9,
+    "trades": 17,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x87fcf43c7e6d12598ac06a74f000d9117cb9e4c4",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1619.87,
+    "trades": 76,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xdf1f7346f33f69c02242c873c43d25c056dd5317",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 3028.8,
+    "trades": 37,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xf32e55e00b84cf085d0c676cebca38dc3b5d441d",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 20027.25,
+    "trades": 543,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2f7a40e3bf89c34ffe09515258a3ca2bc0b86f03",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 1224.68,
+    "trades": 36,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa41f137a7fb14b2d5b3911cd890907053cb8b397",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 1246.65,
+    "trades": 87,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xcc9c7318c9938345cc07631e455d46fb81864488",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 1182.86,
+    "trades": 47,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2f6e3eeb3d4dc2127ff47367e7b4529bed427d46",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 23621.44,
+    "trades": 1407,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x99f6d49711a91c4dbd9e28c48a3508fae92f37fc",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 2695.05,
+    "trades": 221,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x03c4f0465f4b38b9110dd5a455665fe89994fa2a",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1404.71,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x5aa1ad6163ad7357fa6e22efac5188b3df88d9b7",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 1236.22,
+    "trades": 107,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x02c38130c95296a6ac317803fa0c7b973d500a75",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 4658.77,
+    "trades": 403,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfbba3875b02e615405cac1ade5181e0e6c842153",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 6112.47,
+    "trades": 22,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x66ac48b376c6c136fe7346ad8d337e25b8fb0118",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 2588.8,
+    "trades": 147,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xdc7d72b5e34493db0ec6c1207532fd029a6ab2ad",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1004.16,
+    "trades": 456,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x5a34b767eeb3bc1abed4fdb04a245550d6f2b52a",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 1400.29,
+    "trades": 139,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xec560bcbe104ff09f202ba9ea93b1c7eed8a13a7",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 1083.33,
+    "trades": 183,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd02254cf9d86be21961b7648c25252f7e3213834",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 1352.69,
+    "trades": 25,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x59f38c10afd052f83fe054eabfd9879bbbc31c31",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 1102.46,
+    "trades": 190,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x5fcd7afe1d2da7ced927348aa837b6ead132c2ac",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 4719.64,
+    "trades": 86,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x95e4883450f6e3483484d186bbff58910feb10c3",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1012.0,
+    "trades": 78,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x06b264856b01134512d68d42719dcf2e9de9a222",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 1663.03,
+    "trades": 78,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x355dd3113bea86f1baf23cae946e54184d211068",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 1154.63,
+    "trades": 23,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x735a1fd8ca7a400a0df5ced14432c783a8ce4917",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 1834.0,
+    "trades": 37,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x134aad969b0df13425d1455517986b597a8f96bf",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 1913.1,
+    "trades": 120,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfe54b3d4f7b4eb45f24fb94a81f598c7cde315a9",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 1137.67,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4f8a79421d164b9a04da95f2355e232035be8a18",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 5004.18,
+    "trades": 289,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfe059291fd4d1c413960e55ca1e47ad4e585931c",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 1545.2,
+    "trades": 69,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfb3ad72118dffcd927930fffebf9a2be825b3155",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 1052.0,
+    "trades": 219,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x60df9c9dd2116c0eec4f3994eccacf0d7fb8a69e",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 1128.57,
+    "trades": 49,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4613fb4e44e63b0181508e40d7769b0117c58c44",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 1459.87,
+    "trades": 43,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd49a35114b87ecda1799fc9cd46480a8573e6f4c",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 1729.0,
+    "trades": 114,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9e8fb4c07cb1697204313b9f362ec651fc7974de",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 1233.1,
+    "trades": 14,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x0706cefd3aff9fb0728b00531d9213e0be80a381",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 3083.71,
+    "trades": 73,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4671b7821c95171ddbdd835a4442f17f2aa6da69",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1019.5,
+    "trades": 186,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbba84878f74ad26893c1828e07e25684a707b4f8",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 10297.15,
+    "trades": 94,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd7c3ccfbfd9f11b34ea5caaf949a3024eab5c034",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1494.66,
+    "trades": 20,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x333e8f4fb0353ef31cf1a7d00789e1319381369b",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 3546.94,
+    "trades": 89,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x294a45ed846ea6957f6d470c47ee2a90cc608fb7",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 1215.43,
+    "trades": 53,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x622b28d03873dc93c40b0195667fddc7e73bc6cb",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 1341.38,
+    "trades": 21,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x34d0ad43d5cb38b8391aba757fdb405149486989",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 4503.72,
+    "trades": 74,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xdd1db2f6caa04a8bc5c7b86b340ff7a64ceebbf0",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 4807.47,
+    "trades": 141,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x563cd9401c2d8cdff4ab3c62f604e44c7d8d7a82",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 2262.09,
+    "trades": 32,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa07ce5e4de7153136c88e16bce49389c4e953410",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 2549.07,
+    "trades": 29,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x621c7e9b965860b14c4ad84388abf809cbacae1b",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 1202.03,
+    "trades": 68,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc576af380217a4d2b2d190e06c938e5505be747a",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 7995.99,
+    "trades": 136,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb13da19be0dd1dedf56264ac9ea2d4866a8bfa0b",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 8694.36,
+    "trades": 105,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xf94c69f27e25acb49d2e7ef5892b6c5990d559dc",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 11669.51,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x792f8e8bae0323abf8927c6820863fbe8a98328a",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 10682.7,
+    "trades": 797,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbf32b1ff44fa66ffa8f9c4e4e54745f6c6d70920",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 1010.77,
+    "trades": 41,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xf731ab9c4ffeb18d1d7f8596853d5b36ab62e013",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 99535.34,
+    "trades": 154,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x095ed632cc2e5f1aa9d3d3629d9ce76c1f4cb372",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 2128.68,
+    "trades": 45,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc06d04f0d78038f2a9fbfed6d59d97263601c534",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 1150.75,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x725ae97cd0a690b43c193f56699bfd90ec3c0791",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 4333.15,
+    "trades": 24,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xca33a1f1dfbffee395bffbcfce8d06563e3cf3eb",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 2679.32,
+    "trades": 102,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2ece9aea1e1522edf10a58af0254408a098eacf2",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 4123.0,
+    "trades": 99,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd008786fad743d0d5c60f99bff5d90ebc212135d",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 5833.77,
+    "trades": 630,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xdde7e8b3014fc922bc914ff2d5267df261a39932",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 1879.55,
+    "trades": 21,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x38218fbaed474136da25b5e758225d2ff1900ad3",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 1283.7,
+    "trades": 29,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x82ff82838d26347b7188c8e3ddc9fb6f8306f0c4",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 9390.17,
+    "trades": 135,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x398bcdf9ed3a433d8d7b738a92a1dac864e9be1f",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1391.31,
+    "trades": 106,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9ac5bc1634b7453a415c1928157f0f511e59917b",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 5036.97,
+    "trades": 36,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc1d284d1f8097fc64ae5403774cf0dead4b373b8",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1489.98,
+    "trades": 11,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x899843e09e4faaafc65682535cb1fd8ad2f032be",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 2674.87,
+    "trades": 125,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb6cc6f64a8616ccef7d552d1bb71401668740f34",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 5151.65,
+    "trades": 26,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc6bc1debd2a991d8511251302d22e546fef5f729",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 1947.81,
+    "trades": 36,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x267d37ca503ea0f4c0da583b599dcf3e7d9a0c13",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 10897.51,
+    "trades": 173,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x8e9e8bf3ed65d8f25a4222a86745f2f072a329b5",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 7707.7,
+    "trades": 16,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbc1dcd7b21793ebbced7ab780c3b00d6a356e2ff",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 5428.65,
+    "trades": 52,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbf5381bfe109f61be94dd5ded75c7e99edc9c98f",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 3081.95,
+    "trades": 47,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x8a0004224e2d9c9de2a6e44455448b788fd2ab3c",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 1156.93,
+    "trades": 24,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc14e1840aaaa56e12409585ad2c2a74c161339a5",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 1550.01,
+    "trades": 182,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x25bb2f0f0c35529b146e822aa4a3941741e4bc5c",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 1622.06,
+    "trades": 30,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x8d5491366f5808e316844dfe61ac1d4df2a4f62e",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 1077.33,
+    "trades": 35,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x7c42ad0f7660ecf568b25f733ee37f4a4c6919dc",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 4041.44,
+    "trades": 35,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x727dd86fa445ee4ee1a660d5f6fefbbe1b27867e",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 3101.62,
+    "trades": 26,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x1fd7649d7514d636b1fc97599e19308b26af401f",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 10153.09,
+    "trades": 160,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb39811c09d474e871267dad5df9fbf4130a94a9f",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 1548.15,
+    "trades": 110,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x79cd523b2a581a032adac49fb0a5017ab988079b",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 3607.8,
+    "trades": 132,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x0a8ff556f82e5c1a60ba351c98930967cfeeea08",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 1009.15,
+    "trades": 46,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xcb069d9b316750cd83cfba6464b9ee537834f7d9",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1008.33,
+    "trades": 34,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x6954fd0c380608c80d6315528a12ff82d100c052",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 2143.12,
+    "trades": 22,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x75bd2868e94abb7482e05ccb2cb65cd7d1a91fea",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 1152.65,
+    "trades": 121,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x087489564ceed774d55a2aeab35e9b1179b8d847",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 5601.18,
+    "trades": 24,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xff91aff2e663ef5753063241755ae6de10a8a1ed",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 2000.0,
+    "trades": 26,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x7223e63ed5eceabe9683ff37758a61f1c757adc8",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 1858.0,
+    "trades": 281,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x54d2a1791236bf8790d1a42232d89dd7f4f0de22",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 5851.17,
+    "trades": 61,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbf4b843910900877f276792876889d345e4bfe64",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1034.5,
+    "trades": 67,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x425acb2debc40ec1a069138e8feebd980e6f61b0",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 1110.92,
+    "trades": 34,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa2d26d0ff7260b54cbd1f8034d391b87bd72d931",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 2767.08,
+    "trades": 57,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x7e3515169fdc77abe35a91534219050b15bb79fb",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 1690.51,
+    "trades": 273,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x79f2f7b29b108617dbf71a34d6c107e581db30ba",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1018.38,
+    "trades": 17,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4ed7aa9b5c35130bd7ee098e9bc11c8351ad767e",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 1442.5,
+    "trades": 16,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xc4e373816068330ac370bace54c906a67c33df77",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 1450.98,
+    "trades": 24,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfac6069a9d33b6e946cb94b5479fce1e6e6514fd",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1174.31,
+    "trades": 36,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa7715a969f35fea826258fc7b7ce4c95fdf642d1",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 5671.0,
+    "trades": 139,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfdb5049c3fc1ecf35b77ef1732c9404157b96be1",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 3400.0,
+    "trades": 167,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2ad83250bcd2845813e1d0c7674216bd162e034f",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1330.8,
+    "trades": 24,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x313dd7ab099445e5bcbb4fa6dc08797a77204b1a",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 4988.19,
+    "trades": 105,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x33ee29c4f8c560b030397638933c10df9419f5c9",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1700.0,
+    "trades": 29,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd1e166b940a2a514407d3f99b7088db80f9cf023",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 4174.99,
+    "trades": 214,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xaa55d7925373fe373d5e5899828fbda9ea81fae5",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 6162.66,
+    "trades": 146,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb071638af8112214be9b687e19a60646a6ced064",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 2863.22,
+    "trades": 80,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb5a5e9d836c828bb0f0e26cc978089cc58fcc668",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 9937.98,
+    "trades": 366,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x393e0fbd13b1b2c021d2f6c3b66967314fd2c17d",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 1245.84,
+    "trades": 73,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xdd0a22a520624502c92c8b5138ad70669ca2c642",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 4226.1,
+    "trades": 265,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2b43b06284e88a0ab5f7d28619db5ed0bc704758",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 1298.75,
+    "trades": 23,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe52cf2c46eceb96f2d0eec7775ab5e11467af959",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 11848.22,
+    "trades": 305,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xcaacf5cd5b8572bb9e3e1ee2373fe4f1085539e4",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 6047.11,
+    "trades": 99,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x76f9ea62d9e5dc1f83332af85029958068069d10",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 7739.81,
+    "trades": 59,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x360742512c3e1544de6453215eb9d745ca89d3ff",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 30071.95,
+    "trades": 136,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x67574f1f16c6e6cfb17f674dee851eba962f327f",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 1837.5,
+    "trades": 45,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa7a6f428d73348aa9259e3170d26e46933e2310e",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 1066.59,
+    "trades": 19,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd637a1471733542684f7ea0f330973d3080dc7c2",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 1347.38,
+    "trades": 30,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x87d8398a2b60df1b749407f282048ae8d8647197",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 1139.89,
+    "trades": 132,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x62b2115f20c94e03731a9963035432fe056ccec5",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 2063.78,
+    "trades": 85,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xb175f0a63698bfc1ff9b2cb7a760b5e0444b2fd8",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 1186.11,
+    "trades": 32,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9d97de13141c8a3b8fb31f03fc2c3fa53eb40fd4",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 1076.38,
+    "trades": 50,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x55f94f90d192c65fc86bd3833b244f1397618615",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 35690.83,
+    "trades": 363,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x0288846e8ac11d82dbf56c1565c95bc93c0ce926",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 8041.38,
+    "trades": 256,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa42dcbd880f9b32ad8ea06ef78d3323295f12e9a",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 5274.41,
+    "trades": 218,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4757e38a4704d3cb5546d55f6b3c9786b081786e",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 1127.32,
+    "trades": 75,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xfa79540225a5bf4bbc04e7dcd901c77dca52179e",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 1012.0,
+    "trades": 26,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xe513f1006767ff56bb4811c6b9bdb56fad3b1d5f",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 1116.43,
+    "trades": 360,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x02b968cb000eeabf64ebef0b7e396efebd0ebbca",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 1054.22,
+    "trades": 38,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x1b855f9d682760b3f2a81d3154f187d939f72b34",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 2035.16,
+    "trades": 18,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa6f592f15388fa7ea879dc61a0de21ed6ffd4653",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 1011.27,
+    "trades": 20,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x86a70ddb8c44412324d42d5223b61d67849bbb8e",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 1100.7,
+    "trades": 64,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xef8cfc8da4031ec0fa9482634b1aebc69f860313",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 4340.2,
+    "trades": 55,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x2e3f7e339019ab53553fd9f0df8d1b0538e91136",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 6028.8,
+    "trades": 86,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xa642d3bfb88333933ae697395c5251f37877b419",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 19076.88,
+    "trades": 528,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x4586aaf9156a535423473672df75606d1da4c4be",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 1617.02,
+    "trades": 35,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xd14aa86fa6cac2e09edd9944f5c0c0d48634a8ad",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 1757.3,
+    "trades": 188,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x1f28a0404133776151339ff618c876b81a59266e",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 86140.21,
+    "trades": 820,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbf2a62fcda2b07e094e7407bf86bc1a7c08ff6b2",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 5500.08,
+    "trades": 21,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x87ddd7b5033e00713a931a559441a7add7eee210",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 3041.81,
+    "trades": 453,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xf40d0291e3f24b71f4d9879c18493d8f03a09eac",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 10151.5,
+    "trades": 14,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x676fde80d24af60ddc419a364530fba08273cb1b",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 2631.62,
+    "trades": 64,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x0e1306879a4e78ae9f394f80c8f35fc10e8d4d20",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 4582.31,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x3fcc5bcb2e4d41ca07980df3a6bdf7022df54b74",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 1012.62,
+    "trades": 124,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9fe25032e184ab6d93c01cf662791cf0400b207b",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 2013.49,
+    "trades": 27,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x672f13d830d3617efea21c2ec7f4bda5d2c27fcc",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 199800.0,
+    "trades": 1468,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0x9d5e8a5502c626334b8718bc588c2f4f32c517f9",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 1154.77,
+    "trades": 370,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xbf5dfa33f94e80f7649fa94a81ab8465d65c6e7d",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 1015.8,
+    "trades": 10,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   },
+   {
+    "wallet": "0xcdc537db3ca793e6e3464fc42c9099ede6aaafc9",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 1015.79,
+    "trades": 527,
+    "qualifies": true,
+    "source": "market",
+    "also_market": true,
+    "boards": []
+   }
+  ],
+  "lb-profit": [
+   {
+    "wallet": "0x09e7ed40e867fb65a07ce105b19d38c0d70e2737",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 1298.11,
+    "trades": 23,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL FINANCE"
+    ]
+   },
+   {
+    "wallet": "0xac715194f101aa682a63e56d979e58e6b2e40b92",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 68563.64,
+    "trades": 28,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x89961868837749331b85636b9f93f318ea3dfbce",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1820.0,
+    "trades": 216,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL MENTIONS"
+    ]
+   },
+   {
+    "wallet": "0xad9c94a65d1f053b8bb31815865a0d4c64b69889",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 34490.31,
+    "trades": 180,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS"
+    ]
+   },
+   {
+    "wallet": "0x54a598106e0467dacc1a4ced3909582f72aaee3d",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 3480.27,
+    "trades": 795,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL FINANCE"
+    ]
+   },
+   {
+    "wallet": "0x733b2ffa4ebfd125ee71e8b673bd08273abd7260",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 11063.11,
+    "trades": 31,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ESPORTS",
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x9a4a4764d10916b32040f5c145e61e98ccb5170f",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 15324.54,
+    "trades": 408,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0xc8849a93e05a2ae1b49bb07787a9e0059bb4e17e",
+    "markets": 21,
+    "months": 2,
+    "median_usd": 26996.38,
+    "trades": 207,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS"
+    ]
+   },
+   {
+    "wallet": "0x0f0edbb5fca07a7efffe283624f085a7b2e2a019",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 39265.76,
+    "trades": 310,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL CRYPTO",
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x086934317f099d0279493b3f73a954ee896114f1",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 22364.53,
+    "trades": 184,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 228290.5,
+    "trades": 495,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xc4d1a863e9cc45d02ba22d3a1ae9ba7822018ce8",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 22410.66,
+    "trades": 473,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL CULTURE",
+     "PNL ALL FINANCE",
+     "PNL ALL MENTIONS",
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS",
+     "PNL ALL TECH",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x7d2299a379eb0b1c6077c7c419a383da6fb7f0cf",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 69930.0,
+    "trades": 1297,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS",
+     "PNL ALL TECH"
+    ]
+   },
+   {
+    "wallet": "0xbf0fd14d47d8d785ac19f33aafa6985501f128ce",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1898.41,
+    "trades": 101,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL FINANCE"
+    ]
+   },
+   {
+    "wallet": "0xcd75d28b219c3bffc79540a7b03b8e48bdc9d07e",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 1120.86,
+    "trades": 126,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL WEATHER"
+    ]
+   },
+   {
+    "wallet": "0x79929dfb11820a017fb7a51faf536a55bdbd48bf",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 3532.75,
+    "trades": 980,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0x665b39291b0fec221c03f85d29135e3e835873ba",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 1017.42,
+    "trades": 30,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL FINANCE"
+    ]
+   },
+   {
+    "wallet": "0x8e0b7ae246205b1ddf79172148a58a3204139e5c",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 9523.44,
+    "trades": 839,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL CULTURE",
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS"
+    ]
+   },
+   {
+    "wallet": "0xc0ff6a9ac424210cf218fda5c5753324c34a9953",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 2938.89,
+    "trades": 441,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x7e1570ca6c2bf1ee33dc4a3f567831635684cfdb",
+    "markets": 18,
+    "months": 3,
+    "median_usd": 7777.35,
+    "trades": 71,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL CRYPTO"
+    ]
+   },
+   {
+    "wallet": "0xf62e9b24cd788530757b4e80cd81620946caeda7",
+    "markets": 18,
+    "months": 2,
+    "median_usd": 2809.37,
+    "trades": 685,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ESPORTS"
+    ]
+   },
+   {
+    "wallet": "0xa309f903dbbd559e87d8d368834b8e41355c4cf2",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1791.76,
+    "trades": 896,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x02981ea7473e0a7ef143b5144f004165284c5cdc",
+    "markets": 12,
+    "months": 3,
+    "median_usd": 1409.43,
+    "trades": 66,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL TECH"
+    ]
+   },
+   {
+    "wallet": "0x7e97bd09c2ccc632fb728d91b7c37d8ec5f34d54",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 15019.38,
+    "trades": 550,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL CULTURE",
+     "PNL ALL ECONOMICS",
+     "PNL ALL MENTIONS",
+     "PNL ALL OVERALL",
+     "PNL ALL TECH",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xe5c215ac428d4143f9ebc817c9ac6e717a2e2ab0",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 143224.74,
+    "trades": 500,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0x31e2a93d6cc595506fb7ad3dcf0082910a4998a8",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 2499.7,
+    "trades": 696,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL CULTURE"
+    ]
+   },
+   {
+    "wallet": "0xff76dd29f8376dfdaac3aa470467d6ca38c59c05",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 1679.05,
+    "trades": 127,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0x8f7bb1d97c28278e28943b8481f1a1651605154b",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 3029.55,
+    "trades": 462,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL CULTURE"
+    ]
+   },
+   {
+    "wallet": "0xfcf2378f20cf408d077c21e731272f21cccea469",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 2566.11,
+    "trades": 283,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xa953a2c33207de8a8dc009c99aaf8a0a958b8bf7",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 4118.92,
+    "trades": 499,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL FINANCE"
+    ]
+   },
+   {
+    "wallet": "0x246b6f2cf1eb3c74ab82b5d7288ef49baeed1196",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 3154.39,
+    "trades": 915,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0x844ef6cdd0a4d691b7a81429ee550f025aa64f41",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 9177.12,
+    "trades": 1080,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0xaf2830f2dd4dfa32e3dffac60531bb4ba5147f92",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 2599.99,
+    "trades": 785,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0xf0d9af9effd0b4a039899901ba19a05ea1a3e4ee",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 16781.99,
+    "trades": 757,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "PNL ALL MENTIONS",
+     "PNL ALL TECH",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xdf1c2e388bde2fbacabaf85c75a6b69cc35e2ebb",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 9480.0,
+    "trades": 190,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL FINANCE"
+    ]
+   },
+   {
+    "wallet": "0xb1a279adb096d316b1b168993e8ed976d3cd372a",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 3376.38,
+    "trades": 707,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL CULTURE",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x4099db7f2d394449ccf89c8d42260ecaf1d79fb8",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 665332.67,
+    "trades": 1456,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xf4baccff188321440a1ed01a5d5fd89c3e1f5933",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 20167.42,
+    "trades": 1069,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS"
+    ]
+   },
+   {
+    "wallet": "0xe40362b6d2c1eb1134da886f4c64f02f08f6e5a4",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 10587.31,
+    "trades": 217,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0x96b59f71f635da5da031e3e93448c54fe226f5e7",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 62999.97,
+    "trades": 350,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL CRYPTO",
+     "PNL ALL ECONOMICS",
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x269ced0ede348b4b3f8fd8470b19f65508f79017",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 5758.59,
+    "trades": 286,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL FINANCE",
+     "PNL ALL TECH"
+    ]
+   },
+   {
+    "wallet": "0x5e4c3b5b81171e2ca4ab776ac0d6bba787f9dba2",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 859535.42,
+    "trades": 474,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x91168ddb61315a38c13f26b7d74764e21cfc6fda",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 30589.28,
+    "trades": 352,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x64c8ec47e1f5a367f234a74f8176d805e87173ce",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 14644.5,
+    "trades": 1476,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL FINANCE",
+     "PNL ALL TECH"
+    ]
+   },
+   {
+    "wallet": "0xab811fc324bbf4ccf6ff88a1b1880abfb27f6e6d",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1966.03,
+    "trades": 51,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL MENTIONS"
+    ]
+   },
+   {
+    "wallet": "0x157efb90bf2f3bae9eea4f1e9d02abf12ff3add7",
+    "markets": 9,
+    "months": 3,
+    "median_usd": 3074.55,
+    "trades": 241,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x02a17a92e6f673129b37d95359c7af628a3cdd72",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 1334.97,
+    "trades": 195,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL TECH"
+    ]
+   },
+   {
+    "wallet": "0x0af037c59ede5b3b2a6625f23923057d8296d425",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 21981.75,
+    "trades": 636,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS"
+    ]
+   },
+   {
+    "wallet": "0x198a38b9704cf3a5ed321f28c8a7836559676762",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 75383.46,
+    "trades": 1286,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS"
+    ]
+   },
+   {
+    "wallet": "0x8365a0c9908dca494abaf0b90584162b474ce9a6",
+    "markets": 20,
+    "months": 2,
+    "median_usd": 1354.28,
+    "trades": 157,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0x2c2801e96082fd489a9cb57ed6a83b884d7d9e49",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 20785.25,
+    "trades": 158,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ESPORTS"
+    ]
+   },
+   {
+    "wallet": "0x73f8dd50a114884493dbf4a5ea1503f96f348234",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1177.32,
+    "trades": 52,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS"
+    ]
+   },
+   {
+    "wallet": "0x9c1648834ee717cb967d32a31d7b9cf9534ea981",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 2300.0,
+    "trades": 597,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ESPORTS"
+    ]
+   },
+   {
+    "wallet": "0x253da8157571bae06d6cf750eeb1b26830a43307",
+    "markets": 16,
+    "months": 3,
+    "median_usd": 1381.49,
+    "trades": 819,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x87c67f878e93494918c1a2198fee747b4a1589b7",
+    "markets": 10,
+    "months": 3,
+    "median_usd": 26368.82,
+    "trades": 41,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS"
+    ]
+   },
+   {
+    "wallet": "0x97cb27132b9dd66a2ef49390893cbeb26c3fe4d0",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 107984.01,
+    "trades": 962,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS"
+    ]
+   },
+   {
+    "wallet": "0x15692550650de5817af4202681a4e38dcf34bf0c",
+    "markets": 13,
+    "months": 2,
+    "median_usd": 9861.91,
+    "trades": 19,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS"
+    ]
+   },
+   {
+    "wallet": "0x6d2292935570e3fad05b392d49e60699c1024b50",
+    "markets": 19,
+    "months": 2,
+    "median_usd": 1445.03,
+    "trades": 313,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ESPORTS"
+    ]
+   },
+   {
+    "wallet": "0x380002b00394456c8a247bcf115b5ee665f72325",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 19800.0,
+    "trades": 342,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL CULTURE",
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0xafbacaeeda63f31202759eff7f8126e49adfe61b",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 28603.88,
+    "trades": 1163,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL CULTURE",
+     "PNL ALL OVERALL",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x92d8a88f0a9fef812bdf5628770d6a0ecee39762",
+    "markets": 19,
+    "months": 3,
+    "median_usd": 2863.42,
+    "trades": 511,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS"
+    ]
+   },
+   {
+    "wallet": "0xee30e5174dae1fd602ff1f06cc398bf67a1f9297",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 1009.9,
+    "trades": 344,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0x9dc5f4dc0ece70aeb116a6f75a29cc1550e75a8d",
+    "markets": 17,
+    "months": 2,
+    "median_usd": 4972.84,
+    "trades": 168,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL FINANCE"
+    ]
+   },
+   {
+    "wallet": "0x852308055de0cd7f31d2ccce9d55116ea2741c9f",
+    "markets": 15,
+    "months": 2,
+    "median_usd": 4162.49,
+    "trades": 234,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL TECH"
+    ]
+   },
+   {
+    "wallet": "0x2b3ff45c91540e46fae1e0c72f61f4b049453446",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 104840.81,
+    "trades": 1072,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x5116ee15e86bc8878b90ac8a8514e38511eb58c4",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 2067.35,
+    "trades": 73,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL CULTURE",
+     "PNL ALL TECH",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xadc2efbf97ce7b25f7a638aabdba196c657cd1c9",
+    "markets": 21,
+    "months": 3,
+    "median_usd": 199800.0,
+    "trades": 1080,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL MENTIONS",
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS",
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xdc71bed951076a6dfd27f6a341c441b8543ed033",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 43499.81,
+    "trades": 1412,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL SPORTS"
+    ]
+   },
+   {
+    "wallet": "0x59a513a782dd4c1a98ef22932c52191129f5afc8",
+    "markets": 14,
+    "months": 3,
+    "median_usd": 1316.58,
+    "trades": 209,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL TECH"
+    ]
+   },
+   {
+    "wallet": "0x2a21da2e20fa5b69381d7d44bd73f879c1aefb6c",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 2430.12,
+    "trades": 293,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS"
+    ]
+   },
+   {
+    "wallet": "0xdc26d7776929e9c84a3d9651e13260dece6f7e7d",
+    "markets": 11,
+    "months": 2,
+    "median_usd": 2434.95,
+    "trades": 153,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL CRYPTO",
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x3968c3d8090406b6d4c6e29308331a9dc3292b0f",
+    "markets": 12,
+    "months": 2,
+    "median_usd": 3939.78,
+    "trades": 429,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xa5517ed74c6b07843946e0e69cad10a9fa94e050",
+    "markets": 15,
+    "months": 3,
+    "median_usd": 10944.15,
+    "trades": 346,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL OVERALL",
+     "PNL ALL POLITICS"
+    ]
+   },
+   {
+    "wallet": "0xcf6e295f9cc9767eb5579c83177fc87676d4b45b",
+    "markets": 10,
+    "months": 2,
+    "median_usd": 1799.71,
+    "trades": 187,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": true,
+    "boards": [
+     "PNL ALL ECONOMICS",
+     "PNL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xbbea56528e414e3a494c5bc23d93770cc91ae2b0",
+    "markets": 11,
+    "months": 3,
+    "median_usd": 3465.44,
+    "trades": 211,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ECONOMICS"
+    ]
+   },
+   {
+    "wallet": "0x3ce8e7c1d00fd86e1b8cca3bb003479d53fd3cd9",
+    "markets": 14,
+    "months": 2,
+    "median_usd": 2454.45,
+    "trades": 30,
+    "qualifies": true,
+    "source": "lb-profit",
+    "also_market": false,
+    "boards": [
+     "PNL ALL ESPORTS"
+    ]
+   }
+  ],
+  "lb-volume": [
+   {
+    "wallet": "0x7b676d5a6379855773d405fcf19b9aa577651b07",
+    "markets": 17,
+    "months": 3,
+    "median_usd": 1518.98,
+    "trades": 1125,
+    "qualifies": true,
+    "source": "lb-volume",
+    "also_market": true,
+    "boards": [
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x9d3e4fb265800f911de2026ed4a0ebddce36eec6",
+    "markets": 20,
+    "months": 3,
+    "median_usd": 2556.9,
+    "trades": 232,
+    "qualifies": true,
+    "source": "lb-volume",
+    "also_market": true,
+    "boards": [
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x681b3e42aaafc3357ea43522774833b94f192f73",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 2973.29,
+    "trades": 1249,
+    "qualifies": true,
+    "source": "lb-volume",
+    "also_market": true,
+    "boards": [
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0xcc77f32616a96f696a3850ad48c0e378eddcc035",
+    "markets": 13,
+    "months": 3,
+    "median_usd": 4426.01,
+    "trades": 507,
+    "qualifies": true,
+    "source": "lb-volume",
+    "also_market": true,
+    "boards": [
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x68cabafd9ce49a6cd008dbe34c63868404939f73",
+    "markets": 16,
+    "months": 2,
+    "median_usd": 4812.98,
+    "trades": 845,
+    "qualifies": true,
+    "source": "lb-volume",
+    "also_market": false,
+    "boards": [
+     "VOL ALL OVERALL"
+    ]
+   },
+   {
+    "wallet": "0x3f5ea0a8053e81ce2f59814118869322c35fe7db",
+    "markets": 9,
+    "months": 2,
+    "median_usd": 1002.54,
+    "trades": 106,
+    "qualifies": true,
+    "source": "lb-volume",
+    "also_market": false,
+    "boards": [
+     "VOL ALL OVERALL"
+    ]
+   }
+  ]
+ }
+}

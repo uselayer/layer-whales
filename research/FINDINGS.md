@@ -172,3 +172,83 @@ Limits:
 - Selective picks are few (5–37 per rule), so their ranges are wide.
 - 60 checked bets per score.
 - Copy is valued at the hour mark.
+
+## Selective traders who bet big, on and off the leaderboards (14 Oct 2026)
+
+**Question:** the frequent-vs-selective test drew mostly small accounts. Do traders making a few **large** bets a
+month keep making money, keep their advantage, and can a follower capture it? And does today's method miss
+promising ones?
+
+**Design:** pre-registered in `selective-large-preregistered.md`.
+- **Who:** in the 90 days before 14 Aug, bought in 9–21 markets (3–7 a month), in 2+ of the 3 months, with a median
+  of $1,000+ a market.
+- **Found two ways:**
+  - $1,000+ trades in 400 closed markets (no hindsight): 10,768 wallets checked, 462 qualified, 300 kept.
+  - Today's all-time leaderboards: 5,331 wallets checked, 82 qualified (76 on a profit board, which leans to
+    hindsight; 6 on a volume board only).
+- **Total:** 382 wallets; median $2,594 a market; 0 errors.
+- **Measured:** the next 60 days.
+- **Output:** `selective-large-results.txt`. Raw scores: `selective-large-scores.jsonl.gz`.
+
+| | Market source, no hindsight (336) | All-time profit boards (76, leans to hindsight) | Biggest: $10k+ a market (59, both) |
+|---|---|---|---|
+| In profit afterwards | 40% [35–46%] | 41% [30–52%] | 42% [31–55%] |
+| Made / lost $10k+ | 8 / 9 | 10 / 8 | 8 / 5 |
+| Total P&L afterwards | −$7k | +$1.51M | +$1.43M |
+| **Skill:** own settlement return a contract | +1.4¢ ± 3.4 (475 events) | +4.5¢ ± 4.8 (235) | **+6.0¢ ± 5.2 (z +2.2, 136)** |
+| **Skill:** 5-minute edge | **+2.7¢ ± 0.9 (z +6.0, 675)** | +0.3¢ ± 0.8 | +0.5¢ ± 0.5 |
+| **Copy:** a copier 1 min late, held to settlement | −0.3¢ ± 3.2 | +3.2¢ ± 4.7 | +4.7¢ ± 5.3 (z +1.8) |
+| **Copy:** valued at 1 hour | −0.6¢ ± 1.4 | −1.6¢ ± 2.1 | −1.7¢ ± 1.9 |
+| Profit persistence (Spearman, A → B) | +0.12 [+0.02, +0.23] | +0.26 [+0.04, +0.46] | — |
+
+**1. Profitability:**
+- Big selective bettors do much better than the small ones of the earlier test (41% in profit afterwards vs 14%).
+- Having made money before helps a little:
+  - Market source: 56% vs 40% stayed in profit (z +3.4, 177 picks). That passes the bar, but the median was $3 and
+    20 made $1k+ while 19 lost $1k+.
+  - Having made $10k+ before didn't help (31%, 39 picks).
+- On the profit boards, a strong settlement record before (6 picks) was followed by 5 of 6 in profit, median
+  +$4.7k. That passes the bar, but it's 6 wallets on the side that leans to hindsight.
+
+**2. Skill:**
+- The only pass is the biggest bettors' settlement return: +6.0¢ a contract (z +2.2, 59 wallets, 136 events).
+  That was the pre-registered exploratory subgroup.
+- The signal comes mostly from the leaderboard wallets: market-source big bettors alone showed +0.9¢ ± 9.4.
+- Across wallets, settlement returns before and after barely line up (+0.23, CI −0.30 to +0.65, 16 wallets).
+- Market-source wallets beat the price 5 minutes after their buys (+2.7¢, z +6.0), but a copier a minute later
+  gets none of it (−0.6¢ at the hour). With $2,500+ buys, that looks like their own buying moving the price, not
+  foresight.
+
+**3. Copyability:**
+- No rule or group passed.
+- Closest: copying the biggest bettors and holding to settlement, +4.7¢ ± 5.3 a contract (z +1.8), again mostly
+  from leaderboard wallets.
+
+**Does today's method overlook them?**
+- It recommended 1 of 382 wallets, at 13 Sep or 13 Oct. With a median of 4 bets in the last 30 days, it can't
+  judge them at all.
+- 13 of 382 (3%) were promising in hindsight (settlement z ≥ 2, or $10k+ at 5%+ of volume). The method caught 1.
+- No rule on their earlier record found those 13 better than chance:
+
+| Rule | Picks | Promising (precision) | Base rate |
+|---|---|---|---|
+| `R-profit` | 208 | 7 (3%) | 3% |
+| `R-profit10k` | 61 | 5 (8%) | 3% |
+| settlement rules | 13–27 | 1 each | 3% |
+
+What it says:
+1. Big selective bettors are worth discovering and keeping: as a group they hold their own, and the biggest show
+   the one skill signal that passed. But no rule picked the future winners from their earlier record, and a
+   copier's gain isn't shown.
+2. Today's method can't see them, by design: too few bets in 30 days. Phase 3 now keeps them, labelled "Not
+   enough recent evidence".
+3. The lead worth following up is the biggest bettors' settlement return. It needs a test without the
+   leaderboard's hindsight lean: a larger market-source sample of $10k+ bettors, and a second period.
+
+Limits:
+- One period.
+- 9–21 bets per wallet before and fewer after, so per-wallet results are noisy.
+- The profit-board source includes window B in its ranking.
+- 60 checked bets per score.
+- Settlement only for markets settled by 13 Oct.
+- The 5-minute edge of big buyers includes their own price impact.
