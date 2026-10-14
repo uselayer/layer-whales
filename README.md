@@ -42,9 +42,9 @@ The first visit asks one question, which markets interest you (Politics, Sports,
 markets), then opens Traders. The choice is kept in your browser; the market chips on Traders change it, and the Feed
 follows it ("Your markets: … · Change" opens the same picker), so the two always agree. Then two tabs:
 
-- **Feed**: one switch at the top, **Following** (the default) or **Recommended**.
-  - **Following**: signed in, every trade over the last 24 hours from the traders you follow, whoever they are.
-    Signed out, a short prompt to sign in.
+- **Feed** (signed in; signed out it's a sign-in page, while Traders and trader pages need no account): one
+  switch at the top, **Following** (the default) or **Recommended**.
+  - **Following**: every trade over the last 24 hours from the traders you follow, whoever they are.
   - **Recommended**: trades of $1,000 or more over the last 24 hours from the traders in Traders' two sections
     (Sharps, Rising). Quieter on purpose, and never the default. The page says to use their trades to
     learn what they're doing, not as a signal to buy: we haven't found that buying after them makes money.
@@ -132,9 +132,10 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   the store. Set `LAYER_API_KEY` in the service's variables; keys never reach the browser.
 - **Vercel** holds the domain and forwards every request to Railway (`web/vercel.json`, deployed from `web/`).
   Caching is off there.
-- **Signing in, only to follow traders** (off until its keys are set): Clerk, with Google and Telegram. The
-  page loads Clerk from the Frontend API its publishable key names, and sends Clerk's session token with
-  `/api/me` requests; the engine checks it against Clerk's public keys. Follows are kept in
+- **Signing in, for the Feed and to follow traders** (off until its keys are set; while off, nothing is gated):
+  Clerk, with Google and Telegram. The page loads Clerk from the Frontend API its publishable key names, and sends
+  Clerk's session token with `/api/me` and the Feed's requests (`/api/live`, `/api/trading-now`, `/api/bet`); the
+  engine checks it against Clerk's public keys and refuses the Feed's reads without it. Follows are kept in
   `/data/follows.json`, by Clerk user id. Sandboxes kept from before (in `/data/visitors/<id>`) are left on
   the volume, unread, until the owner decides to delete them.
 - **Alerts** on Telegram (off until `TELEGRAM_BOT_TOKEN` is set): "Connect Telegram" on a trader's page gives a
