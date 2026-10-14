@@ -169,6 +169,31 @@ def test_positions_are_read_only_with_a_trade_to_price_and_kept_while_the_trades
     assert asked == [("trades", COPY), ("positions", COPY)]  # a new trade: the price now read with it
 
 
+
+def test_open_positions_are_the_sdks_one_read_of_open_bets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The poller's positions come from uselayer's ``whales.positions``: one request, settled bets left out."""
+    import httpx
+    from uselayer.http import Http
+    from uselayer.layer_api import LayerApi
+    from uselayer.whales import Whales
+
+    rows = [
+        {"conditionId": "0xa", "outcomeIndex": 0, "size": 10, "curPrice": 0.5, "avgPrice": 0.4, "title": "A"},
+        {"conditionId": "0xb", "outcomeIndex": 1, "size": 10, "curPrice": 0.7, "redeemable": True},  # settled
+        {"conditionId": "0xc", "outcomeIndex": 0, "size": 10, "curPrice": 1},  # settled, not redeemed yet
+    ]
+    seen: list[tuple[str, str | None]] = []
+
+    def handler(r: httpx.Request) -> httpx.Response:
+        seen.append((r.url.path, r.url.params.get("user")))
+        return httpx.Response(200, json=rows if r.url.path == "/positions" else [])
+
+    http = Http(transport=httpx.MockTransport(handler), sleep=lambda s: None)
+    monkeypatch.setattr(engine.reads, "whales", Whales(http, LayerApi(None, http)))
+    got = engine._open_positions(COPY)
+    assert [(p.market, p.avg_price, p.title) for p in got] == [("0xa:0", 0.4, "A")]
+    assert seen == [("/positions", COPY)]  # no profile, no stats
+
 def test_the_others_give_way_only_while_followed_traders_are_read_and_alerts_go_at_once_after(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

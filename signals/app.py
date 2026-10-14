@@ -1572,13 +1572,8 @@ def checker() -> Whales:
 
 
 def _open_positions(wallet: str) -> list[Any]:
-    """A trader's open positions (the SDK's TraderDetail.positions without its profile and stats reads).
-    Stopgap, approved for V1: the SDK has no public positions-only read yet, so this calls its internals (as
-    ``listed_now`` reads its leaderboards). Swap for ``whales.positions`` once uselayer has it:
-    https://github.com/uselayer/uselayer-sdk/issues/23"""
-    w = reads.whales
-    return [w._poly_position(p) for p in w._poly.positions(wallet, 50)
-            if not p.get("redeemable") and 0 < float(p.get("curPrice") or 0) < 1]  # fmt: skip
+    """A trader's open positions: the SDK's TraderDetail.positions in one read, without its profile and stats."""
+    return reads.whales.positions("polymarket", wallet, limit=50)
 
 
 def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
