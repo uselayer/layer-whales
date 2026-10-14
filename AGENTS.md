@@ -77,7 +77,9 @@ behind Vercel (see README, "Hosting").
   and when, measured; while they still hold some, the price now and "Check current price"; once they hold none,
   "They no longer hold it." and no price (never a made-up one). A sell is information only: never "sell too",
   never a copy line, never grouped, "Open on Polymarket" for the market. No alert at all when the price
-  now is settled (2¢ or less, 98¢ or more), or a sell's price is. At most
+  now is settled (2¢ or less, 98¢ or more), or a sell's price is. A restart (a deploy) neither skips nor repeats one:
+  what each round looked at is kept in alerts.db (`watched`, `seen_trades`), so a trade made while it was down is
+  alerted once after; only a new follow's existing trades are just noted. At most
   20 alerts per person per UTC day, then one "You've reached today's alert limit; more tomorrow" and nothing until
   the next day. When 2+ traders you follow buy the same outcome, each within 6 hours of the one before (1 hour in
   Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the price now, how
