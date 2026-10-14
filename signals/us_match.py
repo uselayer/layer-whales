@@ -35,7 +35,7 @@ from typing import Any
 VERIFIED = frozenset({"auto_verified", "human_verified"})
 SAME_BET = frozenset({"identical", "equivalent_with_caveats"})
 PAGE = 200  # Layer's largest page of matches
-MAX_PAGES = 50  # 10,000 matches a venue at most: far above today's ~2,000
+MAX_PAGES = 500  # 100,000 matches a venue at most; 9,780 International on 10/14, near the old cap of 10,000
 REFRESH_S = 10 * 60
 STALE_S = 45 * 60  # an index this old says nothing: a match may have been pulled since
 
@@ -182,14 +182,16 @@ twins = UsTwins()
 
 
 def all_matches(read: Callable[..., list[Any]], venue: str) -> list[dict[str, Any]]:
-    """Every live Layer match of ``venue`` to Kalshi, page by page (``read`` is ``Client.matches``)."""
+    """Every live Layer match of ``venue`` to Kalshi, page by page (``read`` is ``Client.matches``). More than
+    MAX_PAGES pages is an error, never a shorter list: an index built from part of the matches would quietly say
+    "no verified US match" for the rest, so ``refresh`` keeps the last index and says why instead."""
     out: list[dict[str, Any]] = []
     for page in range(MAX_PAGES):
         rows = read(titles=False, venue=venue, limit=PAGE, offset=page * PAGE)
         out += [r.to_dict() if hasattr(r, "to_dict") else r for r in rows]
         if len(rows) < PAGE:
-            break
-    return out
+            return out
+    raise RuntimeError(f"Layer has more than {MAX_PAGES * PAGE:,} {venue} matches; raise us_match.MAX_PAGES")
 
 
 def refresh(read: Callable[..., list[Any]]) -> None:
