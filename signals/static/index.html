@@ -1448,11 +1448,14 @@ async function tradersPage(view) {
   return topView(); // Big trades moved to the Feed (#/big)
 }
 
+// The picked markets go with the request: when Traders reads the directory, their traders come first (no id, no account).
+const worthUrl = (picked) => picked?.length ? `/api/worth?markets=${encodeURIComponent(picked.join(","))}` : "/api/worth";
+
 async function worthView() {
   clearTimeout(worthTimer);
   const box = $("#tview");
   let r;
-  try { r = await api("/api/worth"); } catch (e) { box.innerHTML = errorState(e.message); bindActions(box); return; }
+  try { r = await api(worthUrl(interests)); } catch (e) { box.innerHTML = errorState(e.message); bindActions(box); return; }
   if (routeName() !== "traders:worth") return;
   worthLast = r;
   if (r.status.running) worthTimer = setTimeout(() => { if (routeName() === "traders:worth") worthView(); }, 4000);
@@ -1628,7 +1631,8 @@ function renderWorth() {
       · <a class="link" href="#/traders/top">Top profit</a>
       ${st.error ? ` · <span style="color:var(--danger)">Last check failed: ${esc(st.error)}</span>` : ""}</p>`;
 
-  $$("[data-lbmkt]", box).forEach((b) => (b.onclick = () => { toggleInterest(b.dataset.lbmkt); renderWorth(); }));
+  // a new pick is read again (it may bring traders the last pick's list didn't have), shown filtered meanwhile
+  $$("[data-lbmkt]", box).forEach((b) => (b.onclick = () => { toggleInterest(b.dataset.lbmkt); renderWorth(); worthView(); }));
   $("#lbcopy").onclick = () => { if (paused) return toast("Copying is paused: no trader can be copied right now."); lb.copyOnly = !lb.copyOnly; renderWorth(); };
   $("#lbq").oninput = (e) => {
     lb.q = e.target.value; const at = e.target.selectionStart; renderWorth();
@@ -1639,7 +1643,7 @@ function renderWorth() {
   const howp = $("#howpaused"); if (howp) howp.onclick = () => howSheet("copying", "copyable");
   $$("[data-lbmore]", box).forEach((b) => (b.onclick = () => { lb.more[b.dataset.lbmore] = true; renderWorth(); }));
   const clear = $("#lbclear"); if (clear) clear.onclick = () => { lb.q = ""; renderWorth(); };
-  const all = $("#lball"); if (all) all.onclick = () => { setInterests([]); renderWorth(); };
+  const all = $("#lball"); if (all) all.onclick = () => { setInterests([]); renderWorth(); worthView(); };
   const rec = $("#lbrec"); if (rec) rec.onclick = () => { lb.all = !lb.all; renderWorth(); };
   $("#how").onclick = () => howSheet();
   const again = $("#wrefresh"); if (again) again.onclick = async () => { await api("/api/worth/refresh", { method: "POST" }); worthView(); };

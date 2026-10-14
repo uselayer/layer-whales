@@ -23,6 +23,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
@@ -260,7 +261,9 @@ def links(venue: str, trader_id: str) -> dict[str, Any]:
 # Finding and scoring ~200 wallets takes 20-30 minutes, so it runs in the background: on launch when the
 # kept result is older than WORTH_MAX_AGE_S, then again each time it gets that old. The page shows the last
 # result meanwhile. A wallet that isn't in it is scored when its page is opened. Its reads come out of the
-# background's budget (BACKGROUND_RATE), shared with the directory's sweep and evaluation.
+# background's budget (BACKGROUND_RATE), shared with the directory's sweep and evaluation. With
+# SIGNALS_DISCOVERY=directory the page shows the directory's latest scores instead (_worth_load), and the check
+# keeps running beside it, so going back is instant.
 
 WORTH_WALLETS = int(os.environ.get("SIGNALS_WORTH_WALLETS", "200"))
 WORTH_MAX_AGE_S = 6 * 3600
@@ -278,7 +281,17 @@ def worth_file() -> Path:
     return STORE_DIR / "worth-following.json"
 
 
-def _worth_load() -> dict[str, Any] | None:
+def _worth_load(interests: tuple[str, ...] = ()) -> dict[str, Any] | None:
+    """What Traders, the Feed's Recommended, alerts and trader pages read as the traders checked: the directory's
+    latest scores with SIGNALS_DISCOVERY=directory (``discovery_result``, the picked ``interests`` first), else,
+    or while the directory has none, the Worth following check's (``_check_load``). Same shape either way."""
+    if DISCOVERY == "directory" and (got := discovery_result(interests)) is not None:
+        return got
+    return _check_load()
+
+
+def _check_load() -> dict[str, Any] | None:
+    """The Worth following check's last result, as it kept it in worth-following.json."""
     global _worth_data
     if _worth_data is None and worth_file().exists():
         try:
@@ -350,7 +363,7 @@ def worth_refresh() -> None:
 
 
 def _worth_age_s() -> float:
-    data = _worth_load()
+    data = _check_load()
     if data is None or data.get("format") != WORTH_FORMAT:
         return float("inf")
     return time.time() - _iso_ts(data["finished"])
@@ -374,7 +387,7 @@ def _worth_loop() -> None:
 # at every level of activity, once a day, plus traders in the Feed's big trades, wallets opened that the last
 # check didn't have, and followed wallets. Every score worked out is kept there too (the Worth following check's,
 # a trader page's, a failed try, and on launch the last check's from worth-following.json), at no extra reads.
-# Nothing is shown from it yet: the Worth following check still picks its own wallets and the page reads its file.
+# Traders shows the check's own wallets unless SIGNALS_DISCOVERY=directory (phase 5, below the evaluation).
 # /api/directory gives counts only. SIGNALS_DIRECTORY=0 turns the sweep off; scores are kept either way.
 # What the check, the sweep and the evaluation (below) read from Polymarket comes out of one budget, BACKGROUND_RATE.
 
@@ -460,7 +473,7 @@ def _directory_import(d: Directory) -> None:
     """The scores the last check kept in worth-following.json, into the directory as of when that check finished.
     Each launch: the first time it adds them; after that it's the same score again, and the directory keeps the
     one it has (a newer check, or a trader page's, is never replaced)."""
-    data = _worth_load()
+    data = _check_load()
     if data and data.get("scores") and data.get("finished"):
         d.keep_scores(_with_format(data), "import", _iso_ts(data["finished"]))
 
@@ -781,6 +794,220 @@ def _evaluate_loop() -> None:
     _evaluate_state["running"] = False
 
 
+# ---- the directory, phase 5: discovery from the directory ----
+# With SIGNALS_DISCOVERY=directory, Traders, the Feed's Recommended, alerts and trader pages read the traders
+# checked from the directory: each wallet's latest score from the last DISCOVERY_FRESH_S, whoever worked it out (the
+# Worth following check, the background evaluation, a trader page), in the check's order (tier, then the strength
+# of their edge), at most DISCOVERY_LIMIT, in the same shape as the check's result: those in the picked markets
+# first (/api/worth?markets=…, onboarding's interests, matched as the page's matchesInterests), so a pick gets the
+# best of the whole directory, not of a list cut for everyone. The limit keeps the page and the Feed's poller the
+# size they are; Explore browses the whole directory, never limited by it. A score is the same score wherever it's
+# read, so a wallet gets the same tier, section and copy status from either; the directory picks no one itself and
+# its scoring and thresholds are the SDK's, unchanged.
+# For now the check keeps running either way, so going back to it (SIGNALS_DISCOVERY=check, the default) shows a
+# fresh result at once, and with no fresh score in the directory its result is shown anyway. /api/discovery
+# compares the two, for the owner. Once the directory has carried Signals for a while, the check can go.
+
+DISCOVERY = os.environ.get("SIGNALS_DISCOVERY", "check")  # "directory": discovery from the directory
+# A score older than this isn't picked: twice the background evaluation's daily rescore of a recommended trader
+# nobody is shown or follows. Once shown, they're rescored every RESCORE_S, so a shown trader's score stays well
+# inside it (/api/discovery counts any shown older than 2 × RESCORE_S). One window for every candidate, so nobody
+# drops out and back in as their score ages.
+DISCOVERY_FRESH_S = 2 * 86400
+# traders served: as many as the check scores, so the page weighs what it did (~5 KB a trader) and the Feed's
+# poller reads as many Recommended traders as it did
+DISCOVERY_LIMIT = int(os.environ.get("SIGNALS_DISCOVERY_LIMIT", str(WORTH_WALLETS)))
+DISCOVERY_TTL_S = 60
+DISCOVERY_APART_S = WORTH_MAX_AGE_S  # validation: a score worked out apart this close to the check's is compared
+_discovery_state: dict[str, Any] = {"error": None}
+
+
+def _interests_of(markets: str) -> tuple[str, ...]:
+    """The picked markets from ``?markets=Politics,Sports``, as onboarding offers them, in its order."""
+    picked = {m.strip() for m in markets.split(",")}
+    return tuple(c for c in INTEREST_CHOICES if c in picked)
+
+
+def _upgraded(s: dict[str, Any]) -> dict[str, Any]:
+    """A kept score judged by today's rules, as the check's own file is (``_worth_upgrade``)."""
+    return _worth_upgrade({"format": s.get("format") or 0, "scores": [s]})["scores"][0]  # type: ignore[no-any-return]
+
+
+def _in_markets(row: dict[str, Any], interests: tuple[str, ...]) -> bool:
+    """The page's matchesInterests: an interest is their most-traded category or one they're strong in."""
+    return not interests or row["main"] in interests or any(c in interests for c in row["strong"])
+
+
+def discovery_result(interests: tuple[str, ...] = ()) -> dict[str, Any] | None:
+    """The directory's traders checked, in the shape of the check's result (scores, counts, coverage, sources,
+    failed, started and finished: the oldest and newest score shown), plus ``source`` and how many fresh scores
+    there were to pick from (``considered``). None when it has no fresh score or can't be read: the check's then.
+    Kept DISCOVERY_TTL_S per pick."""
+
+    def build() -> dict[str, Any] | None:
+        d, since = directory(), time.time() - DISCOVERY_FRESH_S
+        rows = d.latest_scores(since)
+        if not rows:
+            return None
+        by = {r["wallet"]: r for r in rows}
+        old = [w for w, r in by.items() if (r["format"] or 0) < WORTH_FORMAT]
+        for w, s in d.scores_of(old).items():  # kept by an older uselayer: its tier by today's rules
+            by[w]["segment"] = _upgraded(s)["segment"]
+        order = list(SEGMENTS)
+
+        def rank(r: dict[str, Any]) -> tuple[int, float]:  # as the check's: by tier, then the strength of their edge
+            return order.index(r["segment"]) if r["segment"] in order else len(order), -(r["edge_z"] or 0)
+
+        # those in the picked markets first, then by tier (recommended first) and edge; Explore lists the rest
+        picked = sorted(rows, key=lambda r: (not _in_markets(r, interests), *rank(r)))[:DISCOVERY_LIMIT]
+        kept = d.scores_of(r["wallet"] for r in picked)
+        scores = [_upgraded(kept[r["wallet"]]) for r in sorted(picked, key=rank) if r["wallet"] in kept]
+        at = [s["scored_at"] for s in scores]
+        return {
+            "scores": scores,
+            "counts": {k: sum(1 for s in scores if s.get("segment") == k) for k in SEGMENTS},
+            "coverage": {k: sum((s.get("coverage") or {}).get(k, 0) for s in scores)
+                         for k in ("bets", "priced_1m", "priced_5m", "priced_1h", "combos")},  # fmt: skip
+            "sources": {"leaderboard": sum(1 for s in scores if s.get("on_leaderboard")),
+                        "beyond_leaderboards": sum(1 for s in scores if not s.get("on_leaderboard"))},  # fmt: skip
+            "failed": d.failed_since(since),
+            "started": datetime.fromtimestamp(min(at), UTC).isoformat(),
+            "finished": datetime.fromtimestamp(max(at), UTC).isoformat(),
+            "format": WORTH_FORMAT,
+            "source": "directory",
+            "considered": len(rows),
+            "interests": list(interests),
+        }
+
+    try:
+        got = cached(f"discovery:{','.join(interests)}", DISCOVERY_TTL_S, build)
+    except (sqlite3.Error, OSError) as e:  # the check's result is shown meanwhile
+        _discovery_state["error"] = f"{type(e).__name__}: {e}"
+        return None
+    _discovery_state["error"] = None
+    return got  # type: ignore[no-any-return]
+
+
+def _recommended(data: dict[str, Any] | None) -> set[str]:
+    return {s["wallet"] for s in (data or {}).get("scores", []) if s.get("segment") in RECOMMENDED}
+
+
+def discovery_compare() -> dict[str, Any]:
+    """The check and the directory side by side, for the owner while the directory is validated: which one is
+    shown; each one's traders and recommended traders by section; who is recommended by only one, and why; and
+    every wallet the check scored that was also scored apart from it (a trader page, the background evaluation)
+    within DISCOVERY_APART_S, compared: the same tier, section and copy verdict, or not, with the differences."""
+    from signals.directory import RESCORE_S  # how often a trader shown is rescored
+
+    check, served = _check_load(), _worth_load()
+    view = discovery_result()
+    rows = {r["wallet"]: r for r in directory().latest_scores(time.time() - DISCOVERY_FRESH_S)}
+
+    now = time.time()
+
+    def summary(data: dict[str, Any] | None) -> dict[str, Any] | None:
+        if data is None:
+            return None
+        scores = data.get("scores", [])
+        rec = [s for s in scores if s.get("segment") in RECOMMENDED]
+        boards = directory().on_boards(s["wallet"] for s in scores)
+        done = _iso_ts(data["finished"]) if data.get("finished") else now
+        ages = sorted((now - s.get("scored_at", done)) / 3600 for s in scores)
+        return {"traders": len(scores), "recommended": len(rec),
+                "by_section": {k: sum(1 for s in scores if section_of(s.get("segment")) == k) for k in SECTIONS},
+                "started": data.get("started"), "finished": data.get("finished"),
+                # where they come from: the check's own "on the leaderboard" (the top 1,000 a month and so on),
+                # any board a sweep has seen them on, or none of the 88 at all
+                "on_leaderboard": sum(1 for s in scores if s.get("on_leaderboard")),
+                "seen_on_any_board": len(boards),
+                "recommended_on_leaderboard": sum(1 for s in rec if s.get("on_leaderboard")),
+                "recommended_on_no_board": sum(1 for s in rec if s["wallet"] not in boards),
+                "scored_by": dict(Counter(s.get("via", "check") for s in scores)),
+                "recommended_by_category": dict(Counter(_main(s) or "None" for s in rec).most_common()),
+                "age_hours": None if not ages else {"newest": round(ages[0], 1), "median": round(ages[len(ages) // 2], 1),
+                                                    "oldest": round(ages[-1], 1)},  # fmt: skip
+                # shown recommended traders are rescored every RESCORE_S: older than twice that, rescoring is failing
+                "recommended_older_than_12h": sum(1 for s in rec if now - s.get("scored_at", done) > 2 * RESCORE_S)}  # fmt: skip
+
+    in_check, in_view = _recommended(check), _recommended(view)
+    pool_rec = {w for w, r in rows.items() if r["segment"] in RECOMMENDED}
+    checked = {s["wallet"]: s for s in (check or {}).get("scores", [])}
+
+    def why_not_in_view(w: str) -> str:
+        r = rows.get(w)
+        if r is None:
+            return "no_fresh_score"
+        return "over_limit" if r["segment"] in RECOMMENDED else "scored_since_another_tier"
+
+    def why_not_in_check(w: str) -> str:
+        return "check_scored_another_tier" if w in checked else "not_in_checks_list"
+
+    apart: dict[str, Any] = {"pairs": 0, "same_tier": 0, "same_section": 0, "same_copyable": 0, "differ": []}
+    if check and check.get("finished"):
+        at = _iso_ts(check["finished"])
+        for w, h in directory().scored_apart(checked, at, DISCOVERY_APART_S).items():
+            s = checked[w]
+            same = {"same_tier": s.get("segment") == h["segment"],
+                    "same_section": section_of(s.get("segment")) == section_of(h["segment"]),
+                    "same_copyable": s.get("copyable") == h["copyable"]}  # fmt: skip
+            apart["pairs"] += 1
+            for k, v in same.items():
+                apart[k] += v
+            if not all(same.values()):
+                apart["differ"].append({"wallet": w, "check": s.get("segment"), "apart": h["segment"], "via": h["via"],
+                                        "check_copyable": s.get("copyable"), "apart_copyable": h["copyable"],
+                                        "check_bets": s.get("bets"), "apart_bets": h["bets"],
+                                        "hours_apart": round((h["scored_at"] - at) / 3600, 1)})  # fmt: skip
+        apart["differ"] = sorted(apart["differ"], key=lambda x: abs(x["hours_apart"]))[:25]
+    return {
+        "flag": DISCOVERY,
+        "serving": None if served is None else served.get("source", "check"),
+        "fresh_s": DISCOVERY_FRESH_S,
+        "limit": DISCOVERY_LIMIT,
+        "error": _discovery_state["error"],
+        "check": summary(check),
+        "directory": None if view is None else summary(view) | {"considered": view["considered"]},
+        "recommended": {
+            "both": len(in_check & in_view),
+            "only_check": dict(Counter(why_not_in_view(w) for w in in_check - in_view)),
+            "only_directory": dict(Counter(why_not_in_check(w) for w in in_view - in_check)),
+        },
+        "scored_apart": apart,
+        # everything the directory picks from: every fresh score, before the limit
+        # (recommended_over_limit: recommended, but past the limit with no pick: on Explore, not on Traders' list)
+        "pool": {"scores": len(rows), "recommended": len(pool_rec), "recommended_over_limit": len(pool_rec - in_view),
+                 "recommended_seen_on_any_board": len(directory().on_boards(pool_rec)),
+                 "scored_by": dict(Counter(r["via"] for r in rows.values())),
+                 "recommended_by_category": dict(Counter(r["main"] or "None" for w, r in rows.items()
+                                                         if w in pool_rec).most_common())},  # fmt: skip
+        # each onboarding pick: the recommended traders in those markets the check's list has, and the directory's
+        # list for that pick has (matched as the page matches them)
+        "by_interest": {c: {"check": sum(1 for s in (check or {}).get("scores", []) if s.get("segment") in RECOMMENDED
+                                         and _in_markets(_row(s), (c,))),
+                            "directory": sum(1 for s in (discovery_result((c,)) or {}).get("scores", [])
+                                             if s.get("segment") in RECOMMENDED and _in_markets(_row(s), (c,)))}
+                        for c in INTEREST_CHOICES},  # fmt: skip
+    }
+
+
+def _main(s: dict[str, Any]) -> str | None:
+    """A score's most-traded category, as the page reads it (its first)."""
+    return ((s.get("categories") or [{}])[0] or {}).get("category")
+
+
+def _row(s: dict[str, Any]) -> dict[str, Any]:
+    """A whole score as ``_in_markets`` reads a directory row."""
+    return {"main": _main(s), "strong": s.get("strong_categories") or []}
+
+
+@app.get("/api/discovery")
+def discovery_route(request: Request, response: Response) -> dict[str, Any]:
+    """The check and the directory compared (``discovery_compare``): the owner's, as /api/directory is."""
+    _owner(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    return discovery_compare()
+
+
 @app.get("/api/directory")
 def directory_stats(request: Request, response: Response) -> dict[str, Any]:
     """How many wallets the directory has found, and where, and how its evaluation is going: counts only, never a
@@ -965,9 +1192,10 @@ def _mock_history(s: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.get("/api/worth")
-def worth() -> dict[str, Any]:
-    """Every scored wallet without its bets, plus whether a refresh is running."""
-    data = _worth_load()
+def worth(markets: str = "") -> dict[str, Any]:
+    """Every scored wallet without its bets, plus whether a refresh is running. ``markets``: the picked
+    interests (``Politics,Sports``), whose traders come first when Traders reads the directory."""
+    data = _worth_load(_interests_of(markets))
     out: dict[str, Any] = {"status": dict(_worth), "result": None}
     if data is not None:
         out["result"] = {k: v for k, v in data.items() if k != "scores"} | {
@@ -1209,11 +1437,14 @@ def _stored_or_none(wallet: str) -> dict[str, Any] | None:
 
 
 def _score_of(wallet: str) -> dict[str, Any]:
-    """A wallet's score: from the last check, or scored now (5–30 s) and kept until the next check."""
+    """A wallet's score: from the traders checked (with discovery from the directory, any fresh score it keeps),
+    or scored now (5–30 s) and kept until the next check."""
     w = wallet.lower()
     for s in (_worth_load() or {}).get("scores", []):
         if s["wallet"] == w:
             return s  # type: ignore[no-any-return]
+    if DISCOVERY == "directory" and _WALLET.fullmatch(w) and (kept := _stored_score(w)) is not None:
+        return kept  # the directory's own, as Explore's pages reuse it
     if w not in _worth_one:
         try:
             _worth_one[w] = checker().score(w).to_dict()  # its own share of Polymarket's reads, never the Feed's
