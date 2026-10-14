@@ -23,7 +23,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
@@ -963,6 +963,9 @@ def discovery_compare() -> dict[str, Any]:
     return {
         "flag": DISCOVERY,
         "serving": None if served is None else served.get("source", "check"),
+        # how the switch weighs on the Feed and alerts: the poller's last hour, and the background's read budget
+        "feed": feed_stats(),
+        "background_budget": _background["budget"].state() if "budget" in _background else None,
         "fresh_s": DISCOVERY_FRESH_S,
         "limit": DISCOVERY_LIMIT,
         "error": _discovery_state["error"],
@@ -1553,7 +1556,31 @@ _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open posit
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
 _live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
 _live_round: dict[str, float] = {"ended": float("-inf")}  # when (monotonic) the poller's last round ended
+# the last hour of rounds, for the owner (/api/discovery's "feed"): how long each took, how many it read, and how
+# old the oldest followed and Recommended trader's kept trades were when it ended (what alerts and the Feed see)
+_live_stats: deque[dict[str, Any]] = deque(maxlen=120)
 _followed_reading = threading.Event()  # set while the poller reads followed traders: the background and checks give way
+
+
+def _oldest(wallets: set[str], mono: float) -> int | None:
+    """How old (seconds) the oldest of these traders' kept reads is; None when none was read yet."""
+    ages = [mono - hit[0] for w in wallets if (hit := _live_kept(w)) is not None]
+    return round(max(ages)) if ages else None
+
+
+def feed_stats() -> dict[str, Any]:
+    """The poller over the last hour (_live_stats): round times, the oldest followed and Recommended trader's
+    reads at each round's end (median and worst), rounds cut by a rate limit, and the last round as it was."""
+    rounds = list(_live_stats)
+
+    def spread(key: str) -> dict[str, Any] | None:
+        xs = sorted(r[key] for r in rounds if r[key] is not None)
+        return {"median": xs[len(xs) // 2], "max": xs[-1]} if xs else None
+
+    return {"rounds": len(rounds), "round_s": spread("seconds"), "oldest_followed_s": spread("oldest_followed_s"),
+            "oldest_recommended_s": spread("oldest_recommended_s"),
+            "rate_limited_rounds": sum(1 for r in rounds if r["rate_limited"]),
+            "live_error": _worth.get("live_error"), "last": rounds[-1] if rounds else None}  # fmt: skip
 
 
 def _reading_followed() -> bool:
@@ -1677,7 +1704,7 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
 
     due = sorted((w for w in followed if due_now(w)), key=lambda w: (-age(w), w))  # oldest first; ties by wallet
     late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w), w))
-    done = 0
+    done, limited = 0, False
     def followed_read() -> None:  # alerts' reads are done: the others' full rate back, and the alert pass now
         if _followed_reading.is_set():
             _followed_reading.clear()
@@ -1701,11 +1728,16 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
                 _live_failed[w] = time.monotonic()
                 if e.code == "rate_limited":  # the SDK's retries are spent: more reads now would only add to it
                     _worth["live_error"] = "Polymarket rate limited the Feed's reads; the rest wait for the next round"
+                    limited = True
                     break
     finally:
         followed_read()
     _live_round["ended"] = time.monotonic()
     wanted, mono = followed | rec, time.monotonic()
+    _live_stats.append({"at": time.time(), "seconds": round(mono - started, 1), "followed": len(followed),
+                        "recommended": len(rec), "read": done, "rate_limited": limited,
+                        "never_read": sum(1 for w in wanted if _live_kept(w) is None),
+                        "oldest_followed_s": _oldest(followed, mono), "oldest_recommended_s": _oldest(rec, mono)})  # fmt: skip
     for key in [k for k in list(_cache) if k.startswith("live:")]:
         hit = _cache.get(key)
         if key[5:] not in wanted and hit and mono - hit[0] > LIVE_KEEP_S:
