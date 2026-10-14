@@ -833,6 +833,13 @@ def _upgraded(s: dict[str, Any]) -> dict[str, Any]:
     return _worth_upgrade({"format": s.get("format") or 0, "scores": [s]})["scores"][0]  # type: ignore[no-any-return]
 
 
+def _current(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Only scores worked out by today's scoring (WORTH_FORMAT). An older one (the launch import, mostly) is left
+    out until the evaluation scores the wallet again, rather than re-tiered here: the directory (Explore, the
+    evaluation's schedule) keeps its tier as it was kept, and a tier worked out here alone would differ from it."""
+    return [r for r in rows if (r["format"] or 0) >= WORTH_FORMAT]
+
+
 def _in_markets(row: dict[str, Any], interests: tuple[str, ...]) -> bool:
     """The page's matchesInterests: an interest is their most-traded category or one they're strong in."""
     return not interests or row["main"] in interests or any(c in interests for c in row["strong"])
@@ -846,13 +853,9 @@ def discovery_result(interests: tuple[str, ...] = ()) -> dict[str, Any] | None:
 
     def build() -> dict[str, Any] | None:
         d, since = directory(), time.time() - DISCOVERY_FRESH_S
-        rows = d.latest_scores(since)
+        rows = _current(d.latest_scores(since))
         if not rows:
             return None
-        by = {r["wallet"]: r for r in rows}
-        old = [w for w, r in by.items() if (r["format"] or 0) < WORTH_FORMAT]
-        for w, s in d.scores_of(old).items():  # kept by an older uselayer: its tier by today's rules
-            by[w]["segment"] = _upgraded(s)["segment"]
         order = list(SEGMENTS)
 
         def rank(r: dict[str, Any]) -> tuple[int, float]:  # as the check's: by tier, then the strength of their edge
@@ -901,7 +904,8 @@ def discovery_compare() -> dict[str, Any]:
 
     check, served = _check_load(), _worth_load()
     view = discovery_result()
-    rows = {r["wallet"]: r for r in directory().latest_scores(time.time() - DISCOVERY_FRESH_S)}
+    fresh = directory().latest_scores(time.time() - DISCOVERY_FRESH_S)
+    rows = {r["wallet"]: r for r in _current(fresh)}
 
     now = time.time()
 
@@ -981,7 +985,8 @@ def discovery_compare() -> dict[str, Any]:
         # (recommended_over_limit: recommended, but past the limit with no pick: on Explore, not on Traders' list)
         # (seen_on_any_board: of every fresh score, how many a sweep has seen on any of the 88 boards; the rest were
         # found only in markets, the Feed or a search: whether the pool reaches past the leaderboards at all)
-        "pool": {"scores": len(rows), "recommended": len(pool_rec), "recommended_over_limit": len(pool_rec - in_view),
+        "pool": {"scores": len(rows), "older_format_left_out": len(fresh) - len(rows),
+                 "recommended": len(pool_rec), "recommended_over_limit": len(pool_rec - in_view),
                  "seen_on_any_board": len(pool_boards), "recommended_seen_on_any_board": len(pool_rec & pool_boards),
                  "scored_by": dict(Counter(r["via"] for r in rows.values())),
                  "recommended_by_category": dict(Counter(r["main"] or "None" for w, r in rows.items()
