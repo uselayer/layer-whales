@@ -66,7 +66,9 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     for sale within that limit, when the book was read, and what you get if it wins. Their price is shown for
     context only. The engine reads the price and whether the market is still taking orders itself (Polymarket's
     market status, not the price). It's an estimate, not a guaranteed fill. **Buy on Polymarket ↗** opens the
-    market there; Signals places no orders. It updates every 30 seconds; Polymarket shows trades a few minutes late.
+    market there; Signals places no orders. It typically reads each trader's trades every 30 seconds (Recommended
+    traders about once a minute), and Polymarket typically returns a trader's trades within seconds; Big trades come from
+    Polymarket's feed of every trade, which typically runs 3–5 minutes behind. A trade's time is when it was made on Polymarket.
   - **Big trades** (`#/big`, linked from the foot of Recommended; the old `#/traders/big` link still works): trades of $250 or more right now on
     Polymarket, one card per trade, opened on your markets like the rest of the Feed. A named trader's card
     opens their page. With Kalshi on, it shows every big trade on both venues instead ("Anonymous trader" when
@@ -146,8 +148,9 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   the volume, unread, until the owner decides to delete them.
 - **Alerts** on Telegram (off until `TELEGRAM_BOT_TOKEN` is set): "Connect Telegram" on a trader's page gives a
   one-time link to the bot; Start there connects the chat. Every 30 seconds the engine reads followed traders'
-  trades (once per trader) and messages each connected follower about every new buy and sell, whatever the amount
-  and whoever the trader (split buys within 30 minutes add up): who bought what, at what price, the market, the price
+  trades (once per trader) and messages each connected follower about new buys and sells, of any size and whoever
+  the trader (split buys within 30 minutes add up; after a message, more buys or sells of that outcome are left out
+  for 6 hours, which the bot's welcome message says): who bought what, at what price, the market, the price
   now, and when they traded with how long before the alert that was. A trader copying is offered for gets one more
   line while the price is still near theirs; costs stay on the trade's page, which "Check current price" opens.
   A sell says whether they still hold some (then the price now) or none, and is never a suggestion to sell.
@@ -198,8 +201,22 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   `/api/directory` gives the counts (wallets, new in a day, by source and category, sweeps; scored,
   failed and never scored, by segment and category, active in the last week) to the owner only, as
   `/api/metrics`. `SIGNALS_DIRECTORY=0` turns the sweep off; scores are kept either way.
+  **Monitoring** (phase 6): `/api/monitoring` (the owner's, the same way; `?days=14`, up to 90) says how discovery
+  is going and what it costs, counts only, never a wallet. The funnel: found, screened (a quick check or a score),
+  fully evaluated (a score), recommended (a recommended tier), qualified (recommended with a score from the last 48 h,
+  Explore's "Passed our checks"), with qualified per 1,000 found. The funnel appears overall, by category (with how
+  many qualified traders are strong in each), and by source: where wallets were seen, seen only there, first found,
+  which leaderboard, best rank. Day by day: new wallets by first source, wallets screened and scored, evaluation
+  outcomes, requests by host and how they ended (2xx, 4xx, 429, 5xx, no answer), Polymarket reads by budget
+  (background, "Check now", the rest are the Feed's and pages'), and the engine's CPU, memory, volume, egress and
+  estimated Railway cost at list prices (an estimate: Railway's usage page is the bill). Also freshness (recommended
+  traders' score ages, shown and not, against 12 h and 48 h; what's due and how late; the queue never looked at),
+  failures by kind, the sweeps, and `health`: what looks wrong, in sentences, which also goes to the logs hourly. The
+  counts the directory doesn't keep itself are kept by day in `directory.db` (`daily`) each minute, so they last
+  across deploys; they start on the day this shipped.
 - **Counting** (is any of this useful?): per alert and per follow, in `/data/alerts.db`, with nothing personal
-  beyond the signed-in account (no IPs, no user agents): minutes from their trade to the alert, taps on an
+  beyond the signed-in account (no IPs, no user agents): minutes from their trade to the alert, how each alert was
+  delivered (sent, sent after a retry, waiting, failed and why, unknown, chats disconnected), taps on an
   alert's links (each goes through `/go/<alert id>/<target>`, which counts the tap and redirects: to Polymarket
   or Signals only, and even when counting fails), "Stop alerts" taps and unfollows (and how many came within 7
   days of an alert about that trader), Useful / Not useful votes, follows per visitor who picks interests (the
@@ -213,6 +230,14 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   - hosted: the owner sets `SIGNALS_METRICS_KEY` in Railway's variables, then
     `curl -H "Authorization: Bearer $SIGNALS_METRICS_KEY" https://usesignals.app/api/metrics`. Without the key
     it answers 404; with no key set it's closed. `?days=7` changes the period (default 30).
+- **Analytics** (how people use the page; off until `SIGNALS_POSTHOG_KEY` is set): PostHog, the same as
+  uselayer.sh. Page views (each `#/…` route is one), clicks, scroll depth and session replay. The page gets the
+  project key (phc_…, public by design) from `/api/config` and sends everything through `/lyr` on usesignals.app
+  (`web/vercel.json` forwards it to PostHog's US region), so ad blockers don't drop it and it only works behind
+  Vercel. A signed-in person is known by their Clerk user id only; signing out starts a new anonymous visitor.
+  Replays mask every field, and the text and pictures in Clerk's sign-in and account menus. PostHog keeps each
+  visitor's IP address and works out where they are from it (country, region, city). This is separate from
+  Counting below, which stays in `alerts.db` and keeps no IPs.
 - **Limits**: "Check again" on Worth following only starts a new check when the last one is over an hour old.
   Someone can follow up to 20 traders.
 

@@ -39,6 +39,10 @@ behind Vercel (see README, "Hosting").
   there as traffic grows. Alert
   links go through `/go/<alert id>/<target>`, which redirects to Polymarket or Signals only, and still redirects
   when counting fails. `/api/metrics` is the owner's: locally, or with `SIGNALS_METRICS_KEY`; never public.
+- Analytics (README, "Analytics"): PostHog on the page, off unless `SIGNALS_POSTHOG_KEY` is set, sent through
+  `/lyr` (`web/vercel.json`). A signed-in person is identified by their Clerk user id only: never send PostHog a
+  name, email, Telegram account or anything from `/api/me`, and keep fields and Clerk's menus masked in replays.
+  It's for seeing how the page is used; Counting (above) stays the record of alerts and follows.
 - Signals is a consumer website (usesignals.app); running it locally is for development. It places no orders:
   no sandbox, no in-app trading, no automatic copying, and it never holds anyone's keys or funds. Buying means
   "What buying now costs", then "Buy on Polymarket ↗", where the user buys it themselves. A session never
@@ -50,7 +54,7 @@ behind Vercel (see README, "Hosting").
   Polymarket's market status (the SDK's `preview_copy`), never from the price, and the amount is priced from
   the cheapest price for sale now, up to `BUY_LIMIT` (3¢) above it, a limit the page discloses. It shows the
   estimated cost, what's for sale within the limit, the fee, the estimated slippage and when the book was read
-  (plus the 3–5 minute lag of their trade). Their price is context ("They paid 37¢, 12m ago, for context"),
+  (and that their trade's time is when it was made on Polymarket). Their price is context ("They paid 37¢, 12m ago, for context"),
   never a target. It's always an estimate: never imply a guaranteed fill (it may fill higher, in part, or not
   at all), and no green or "you can still get in" in it. A quote that fails shows no price: when the book moved
   between the reads (`price_changed`) it says "Price changed—refresh quote", never that nothing is for sale;
@@ -77,7 +81,14 @@ behind Vercel (see README, "Hosting").
   and when, measured; while they still hold some, the price now and "Check current price"; once they hold none,
   "They no longer hold it." and no price (never a made-up one). A sell is information only: never "sell too",
   never a copy line, never grouped, "Open on Polymarket" for the market. No alert at all when the price
-  now is settled (2¢ or less, 98¢ or more), or a sell's price is. At most
+  now is settled (2¢ or less, 98¢ or more), or a sell's price is. A restart (a deploy) neither skips nor repeats one:
+  what each round looked at is kept in alerts.db (`watched`, `seen_trades`), so a trade made while it was down is
+  alerted once after; only a new follow's existing trades are just noted. Delivery (`_send`, `_attempt`): each
+  alert is kept with its message before Telegram is asked, and never sent twice. It's tried again (after Telegram's
+  wait or 30 s, 1, 2, 4 min, for up to 30 minutes, after a restart too) only when Telegram surely didn't take it:
+  it was never reached, or it said 429. When it may have (a 5xx, no answer once the request went out, the engine
+  stopping mid-request) it's recorded as unknown, with why, never asked again. A refusal fails it, and a chat that
+  blocked the bot is disconnected. At most
   20 alerts per person per UTC day, then one "You've reached today's alert limit; more tomorrow" and nothing until
   the next day. When 2+ traders you follow buy the same outcome, each within 6 hours of the one before (1 hour in
   Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the price now, how
@@ -89,7 +100,12 @@ behind Vercel (see README, "Hosting").
   (Skip, all markets) means no big-trade alerts. For a trader copying isn't offered for, an alert is never
   "you can still get in" and never green.
   Every alert and trade card keeps the link to the market, whoever the trader. Every alert, and the Feed, says
-  Polymarket's public data runs 3–5 minutes behind. The engine checks Clerk's session token itself (public keys,
+  how late it can be for where its trades come from, never a blanket figure and never "instant": a trader you
+  follow is read on their own about every 30 seconds (Polymarket returns their trades there within seconds), so
+  their alerts say "Signals typically reads followed traders' trades every 30 seconds" (`FOLLOW_DELAY`); big trades
+  come from Polymarket's feed of every trade, which typically runs 3–5 minutes behind (`BIG_DELAY`, and the Feed's Big
+  trades). A trade's time is its Polymarket timestamp (its transaction's block time), and every alert measures
+  from it ("Traded 14:02 UTC, 6 min before this alert."). The engine checks Clerk's session token itself (public keys,
   no Clerk secret). Never let one account see or change another's follows, and never let an answer about a
   signed-in person be cached.
 - Deploys and changes to the hosting (Railway, Vercel, the domain) only when the owner asks.

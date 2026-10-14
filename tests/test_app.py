@@ -132,7 +132,7 @@ def test_trader_pages_ask_for_closed_positions_and_the_feed_does_not(
     monkeypatch.setattr(engine, "_categories", lambda markets: {})
     feed: list[Any] = []
     monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: feed.append(("trades", k)) or [TRADE])
-    monkeypatch.setattr(engine, "_open_positions", lambda w: feed.append(("positions", {})) or [])
+    monkeypatch.setattr(engine, "_open_positions", lambda w, markets=None: feed.append(("positions", {})) or [])
     n = len(asked)
     api.get("/api/live")
     assert len(asked) == n  # the feed reads every 30 s: never the profile, stats or closed positions
@@ -229,7 +229,8 @@ def test_signals_reads_polymarket_only_unless_kalshi_is_switched_on(
     monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: asked.append(("trader", a[0])) or None)
     monkeypatch.setattr(engine.reads.whales, "links", lambda *a, **k: asked.append(("links",)) or [])
     assert engine.VENUES == ("polymarket",)  # the default
-    assert api.get("/api/config").json() == {"venues": ["polymarket"], "clerk_key": None, "alerts": False, "explore": False}
+    assert api.get("/api/config").json() == {
+        "venues": ["polymarket"], "clerk_key": None, "alerts": False, "explore": False, "posthog_key": None}
     api.get("/api/trading-now")
     api.get("/api/top")  # "all" means the venues Signals reads
     assert api.get("/api/top?venue=kalshi").status_code == 404
@@ -238,6 +239,15 @@ def test_signals_reads_polymarket_only_unless_kalshi_is_switched_on(
     assert asked == [("big", ("polymarket",)), ("top", "polymarket")]  # Kalshi was never asked for
     with_kalshi(monkeypatch)  # SIGNALS_VENUES=polymarket,kalshi
     assert api.get("/api/config").json()["venues"] == ["polymarket", "kalshi"]
+
+
+def test_analytics_is_off_until_its_project_key_is_set(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # PostHog's project key (SIGNALS_POSTHOG_KEY) is public by design: the page needs it to send events.
+    assert api.get("/api/config").json()["posthog_key"] is None
+    monkeypatch.setattr(engine, "POSTHOG_KEY", "phc_test")
+    assert api.get("/api/config").json()["posthog_key"] == "phc_test"
+    page = api.get("/").text
+    assert 'loadScript("/lyr/static/array.js")' in page and 'api_host: "/lyr"' in page  # through our domain only
 
 
 def test_the_sandbox_is_gone(api: TestClient) -> None:
@@ -573,7 +583,7 @@ def test_the_page_has_the_sections_and_no_copy_cue_for_traders_copying_isnt_offe
                   "they paid", "Buy on ${INTL} ↗", "weeks up",
                   "A week counts profit taken plus the change in value of trades still open.",
                   "the price you'd actually pay, which is a bit higher than the price on Polymarket's chart",
-                  "Polymarket's public data runs 3–5 minutes behind"):  # fmt: skip
+                  "when it was made on Polymarket, not when Signals saw it"):  # fmt: skip
         assert words in page, words
     assert "weeks profitable" not in page
     for gone in ("Worth copying", "Worth watching", "Lucky", "No clear edge", "You can copy it.", "too_fast"):

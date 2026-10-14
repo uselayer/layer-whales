@@ -35,7 +35,7 @@ from typing import Any
 VERIFIED = frozenset({"auto_verified", "human_verified"})
 SAME_BET = frozenset({"identical", "equivalent_with_caveats"})
 PAGE = 200  # Layer's largest page of matches
-MAX_PAGES = 50  # 10,000 matches a venue at most: far above today's ~2,000
+MAX_PAGES = 500  # 100,000 matches a venue at most; 9,780 International on 10/14, near the old cap of 10,000
 REFRESH_S = 10 * 60
 STALE_S = 45 * 60  # an index this old says nothing: a match may have been pulled since
 
@@ -48,6 +48,29 @@ DIFFERENCES = {
     "definition_differs": "The two exchanges define the outcome in slightly different words.",
 }
 _YES, _NO = "yes", "no"
+
+# Kalshi's player-prop series: one player's stat line (NFL field goals are a team's, so not here). When the player doesn't
+# play, International settles the line Under/No (a pitcher's strikeouts 50-50) and Kalshi and Polymarket US at a fair price
+# from before the game. Layer calls that venue policy, stated once in its docs and never on a match (Layer ROADMAP 6.4),
+# so no match carries it: Signals says it on every prop twin, first.
+PLAYER_PROPS = frozenset({
+    "KXNFLPASSYDS", "KXNFLPASSTDS", "KXNFLPASSATT", "KXNFLPASSCOMP", "KXNFLPASSINT", "KXNFLRSHYDS", "KXNFLRSHATT",
+    "KXNFLRECYDS", "KXNFLREC", "KXNFLRRYDS", "KXNFLTD",
+    "KXMLBTB", "KXMLBHRR", "KXMLBHIT", "KXMLBRBI", "KXMLBHR", "KXMLBSB", "KXMLBKS", "KXMLBHA", "KXMLBWA", "KXMLBERA",
+    "KXMLBOUTS",
+    "KXNHLPTS", "KXNHLGOAL", "KXNHLAST",
+    "KXWNBAPTS", "KXWNBAREB", "KXWNBAAST", "KXWNBA3PT",
+    "KXUEFANLGOAL", "KXINTLFRIENDLYGOAL",
+})  # fmt: skip
+SITS_OUT = {
+    "code": "player_sits_out",
+    "text": "If the player doesn't play, the two can pay differently: Polymarket International usually settles this line as "
+            "No (Under), or 50-50 for a pitcher's strikeouts, while Polymarket US settles it at a fair price from before the game.",
+}  # fmt: skip
+
+
+def _player_prop(m: dict[str, Any]) -> bool:
+    return str((m.get("kalshi") or {}).get("series") or "").upper() in PLAYER_PROPS
 
 
 def _cid(market_id: str) -> str:
@@ -91,7 +114,7 @@ def _twin(intl: dict[str, Any], us: dict[str, Any], side: str, checked_at: str) 
         "outcome": u.get("outcome") if side == "same" else f"No on {u['outcome']}" if u.get("outcome") else "No",
         "via": "kalshi",
         "confidence": min(float(intl.get("confidence") or 0), float(us.get("confidence") or 0)),
-        "differences": _differences(intl, us),
+        "differences": ([dict(SITS_OUT)] if _player_prop(intl) else []) + _differences(intl, us),
         "checked_at": checked_at,
     }
 
@@ -182,14 +205,16 @@ twins = UsTwins()
 
 
 def all_matches(read: Callable[..., list[Any]], venue: str) -> list[dict[str, Any]]:
-    """Every live Layer match of ``venue`` to Kalshi, page by page (``read`` is ``Client.matches``)."""
+    """Every live Layer match of ``venue`` to Kalshi, page by page (``read`` is ``Client.matches``). More than
+    MAX_PAGES pages is an error, never a shorter list: an index built from part of the matches would quietly say
+    "no verified US match" for the rest, so ``refresh`` keeps the last index and says why instead."""
     out: list[dict[str, Any]] = []
     for page in range(MAX_PAGES):
         rows = read(titles=False, venue=venue, limit=PAGE, offset=page * PAGE)
         out += [r.to_dict() if hasattr(r, "to_dict") else r for r in rows]
         if len(rows) < PAGE:
-            break
-    return out
+            return out
+    raise RuntimeError(f"Layer has more than {MAX_PAGES * PAGE:,} {venue} matches; raise us_match.MAX_PAGES")
 
 
 def refresh(read: Callable[..., list[Any]]) -> None:

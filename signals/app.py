@@ -23,7 +23,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
@@ -50,8 +50,8 @@ from uselayer.whale_scores import (
     segment_of,
 )
 
-from signals import us_match
-from signals.budget import BackgroundHttp, Budget
+from signals import monitoring, us_match
+from signals.budget import POLYMARKET_HOSTS, BackgroundHttp, Budget
 from signals.directory import (
     CHECK_BOARDS,
     EXPLORE_GROUPS,
@@ -98,7 +98,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         threading.Thread(target=_alert_loop, daemon=True).start()
     if LAYER_KEY:  # Polymarket US twins of the International markets, from Layer's matches (us_match)
         threading.Thread(target=us_match.loop, args=(reads.matches, _us_stop), daemon=True).start()
+    threading.Thread(target=_monitor_loop, daemon=True).start()  # resources each minute; the day's counts kept
     yield
+    _monitor_stop.set()
+    _monitor_flush()  # the last minute's counts
     _us_stop.set()
     _worth_stop.set()
     _follow_stop.set()
@@ -108,7 +111,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Signals", lifespan=lifespan)
+app.add_middleware(monitoring.CountBytesOut)  # the bytes served: monitoring's egress
 reads = Client(store=":memory:")  # leaderboards, traders, links, cost previews: reads only
+monitoring.watch(reads._http._client)  # every request the SDK sends, whoever asked: monitoring's ``api``
 LAYER_KEY = os.environ.get("LAYER_API_KEY", "")
 _us_stop = threading.Event()
 
@@ -158,9 +163,11 @@ def feed_reader(request: Request) -> None:
 
 @app.get("/api/config")
 def config() -> dict[str, Any]:
-    """What the page needs to know before it draws: which venues Signals reads (see VENUES), and Clerk's
-    publishable key when signing in (to follow traders) is switched on. The key is public by design."""
-    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN), "explore": EXPLORE_ON}
+    """What the page needs to know before it draws: which venues Signals reads (see VENUES), Clerk's publishable
+    key when signing in (to follow traders) is switched on, and PostHog's project key when analytics is. Both keys
+    are public by design."""
+    return {"venues": list(VENUES), "clerk_key": CLERK_KEY or None, "alerts": bool(TG_TOKEN), "explore": EXPLORE_ON,
+            "posthog_key": POSTHOG_KEY or None}
 
 
 @app.get("/api/top")
@@ -770,6 +777,7 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
             _count_reads(item["kind"], got, item.get("lane"))
             done[got] += 1
             _evaluate_state["since_launch"][got] += 1
+            monitoring.usage.add("evaluated", f"{item['kind']}:{got}")
             in_a_row = in_a_row + 1 if got == "failed" else 0
 
     with ThreadPoolExecutor(max_workers=EVALUATE_WORKERS, thread_name_prefix="evaluate") as pool:
@@ -833,11 +841,11 @@ def _evaluate_loop() -> None:
 # compares the two, for the owner. Once the directory has carried Signals for a while, the check can go.
 
 DISCOVERY = os.environ.get("SIGNALS_DISCOVERY", "check")  # "directory": discovery from the directory
-# A score older than this isn't picked: twice the background evaluation's daily rescore of a recommended trader
-# nobody is shown or follows. Once shown, they're rescored every RESCORE_S, so a shown trader's score stays well
-# inside it (/api/discovery counts any shown older than 2 × RESCORE_S). One window for every candidate, so nobody
-# drops out and back in as their score ages.
-DISCOVERY_FRESH_S = 2 * 86400
+# A score older than this isn't picked: fresh_for(False), twice the background evaluation's daily rescore of a
+# recommended trader nobody is shown or follows (Explore's "Passed our checks" window too). Once shown, they're
+# rescored every RESCORE_S, so a shown trader's score stays well inside it (/api/discovery counts any shown older
+# than 2 × RESCORE_S). One window for every candidate, so nobody drops out and back in as their score ages.
+DISCOVERY_FRESH_S = fresh_for(False)
 # traders served: as many as the check scores, so the page weighs what it did (~5 KB a trader) and the Feed's
 # poller reads as many Recommended traders as it did
 DISCOVERY_LIMIT = int(os.environ.get("SIGNALS_DISCOVERY_LIMIT", str(WORTH_WALLETS)))
@@ -857,6 +865,17 @@ def _upgraded(s: dict[str, Any]) -> dict[str, Any]:
     return _worth_upgrade({"format": s.get("format") or 0, "scores": [s]})["scores"][0]  # type: ignore[no-any-return]
 
 
+def _consistent(d: Directory, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The scores whose tier is the same wherever it's read. One worked out by today's scoring (WORTH_FORMAT)
+    always is. An older one is kept only when today's rules (``_upgraded``, as the check's own file is judged) give
+    it the tier the directory stored, which Explore and the evaluation's schedule read; otherwise it's left out
+    until the wallet is scored again, so Traders never says one tier while the rest of Signals says another."""
+    by = {r["wallet"]: r for r in rows}
+    old = [w for w, r in by.items() if (r["format"] or 0) < WORTH_FORMAT]
+    differs = {w for w, s in d.scores_of(old).items() if _upgraded(s)["segment"] != by[w]["segment"]} if old else set()
+    return [r for r in rows if r["wallet"] not in differs]
+
+
 def _in_markets(row: dict[str, Any], interests: tuple[str, ...]) -> bool:
     """The page's matchesInterests: an interest is their most-traded category or one they're strong in."""
     return not interests or row["main"] in interests or any(c in interests for c in row["strong"])
@@ -870,13 +889,9 @@ def discovery_result(interests: tuple[str, ...] = ()) -> dict[str, Any] | None:
 
     def build() -> dict[str, Any] | None:
         d, since = directory(), time.time() - DISCOVERY_FRESH_S
-        rows = d.latest_scores(since)
+        rows = _consistent(d, d.latest_scores(since))
         if not rows:
             return None
-        by = {r["wallet"]: r for r in rows}
-        old = [w for w, r in by.items() if (r["format"] or 0) < WORTH_FORMAT]
-        for w, s in d.scores_of(old).items():  # kept by an older uselayer: its tier by today's rules
-            by[w]["segment"] = _upgraded(s)["segment"]
         order = list(SEGMENTS)
 
         def rank(r: dict[str, Any]) -> tuple[int, float]:  # as the check's: by tier, then the strength of their edge
@@ -925,7 +940,8 @@ def discovery_compare() -> dict[str, Any]:
 
     check, served = _check_load(), _worth_load()
     view = discovery_result()
-    rows = {r["wallet"]: r for r in directory().latest_scores(time.time() - DISCOVERY_FRESH_S)}
+    fresh = directory().latest_scores(time.time() - DISCOVERY_FRESH_S)
+    rows = {r["wallet"]: r for r in _consistent(directory(), fresh)}
 
     now = time.time()
 
@@ -955,6 +971,7 @@ def discovery_compare() -> dict[str, Any]:
 
     in_check, in_view = _recommended(check), _recommended(view)
     pool_rec = {w for w, r in rows.items() if r["segment"] in RECOMMENDED}
+    pool_boards = directory().on_boards(rows)
     checked = {s["wallet"]: s for s in (check or {}).get("scores", [])}
 
     def why_not_in_view(w: str) -> str:
@@ -986,6 +1003,9 @@ def discovery_compare() -> dict[str, Any]:
     return {
         "flag": DISCOVERY,
         "serving": None if served is None else served.get("source", "check"),
+        # how the switch weighs on the Feed and alerts: the poller's last hour, and the background's read budget
+        "feed": feed_stats(),
+        "background_budget": _background["budget"].state() if "budget" in _background else None,
         "fresh_s": DISCOVERY_FRESH_S,
         "limit": DISCOVERY_LIMIT,
         "error": _discovery_state["error"],
@@ -999,8 +1019,11 @@ def discovery_compare() -> dict[str, Any]:
         "scored_apart": apart,
         # everything the directory picks from: every fresh score, before the limit
         # (recommended_over_limit: recommended, but past the limit with no pick: on Explore, not on Traders' list)
-        "pool": {"scores": len(rows), "recommended": len(pool_rec), "recommended_over_limit": len(pool_rec - in_view),
-                 "recommended_seen_on_any_board": len(directory().on_boards(pool_rec)),
+        # (seen_on_any_board: of every fresh score, how many a sweep has seen on any of the 88 boards; the rest were
+        # found only in markets, the Feed or a search: whether the pool reaches past the leaderboards at all)
+        "pool": {"scores": len(rows), "tier_differs_left_out": len(fresh) - len(rows),
+                 "recommended": len(pool_rec), "recommended_over_limit": len(pool_rec - in_view),
+                 "seen_on_any_board": len(pool_boards), "recommended_seen_on_any_board": len(pool_rec & pool_boards),
                  "scored_by": dict(Counter(r["via"] for r in rows.values())),
                  "recommended_by_category": dict(Counter(r["main"] or "None" for w, r in rows.items()
                                                          if w in pool_rec).most_common())},  # fmt: skip
@@ -1046,6 +1069,167 @@ def directory_stats(request: Request, response: Response) -> dict[str, Any]:
     return stats | {"sweep_left": {"leaderboards": len(boards), "of": len(all_boards()), "markets": markets},
                     "sweeping": _directory_state["running"], "last_error": directory().last_error(),
                     "evaluating": evaluating}
+
+
+# ---- the directory, phase 6: monitoring and measurement ----
+# /api/monitoring (the owner's, as /api/directory is) says how discovery is going and what it costs, day by day:
+# wallets found (in all, and new each day, by where), screened and fully evaluated (each day too), coverage and
+# qualified traders by category, how fresh scores are and what's waiting, which sources find traders who qualify,
+# and the reads made, how they ended, and what the engine costs on Railway. The directory's own tables answer most
+# of it; what they don't keep is counted as it happens (signals/monitoring.py) and kept by day in directory.db each
+# minute, so it lasts across deploys. ``health`` says in sentences what looks wrong; hourly, it goes to the logs.
+
+MONITOR_TTL_S = 300
+MONITOR_LOG_S = 3600
+_monitor_stop = threading.Event()
+_monitor_state: dict[str, Any] = {"sampler": None, "error": None}
+
+
+def _monitor_flush() -> None:
+    """The counts since the last flush into directory.db; kept in memory for the next try if they can't be written."""
+    rows = monitoring.usage.take()
+    try:
+        directory().tally(rows)
+        _monitor_state["error"] = None
+    except (sqlite3.Error, OSError) as e:
+        monitoring.usage.put_back(rows)
+        _monitor_state["error"] = f"{type(e).__name__}: {e}"
+
+
+def _monitor_loop() -> None:
+    """Each SAMPLE_S, the engine's resources, and the counts kept; each MONITOR_LOG_S, any warning to the logs."""
+    sampler = _monitor_state["sampler"] = monitoring.Sampler(STORE_DIR)
+    logged = time.monotonic()
+    while not _monitor_stop.wait(monitoring.SAMPLE_S):
+        try:
+            sampler.sample()
+        except OSError:
+            pass
+        _monitor_flush()
+        if time.monotonic() - logged >= MONITOR_LOG_S:
+            logged = time.monotonic()
+            try:
+                warnings = monitoring_report()["health"]
+            except Exception as e:  # the report can wait for the next hour
+                warnings = [f"The monitoring report couldn't be worked out: {type(e).__name__}: {e}"]
+            if warnings:
+                print(f"monitoring: {' | '.join(warnings)}", flush=True)
+
+
+SCREENED_KINDS = ("new", "recheck")  # what the evaluation quick-checks first (recommended traders are rescored)
+
+
+def _day_view(day: dict[str, Any]) -> dict[str, Any]:
+    """One day of the report: the directory's facts, and its tallies turned into what they mean."""
+    t = day.pop("tallies")
+    evaluated: Counter[str] = Counter()
+    screened = new_screened = 0
+    for key, n in t.get("evaluated", {}).items():
+        kind, _, outcome = key.partition(":")
+        evaluated[outcome] += int(n)
+        if kind in SCREENED_KINDS and outcome != "failed":
+            screened += int(n)
+            new_screened += int(n) if kind == "new" else 0
+    infra = t.get("infra", {})
+    peaks = t.get("infra_max", {})
+    return day | {
+        "screened": screened, "screened_never_looked_at_before": new_screened, "evaluated": dict(evaluated),
+        "api": monitoring.api_counts(t.get("api_sent", {}), t.get("api", {})),
+        "polymarket_reads_by_budget": {k: int(v) for k, v in t.get("lane", {}).items()},
+        "infra": {"cpu_s": round(infra.get("cpu_s", 0)), "ram_gb_h": round(infra.get("ram_gb_s", 0) / 3600, 2),
+                  "egress_mb": round(infra.get("egress_bytes", 0) / 2**20, 1),
+                  "peak_ram_mb": round(peaks["ram_bytes"] / 2**20) if "ram_bytes" in peaks else None,
+                  "volume_gb": round(peaks["volume_bytes"] / monitoring.GB, 2) if "volume_bytes" in peaks else None,
+                  "cost_usd": monitoring.cost(infra) if infra else None},  # fmt: skip
+    }  # fmt: skip
+
+
+def _health(r: dict[str, Any], now: float) -> list[str]:
+    """What looks wrong, in sentences (an empty list: nothing does)."""
+    out = []
+    sweep = directory().last_sweep()
+    if DIRECTORY_ON and not _directory_state["running"] and (sweep is None or now - sweep["finished"] > DIRECTORY_SWEEP_S + 6 * 3600):
+        out.append("No sweep has finished in the last 30 hours." if sweep else "No sweep has finished yet.")
+    if err := directory().last_error():
+        out.append(f"The last sweep stopped early: {err['error']}")
+    if EVALUATE_ON and _evaluate_state["error"]:
+        out.append(f"The evaluation's last round failed: {_evaluate_state['error']}")
+    fresh = r["freshness"]
+    if n := fresh["recommended"]["shown"]["past_fresh"]:
+        out.append(f"{n} recommended traders people are shown have a score older than {fresh_for(True) / 3600:.0f} h.")
+    if n := fresh["recommended"]["others"]["past_fresh"]:
+        out.append(f"{n} other recommended traders have a score older than {fresh_for(False) / 3600:.0f} h.")
+    late = fresh["due_now"]["presented"]["most_overdue_h"]
+    if late is not None and late > 1:
+        out.append(f"Rescoring traders people are shown is {late:.1f} h behind.")
+    today = r["by_day"][0] if r["by_day"] else None
+    if today:
+        looked = sum(today["evaluated"].values())
+        failed = today["evaluated"].get("failed", 0)
+        if looked >= 20 and failed / looked > 0.1:
+            out.append(f"{failed} of {looked} wallets looked at today failed.")
+        for host, c in today["api"].items():
+            if host in POLYMARKET_HOSTS and c["requests"] >= 100 and (c.get("429", 0) + c.get("error", 0) + c.get("5xx", 0)) / c["requests"] > 0.02:
+                out.append(f"{host}: {c.get('429', 0)} rate limits, {c.get('5xx', 0)} server errors and {c.get('error', 0)} "
+                           f"unanswered of {c['requests']} requests today.")  # fmt: skip
+    errors = r["api"]["errors"]
+    out += [f"{what}: {errors[what]}" for what in ("discovery", "directory_writes", "feed", "monitoring") if errors[what]]
+    if str(errors["leaderboards"] or "").startswith("stale"):  # "sweep" and "read" are fine
+        out.append(f"leaderboards: {errors['leaderboards']}")
+    return out
+
+
+def monitoring_report(days: int = 14) -> dict[str, Any]:
+    """The whole report (see above), kept MONITOR_TTL_S per ``days``."""
+
+    def build() -> dict[str, Any]:
+        t0, now = time.monotonic(), time.time()
+        r = directory().monitoring(presented_wallets(), days, now)
+        r["by_day"] = [_day_view(d) for d in r["by_day"]]
+        launch = {m: monitoring.usage.since_launch(m) for m in ("api_sent", "api", "lane", "infra")}
+        poly_reads = sum(n for h, n in launch["api_sent"].items() if h in POLYMARKET_HOSTS)
+        lanes = {k: int(v) for k, v in launch["lane"].items()}
+        full = r["by_day"][1] if len(r["by_day"]) > 1 else None  # yesterday: the last whole day
+        sampler = _monitor_state["sampler"]
+        r["api"] = {
+            "since_launch": monitoring.api_counts(launch["api_sent"], launch["api"]),
+            # the Feed's and the pages' share is what the budgets didn't take
+            "polymarket_reads_since_launch": {**lanes, "feed_and_pages": max(0, int(poly_reads) - sum(lanes.values()))},
+            "budgets": {"background": _background["budget"].state() if "budget" in _background else None,
+                        "check": _check_budget.state()},  # fmt: skip
+            "feed": feed_stats(),
+            "errors": {"sweep": (directory().last_error() or {}).get("error"), "evaluation": _evaluate_state["error"],
+                       "leaderboards": _evaluate_state["leaderboards"], "discovery": _discovery_state["error"],
+                       "directory_writes": _directory_state.get("note_error"), "feed": _worth.get("live_error"),
+                       "monitoring": _monitor_state["error"]},  # fmt: skip
+        }
+        r["infrastructure"] = {
+            "uptime_h": round((now - monitoring.usage.started) / 3600, 1),
+            "now": sampler.now() if sampler else None,
+            "since_launch_usd": monitoring.cost(launch["infra"]),
+            "last_full_day_usd": full["infra"]["cost_usd"] if full else None,
+            "month_at_last_full_day_usd": round(full["infra"]["cost_usd"]["total"] * 30, 2)
+            if full and full["infra"]["cost_usd"] else None,
+            "rates": monitoring.RATES,
+            "note": "An estimate of the engine's own Railway usage at list prices; Railway's usage page is the bill. "
+                    "Vercel, Clerk and PostHog aren't included.",
+        }  # fmt: skip
+        r["flags"] = {"directory": DIRECTORY_ON, "evaluate": EVALUATE_ON, "discovery": DISCOVERY}
+        r["health"] = _health(r, now)
+        r["as_of"] = datetime.fromtimestamp(now, UTC).isoformat()
+        r["took_s"] = round(time.monotonic() - t0, 2)
+        return r
+
+    return cached(f"monitoring:{days}", MONITOR_TTL_S, build)  # type: ignore[no-any-return]
+
+
+@app.get("/api/monitoring")
+def monitoring_route(request: Request, response: Response, days: int = 14) -> dict[str, Any]:
+    """Discovery's monitoring and measurement (``monitoring_report``) over the last ``days`` (1–90): counts only,
+    never a wallet. The owner's, as /api/directory is."""
+    _owner(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    return monitoring_report(min(90, max(1, days)))
 
 
 # ---- the Traders leaderboard's columns ----
@@ -1336,7 +1520,8 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
 # ---- Explore (SIGNALS_EXPLORE=1): the directory on the Traders page ----
 # Every wallet the directory found somewhere public, in three groups: limited evidence (too few bets to judge, from a
 # quick check's count or a score), checked (a score's verdict, or a quick check's: dormant, paused), and, only when
-# asked for, not checked yet. Sorted and filtered by facts only; nothing is ranked or newly recommended. Browsing
+# asked for, not checked yet. Whales is a view across them: a usual bet of WHALE_USD or more, whatever the checks
+# found, each row with its own group. Sorted and filtered by facts only; nothing is ranked or newly recommended. Browsing
 # reads only directory.db, never Polymarket; a trader page reuses a score the directory keeps while it's fresh
 # (STORED_FRESH_S), and "Check now" scores one on the spot, a few at a time (CHECKS_AT_ONCE, CHECKS_PER_CLIENT).
 
@@ -1570,18 +1755,43 @@ LIVE_PAGE_READS = 3  # a Feed view reads at most this many traders the poller ha
 LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
 LIVE_REC_FLOOR = 4  # Recommended reads a round even when everyone followed fills the slot, so it never stops
 LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; further back when there's a gap
+POSITIONS_PER_READ = 20  # conditionIds per read of the positions a trader's 50 biggest left out
 _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
 _live_hinted: set[str] = set()  # the shared big-trades feed's trades that already moved their trader up
 _live_round: dict[str, float] = {"ended": float("-inf")}  # when (monotonic) the poller's last round ended
+# the last hour of rounds, for the owner (/api/discovery's "feed"): how long each took, how many it read, and how
+# old the oldest followed and Recommended trader's kept trades were when it ended (what alerts and the Feed see)
+_live_stats: deque[dict[str, Any]] = deque(maxlen=120)
 _followed_reading = threading.Event()  # set while the poller reads followed traders: the background and checks give way
+
+
+def _oldest(wallets: set[str], mono: float) -> int | None:
+    """How old (seconds) the oldest of these traders' kept reads is; None when none was read yet."""
+    ages = [mono - hit[0] for w in wallets if (hit := _live_kept(w)) is not None]
+    return round(max(ages)) if ages else None
+
+
+def feed_stats() -> dict[str, Any]:
+    """The poller over the last hour (_live_stats): round times, the oldest followed and Recommended trader's
+    reads at each round's end (median and worst), rounds cut by a rate limit, and the last round as it was."""
+    rounds = list(_live_stats)
+
+    def spread(key: str) -> dict[str, Any] | None:
+        xs = sorted(r[key] for r in rounds if r[key] is not None)
+        return {"median": xs[len(xs) // 2], "max": xs[-1]} if xs else None
+
+    return {"rounds": len(rounds), "round_s": spread("seconds"), "oldest_followed_s": spread("oldest_followed_s"),
+            "oldest_recommended_s": spread("oldest_recommended_s"),
+            "rate_limited_rounds": sum(1 for r in rounds if r["rate_limited"]),
+            "live_error": _worth.get("live_error"), "last": rounds[-1] if rounds else None}  # fmt: skip
 
 
 def _reading_followed() -> bool:
     return _followed_reading.is_set()
 
 
-_check_budget = Budget(CHECK_RATE, yield_to=_reading_followed)
+_check_budget = Budget(CHECK_RATE, yield_to=_reading_followed, name="check")
 _checker: dict[str, Whales] = {}
 
 
@@ -1595,9 +1805,19 @@ def checker() -> Whales:
         return _checker["whales"]
 
 
-def _open_positions(wallet: str) -> list[Any]:
-    """A trader's open positions: the SDK's TraderDetail.positions in one read, without its profile and stats."""
-    return reads.whales.positions("polymarket", wallet, limit=50)
+def _open_positions(wallet: str, markets: list[str] | None = None) -> list[Any]:
+    """A trader's open positions: the SDK's TraderDetail.positions, without its profile and stats. Their 50
+    biggest, plus, in one more read per POSITIONS_PER_READ markets, any of ``markets`` (outcomes they traded
+    lately) the 50 biggest left out, matched by outcome (holding one side of a market doesn't price the other): a
+    trader with more open positions than that still gets the price now for every trade they just made (an alert,
+    a Feed card), and a sell isn't called "no longer hold it" when they do. (Polymarket's positions take several
+    conditionIds at once, comma-separated, and ``whales.positions`` passes ``market`` on as it is.)"""
+    out = {p.market: p for p in reads.whales.positions("polymarket", wallet, limit=50)}
+    missing = list(dict.fromkeys(m.partition(":")[0] for m in markets or () if m not in out))
+    for i in range(0, len(missing), POSITIONS_PER_READ):
+        for p in reads.whales.positions("polymarket", wallet, limit=500, market=",".join(missing[i : i + POSITIONS_PER_READ])):
+            out.setdefault(p.market, p)
+    return list(out.values())
 
 
 def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
@@ -1620,7 +1840,8 @@ def _live_fetch(wallet: str, priced: bool) -> TraderDetail:
         if same and at is not None and time.monotonic() - at < LIVE_PRICE_S:
             positions = old.positions
         else:
-            positions, _live_priced[wallet] = _open_positions(wallet), time.monotonic()
+            traded = [t.market for t in trades if priced or t.at.timestamp() >= since]
+            positions, _live_priced[wallet] = _open_positions(wallet, traded), time.monotonic()
     else:
         _live_priced.pop(wallet, None)
     name = next((t.name for t in trades if t.name), None)
@@ -1693,7 +1914,7 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
 
     due = sorted((w for w in followed if due_now(w)), key=lambda w: (-age(w), w))  # oldest first; ties by wallet
     late = sorted((w for w in rec if w in hinted or age(w) >= rec_after), key=lambda w: (w not in hinted, -age(w), w))
-    done = 0
+    done, limited = 0, False
     def followed_read() -> None:  # alerts' reads are done: the others' full rate back, and the alert pass now
         if _followed_reading.is_set():
             _followed_reading.clear()
@@ -1717,11 +1938,16 @@ def live_poll_once(stop: threading.Event | None = None) -> int:
                 _live_failed[w] = time.monotonic()
                 if e.code == "rate_limited":  # the SDK's retries are spent: more reads now would only add to it
                     _worth["live_error"] = "Polymarket rate limited the Feed's reads; the rest wait for the next round"
+                    limited = True
                     break
     finally:
         followed_read()
     _live_round["ended"] = time.monotonic()
     wanted, mono = followed | rec, time.monotonic()
+    _live_stats.append({"at": time.time(), "seconds": round(mono - started, 1), "followed": len(followed),
+                        "recommended": len(rec), "read": done, "rate_limited": limited,
+                        "never_read": sum(1 for w in wanted if _live_kept(w) is None),
+                        "oldest_followed_s": _oldest(followed, mono), "oldest_recommended_s": _oldest(rec, mono)})  # fmt: skip
     for key in [k for k in list(_cache) if k.startswith("live:")]:
         hit = _cache.get(key)
         if key[5:] not in wanted and hit and mono - hit[0] > LIVE_KEEP_S:
@@ -1771,6 +1997,26 @@ def _bets_of(d: Any, who: dict[str, Any], since: datetime | None = None) -> list
             for b in one.values()]  # fmt: skip
 
 
+def _sells_of(d: Any, who: dict[str, Any], since: datetime) -> list[dict[str, Any]]:
+    """A trader's sells since ``since``, one per outcome (fills merged: ``price`` is what they got on average), for
+    the Feed's Following: ``side`` "sell", ``held`` whether they still hold some (an open position) and, only while
+    they do, the price now (else None: no position to read it from, and no number is made up)."""
+    now = {p.market: p.current_price for p in d.positions}
+    one: dict[str, dict[str, Any]] = {}
+    for t in d.trades:
+        if t.action != "sell" or t.at < since or not t.size:
+            continue
+        b = one.setdefault(
+            t.market,
+            {"wallet": who["wallet"], "name": who.get("name"), "segment": who.get("segment"), "label": who.get("label"),
+             "side": "sell", "market": t.market, "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at,
+             "usd": 0.0, "size": 0.0, "held": t.market in now, "price_now": now.get(t.market), "token": t.token},
+        )  # fmt: skip
+        b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
+    return [b | {"price": b["usd"] / b["size"], "at": b["at"].isoformat(), "us": us_of(b["market"], b["token"], b["outcome"])}
+            for b in one.values()]  # fmt: skip
+
+
 @app.get("/api/bet/{wallet}/{market}")
 def one_bet(wallet: str, market: str, response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
     """One trader's buy of one outcome, as a Feed card has it (status, price now, copy_ok): what an alert's
@@ -1810,9 +2056,9 @@ def live(response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
             "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD} | got  # fmt: skip
 
 
-def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> dict[str, Any]:
-    """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), newest first, with
-    status and category, from what the poller keeps: a view never waits on Polymarket for dozens of traders. Only
+def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = False) -> dict[str, Any]:
+    """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), and their sells too
+    when ``sells`` (``_sells_of``: Following's), newest first, with status (a buy's; None for a sell) and category, from what the poller keeps: a view never waits on Polymarket for dozens of traders. Only
     a trader the poller hasn't read yet (just followed, or just after a restart) is read here, at most
     LIVE_PAGE_READS a view; the rest are ``pending`` until its next round. ``failed``: traders that couldn't be read
     (or only longer ago than LIVE_SHOW_S). ``as_of``: when the oldest of what's shown was read (epoch ms)."""
@@ -1840,14 +2086,15 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> dict[str, Any]:
         oldest, d = min(oldest, hit[0]), hit[1]
         if not s.get("name"):
             s["name"] = d.trader.name  # a followed wallet we haven't scored: their Polymarket name, as on their cards
-        bets += [b for b in _bets_of(d, s, since) if b["usd"] >= min_usd]
+        bets += [b for b in _bets_of(d, s, since) + (_sells_of(d, s, since) if sells else []) if b["usd"] >= min_usd]
     bets.sort(key=lambda b: b["at"], reverse=True)
     try:
         cats = _categories([b["market"] for b in bets]) if bets else {}
     except VenueError:
         cats = {}  # the trades still show, under All
     for b in bets:
-        b["status"], b["category"] = bet_status(b["price"], b["price_now"]), cats.get(b["market"])
+        b["status"] = None if b.get("side") == "sell" else bet_status(b["price"], b["price_now"])
+        b["category"] = cats.get(b["market"])
     as_of = round((time.time() - (time.monotonic() - oldest)) * 1000)
     return {"bets": bets, "failed": failed, "pending": pending, "as_of": as_of}
 
@@ -1964,6 +2211,9 @@ def _quote_outcome(p: Any, changed: bool) -> str:
 # TELEGRAM_BOT_TOKEN is. Nothing here places an order.
 
 CLERK_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+# Product analytics on the page (PostHog: page views, clicks, session replay), off unless the owner sets the project's
+# key (phc_…). The page sends it through /lyr on our domain (web/vercel.json), so it only works behind Vercel.
+POSTHOG_KEY = os.environ.get("SIGNALS_POSTHOG_KEY", "")
 TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 SITE = os.environ.get("SIGNALS_SITE", "https://usesignals.app")
 MAX_FOLLOWS = 20
@@ -1971,9 +2221,22 @@ CODE_TTL_S = 15 * 60  # a "Connect Telegram" link works this long, once
 ALERT_EVERY_S = 30
 ALERT_MAX_AGE_S = 30 * 60  # a buy first seen later than this isn't alerted (Polymarket shows trades minutes late)
 ALERT_AGAIN_S = 6 * 3600  # one alert per trader and market in this long, however many fills
-DATA_DELAY = "Polymarket's public data runs 3–5 minutes behind."  # said on every alert, and on the Feed
-DAILY_CAP = 20  # alerts per person per UTC day (a group counts once); then one "limit reached" message
-CAP_TEXT = "You've reached today's alert limit; more tomorrow."
+# How late an alert can be, for where its trade came from. Every alert also says when the trade was made (its
+# Polymarket timestamp: the block time of the trade's transaction) and how long before the alert that was, measured.
+# A trader you follow is read on their own every round (Polymarket returns a trade there within seconds, measured
+# 1–14 s on 2026-10-14), so their alerts come one round or so after the trade. A big trade comes from Polymarket's
+# feed of every trade, which runs 3–5 minutes behind (its newest trade was 158–299 s old when read).
+# "typically": both vary with load and with how Polymarket's API is answering; the measured line is the real one
+FOLLOW_DELAY = f"Signals typically reads followed traders' trades every {LIVE_POLL_S} seconds."
+BIG_DELAY = "Big trades come from Polymarket's feed of every trade, which typically runs 3–5 minutes behind."
+DAILY_CAP = 20  # alerts per person per UTC day (a group counts once, a summary once); then one "limit reached" message
+CAP_TEXT = f"You've reached today's alert limit; more tomorrow. Every trade by traders you follow is still in your Feed: {SITE}/#/"
+# Of the DAILY_CAP, at most this many a day from any one trader you follow (their buys and sells, not a group), so
+# one busy trader can't use up the day. Past it their trades wait for a summary (held), except a sale of something
+# they alerted you about (_told): that still comes right away, within the DAILY_CAP.
+TRADER_DAILY = 5
+SUMMARY_S = 3 * 3600  # held trades go out as one summary per person this long after the first of them was held
+TOLD_S = 30 * 86400  # a sale counts as one they alerted you about when that alert was this recent
 GROUP_S = 6 * 3600  # 2+ traders you follow buying the same outcome within this long make one grouped alert
 GROUP_FAST_S = 3600  # the same, for markets that settle fast
 FAST_CATEGORIES = ("Sports", "Esports")
@@ -2150,7 +2413,7 @@ def unfollow(wallet: str, response: Response, uid: str = Depends(signed_in)) -> 
 
 @app.get("/api/me/feed")
 def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
-    """The Feed's Following: your followed traders' buys over the last FEED_HOURS, every size. Whoever they are:
+    """The Feed's Following: your followed traders' buys and sells over the last FEED_HOURS, every size. Whoever they are:
     a trader followed from Explore shows the verdict their page shows (the directory's fresh stored score, as
     ``worth_wallet`` reuses it; no read), and one nobody has scored lately has no tier and copying isn't offered for
     them (copy_ok False)."""
@@ -2163,7 +2426,7 @@ def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]
         label = s.get("label") or (SEGMENTS[s["segment"]][0] if s.get("segment") in SEGMENTS else None)
         people.append({"wallet": w, "name": s.get("name"), "segment": s.get("segment"), "label": label}
                       | copy_fields(s or None))  # fmt: skip
-    return {"traders": people, "hours": FEED_HOURS} | _feed(people)
+    return {"traders": people, "hours": FEED_HOURS} | _feed(people, sells=True)
 
 
 @app.post("/api/me/telegram")
@@ -2183,22 +2446,60 @@ def connect_telegram(response: Response, uid: str = Depends(signed_in)) -> dict[
     return {"link": f"https://t.me/{bot}?start={code}"}
 
 
+class TelegramError(RuntimeError):
+    """A Telegram Bot API call that failed, in Telegram's own words (never the token). ``code``: its error code
+    (None when it never got the request); ``retry_after``: how long it asked us to wait, if it did;
+    ``maybe_sent``: whether it may have done what was asked anyway (a 5xx, or the request went out and no answer
+    came back): Telegram can't tell a repeat, so that one is never asked again."""
+
+    def __init__(self, message: str, code: int | None = None, retry_after: float | None = None,
+                 maybe_sent: bool = False) -> None:  # fmt: skip
+        super().__init__(message)
+        self.code, self.retry_after, self.maybe_sent = code, retry_after, maybe_sent
+
+    @property
+    def temporary(self) -> bool:
+        """Safe to try again: Telegram surely didn't take it, and later may work (it never got the request, or it
+        said too many requests, 429)."""
+        return not self.maybe_sent and (self.code is None or self.code == 429)
+
+    @property
+    def chat_gone(self) -> bool:
+        """The chat can't get messages any more: the bot was blocked, the account deleted, the chat not found."""
+        return self.code == 403 or (self.code == 400 and "chat not found" in str(self).lower())
+
+
 def tg(method: str, **params: Any) -> Any:
-    """One Telegram Bot API call. A failure raises RuntimeError with Telegram's own words, never the token."""
+    """One Telegram Bot API call. A failure raises TelegramError with Telegram's own words, never the token, saying
+    whether Telegram may have done it anyway: urllib wraps a failure to connect or to send the request in URLError
+    (it never got it), and raises one while waiting for or reading the answer as it is (it may have)."""
     req = urllib.request.Request(f"https://api.telegram.org/bot{TG_TOKEN}/{method}", data=json.dumps(params).encode(),
                                  headers={"content-type": "application/json"})  # fmt: skip
+    code = None
     try:
         with urllib.request.urlopen(req, timeout=float(params.get("timeout", 0)) + 15) as r:
-            body = json.loads(r.read())
+            raw = r.read()
     except urllib.error.HTTPError as e:
+        code = e.code
         try:
             body = json.loads(e.read())
-        except ValueError:
+        except (ValueError, OSError):
             body = {"description": f"HTTP {e.code}"}
-    except OSError as e:  # no answer: URLError, a timeout, a dropped connection
-        raise RuntimeError(f"Telegram didn't answer ({type(e).__name__})") from None
+    except urllib.error.URLError as e:  # couldn't connect, or couldn't send the request: Telegram never got it
+        raise TelegramError(f"Telegram couldn't be reached ({type(e.reason).__name__})") from None
+    except OSError as e:  # the request went out and no answer came back (a timeout, a dropped connection)
+        raise TelegramError(f"Telegram didn't answer ({type(e).__name__})", maybe_sent=True) from None
+    else:
+        try:
+            body = json.loads(raw)
+        except ValueError:  # it answered 200 in a way we can't read: it may well have done it
+            raise TelegramError("Telegram's answer couldn't be read", maybe_sent=True) from None
     if not body.get("ok"):
-        raise RuntimeError(f"Telegram: {body.get('description') or 'refused'}")
+        wait = (body.get("parameters") or {}).get("retry_after")
+        err_code = body.get("error_code") or code
+        raise TelegramError(f"Telegram: {body.get('description') or 'refused'}", err_code,
+                            float(wait) if isinstance(wait, int | float) else None,
+                            maybe_sent=isinstance(err_code, int) and err_code >= 500)  # fmt: skip
     return body.get("result")
 
 
@@ -2225,11 +2526,17 @@ def _who(wallet: str) -> str:
 
 
 CONNECTED = (
-    "Connected. You'll get a message here a few minutes after a trader you follow buys or sells, whatever the amount: "
-    "what they traded, at what price, the price now and when they traded. Polymarket's public data runs a few minutes "
-    "behind, so alerts are never instant. When two or more of them buy the same thing, one message lists them all, and it's "
-    f"updated as more buy. If you've picked markets on Signals, trades of ${WHALE_USD:,.0f} or more there come too. "
-    f"At most {DAILY_CAP} alerts a day.\n\nFollowing: {{names}}\n/list: who you follow · /stop: turn alerts off"
+    "Connected. You'll get a message here a few minutes after a trader you follow buys or sells, of any size: what "
+    "they traded, at what price, the price now and when they traded. Polymarket's public data runs a few minutes "
+    "behind, so alerts are never instant.\n\n"
+    "Not every trade gets its own message. A trader's buys of one outcome within 30 minutes come as one, and after a "
+    f"message, more buys of that outcome (or more sells of it) are left out for {ALERT_AGAIN_S // 3600} hours. When two or "
+    "more traders you follow buy the same thing, one message lists them all and is updated as more buy. Nothing comes "
+    "for a market that's all but decided (2¢ or less, 98¢ or more). If you've picked markets on Signals, trades of "
+    f"${WHALE_USD:,.0f} or more there come too. At most {DAILY_CAP} alerts a day, and {TRADER_DAILY} from any one "
+    f"trader: past that, their trades come in one summary every {SUMMARY_S // 3600} hours (a summary counts as one "
+    "alert), except a sale of something they alerted you about, which still comes right away."
+    "\n\nFollowing: {names}\n/list: who you follow · /stop: turn alerts off"
 )
 
 
@@ -2348,9 +2655,16 @@ def _chat_owner(chat: str) -> str | None:
 # pending: a trader's fills not alerted yet, over the last ALERT_MAX_AGE_S, so split buys add up into one alert
 # across rounds and restarts.
 # votes: "Useful" / "Not useful", one per alert and account, changeable.
+# held: trades by a trader you follow past their TRADER_DAILY, per account, until one summary sums them up (_summaries).
 
 _db_lock = threading.RLock()  # re-entrant: a nested read never hangs the alert loop
 _db_ready: set[str] = set()
+# Each alert's delivery (see _send): state is queued (kept, Telegram not asked yet), sending (asking it), sent,
+# retry (a temporary failure: next_at), failed (refused for good, or too late) or unknown (the engine died while
+# asking: not asked again, so never twice). NULL: an alert from before these, sent. ``body``: the message and its
+# buttons, so a retry after a restart sends exactly what was meant; ``queued_at``: when it was first kept.
+_DELIVERY_COLUMNS = (("state", "TEXT"), ("tries", "INTEGER NOT NULL DEFAULT 0"), ("queued_at", "REAL"),
+                     ("next_at", "REAL"), ("error", "TEXT"), ("body", "TEXT"))  # fmt: skip
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, uid TEXT NOT NULL, chat TEXT, kind TEXT NOT NULL,
   trader TEXT, outcome TEXT, message_id INTEGER, sent_at REAL NOT NULL, trade_at REAL, day TEXT NOT NULL,
@@ -2366,6 +2680,11 @@ CREATE TABLE IF NOT EXISTS votes (alert_id TEXT NOT NULL, uid TEXT NOT NULL, use
 CREATE TABLE IF NOT EXISTS events (at REAL NOT NULL, kind TEXT NOT NULL, uid TEXT, alert_id TEXT, target TEXT,
   trader TEXT);
 CREATE TABLE IF NOT EXISTS quotes (at REAL NOT NULL, outcome TEXT NOT NULL, reads INTEGER NOT NULL, ms REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS watched (trader TEXT PRIMARY KEY, seen_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS held (uid TEXT NOT NULL, trader TEXT NOT NULL, outcome TEXT, side TEXT NOT NULL,
+  usd REAL, at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS seen_trades (trader TEXT NOT NULL, trade_id TEXT NOT NULL, at REAL NOT NULL,
+  PRIMARY KEY (trader, trade_id));
 """
 
 
@@ -2381,9 +2700,12 @@ def _db() -> Iterator[sqlite3.Connection]:
         con = sqlite3.connect(alerts_db())
         try:
             con.executescript(_SCHEMA)
-            if str(alerts_db()) not in _db_ready:  # a db from before trigger_at: add the column, once
-                if "trigger_at" not in {r[1] for r in con.execute("PRAGMA table_info(alerts)")}:
-                    con.execute("ALTER TABLE alerts ADD COLUMN trigger_at REAL")
+            if str(alerts_db()) not in _db_ready:  # a db from before these columns: add them, once
+                have = {r[1] for r in con.execute("PRAGMA table_info(alerts)")}
+                for col, kind in (("trigger_at", "REAL"), *_DELIVERY_COLUMNS):
+                    if col not in have:
+                        con.execute(f"ALTER TABLE alerts ADD COLUMN {col} {kind}")
+                con.execute("CREATE INDEX IF NOT EXISTS alerts_by_state ON alerts (state, next_at)")
                 _db_ready.add(str(alerts_db()))
             yield con
             con.commit()
@@ -2396,12 +2718,19 @@ def _today(now: float | None = None) -> str:
     return datetime.fromtimestamp(time.time() if now is None else now, UTC).date().isoformat()
 
 
-COUNTED = ("buy", "sell", "group", "whale")  # what the daily cap counts: a group once, its edits never
+COUNTED = ("buy", "sell", "group", "whale", "summary")  # what the daily cap counts: a group once, its edits never
+TRADER_KINDS = ("buy", "sell")  # what TRADER_DAILY counts: one trader's own alerts (a group names several)
 
 
-def _sent_today(uid: str, kinds: tuple[str, ...] = COUNTED) -> int:
+def _sent_today(uid: str, kinds: tuple[str, ...] = COUNTED, trader: str | None = None) -> int:
+    """Today's alerts of these kinds for this account (from this trader, if given): sent, or still on their way
+    (queued, retrying, unknown); not those that failed for good, so a retry never takes anyone past the cap and a
+    refusal doesn't use it up."""
     with _db() as con:
-        q = f"SELECT COUNT(*) FROM alerts WHERE uid = ? AND day = ? AND kind IN ({','.join('?' * len(kinds))})"
+        q = (f"SELECT COUNT(*) FROM alerts WHERE uid = ? AND day = ? AND kind IN ({','.join('?' * len(kinds))})"
+             " AND COALESCE(state, 'sent') != 'failed'")  # fmt: skip
+        if trader is not None:
+            return int(con.execute(q + " AND trader = ?", (uid, _today(), *kinds, trader)).fetchone()[0])
         return int(con.execute(q, (uid, _today(), *kinds)).fetchone()[0])
 
 
@@ -2413,14 +2742,30 @@ def _keyboard(alert_id: str, stop: str | None = None) -> dict[str, Any]:
     return {"inline_keyboard": rows}
 
 
+RETRY_S = (30.0, 60.0, 120.0, 240.0)  # waits before each try again of a temporary failure (or what Telegram asks)
+
+
 def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, trader: str | None = None,
           outcome: str | None = None, trade_at: float | None = None, stop: str | None = None,
-          trigger_at: float | None = None) -> str | None:  # fmt: skip
-    """Send one alert if today's cap allows it; its id, or None when it wasn't sent. At the cap, the first alert
-    that doesn't fit sends CAP_TEXT instead, once a day (a failed send tries again with the next one), and the
-    rest are dropped until the next UTC day. ``text_for`` gets the alert's id (its links can name it).
-    ``trade_at``: when the alert's buys began (a group's first buy); ``trigger_at``: when the buy that sent it was
-    made (defaults to ``trade_at``)."""
+          trigger_at: float | None = None, usd: float | None = None, told: bool = False,
+          on_queue: Callable[[sqlite3.Connection], Any] | None = None) -> str | None:  # fmt: skip
+    """Send one alert if today's cap allows it; its id when it went out now, else None (not sent, or sent later by
+    a retry). At the cap, the first alert that doesn't fit sends CAP_TEXT instead, once a day (a failed send tries
+    again with the next one), and the rest are dropped until the next UTC day. ``text_for`` gets the alert's id
+    (its links can name it). ``trade_at``: when the alert's buys began (a group's first buy); ``trigger_at``: when
+    the buy that sent it was made (defaults to ``trade_at``).
+
+    A buy or sell from a trader who already had TRADER_DAILY alerts today isn't sent: it's held for the next summary
+    (``usd``: its dollars there), unless ``told`` (a sale of something they alerted you about). The alert that
+    reaches TRADER_DAILY says so. ``on_queue`` runs in the transaction that keeps the alert (a summary clears what
+    it sums up there: kept and cleared together, or neither).
+
+    Never twice, across any crash or failure (Telegram can't tell a repeat): the alert is kept (queued, with its
+    message) before Telegram is asked and marked sending just before it is. Tried again only when Telegram surely
+    didn't take it (it was never reached, or it said 429: TelegramError.temporary): after a restart a queued one is
+    sent. When it may have (a 5xx, no answer once the request went out, the engine stopping mid-request) it's
+    recorded as unknown, with why, and never asked again: not silently lost, not sent twice. A refusal for good is
+    failed, and a chat that's gone is disconnected (_chat_gone)."""
     if _sent_today(uid) >= DAILY_CAP:
         if not _sent_today(uid, ("cap",)):
             try:
@@ -2428,19 +2773,104 @@ def _send(uid: str, chat: str, kind: str, text_for: Callable[[str], str], *, tra
             except RuntimeError:
                 return None
             with _db() as con:
-                con.execute("INSERT INTO alerts (id, uid, chat, kind, sent_at, day) VALUES (?, ?, ?, 'cap', ?, ?)",
+                con.execute("INSERT INTO alerts (id, uid, chat, kind, sent_at, day, state) VALUES (?, ?, ?, 'cap', ?, ?, 'sent')",
                             (secrets.token_urlsafe(6), uid, chat, time.time(), _today()))  # fmt: skip
         return None
+    now = time.time()
+    last = ""
+    if kind in TRADER_KINDS and trader:
+        n = _sent_today(uid, TRADER_KINDS, trader)
+        if n >= TRADER_DAILY and not told:
+            with _db() as con:
+                con.execute("INSERT INTO held VALUES (?, ?, ?, ?, ?, ?)", (uid, trader, outcome, kind, usd, now))
+            return None
+        if n == TRADER_DAILY - 1:
+            last = (f"\n<i>That's {TRADER_DAILY} alerts from {html.escape(_who(trader))} today. Their next trades come"
+                    f" in one summary every {SUMMARY_S // 3600} hours; a sale of something they alerted you about"
+                    " still comes right away.</i>")  # fmt: skip
     aid = secrets.token_urlsafe(6)  # 8 characters: fits Telegram's 64-byte button data with room to spare
-    try:
-        msg = _say(chat, text_for(aid), reply_markup=_keyboard(aid, stop))
-    except RuntimeError:
-        return None  # blocked the bot, or Telegram is down: the next buy tries again
+    body = json.dumps({"text": text_for(aid) + last, "markup": _keyboard(aid, stop)})
     with _db() as con:
-        con.execute("INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (aid, uid, chat, kind, trader, outcome, (msg or {}).get("message_id") if isinstance(msg, dict) else None,
-                     time.time(), trade_at, _today(), trade_at if trigger_at is None else trigger_at))  # fmt: skip
-    return aid
+        if on_queue is not None:
+            on_queue(con)
+        con.execute("INSERT INTO alerts (id, uid, chat, kind, trader, outcome, message_id, sent_at, trade_at, day,"
+                    " trigger_at, state, tries, queued_at, next_at, body) VALUES"
+                    " (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)",
+                    (aid, uid, chat, kind, trader, outcome, now, trade_at, _today(now),
+                     trade_at if trigger_at is None else trigger_at, now, now, body))  # fmt: skip
+    return aid if _attempt(aid) else None
+
+
+def _attempt(aid: str, now: float | None = None) -> bool:
+    """One try at sending a kept alert. True when Telegram took it."""
+    now = time.time() if now is None else now
+    with _db() as con:
+        row = con.execute("SELECT uid, chat, body, tries, queued_at FROM alerts WHERE id = ? AND state IN ('queued', 'retry')",
+                          (aid,)).fetchone()  # fmt: skip
+        if row is None:
+            return False
+        con.execute("UPDATE alerts SET state = 'sending', tries = tries + 1 WHERE id = ?", (aid,))
+    uid, chat, body, tries, queued_at = row
+    msg = json.loads(body)
+    try:
+        got = _say(chat, msg["text"], reply_markup=msg["markup"])
+    except RuntimeError as e:
+        err = e if isinstance(e, TelegramError) else TelegramError(str(e))
+        wait = err.retry_after if err.retry_after is not None else RETRY_S[min(tries, len(RETRY_S) - 1)]
+        if err.maybe_sent:  # it may have reached the chat: asking again could send it twice, so it's left as unknown
+            state = "unknown"
+        elif err.chat_gone:
+            state = "failed"
+            _chat_gone(uid, chat)
+        elif err.temporary and now + wait - (queued_at or now) <= ALERT_MAX_AGE_S:
+            state = "retry"
+        else:
+            state = "failed"  # refused for good, or it would arrive too late to be news
+        why = str(err)[:200] + (" (too late to try again)" if state == "failed" and err.temporary and not err.chat_gone else "")
+        with _db() as con:
+            con.execute("UPDATE alerts SET state = ?, next_at = ?, error = ? WHERE id = ?",
+                        (state, now + wait if state == "retry" else None, why, aid))  # fmt: skip
+        return False
+    with _db() as con:
+        con.execute("UPDATE alerts SET state = 'sent', sent_at = ?, message_id = ?, error = NULL WHERE id = ?",
+                    (time.time(), got.get("message_id") if isinstance(got, dict) else None, aid))  # fmt: skip
+    return True
+
+
+_retry_state: dict[str, bool] = {"started": False}
+
+
+def _retry_due(now: float | None = None) -> int:
+    """Send the alerts whose time to try again has come, oldest first; the first time after a start, also those
+    kept but never asked (queued: the engine went down first), and mark those caught mid-request unknown (never
+    asked again). One too old to be news any more fails instead. Returns how many went out."""
+    now = time.time() if now is None else now
+    with _db() as con:
+        if not _retry_state["started"]:
+            con.execute("UPDATE alerts SET state = 'unknown', error = 'the engine stopped while asking Telegram'"
+                        " WHERE state = 'sending'")  # fmt: skip
+            con.execute("UPDATE alerts SET next_at = ? WHERE state = 'queued'", (now,))
+            _retry_state["started"] = True
+        con.execute("UPDATE alerts SET state = 'failed', error = COALESCE(error, '') || ' (too late to send)'"
+                    " WHERE state IN ('queued', 'retry') AND queued_at < ?", (now - ALERT_MAX_AGE_S,))  # fmt: skip
+        due = [r[0] for r in con.execute("SELECT id FROM alerts WHERE state IN ('queued', 'retry') AND next_at <= ?"
+                                         " ORDER BY queued_at", (now,))]  # fmt: skip
+    return sum(_attempt(aid, now) for aid in due)
+
+
+def _chat_gone(uid: str, chat: str) -> None:
+    """Telegram says this chat can't get messages any more (the bot was blocked, the account deleted): disconnect
+    it, so the page asks to connect Telegram again rather than failing every round, and drop what's waiting for it."""
+    with _follow_lock:
+        d = _load_follows()
+        u = d["users"].get(uid)
+        if u and str(u.get("chat")) == str(chat):
+            u["chat"] = None
+            _save_follows(d)
+    with _db() as con:
+        con.execute("UPDATE alerts SET state = 'failed', error = 'chat gone' WHERE chat = ? AND state IN ('queued', 'retry')",
+                    (chat,))  # fmt: skip
+    count("telegram_lost", uid=uid)
 
 
 def _cents(p: float) -> str:
@@ -2455,7 +2885,8 @@ def _copy_offered(wallet: str) -> bool:
 
 
 LINK_TARGETS = {"Buy on Polymarket International": "market", "Open on Polymarket International": "market",
-                "View on Polymarket US": "market_us", "Their record": "record", "Check current price": "check"}  # fmt: skip
+                "View on Polymarket US": "market_us", "Their record": "record", "Check current price": "check",
+                "Open your Feed": "feed"}  # fmt: skip
 
 # Where the trade happened, said on every alert: the traders Signals follows trade on Polymarket International.
 # With a verified Polymarket US twin (us_match), that it's the same market, never the same price.
@@ -2505,14 +2936,15 @@ def _traded(at: float, seen: float) -> str:
 
 
 def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, at: float, seen: float,
-                record: bool, aid: str | None) -> str:  # fmt: skip
+                record: bool, aid: str | None, delay: str = FOLLOW_DELAY) -> str:  # fmt: skip
     """What happened, the same for every trader: ``head`` (who bought which outcome, at what price, for how much),
     the market, the price now (", price already moved" outside the "can still get in" range, ``bet_status``), and
-    when they traded, measured against this alert (Polymarket shows trades minutes late), and where (``_venue_line``:
+    when they traded, measured against this alert, and where (``_venue_line``:
     Polymarket International, and its Polymarket US twin when there's a verified one). Then COPY_LINE, only when
     copying is offered for them and the price is still in range. Links: "Check current price" (the trade's own page
-    on Signals, neutral for every trader), their record, "Buy on Polymarket International" (it only opens the market:
-    Signals places no orders), "View on Polymarket US" with a twin; then the delay line."""
+    on Signals, neutral for every trader), their record, "View on Polymarket US" with a twin (it leads the venues),
+    "Buy on Polymarket International" (it only opens the market: Signals places no orders); then ``delay``, how late
+    this kind of alert can be (FOLLOW_DELAY, or BIG_DELAY for a big trade)."""
     e = html.escape
     status = bet_status(paid, now)
     where, us_url = _venue_line(t)
@@ -2522,8 +2954,8 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
         lines.append(COPY_LINE)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}"),
                    ("Their record", f"{SITE}/#/worth/{wallet}" if record else None),
-                   ("Buy on Polymarket International", t.url), ("View on Polymarket US", us_url), aid=aid)  # fmt: skip
-    return "\n".join([*lines, links, DATA_DELAY])
+                   ("View on Polymarket US", us_url), ("Buy on Polymarket International", t.url), aid=aid)  # fmt: skip
+    return "\n".join([*lines, links, delay])
 
 
 def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, usd: float, at: float, seen: float,
@@ -2549,9 +2981,9 @@ def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: flo
     moved = bet_status(members[-1][1], now) != "in"
     where, us_url = _venue_line(t)
     lines += [f"Now {_cents(now)}{', price already moved' if moved else ''}.", f"Latest buy {_lag(last_at, seen)} before this alert.",
-              where, _links(("Check current price", f"{SITE}/#/check/{last}/{t.market}"), ("Buy on Polymarket International", t.url),
-                            ("View on Polymarket US", us_url), aid=aid),
-              DATA_DELAY]  # fmt: skip
+              where, _links(("Check current price", f"{SITE}/#/check/{last}/{t.market}"), ("View on Polymarket US", us_url),
+                            ("Buy on Polymarket International", t.url), aid=aid),
+              FOLLOW_DELAY]  # fmt: skip
     return "\n".join(lines)
 
 
@@ -2599,9 +3031,9 @@ def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool,
     where, us_url = _venue_line(t)
     lines.append(where)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}" if held else None),
-                   ("Their record", f"{SITE}/#/worth/{wallet}"), ("Open on Polymarket International", t.url),
-                   ("View on Polymarket US", us_url), aid=aid)  # fmt: skip
-    return "\n".join([*lines, links, DATA_DELAY])
+                   ("Their record", f"{SITE}/#/worth/{wallet}"), ("View on Polymarket US", us_url),
+                   ("Open on Polymarket International", t.url), aid=aid)  # fmt: skip
+    return "\n".join([*lines, links, FOLLOW_DELAY])
 
 
 class NewSell:
@@ -2628,11 +3060,23 @@ class NewSell:
 
 
 def _sold_recently(trader: str, outcome: str, now: float) -> bool:
-    """Whether this trader's sell of this outcome was already alerted (to anyone) in the last ALERT_AGAIN_S, from
-    alerts.db, so a restart doesn't alert it again."""
+    """Whether this trader's sell of this outcome was already alerted (to anyone), or held for a summary, in the
+    last ALERT_AGAIN_S, from alerts.db, so a restart doesn't alert it again."""
     with _db() as con:
-        q = "SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ? LIMIT 1"
-        return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S)).fetchone() is not None
+        q = ("SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ?"
+             " UNION ALL SELECT 1 FROM held WHERE side = 'sell' AND trader = ? AND outcome = ? AND at >= ? LIMIT 1")  # fmt: skip
+        return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S) * 2).fetchone() is not None
+
+
+def _told(uid: str, trader: str, outcome: str, now: float) -> bool:
+    """Whether this trader alerted this person to this outcome in the last TOLD_S: a buy alert from them, or a
+    grouped alert with their buy in it. Their sale of it is then still sent past TRADER_DAILY: it may be news
+    about something the person bought because of that alert."""
+    with _db() as con:
+        q = ("SELECT 1 FROM alerts WHERE uid = ? AND outcome = ? AND sent_at >= ? AND COALESCE(state, 'sent') != 'failed'"
+             " AND ((kind = 'buy' AND trader = ?) OR (kind = 'group' AND EXISTS (SELECT 1 FROM buys WHERE"
+             " buys.uid = alerts.uid AND buys.outcome = alerts.outcome AND buys.trader = ?))) LIMIT 1")  # fmt: skip
+        return con.execute(q, (uid, outcome, now - TOLD_S, trader, trader)).fetchone() is not None
 
 
 def _recently(uid: str | None, trader: str, outcome: str, now: float) -> bool:
@@ -2688,7 +3132,7 @@ def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
         aid = _send(uid, chat, "group", lambda aid: _group_text(first, b.t, b.now, b.seen, aid), outcome=b.outcome,
                     trade_at=first[0][2], trigger_at=b.at)  # fmt: skip
         return 1 if aid else 0
-    aid = _send(uid, chat, "buy", b.text, trader=b.wallet, outcome=b.outcome, trade_at=b.at, stop=b.wallet)
+    aid = _send(uid, chat, "buy", b.text, trader=b.wallet, outcome=b.outcome, trade_at=b.at, stop=b.wallet, usd=b.usd)
     return 1 if aid else 0
 
 
@@ -2711,13 +3155,53 @@ def _added_up(w: str, market: str) -> None:
         con.execute("DELETE FROM pending WHERE trader = ? AND market = ?", (w, market))
 
 
+# ---- alert state that survives a restart (a deploy) ----
+# What each round looked at, per followed trader (and for big trades, BIG_TRADES_KEY), kept in alerts.db as well as
+# in _seen: after a restart, a trader who was being watched picks up where the last round left off, so a trade that
+# showed up while the engine was down (or in its first round back) is alerted, not just noted. Nothing goes out
+# twice: a buy already alerted is in buys (_recently), a sell or big trade in alerts (_sold_recently, _recently).
+# Only a trader nobody watched before (a new follow) has their existing trades just noted.
+
+SEEN_KEEP_S = 2 * ALERT_MAX_AGE_S  # trade ids kept this long; an older trade can't be alerted anyway
+BIG_TRADES_KEY = "*big trades*"
+
+
+def _seen_load(key: str) -> tuple[set[str], float] | None:
+    """The trade ids the alert pass had looked at for ``key`` before this run (those under SEEN_KEEP_S old) and
+    when it last did, or None if it never watched it."""
+    with _db() as con:
+        row = con.execute("SELECT seen_at FROM watched WHERE trader = ?", (key,)).fetchone()
+        if row is None:
+            return None
+        return {r[0] for r in con.execute("SELECT trade_id FROM seen_trades WHERE trader = ?", (key,))}, row[0]
+
+
+def _seen_keep(looked: dict[str, list[WhaleTrade]], watching: set[str] | None, now: float) -> None:
+    """What this round looked at, kept after its alerts went out (so a crash in between can only alert them on the
+    next start, never skip them; the dedupe above stops a second message). ``watching``: everyone followed now, so
+    a trader nobody follows any more is forgotten, and following them again later starts fresh (only noted)."""
+    with _db() as con:
+        con.executemany("INSERT INTO watched VALUES (?, ?) ON CONFLICT (trader) DO UPDATE SET seen_at = excluded.seen_at",
+                        [(k, now) for k in looked])  # fmt: skip
+        con.executemany("INSERT OR IGNORE INTO seen_trades VALUES (?, ?, ?)",
+                        [(k, t.trade_id, t.at.timestamp()) for k, ts in looked.items() for t in ts])  # fmt: skip
+        con.execute("DELETE FROM seen_trades WHERE at < ?", (now - SEEN_KEEP_S,))
+        if watching is not None:
+            gone = [r[0] for r in con.execute("SELECT trader FROM watched WHERE trader != ?", (BIG_TRADES_KEY,))
+                    if r[0] not in watching]  # fmt: skip
+            con.executemany("DELETE FROM watched WHERE trader = ?", [(k,) for k in gone])
+            con.executemany("DELETE FROM seen_trades WHERE trader = ?", [(k,) for k in gone])
+
+
 def alert_pass(now: float | None = None) -> int:
     """One round: each followed trader's trades, read once however many people follow them, and for each new
     buy or sell, whatever the amount and whoever the trader, a message to every connected follower (grouped when 2+ traders they follow
     bought the same outcome; sells never are), then big trades in people's chosen markets. A trader's trades from before their
-    first round are only noted, never alerted. No alert for a buy with no price now (no open position to read it
+    first round are only noted, never alerted; after a restart a trader already watched carries on (_seen_load), so
+    a trade made meanwhile is alerted, once. No alert for a buy with no price now (no open position to read it
     from: there's no saying how far the price moved), nor when the price now is settled (2¢ or less, 98¢ or more).
     Returns how many messages went out."""
+    retried = _retry_due(now)  # alerts waiting to be tried again first: they were news before this round's
     users = {uid: u for uid, u in _load_follows()["users"].items() if u.get("chat")}
     to: dict[str, list[str]] = {}
     for uid, u in users.items():
@@ -2728,12 +3212,24 @@ def alert_pass(now: float | None = None) -> int:
     now = time.time() if now is None else now
     new_buys: list[NewBuy] = []
     new_sells: list[NewSell] = []
+    looked: dict[str, list[WhaleTrade]] = {}
     for w in to:
         try:  # what the poller keeps (it reads everyone followed first, each round); read here only if it hasn't yet
             d = hit[1] if (hit := _live_kept(w)) else _live_read(w, LIVE_ALERT_S)
         except VenueError:
             continue
-        first, seen = w not in _seen, _seen.setdefault(w, set())
+        first = w not in _seen
+        if first and (kept := _seen_load(w)) is not None:  # watched before a restart: carry on from there
+            first, (_seen[w], last) = False, kept
+            # a whole read of trades all made since a while before its last round: there may be more in between
+            if len(d.trades) >= LIVE_TRADES and min(t.at.timestamp() for t in d.trades) > last - ALERT_MAX_AGE_S:
+                try:  # more trades while it was down than one read holds: further back, so none is missed
+                    d = TraderDetail(d.trader, d.visibility, d.stats, d.positions,
+                                     reads.whales.trades("polymarket", w, limit=LIVE_GAP_TRADES))  # fmt: skip
+                except VenueError:
+                    pass
+        seen = _seen.setdefault(w, set())
+        looked[w] = list(d.trades)
         new = [t for t in d.trades if t.trade_id not in seen]
         seen.update(t.trade_id for t in d.trades)
         if len(seen) > 2000:
@@ -2774,9 +3270,61 @@ def alert_pass(now: float | None = None) -> int:
     for sell in new_sells:  # never grouped
         for uid in to[sell.wallet]:
             if _send(uid, users[uid]["chat"], "sell", sell.text, trader=sell.wallet, outcome=sell.outcome,
-                     trade_at=sell.at, stop=sell.wallet):  # fmt: skip
+                     trade_at=sell.at, stop=sell.wallet, usd=sell.usd,
+                     told=_told(uid, sell.wallet, sell.outcome, now)):  # fmt: skip
                 sent += 1
-    return sent + whale_pass(users, now)
+    _seen_keep(looked, set(to), now)
+    return sent + retried + _summaries(users, now) + whale_pass(users, now)
+
+
+# ---- summaries: a busy trader's trades past TRADER_DAILY ----
+
+
+def _summary_text(rows: list[tuple[str, str, float | None, float]], aid: str | None = None) -> str:
+    """One message for everything held for a person: per trader, how many more trades (buys and sells, with their
+    dollars), since the first was held, and a link to the Feed, where every trade is."""
+    e = html.escape
+    per: dict[str, dict[str, list[float]]] = {}
+    for trader, side, usd, _ in rows:
+        per.setdefault(trader, {"buy": [], "sell": []})[side].append(usd or 0.0)
+    lines = [f"More from traders you follow, since {datetime.fromtimestamp(min(r[3] for r in rows), UTC):%H:%M} UTC:"]
+    for trader, sides in sorted(per.items(), key=lambda kv: -sum(map(len, kv[1].values()))):
+        parts = [f"{len(v)} {side}{'s' if len(v) != 1 else ''} (${sum(v):,.0f})" for side, v in sides.items() if v]
+        n = sum(map(len, sides.values()))
+        lines.append(f"• <b>{e(_who(trader))}</b>: {n} more trade{'s' if n != 1 else ''}, {' and '.join(parts)}")
+    lines.append(f"Each came after that trader's {TRADER_DAILY} alerts for the day. Every trade is in your Feed.")
+    return "\n".join([*lines, _links(("Open your Feed", f"{SITE}/#/"), aid=aid)])
+
+
+def _summaries(users: dict[str, dict[str, Any]], now: float) -> int:
+    """For each person whose first held trade was held SUMMARY_S ago or more: one summary of everything held for
+    them, a "summary" alert that counts once toward the DAILY_CAP. It's kept in the alerts outbox in the same
+    transaction that clears what it sums up, so a restart sends it (or a retry does) and never loses or repeats
+    it. A held buy that's since been in a grouped alert is left out (the group told them). Past the DAILY_CAP, it
+    goes like any alert that doesn't fit (CAP_TEXT, once) and what it would have summed up is dropped. Returns
+    messages sent."""
+    with _db() as con:
+        due = [r[0] for r in con.execute("SELECT uid FROM held GROUP BY uid HAVING MIN(at) <= ?", (now - SUMMARY_S,))]
+    sent = 0
+    for uid in due:
+        with _db() as con:
+            rows = con.execute("SELECT rowid, trader, side, usd, at FROM held WHERE uid = ? AND NOT (side = 'buy' AND"
+                               " EXISTS (SELECT 1 FROM alerts WHERE alerts.uid = held.uid AND kind = 'group' AND"
+                               " alerts.outcome = held.outcome AND sent_at >= held.at)) ORDER BY at",
+                               (uid,)).fetchall()  # fmt: skip
+            last = con.execute("SELECT MAX(rowid) FROM held WHERE uid = ?", (uid,)).fetchone()[0]
+        clear = lambda con, uid=uid, last=last: con.execute("DELETE FROM held WHERE uid = ? AND rowid <= ?", (uid, last))  # noqa: E731
+        chat = (users.get(uid) or {}).get("chat")
+        if not rows or not chat:
+            with _db() as con:
+                clear(con)
+            continue
+        summed = [r[1:] for r in rows]
+        if _send(uid, chat, "summary", lambda aid, x=summed: _summary_text(x, aid), on_queue=clear):
+            sent += 1
+        with _db() as con:  # kept (and cleared with it) or past the cap: either way, nothing is held for it now
+            clear(con)
+    return sent
 
 
 # ---- big trades in your markets, whoever the trader ----
@@ -2795,7 +3343,7 @@ def _whale_text(t: WhaleTrade, now: float, category: str | None, seen: float, ai
     who = f'<a href="{e(SITE)}/#/worth/{w}">{e(_who(w))}</a>' if _scored(w) else e(_who(w))
     where = f" in {e(category)}" if category else ""
     head = f"<b>Big trade{where}:</b> {who} bought <b>{e(t.outcome or 'Yes')}</b> at {_cents(t.price)} (${t.usd:,.0f})"
-    return _trade_text(head, w, t, t.price, now, t.at.timestamp(), seen, False, aid)
+    return _trade_text(head, w, t, t.price, now, t.at.timestamp(), seen, False, aid, BIG_DELAY)
 
 
 def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
@@ -2812,13 +3360,25 @@ def whale_pass(users: dict[str, dict[str, Any]], now: float) -> int:
         return 0
     rows = [t for t in rows if t.venue == "polymarket" and t.action == "buy" and t.trader and t.usd >= WHALE_USD]
     seen: set[str] = _whale["seen"]
+    if not _whale["started"] and (kept := _seen_load(BIG_TRADES_KEY)) is not None:  # carry on after a restart
+        _whale["started"] = True
+        seen |= kept[0]
     new = [t for t in rows if t.trade_id not in seen and now - t.at.timestamp() <= ALERT_MAX_AGE_S]
     seen.update(t.trade_id for t in rows)
     if len(seen) > 5000:
         _whale["seen"] = {t.trade_id for t in rows}
     if not _whale["started"]:
         _whale["started"] = True
+        _seen_keep({BIG_TRADES_KEY: rows}, None, now)
         return 0
+    try:
+        return _whale_send(new, wants, now)
+    finally:
+        _seen_keep({BIG_TRADES_KEY: rows}, None, now)  # after they went out
+
+
+def _whale_send(new: list[WhaleTrade], wants: dict[str, dict[str, Any]], now: float) -> int:
+    """whale_pass's messages: each new big trade to everyone who picked its market and doesn't follow the trader."""
     try:
         cats = _categories([t.market for t in new]) if new else {}
     except VenueError:
@@ -2870,7 +3430,7 @@ _alert_wake = threading.Event()
 # profile (events: no_profile). /api/metrics sums them up for the owner: locally, or with SIGNALS_METRICS_KEY.
 
 METRICS_KEY = os.environ.get("SIGNALS_METRICS_KEY", "")
-EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "picked", "no_profile")
+EVENTS = ("tap", "stop", "unfollow", "follow", "telegram", "telegram_lost", "picked", "no_profile")
 _ALERT_ID = re.compile(r"[A-Za-z0-9_-]{4,16}")
 
 
@@ -2970,10 +3530,19 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
     since = time.time() - max(1, days) * 86400
     week = 7 * 86400
     with _db() as con:
-        sent = dict(con.execute("SELECT kind, COUNT(*) FROM alerts WHERE sent_at >= ? GROUP BY kind", (since,)).fetchall())
+        delivered = "COALESCE(state, 'sent') = 'sent'"  # reached the chat (an alert from before delivery states did)
+        sent = dict(con.execute(f"SELECT kind, COUNT(*) FROM alerts WHERE sent_at >= ? AND {delivered} GROUP BY kind",
+                                (since,)).fetchall())  # fmt: skip
+        states = dict(con.execute("SELECT COALESCE(state, 'sent'), COUNT(*) FROM alerts WHERE sent_at >= ? AND kind != 'cap'"
+                                  " GROUP BY 1", (since,)).fetchall())  # fmt: skip
+        retried_ok = con.execute(f"SELECT COUNT(*) FROM alerts WHERE sent_at >= ? AND {delivered} AND tries > 1",
+                                 (since,)).fetchone()[0]  # fmt: skip
+        why = dict(con.execute("SELECT error, COUNT(*) FROM alerts WHERE sent_at >= ? AND state = 'failed' GROUP BY error"
+                               " ORDER BY 2 DESC LIMIT 5", (since,)).fetchall())  # fmt: skip
         # from the buy that sent the alert (trigger_at; a group's is its latest buyer's, not its first)
         lags = [r[0] / 60 for r in con.execute("SELECT sent_at - COALESCE(trigger_at, trade_at) FROM alerts WHERE sent_at >= ?"
-                                                " AND COALESCE(trigger_at, trade_at) IS NOT NULL AND kind != 'cap'", (since,))]  # fmt: skip
+                                                f" AND COALESCE(trigger_at, trade_at) IS NOT NULL AND kind != 'cap' AND {delivered}",
+                                                (since,))]  # fmt: skip
         taps = dict(con.execute("SELECT target, COUNT(*) FROM events WHERE kind = 'tap' AND at >= ? GROUP BY target", (since,)).fetchall())
         tapped = con.execute("SELECT COUNT(DISTINCT e.alert_id) FROM events e JOIN alerts a ON a.id = e.alert_id"
                              " WHERE e.kind = 'tap' AND e.at >= ?", (since,)).fetchone()[0]  # fmt: skip
@@ -2998,7 +3567,13 @@ def metrics(request: Request, response: Response, days: int = 30) -> dict[str, A
     return {
         "days": days,
         "alerts": {"sent": counted, "by_kind": sent, "minutes_from_trade_to_alert": {
-            "median": _pct(lags, 0.5), "p90": _pct(lags, 0.9), "n": len(lags)}},
+            "median": _pct(lags, 0.5), "p90": _pct(lags, 0.9), "n": len(lags)},
+            # every alert's delivery: sent (of which after a retry), still on its way, failed for good (with
+            # Telegram's reason; a chat that's gone is disconnected), unknown (the engine died while asking)
+            "delivery": {"sent": states.get("sent", 0), "sent_after_retry": retried_ok,
+                         "waiting": states.get("queued", 0) + states.get("retry", 0) + states.get("sending", 0),
+                         "failed": states.get("failed", 0), "failed_why": why, "unknown": states.get("unknown", 0),
+                         "chats_disconnected": n.get("telegram_lost", 0)}},
         "taps": {"by_target": taps, "alerts_tapped": tapped, "share_of_alerts_tapped": ratio(tapped, counted)},
         "stops": {"stop_taps": n.get("stop", 0), "stop_taps_within_7_days_of_an_alert": after.get("stop", 0),
                   "unfollows": n.get("unfollow", 0), "unfollows_within_7_days_of_an_alert": after.get("unfollow", 0)},

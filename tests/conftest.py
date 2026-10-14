@@ -43,7 +43,7 @@ def live_reads(monkeypatch: pytest.MonkeyPatch, detail: Any) -> None:
 
     monkeypatch.setattr(engine.reads.whales, "trader", detail)
     monkeypatch.setattr(engine.reads.whales, "trades", trades)
-    monkeypatch.setattr(engine, "_open_positions", lambda w: detail("polymarket", w).positions)
+    monkeypatch.setattr(engine, "_open_positions", lambda w, markets=None: detail("polymarket", w).positions)
 
 
 @pytest.fixture(autouse=True)
@@ -54,6 +54,7 @@ def fresh_poller() -> None:
     for kept in (engine._live_priced, engine._live_failed, engine._live_hinted):
         kept.clear()
     engine._live_round["ended"] = float("-inf")
+    engine._retry_state["started"] = False  # each test's alerts.db is new: as after a start
 
 
 @pytest.fixture(autouse=True)

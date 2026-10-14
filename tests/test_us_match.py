@@ -155,6 +155,21 @@ def test_refresh_reads_every_page_of_both_lists_and_a_failure_keeps_the_last_ind
     assert us_match.twins.lookup(f"{GAME}:0", "tok-cle", "x")["found"] is True  # type: ignore[index]  # until it goes stale
 
 
+
+def test_more_matches_than_the_page_cap_keeps_the_last_index_instead_of_part_of_the_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    # On 10/14 Layer served 9,780 International matches against a cap of 10,000: past it, the twins of every
+    # match after the cap would have turned into "no verified US match" with nothing said.
+    monkeypatch.setattr(us_match, "PAGE", 2)
+    a, b = layer()
+    us_match.refresh(lambda *, titles, venue, limit, offset: (a if venue == "polymarket" else b)[offset : offset + limit])
+    assert us_match.twins.error is None and us_match.twins.counts["twins"] == 3
+
+    monkeypatch.setattr(us_match, "MAX_PAGES", 1)  # a full first page and no room for the rest
+    us_match.refresh(lambda *, titles, venue, limit, offset: (a if venue == "polymarket" else b)[offset : offset + limit])
+    assert us_match.twins.error == "RuntimeError: Layer has more than 2 polymarket matches; raise us_match.MAX_PAGES"
+    assert us_match.twins.counts["twins"] == 3  # the last full index, not one built from the first page
+    assert us_match.twins.lookup(f"{GAME}:0", "tok-cle", "x")["found"] is True  # type: ignore[index]
+
 # ---- what the engine sends the page ----
 
 
@@ -209,12 +224,14 @@ def test_an_alert_says_where_they_traded_and_links_the_us_twin_through_go(api: T
     assert engine.US_TWIN_LINE + engine.US_DIFFERS in text.splitlines()
     us_go = f"/go/a1/market_us?to={urllib.parse.quote('https://polymarket.us/event/nba-cle-orl', safe='')}"
     assert us_go in text and ">View on Polymarket US</a>" in text and ">Buy on Polymarket International</a>" in text
+    assert text.index(">View on Polymarket US</a>") < text.index(">Buy on Polymarket International</a>")  # US leads
     plain = engine._alert_text("0xabc", poly(f"{GAME}:1", "tok-orl", "Orlando"), 0.4, 0.41, 40, at, at + 60)
     assert engine.US_TWIN_LINE in plain.splitlines()  # no stated differences: none claimed
     none = engine._alert_text("0xabc", poly("0xelse:0", "tok-x", "Yes"), 0.4, 0.41, 40, at, at + 60)
     assert engine.NO_US_TWIN_LINE in none.splitlines() and "Polymarket US</a>" not in none
     sold = engine._sell_text("0xabc", poly(f"{GAME}:0", "tok-cle", "Cleveland", "sell"), 0.4, 40, False, None, at, at + 60)
     assert ">View on Polymarket US</a>" in sold and ">Open on Polymarket International</a>" in sold
+    assert sold.index(">View on Polymarket US</a>") < sold.index(">Open on Polymarket International</a>")
     # the words never offer their price on Polymarket US, nor suggest Signals sees trades there
     for line in (engine.US_TWIN_LINE, engine.NO_US_TWIN_LINE):
         assert "may differ" in line or "No verified US match found" in line
@@ -230,7 +247,7 @@ def test_go_sends_a_tap_to_polymarket_us_and_nowhere_else(api: TestClient) -> No
 
 # ---- the page ----
 
-PAGE_DEFS = ("esc", "INTL", "usLink", "venueNote", "usInline", "usBox")
+PAGE_DEFS = ("esc", "INTL", "usLink", "sitsOut", "venueNote", "usInline", "usBox")
 TWIN = {"found": True, "url": "https://polymarket.us/event/nba-cle-orl", "outcome": "Cavaliers",
         "differences": [{"code": "carveout_differs", "text": "Polymarket US sends a tie to <manual> review."}]}  # fmt: skip
 
@@ -255,6 +272,48 @@ def test_the_trade_sheet_explains_the_twin_its_differences_and_that_their_price_
     none = run_js(PAGE_DEFS, "usBox({us: {found: false}})")
     assert "No verified US match found." in none and "View on Polymarket US" not in none
     assert "couldn't check" in run_js(PAGE_DEFS, "usBox({us: null})")
+    assert "View on Polymarket US" not in run_js(PAGE_DEFS, f"usBox({{us: {json.dumps(TWIN)}}}, {{button: false}})")
+
+
+def test_with_a_us_twin_the_sheet_leads_with_polymarket_us_and_international_comes_second(run_js: Any) -> None:
+    defs = (*PAGE_DEFS, "buyButtons")
+    intl = "https://polymarket.com/event/cle-orl"
+    both = run_js(defs, f"buyButtons({{url: {json.dumps(intl)}, us: {json.dumps(TWIN)}}})")
+    assert both.index("View on Polymarket US ↗") < both.index("Buy on Polymarket International ↗")
+    assert 'class="btn wide" id="buyus"' in both and 'class="btn ghost wide" id="buyon"' in both
+    assert "Buy on Polymarket US" not in both  # "View", never "Buy": the estimate is International's
+    assert "This estimate is for Polymarket International" in both and "Signals places no orders" in both
+    prop = TWIN | {"differences": [dict(us_match.SITS_OUT)]}
+    assert "if the player doesn't play" in run_js(defs, f"buyButtons({{url: {json.dumps(intl)}, us: {json.dumps(prop)}}})")
+    for us in ("{found: false}", "null"):  # no verified twin: International is the one button, as before
+        only = run_js(defs, f"buyButtons({{url: {json.dumps(intl)}, us: {us}}})")
+        assert 'class="btn wide" id="buyon"' in only and "Polymarket US" not in only
+    assert run_js(defs, "buyButtons({us: null})") == ""
+
+
+def test_a_player_prop_twin_says_first_that_the_two_can_pay_differently_if_the_player_sits_out() -> None:
+    # 14 NFL prop lines paid differently Oct 4–13: the player sat out, International paid No, Kalshi and US a fair price.
+    # Layer states that once in its docs, never on a match, so the twin has to say it.
+    k = {"venue": "kalshi", "market_id": "KXNFLRECYDS-26OCT18-X-40", "series": "KXNFLRECYDS"}
+    t = built([intl("0xprop", k["market_id"], "tok-prop") | {"kalshi": k}],
+              [us("aec-nfl-prop:long", k["market_id"], "Player 40+ receiving yards", caveats=["definition_differs"])
+               | {"kalshi": k}])  # fmt: skip
+    twin = t.lookup("0xprop:0", "tok-prop", "Yes", now=1.0)
+    assert twin is not None and twin["found"] is True
+    assert [d["code"] for d in twin["differences"]] == ["player_sits_out", "definition_differs"]
+    assert "doesn't play" in twin["differences"][0]["text"] and "fair price" in twin["differences"][0]["text"]
+    game = built().lookup(f"{GAME}:0", "tok-cle", "x", now=1.0)  # a game's winner: no player to sit out
+    assert game is not None and "player_sits_out" not in [d["code"] for d in game["differences"]]
+
+
+def test_the_page_never_calls_a_player_prop_twin_the_same_market(run_js: Any) -> None:
+    prop = TWIN | {"differences": [dict(us_match.SITS_OUT)] + TWIN["differences"]}
+    line = run_js(PAGE_DEFS, f"venueNote({json.dumps(prop)})")
+    assert "Same market" not in line and "can pay differently if the player doesn't play" in line
+    assert "View on Polymarket US ↗" in line
+    box = run_js(PAGE_DEFS, f"usBox({{us: {json.dumps(prop)}}})")
+    assert "the same market" not in box and "this player's line" in box and "doesn&#39;t play" in box  # escaped
+    assert "Same market on Polymarket US" in run_js(PAGE_DEFS, f"venueNote({json.dumps(TWIN)})")  # a game is unchanged
 
 
 def test_the_page_never_says_a_market_is_not_on_polymarket_us_and_scopes_quotes_to_international() -> None:
@@ -265,7 +324,7 @@ def test_the_page_never_says_a_market_is_not_on_polymarket_us_and_scopes_quotes_
 
 # ---- the quote: the numbers in view, the working folded ----
 
-QUOTE_DEFS = ("esc", "INTL", "c1", "money", "slipOf", "slippageLine", "readAt", "quoteNote", "quoteFold")
+QUOTE_DEFS = ("esc", "INTL", "c1", "money", "slipOf", "slippageLine", "readAt", "quoteNote", "TRADE_TIME", "quoteFold")
 
 
 def test_the_quote_folds_its_working_and_shows_slippage_only_when_there_is_some(run_js: Any) -> None:
