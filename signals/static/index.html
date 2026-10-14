@@ -997,7 +997,8 @@ async function loadFeed() {
   try { data = await api(view === "big" ? "/api/trading-now?min_usd=250" : view === "rec" ? "/api/live" : "/api/me/feed"); }
   catch (e) { error = e.message; }
   if (my !== feed.seq || (view === "follow" && uid !== auth.uid)) return; // stale, or someone else signed in since
-  if (error) feed[err] = error; else { feed[k] = data; feed[at] = Date.now(); feed[err] = null; }
+  // "Updated": when the oldest of it was read from Polymarket (as_of), not when this page asked
+  if (error) feed[err] = error; else { feed[k] = data; feed[at] = Math.min(Date.now(), data?.as_of || Infinity); feed[err] = null; }
   if (!onFeed() || feedView() !== view) return; // the other view, or another page, since
   clearTimeout(feedTimer);
   feedTimer = setTimeout(() => { if (onFeed()) loadFeed(); }, 30000);
@@ -1104,7 +1105,8 @@ function renderTrades(r, at, err, { who, note, none, sheet: openSheet, foot }) {
     </div>
     ${err ? `<p class="inline-err">Couldn't refresh: ${esc(err)}. Showing the last update.</p>` : ""}
     ${note}
-    ${r.failed ? `<p class="foot-note" style="margin:0 0 12px">${plural(r.failed, "trader")} couldn't be read just now; retrying.</p>` : ""}`;
+    ${r.failed ? `<p class="foot-note" style="margin:0 0 12px">${plural(r.failed, "trader")} couldn't be read just now; retrying.</p>` : ""}
+    ${r.pending ? `<p class="foot-note" style="margin:0 0 12px">Still reading ${plural(r.pending, "trader")}; their trades show in a minute.</p>` : ""}`;
   $("#onlyin").onchange = (e) => { feed.onlyIn = e.target.checked; renderFeed(); };
   $("#following").onclick = openSheet;
   bindLag();

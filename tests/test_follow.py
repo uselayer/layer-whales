@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from uselayer import Trader, TraderDetail, Whales, WhalePosition, WhaleTrade
 
+from conftest import live_reads
 from signals import app as engine
 
 FAPI = "clerk.signals.test"
@@ -138,7 +139,7 @@ def test_every_new_buy_alerts_with_how_far_the_price_moved(api: TestClient, monk
     detail = lambda *a, **k: TraderDetail(  # noqa: E731
         Trader(venue="polymarket", id=SHARP, name="Sharp"), "visible", {},
         [WhalePosition(m, None, "Yes", 100, 0.4, p, None, None) for m, p in now_price.items()], list(trades))  # fmt: skip
-    monkeypatch.setattr(engine.reads.whales, "trader", detail)
+    live_reads(monkeypatch, detail)
     monkeypatch.setattr(engine, "copy_offer", lambda s: (False, "Not offered."))  # alerted all the same, neutrally
     monkeypatch.setattr(Whales, "preview_copy", lambda self, t, **kw: pytest.fail("an alert never prices a copy"))
     engine.tg.sent.clear()

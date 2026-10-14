@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import base64
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from uselayer import Trader, TraderDetail, WhalePosition, WhaleTrade
 
+from conftest import live_reads
 from signals import app as engine
 
 FAPI = "clerk.signals.test"
@@ -49,7 +50,8 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestClient:
         return TraderDetail(Trader(venue="polymarket", id=w, name=f"pm-{w[2:4]}"), "visible", {},
                             [WhalePosition(b.market, None, "Yes", b.size, 0.5, 0.51, None, None) for b in buys], buys)  # fmt: skip
 
-    monkeypatch.setattr(engine.reads.whales, "trader", detail)
+    live_reads(monkeypatch, detail)
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [])  # the shared feed: nobody in it
     return TestClient(engine.app)
 
 
@@ -114,13 +116,12 @@ def test_the_poller_keeps_recommended_and_followed_traders_and_pages_only_read_i
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     api.post("/api/me/follows", json={"wallet": STRANGER}, headers=auth())
-    asked: list[str] = []
-    real = engine.reads.whales.trader
-    monkeypatch.setattr(engine.reads.whales, "trader", lambda venue, w, **k: asked.append(w) or real(venue, w, **k))
+    asked = _counting(monkeypatch)
     gone = "0x" + "9" * 40
     engine._cache[f"live:{gone}"] = (time.monotonic() - engine.LIVE_KEEP_S - 1, None)  # nobody wants it any more
     assert engine.live_poll_once() == 4
-    assert sorted(asked) == sorted([COPY, RISE, WATCH, STRANGER])  # Recommended and followed, never Lucky
+    assert sorted(w for kind, w in asked if kind == "trades") == sorted([COPY, RISE, WATCH, STRANGER])  # never Lucky
+    assert {kind for kind, _ in asked} == {"trades", "positions"}  # never the profile or stats
     assert f"live:{gone}" not in engine._cache
     asked.clear()
     api.get("/api/live")
@@ -128,6 +129,132 @@ def test_the_poller_keeps_recommended_and_followed_traders_and_pages_only_read_i
     assert asked == []  # the pages read what the poller keeps
     engine.live_poll_once()
     assert asked == []  # read in the last 30 s: not again
+
+
+def _counting(monkeypatch: pytest.MonkeyPatch, trades: Any = None, clock: Any = None, read_s: float = 0.0) -> list[Any]:
+    """Counts the poller's reads of Polymarket, as (kind, wallet), on top of the api fixture's stand-ins (or
+    ``trades(wallet)``); each read moves ``clock`` on ``read_s``, as a real one takes time."""
+    asked: list[Any] = []
+    real_trades, real_positions = engine.reads.whales.trades, engine._open_positions
+
+    def read(kind: str, w: str, fn: Any) -> Any:
+        asked.append((kind, w))
+        if clock is not None:
+            clock.t += read_s
+        return fn()
+
+    monkeypatch.setattr(engine.reads.whales, "trades", lambda venue, w, **k: read(
+        "trades", w, (lambda: trades(w)) if trades else (lambda: real_trades(venue, w, **k))))  # fmt: skip
+    monkeypatch.setattr(engine, "_open_positions", lambda w: read("positions", w, lambda: [] if trades else real_positions(w)))
+    return asked
+
+
+def test_positions_are_read_only_with_a_trade_to_price_and_kept_while_the_trades_dont_change(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old = datetime.now(UTC) - timedelta(hours=engine.FEED_HOURS + 1)
+    quiet = [WhaleTrade("polymarket", COPY, "Cora", "0xq:0", "yes", "buy", 0.5, 10, 5.0, old, "q1")]
+    asked = _counting(monkeypatch, trades=lambda w: list(quiet))
+    engine._live_read(COPY)
+    assert asked == [("trades", COPY)]  # nothing in the Feed's last day: no price to read
+    engine._live_read(COPY, priced=True)
+    assert asked[1:] == [("trades", COPY), ("positions", COPY)]  # a trade's own price check wants it anyway
+    asked.clear()
+    engine._live_read(COPY, 0, priced=True)
+    assert asked == [("trades", COPY)]  # the same trades, positions under LIVE_PRICE_S old: kept
+    quiet.insert(0, WhaleTrade("polymarket", COPY, "Cora", "0xq:0", "yes", "buy", 0.5, 10, 5.0, datetime.now(UTC), "q2"))
+    asked.clear()
+    engine._live_read(COPY, 0)
+    assert asked == [("trades", COPY), ("positions", COPY)]  # a new trade: the price now read with it
+
+
+def test_each_round_reads_the_followed_first_then_who_just_traded_then_the_oldest_recommended(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api.post("/api/me/follows", json={"wallet": STRANGER}, headers=auth())
+    now = time.monotonic()
+    for w in (COPY, RISE, WATCH):
+        engine._cache[f"live:{w}"] = (now - engine.LIVE_REC_S - 1, engine._live_fetch(w, False))
+    engine._cache[f"live:{WATCH}"] = (now - engine.LIVE_REC_S - 50, engine._cache[f"live:{WATCH}"][1])  # the oldest
+    big = WhaleTrade("polymarket", RISE, "Rita", "0xr:0", "yes", "buy", 0.5, 4000, 2000.0, datetime.now(UTC), "fresh")
+    monkeypatch.setattr(engine.reads.whales, "big_trades", lambda *a, **k: [big])
+    asked = _counting(monkeypatch)
+    engine.live_poll_once()
+    assert [w for kind, w in asked if kind == "trades"] == [STRANGER, RISE, WATCH, COPY]
+    asked.clear()
+    engine._cache[f"live:{RISE}"] = (now - engine.LIVE_REC_S - 1, engine._cache[f"live:{RISE}"][1])
+    engine.live_poll_once()
+    assert [w for kind, w in asked if kind == "trades"] == [RISE]  # a hint counts once; then it's their turn by age
+
+
+def test_a_feed_view_reads_only_a_few_traders_itself_and_says_the_rest_are_still_being_read(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    many = [score(f"0x{i:040x}", "proven", name=f"T{i}") for i in range(10)]
+    monkeypatch.setattr(engine, "_worth_data", {"format": engine.WORTH_FORMAT, "scores": many})
+    asked = _counting(monkeypatch)
+    r = api.get("/api/live").json()  # just after a restart: the poller hasn't read anyone yet
+    assert len({w for _, w in asked}) == engine.LIVE_PAGE_READS
+    assert (r["pending"], r["failed"]) == (10 - engine.LIVE_PAGE_READS, 0)
+    engine.live_poll_once()
+    asked.clear()
+    r = api.get("/api/live").json()
+    assert asked == [] and (r["pending"], r["failed"]) == (0, 0)
+    assert abs(r["as_of"] / 1000 - time.time()) < 5  # when the oldest of it was read: just now
+    hit = engine._cache[f"live:{many[0]['wallet']}"]
+    engine._cache[f"live:{many[0]['wallet']}"] = (hit[0] - 120, hit[1])
+    assert time.time() - api.get("/api/live").json()["as_of"] / 1000 == pytest.approx(120, abs=5)  # "Updated 2m ago"
+    engine._cache[f"live:{many[0]['wallet']}"] = (hit[0] - engine.LIVE_SHOW_S - 1, hit[1])
+    assert api.get("/api/live").json()["failed"] == 1  # too old to show: it says so, and nobody waits on a read
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.t = 1_000_000.0
+
+    def __call__(self) -> float:
+        return self.t
+
+
+@pytest.mark.parametrize("pool", [50, 200, 1000])
+def test_the_feed_holds_up_as_the_recommended_pool_grows(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch, pool: int
+) -> None:
+    """Twenty followed traders and ``pool`` Recommended ones, a third of them with no trade in the last day, each
+    read taking 0.25 s, the poller's rounds 30 s apart, for 20 minutes: alerts never wait (everyone followed is
+    under LIVE_ALERT_S old at every round's end), each round fits its slot, every Recommended trader gets read and
+    refreshed, and once they have been a Feed view reads nothing at all."""
+    clock = _Clock()
+    monkeypatch.setattr(engine.time, "monotonic", clock)
+    rec = [f"0x{i:040x}" for i in range(pool)]
+    follows = [f"0x{i:040x}" for i in range(10**6, 10**6 + 20)]
+    monkeypatch.setattr(engine, "_worth_data",
+                        {"format": engine.WORTH_FORMAT, "scores": [score(w, "proven", name="R") for w in rec]})  # fmt: skip
+    engine._save_follows({"users": {"u": {"follows": follows, "chat": None}}})
+    now, old = datetime.now(UTC), datetime.now(UTC) - timedelta(days=3)
+    trades = {w: [WhaleTrade("polymarket", w, "R", f"0x{i:x}:0", "yes", "buy", 0.5, 4000, 2000.0, old if i % 3 == 0 else now,
+                             f"{w}t") for _ in range(1)] for i, w in enumerate(rec + follows)}  # fmt: skip
+    asked = _counting(monkeypatch, trades=lambda w: trades[w], clock=clock, read_s=0.25)
+    per_round, read_at = [], {}
+    for _ in range(40):
+        start, n = clock.t, len(asked)
+        engine.live_poll_once()
+        per_round.append(len(asked) - n)
+        assert clock.t - start <= engine.LIVE_POLL_S + 0.5  # the round fits its slot (one read may run over)
+        assert all(clock.t - engine._cache[f"live:{w}"][0] < engine.LIVE_ALERT_S for w in follows)
+        for w in rec:
+            if (hit := engine._live_kept(w)) is not None:
+                read_at.setdefault(w, set()).add(hit[0])
+        clock.t = max(clock.t, start + engine.LIVE_POLL_S)
+    assert len(read_at) == pool  # everyone recommended was read...
+    if pool <= 200:
+        assert all(len(times) >= 3 for times in read_at.values())  # ...and kept up to date
+    assert max(per_round) <= engine.LIVE_POLL_S / 0.25 + 1  # at most what the slot holds: never a burst
+    reads_now = len(asked)
+    r = engine.live()
+    assert len(asked) == reads_now and r["pending"] == 0 and r["failed"] == 0  # a view reads nothing
+    oldest = (time.time() * 1000 - r["as_of"]) / 1000
+    assert oldest <= (engine.LIVE_REC_S + engine.LIVE_POLL_S if pool <= 50 else engine.LIVE_SHOW_S)
 
 
 def test_the_feed_page_rules(run_js: Any) -> None:

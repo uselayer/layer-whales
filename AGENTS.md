@@ -150,8 +150,13 @@ behind Vercel (see README, "Hosting").
     stays quiet (fewer, bigger trades) and never more prominent than Following: second in the switch, never the
     default. Both keep the switch "Only trades I can still get into", one card per outcome with "Also bought
     by", and the delay line. Big trades (`#/big`) is linked from the foot of Recommended. Traders' trades come from
-    one background poller (`_live_loop`: Recommended's and everyone followed, one at a time, every 30 s); pages
-    only read what it keeps, so a busy Feed never adds Polymarket reads.
+    one background poller (`_live_loop`, one read at a time, in 30 s rounds: everyone followed each round,
+    Recommended's every 60 s while the round's slot allows, oldest first, so a bigger pool is read less often,
+    never faster). Per trader it reads their trades, and their open positions only when there's a trade from the
+    last day to price (kept while their trades don't change, for 90 s); never the profile or stats. Polymarket's
+    shared $1,000+ trades feed (one read for everyone) moves a Recommended trader who just traded to the front.
+    Pages only read what it keeps, so a busy Feed never adds Polymarket reads: a view reads at most 3 traders the
+    poller hasn't read yet itself ("Still reading N traders"), and "Updated" is when the oldest of it was read.
   - Market chips live on Traders only. The Feed follows the same choice and says so in one line ("Your markets:
     Politics, Sports · Change"); Change opens the onboarding picker. Never a second set of filter chips.
   - A trade at 2¢ or less, 98¢ or more, or no longer held is settled (Won / Lost / Closed), never a bargain

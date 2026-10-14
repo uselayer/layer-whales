@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from uselayer import Trader, TraderDetail, WhalePosition, WhaleTrade
 
+from conftest import live_reads
 from signals import app as engine
 
 FAPI = "clerk.signals.test"
@@ -104,7 +105,7 @@ def test_every_buy_by_a_followed_trader_alerts_whatever_the_amount(api: TestClie
     detail = lambda *a, **k: TraderDetail(Trader(venue="polymarket", id=SAM, name="Sam"), "visible", {},  # noqa: E731
                                           [WhalePosition("0xcid:0", None, "Yes", 100, 0.4, 0.40, None, None),
                                            WhalePosition("0xcid:1", None, "Yes", 100, 0.4, 0.40, None, None)], list(trades))  # fmt: skip
-    monkeypatch.setattr(engine.reads.whales, "trader", detail)
+    live_reads(monkeypatch, detail)
     assert engine.alert_pass() == 0  # first round: noted only
     fresh = datetime.now(UTC)
     trades[:0] = [trade(SAM, fresh, 0.40, 5, "0xcid:0"), trade(SAM, fresh, 0.40, 150, "0xcid:1")]
@@ -244,7 +245,7 @@ def test_big_trades_alert_people_who_saved_markets_there_whoever_the_trader(
     rows: list[WhaleTrade] = [big(WHALE, i="0")]
     asked: list[Any] = []
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: asked.append((usd, k)) or list(rows))
-    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(
+    live_reads(monkeypatch, lambda *a, **k: TraderDetail(
         Trader(venue="polymarket", id=WHALE, name=None), "visible", {}, [WhalePosition("0xw:0", None, "Yes", 1, 0.49, 0.51, None, None)], []))  # fmt: skip
     users = {uid: u for uid, u in engine._load_follows()["users"].items()}
     assert engine.whale_pass(users, time.time()) == 0  # the first round only notes what's there
@@ -282,7 +283,7 @@ def test_big_trade_alerts_are_capped_within_the_daily_cap(api: TestClient, monke
     user("u", "1", follows=(), interests=["Politics"])
     rows: list[WhaleTrade] = []
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
-    monkeypatch.setattr(engine, "_live_read", lambda w, *a: TraderDetail(
+    monkeypatch.setattr(engine, "_live_read", lambda w, *a, **k: TraderDetail(
         Trader(venue="polymarket", id=w, name=None), "visible", {}, [WhalePosition(f"0x{w[2:6]}:0", None, "Yes", 1, 0.49, 0.5, None, None)], []))  # fmt: skip
     users = engine._load_follows()["users"]
     engine.whale_pass(users, time.time())
@@ -315,7 +316,7 @@ def test_connecting_describes_the_alert_rules(api: TestClient, monkeypatch: pyte
 def test_check_your_price_opens_that_one_trade(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     at = datetime.now(UTC)
     fills = [trade(WHALE, at, 0.40, 400, "0xw:0", "1"), trade(WHALE, at, 0.50, 500, "0xw:0", "2")]
-    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(
+    live_reads(monkeypatch, lambda *a, **k: TraderDetail(
         Trader(venue="polymarket", id=WHALE, name="whaley"), "visible", {}, [WhalePosition("0xw:0", None, "Yes", 1, 0.45, 0.46, None, None)], fills))  # fmt: skip
     b = api.get(f"/api/bet/{WHALE}/0xw:0").json()
     assert (b["name"], b["copy_ok"], b["status"], b["category"], b["usd"]) == ("whaley", False, "in", "Politics", 900)
@@ -338,7 +339,7 @@ def test_no_alert_at_a_settled_price_alone_or_grouped(api: TestClient, monkeypat
     user(follows=(SAM, ANN))
     trades: list[WhaleTrade] = []
     prices = {"0xcid:0": 0.50}
-    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, prices))
+    live_reads(monkeypatch, detail_of(trades, prices))
     engine.alert_pass()  # first round: noted only
     fresh = datetime.now(UTC)
     trades.append(trade(SAM, fresh, 0.49, 1000, "0xcid:0", "1"))
@@ -359,7 +360,7 @@ def test_no_big_trade_alert_at_a_settled_price(api: TestClient, monkeypatch: pyt
     user("politics", "1", follows=(), interests=["Politics"])
     rows: list[WhaleTrade] = []
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
-    monkeypatch.setattr(engine, "_live_read", lambda w, *a: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
+    monkeypatch.setattr(engine, "_live_read", lambda w, *a, **k: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
                                                                      [WhalePosition("0xw:0", None, "Yes", 1, 0.49, 0.985, None, None)], []))  # fmt: skip
     users = engine._load_follows()["users"]
     engine.whale_pass(users, time.time())
@@ -429,7 +430,7 @@ def test_a_big_trade_at_the_daily_cap_sends_the_limit_message_instead(api: TestC
         engine._send("u", "1", "buy", lambda aid: "x")
     rows: list[WhaleTrade] = []
     monkeypatch.setattr(engine.reads.whales, "big_trades", lambda usd, **k: list(rows))
-    monkeypatch.setattr(engine, "_live_read", lambda w, *a: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
+    monkeypatch.setattr(engine, "_live_read", lambda w, *a, **k: TraderDetail(Trader(venue="polymarket", id=w, name=None), "visible", {},
                                                                      [WhalePosition("0xw:0", None, "Yes", 1, 0.49, 0.5, None, None)], []))  # fmt: skip
     users = engine._load_follows()["users"]
     engine.whale_pass(users, time.time())
@@ -450,7 +451,7 @@ def test_stop_alerts_from_another_chat_changes_nobody_elses_follows(api: TestCli
 def test_a_restart_doesnt_alert_the_same_trader_and_market_again(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     user(follows=(SAM,))
     trades: list[WhaleTrade] = []
-    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.50}))
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50}))
     engine.alert_pass()
     trades.append(trade(SAM, datetime.now(UTC), 0.49, 1000, "0xcid:0", "1"))
     engine._cache.clear()
@@ -471,7 +472,7 @@ def test_the_alert_text_and_its_price_check_are_built_once_per_buy(api: TestClie
     real = engine._alert_text
     monkeypatch.setattr(engine, "_alert_text", lambda *a, **k: built.append(a) or real(*a, **k))
     trades: list[WhaleTrade] = []
-    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.50}))
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50}))
     engine.alert_pass()
     trades.append(trade(SAM, datetime.now(UTC), 0.49, 1000, "0xcid:0", "1"))
     engine._cache.clear()
@@ -521,7 +522,7 @@ def _split(monkeypatch: pytest.MonkeyPatch, gaps_min: list[float], usd: float = 
     """A trader's buys of one outcome, each seen in its own round, ``gaps_min`` minutes after the first."""
     user(follows=(SAM,))
     trades: list[WhaleTrade] = []
-    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.50}))
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50}))
     t0 = datetime.now(UTC) - timedelta(hours=1)
     engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
     sent = 0
@@ -546,7 +547,7 @@ def test_fills_seen_before_there_was_a_price_add_into_the_next_alert_across_a_re
     user(follows=(SAM,))
     trades: list[WhaleTrade] = []
     prices: dict[str, float] = {}  # no open position to read the price now from yet: no alert
-    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, prices))
+    live_reads(monkeypatch, detail_of(trades, prices))
     t0 = datetime.now(UTC) - timedelta(minutes=5)
     engine.alert_pass(now=t0.timestamp() - 60)
     trades.append(trade(SAM, t0, 0.50, 60, "0xcid:0", "a"))
@@ -575,7 +576,7 @@ def test_a_sell_alerts_with_the_price_now_while_they_still_hold_some_and_only_on
     monkeypatch.setattr(engine, "copy_offer", lambda s: (True, None))  # copyable or not: a sell never has a copy line
     user(follows=(SAM,))
     trades: list[WhaleTrade] = []
-    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {"0xcid:0": 0.61}))
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.61}))
     t0 = datetime.now(UTC) - timedelta(minutes=6)
     engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
     trades += [sold(SAM, t0, 0.62, 500, i="a"), sold(SAM, t0, 0.62, 300, i="b")]  # two fills, one alert
@@ -620,7 +621,7 @@ def test_no_alert_for_a_sell_at_a_settled_price(
 ) -> None:
     user(follows=(SAM,))
     trades: list[WhaleTrade] = []
-    monkeypatch.setattr(engine.reads.whales, "trader", detail_of(trades, {} if now is None else {"0xcid:0": now}))
+    live_reads(monkeypatch, detail_of(trades, {} if now is None else {"0xcid:0": now}))
     engine.alert_pass()
     trades.append(sold(SAM, datetime.now(UTC), paid))
     engine._cache.clear()
