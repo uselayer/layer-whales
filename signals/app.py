@@ -1803,6 +1803,26 @@ def _bets_of(d: Any, who: dict[str, Any], since: datetime | None = None) -> list
             for b in one.values()]  # fmt: skip
 
 
+def _sells_of(d: Any, who: dict[str, Any], since: datetime) -> list[dict[str, Any]]:
+    """A trader's sells since ``since``, one per outcome (fills merged: ``price`` is what they got on average), for
+    the Feed's Following: ``side`` "sell", ``held`` whether they still hold some (an open position) and, only while
+    they do, the price now (else None: no position to read it from, and no number is made up)."""
+    now = {p.market: p.current_price for p in d.positions}
+    one: dict[str, dict[str, Any]] = {}
+    for t in d.trades:
+        if t.action != "sell" or t.at < since or not t.size:
+            continue
+        b = one.setdefault(
+            t.market,
+            {"wallet": who["wallet"], "name": who.get("name"), "segment": who.get("segment"), "label": who.get("label"),
+             "side": "sell", "market": t.market, "title": t.title, "outcome": t.outcome, "url": t.url, "at": t.at,
+             "usd": 0.0, "size": 0.0, "held": t.market in now, "price_now": now.get(t.market), "token": t.token},
+        )  # fmt: skip
+        b["at"], b["usd"], b["size"] = max(b["at"], t.at), b["usd"] + t.usd, b["size"] + t.size
+    return [b | {"price": b["usd"] / b["size"], "at": b["at"].isoformat(), "us": us_of(b["market"], b["token"], b["outcome"])}
+            for b in one.values()]  # fmt: skip
+
+
 @app.get("/api/bet/{wallet}/{market}")
 def one_bet(wallet: str, market: str, response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
     """One trader's buy of one outcome, as a Feed card has it (status, price now, copy_ok): what an alert's
@@ -1842,9 +1862,9 @@ def live(response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
             "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD} | got  # fmt: skip
 
 
-def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> dict[str, Any]:
-    """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), newest first, with
-    status and category, from what the poller keeps: a view never waits on Polymarket for dozens of traders. Only
+def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = False) -> dict[str, Any]:
+    """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), and their sells too
+    when ``sells`` (``_sells_of``: Following's), newest first, with status (a buy's; None for a sell) and category, from what the poller keeps: a view never waits on Polymarket for dozens of traders. Only
     a trader the poller hasn't read yet (just followed, or just after a restart) is read here, at most
     LIVE_PAGE_READS a view; the rest are ``pending`` until its next round. ``failed``: traders that couldn't be read
     (or only longer ago than LIVE_SHOW_S). ``as_of``: when the oldest of what's shown was read (epoch ms)."""
@@ -1872,14 +1892,15 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0) -> dict[str, Any]:
         oldest, d = min(oldest, hit[0]), hit[1]
         if not s.get("name"):
             s["name"] = d.trader.name  # a followed wallet we haven't scored: their Polymarket name, as on their cards
-        bets += [b for b in _bets_of(d, s, since) if b["usd"] >= min_usd]
+        bets += [b for b in _bets_of(d, s, since) + (_sells_of(d, s, since) if sells else []) if b["usd"] >= min_usd]
     bets.sort(key=lambda b: b["at"], reverse=True)
     try:
         cats = _categories([b["market"] for b in bets]) if bets else {}
     except VenueError:
         cats = {}  # the trades still show, under All
     for b in bets:
-        b["status"], b["category"] = bet_status(b["price"], b["price_now"]), cats.get(b["market"])
+        b["status"] = None if b.get("side") == "sell" else bet_status(b["price"], b["price_now"])
+        b["category"] = cats.get(b["market"])
     as_of = round((time.time() - (time.monotonic() - oldest)) * 1000)
     return {"bets": bets, "failed": failed, "pending": pending, "as_of": as_of}
 
@@ -2189,7 +2210,7 @@ def unfollow(wallet: str, response: Response, uid: str = Depends(signed_in)) -> 
 
 @app.get("/api/me/feed")
 def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]:
-    """The Feed's Following: your followed traders' buys over the last FEED_HOURS, every size. Whoever they are:
+    """The Feed's Following: your followed traders' buys and sells over the last FEED_HOURS, every size. Whoever they are:
     a trader followed from Explore shows the verdict their page shows (the directory's fresh stored score, as
     ``worth_wallet`` reuses it; no read), and one nobody has scored lately has no tier and copying isn't offered for
     them (copy_ok False)."""
@@ -2202,7 +2223,7 @@ def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]
         label = s.get("label") or (SEGMENTS[s["segment"]][0] if s.get("segment") in SEGMENTS else None)
         people.append({"wallet": w, "name": s.get("name"), "segment": s.get("segment"), "label": label}
                       | copy_fields(s or None))  # fmt: skip
-    return {"traders": people, "hours": FEED_HOURS} | _feed(people)
+    return {"traders": people, "hours": FEED_HOURS} | _feed(people, sells=True)
 
 
 @app.post("/api/me/telegram")

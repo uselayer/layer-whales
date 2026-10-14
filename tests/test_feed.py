@@ -130,9 +130,37 @@ def test_following_is_your_traders_trades_every_size_and_only_yours(api: TestCli
     assert api.get("/api/me/feed", headers=auth("user_2")).json()["bets"] == []  # someone else's follows aren't yours
 
 
+def test_following_shows_their_sells_too_and_recommended_doesnt(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    at = datetime.now(UTC)
+
+    def detail(venue: str, w: str, **k: Any) -> TraderDetail:
+        mk = lambda m, action, price, usd, when, i: WhaleTrade("polymarket", w, None, f"{w[:6]}:{m}", "yes", action, price,  # noqa: E731
+                                                               usd / price, usd, when, f"{w}{i}", title="T")  # fmt: skip
+        trades = [mk("b", "buy", 0.5, 2500.0, at, 1),
+                  mk("held", "sell", 0.6, 600.0, at - timedelta(minutes=3), 2), mk("held", "sell", 0.7, 700.0, at, 3),
+                  mk("gone", "sell", 0.4, 2000.0, at, 4), mk("old", "sell", 0.5, 900.0, at - timedelta(hours=25), 5)]  # fmt: skip
+        return TraderDetail(Trader(venue="polymarket", id=w, name="pm"), "visible", {},
+                            [WhalePosition(f"{w[:6]}:b", None, "Yes", 10, 0.5, 0.51, None, None),
+                             WhalePosition(f"{w[:6]}:held", None, "Yes", 10, 0.5, 0.66, None, None)], trades)  # fmt: skip
+
+    live_reads(monkeypatch, detail)
+    api.post("/api/me/follows", json={"wallet": WATCH}, headers=auth())
+    body = api.get("/api/me/feed", headers=auth()).json()
+    sells = {b["market"].partition(":")[2]: b for b in body["bets"] if b.get("side") == "sell"}
+    assert set(sells) == {"held", "gone"}  # one per outcome, over the last FEED_HOURS
+    held, gone = sells["held"], sells["gone"]
+    assert (held["price"], held["usd"], held["held"], held["price_now"], held["status"]) == (pytest.approx(0.65), 1300.0, True, 0.66, None)
+    assert (gone["held"], gone["price_now"], gone["status"]) == (False, None, None)  # no price made up once they hold none
+    assert held["us"] is None and "copy_ok" not in held and held["category"] == "Politics"
+    assert [(b["market"].partition(":")[2], b["status"]) for b in body["bets"] if b.get("side") != "sell"] == [("b", "in")]
+    rec = api.get("/api/live", headers=auth()).json()
+    assert rec["bets"] and not any(b.get("side") == "sell" for b in rec["bets"])  # Recommended: buys only
+
+
 def test_the_feed_page_has_following_and_recommended(api: TestClient) -> None:
     page = api.get("/").text
-    for words in ('"Following"', '"Recommended"', "#/recommended", "Only trades I can still get into", "Also bought by",
+    for words in ('"Following"', '"Recommended"', "#/recommended", "Only buys I can still get into", "Also ${did} by",
+                  "Sold at <b>", "They no longer hold it.", "They still hold some.",
                   "Sign in to see the Feed", "Browse traders", "/api/me/feed", "from Sharps and Rising traders", "not as a signal to buy",
                   "All big trades right now", "Typically 3–5 min behind", "Typically read every 30–60 s"):  # fmt: skip
         assert words in page, words

@@ -870,12 +870,27 @@ function tradeCard(b, i, { who = true } = {}) {
     <div class="trade-foot">${tradeStatus(b, offered)}${act}</div>
   </article>`;
 }
-// Other traders we follow who bought the same thing (one card per trade): names only, never "the same person".
-function alsoBought(b) {
+// A sell by a trader you follow (Following only): information, never a suggestion to sell and nothing to buy, so
+// no price check; it opens their page. The price now only while they still hold some, as in a sell alert.
+function sellCard(b) {
+  const now = b.held && b.price_now != null ? `<span class="sep">·</span>Now <b>${cents(b.price_now)}</b>` : "";
+  return `<article class="card trade" data-href="#/worth/${esc(b.wallet)}" tabindex="0">
+    <div class="trade-top">${avatar(b.wallet, 28)}<span class="who"><span class="name">${esc(displayName(b.name, b.wallet))}</span>${tier(b.segment, true)}</span>
+      <span class="when">${[b.category, b.at ? ago(b.at) : ""].filter(Boolean).map(esc).join(" · ")}</span></div>
+    <h3 class="trade-title">${esc(b.title || "Untitled market")}</h3>
+    ${b.outcome || b.url ? `<div class="trade-tags">${b.outcome ? `<span class="chip">${esc(b.outcome)}</span>` : ""}${marketLink(b.url)}</div>` : ""}
+    ${venueNote(b.us)}
+    <div class="trade-nums"><span>Sold at <b>${cents(b.price)}</b>${now}</span><span class="amt">${usd(b.usd)} out</span></div>
+    ${alsoBought(b, "sold")}
+    <div class="trade-foot"><span class="muted" style="font-size:14px">${b.held ? "They still hold some." : "They no longer hold it."}</span></div>
+  </article>`;
+}
+// Other traders we follow who bought (or sold) the same thing (one card per trade): names only, never "the same person".
+function alsoBought(b, did = "bought") {
   const names = (b.also || []).map((x) => esc(displayName(x.name, x.wallet)));
   if (!names.length) return "";
   const list = names.length <= 2 ? names.join(" and ") : `${names.slice(0, 2).join(", ")} and ${plural(names.length - 2, "other")}`;
-  return `<p class="also">Also bought by ${list}</p>`;
+  return `<p class="also">Also ${did} by ${list}</p>`;
 }
 function tradeSheet(b) {
   const [paid, now] = centsPair(b.price, b.price_now);
@@ -1169,7 +1184,7 @@ function feedGaps(r, at, now) {
 // then one card per outcome ("Also bought by" for the rest) and the empty states.
 function renderTrades(r, at, err, { who, note, none, sheet: openSheet, foot }) {
   const cards = oneCardPerTrade(r.bets);
-  const pool = cards.filter((b) => !feed.onlyIn || b.status === "in");
+  const pool = cards.filter((b) => !feed.onlyIn || b.status === "in" || b.side === "sell"); // a sell always shows
   const names = interestNames(interests || []);
   const gaps = feedGaps(r, at, Date.now());
   $("#fbar").innerHTML = `
@@ -1180,7 +1195,7 @@ function renderTrades(r, at, err, { who, note, none, sheet: openSheet, foot }) {
     </div>
     <div class="filters">
       ${marketLine()}
-      <label class="switch"><input type="checkbox" id="onlyin" ${feed.onlyIn ? "checked" : ""}><span class="track"></span>Only trades I can still get into</label>
+      <label class="switch"><input type="checkbox" id="onlyin" ${feed.onlyIn ? "checked" : ""}><span class="track"></span>Only buys I can still get into</label>
     </div>
     ${err ? `<p class="inline-err">Couldn't refresh: ${esc(err)}. Showing the last update.</p>` : ""}
     ${note}
@@ -1190,13 +1205,13 @@ function renderTrades(r, at, err, { who, note, none, sheet: openSheet, foot }) {
   bindLag();
 
   shown = pool.filter((b) => inMarkets(b.category));
-  const anyHere = cards.some((b) => inMarkets(b.category)); // before "Only trades I can still get into"
+  const anyHere = cards.some((b) => inMarkets(b.category)); // before "Only buys I can still get into"
   let html;
   if (!r.bets.length) html = emptyState(...(gaps.empty || none));
   else if (!shown.length && anyHere) html = emptyState("Nothing you can still get into",
     `Every ${names ? esc(names) + " " : ""}trade here from the last ${r.hours} hours has moved away or settled.`, `<button class="btn ghost" id="showall">Show all trades</button>`);
   else if (!shown.length) html = emptyState(`No ${esc(names)} trades`, `Nothing in ${esc(names)} in the last ${r.hours} hours.`, `<button class="btn ghost" id="feedall">Show all markets</button>`);
-  else html = `<div class="cards">${shown.map((b, i) => tradeCard(b, i)).join("")}</div>`;
+  else html = `<div class="cards">${shown.map((b, i) => b.side === "sell" ? sellCard(b) : tradeCard(b, i)).join("")}</div>`;
   $("#flist").innerHTML = html + foot;
   const all = $("#showall");
   if (all) all.onclick = () => { feed.onlyIn = false; renderFeed(); };
@@ -1255,7 +1270,7 @@ const leadOf = (b) => (LEAD[b.status] ?? 2) * 2 + (b.status === "in" && b.copy_o
 function oneCardPerTrade(bets) {
   const by = new Map();
   for (const b of bets) {
-    const k = b.token || b.market; // the exact outcome token; the outcome index is sometimes junk
+    const k = `${b.side === "sell" ? "sell:" : ""}${b.token || b.market}`; // the exact outcome token (the index is sometimes junk), per side
     if (!by.has(k)) by.set(k, []);
     by.get(k).push(b);
   }
