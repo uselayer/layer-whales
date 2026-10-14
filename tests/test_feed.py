@@ -376,6 +376,49 @@ def test_the_feed_holds_up_as_the_recommended_pool_grows(
     assert oldest <= (engine.LIVE_REC_S + engine.LIVE_POLL_S if pool <= 50 else engine.LIVE_SHOW_S)
 
 
+def test_a_recommended_trader_whose_reads_keep_failing_is_tried_less_often_and_the_feed_says_so(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from uselayer import VenueError
+
+    api.post("/api/me/follows", json={"wallet": STRANGER}, headers=auth())
+    engine.live_poll_once()  # everyone read once: WATCH's trades are kept
+    broken = {WATCH, STRANGER}
+
+    def trades(venue: str, w: str, **k: Any) -> Any:
+        asked.append(w)
+        if w in broken:
+            raise VenueError("bad_request", f"Polymarket answered 400 for user={w}.", venue="polymarket", status=400)
+        return real(venue, w, **k)
+
+    asked: list[str] = []
+    real = engine.reads.whales.trades
+    monkeypatch.setattr(engine.reads.whales, "trades", trades)
+    for w in (COPY, RISE, WATCH):  # Recommended's turn again
+        engine._cache[f"live:{w}"] = (time.monotonic() - engine.LIVE_REC_S - 1, engine._cache[f"live:{w}"][1])
+    engine.live_poll_once()
+    assert WATCH in asked and engine._live_errors[WATCH]["count"] == 1
+    asked.clear()
+    engine._cache[f"live:{COPY}"] = (time.monotonic() - engine.LIVE_REC_S - 1, engine._cache[f"live:{COPY}"][1])
+    engine.live_poll_once()
+    assert WATCH not in asked and COPY in asked  # backing off: not every round, though it's the oldest
+    assert asked.count(STRANGER) == 1 and engine._live_errors[STRANGER]["count"] == 2  # followed: every round
+    engine._live_failed[WATCH] -= engine._live_backoff_s(1) + 1  # its wait is over
+    engine.live_poll_once()
+    assert engine._live_errors[WATCH]["count"] == 2 and engine._live_backoff_s(2) == 2 * engine.LIVE_REC_S
+    assert engine._live_backoff_s(20) == engine.LIVE_FAIL_MAX_S
+    stats = engine.feed_stats()
+    # WATCH twice (backing off), STRANGER every round (followed): three
+    assert sorted((f["failures_in_a_row"], f["status"], f["code"]) for f in stats["failing"]) == [
+        (2, 400, "bad_request"), (3, 400, "bad_request")]  # fmt: skip
+    assert WATCH not in repr(stats) and STRANGER not in repr(stats) and stats["skipped_backing_off"] >= 1
+    assert api.get("/api/live", headers=auth()).json()["stale"] == 1  # WATCH: shown from its last good read, said so
+    broken.clear()
+    engine._live_failed[WATCH] -= engine._live_backoff_s(2) + 1
+    engine.live_poll_once()
+    assert WATCH not in engine._live_errors and api.get("/api/live", headers=auth()).json()["stale"] == 0
+
+
 def test_the_feed_says_what_it_hasnt_read_and_how_old_it_is_never_no_trades(run_js: Any) -> None:
     got = run_js(("plural", "STALE_NOTE_MS", "feedGaps"), """(() => {
       const t = (n) => Array.from({ length: n }, (_, i) => ({ wallet: "0x" + i }));
@@ -385,6 +428,7 @@ def test_the_feed_says_what_it_hasnt_read_and_how_old_it_is_never_no_trades(run_
         feedGaps({ traders: t(3), bets: [], pending: 3, failed: 0 }, now, now),
         feedGaps({ traders: t(3), bets: [], pending: 0, failed: 3 }, now, now),
         feedGaps({ traders: t(3), bets: [], pending: 1, failed: 1 }, now - 12 * 60000, now),
+        feedGaps({ traders: t(3), bets: [1], pending: 0, failed: 0, stale: 1 }, now, now),
       ];
     })()""")
     assert got[0] == {"notes": [], "empty": None}  # everyone read, nothing traded: "None of … traded" stands
@@ -393,6 +437,8 @@ def test_the_feed_says_what_it_hasnt_read_and_how_old_it_is_never_no_trades(run_
     assert got[3]["empty"][0] == "No trades from the traders read so far"
     assert got[3]["notes"] == ["1 trader couldn't be read just now; retrying.", "Still reading 1 trader; their trades show in a minute.",
                                "Some of these traders were last read 12 minutes ago."]  # fmt: skip
+    assert got[4] == {"notes": ["1 trader couldn't be refreshed just now: showing their trades from the last good read; "
+                                "retrying."], "empty": None}  # fmt: skip
 
 
 def test_the_feed_page_rules(run_js: Any) -> None:
