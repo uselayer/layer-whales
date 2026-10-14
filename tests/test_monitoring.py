@@ -284,7 +284,11 @@ def test_the_discovery_funnel_leads_the_report_in_explores_words(api: TestClient
     r = api.get("/api/monitoring?days=2").json()
     assert list(r)[:3] == ["discovery_funnel", "health", "data"]
     f = r["discovery_funnel"]
-    assert list(f["overall"]) == ["found", "screened", "scored", "passed_our_checks", "passed_per_1000_found"]
+    assert list(f["overall"]) == ["found", "screened", "scored", "passed_our_checks", "coverage", "yield"]
+    assert f["overall"]["coverage"] == {"screened_of_found": 0.8, "scored_of_screened": 0.75, "never_looked_at": 1}
+    y = f["overall"]["yield"]  # 1 of 3 scored passed: a wide range, and too few scored to know the yield
+    assert y["passed_of_scored"] == 0.3333 and y["yield_known"] is False
+    assert y["passed_of_scored_range"][0] < 0.3333 < y["passed_of_scored_range"][1]
     assert set(f) >= {"by_source", "by_source_only", "by_first_source", "by_leaderboard", "by_best_rank", "by_category"}
     assert f["by_source"]["market"]["found"] == 2 and "Sports" in f["by_category"]
 

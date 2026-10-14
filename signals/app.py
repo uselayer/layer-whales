@@ -1181,8 +1181,34 @@ def _scrub(text: Any) -> Any:
 FUNNEL_STAGES = {"found": "found", "screened": "screened", "scored": "fully_evaluated", "passed_our_checks": "qualified"}
 
 
+YIELD_MIN_SCORED = 30  # fewer scored than this and a source's yield isn't known yet, however it looks
+
+
+def _share(a: int, b: int) -> float | None:
+    return round(a / b, 4) if b else None
+
+
+def _wilson(k: int, n: int, z: float = 1.96) -> list[float] | None:
+    """The 95% range of a share k of n (Wilson's, which stays sensible near 0 and with few)."""
+    if not n:
+        return None
+    p, d = k / n, 1 + z * z / n
+    mid, half = (p + z * z / (2 * n)) / d, z * (p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5 / d
+    return [round(max(0.0, mid - half), 4), round(min(1.0, mid + half), 4)]
+
+
 def _stages(f: dict[str, Any]) -> dict[str, Any]:
-    return {k: f[v] for k, v in FUNNEL_STAGES.items()} | {"passed_per_1000_found": f["qualified_per_1000_found"]}
+    """One row of the funnel, with coverage (how far evaluation has got: screened of found, scored of screened) kept
+    apart from yield (how good the traders it found are: passed of those actually scored, with its 95% range). A
+    source few of whose wallets were scored yet has an unknown yield, not a poor one (``yield_known``). Scored
+    wallets are those a quick check found enough recent evidence for, in the queue's order, not a random sample."""
+    found, screened, scored, passed = (f[v] for v in FUNNEL_STAGES.values())
+    return {k: f[v] for k, v in FUNNEL_STAGES.items()} | {
+        "coverage": {"screened_of_found": _share(screened, found), "scored_of_screened": _share(scored, screened),
+                     "never_looked_at": found - screened},
+        "yield": {"passed_per_1000_found": f["qualified_per_1000_found"], "passed_of_scored": _share(passed, scored),
+                  "passed_of_scored_range": _wilson(passed, scored), "yield_known": scored >= YIELD_MIN_SCORED},
+    }  # fmt: skip
 
 
 def _discovery_funnel(r: dict[str, Any]) -> dict[str, Any]:
@@ -1192,6 +1218,9 @@ def _discovery_funnel(r: dict[str, Any]) -> dict[str, Any]:
     return {
         "stages": "found → screened (a quick check or a score) → scored → passed our checks (a recommended tier, "
                   "scored in the last 48 h)",
+        "reading_it": "coverage says how far evaluation has got through a source; yield.passed_of_scored says how good "
+                      "the traders it has scored are. A low passed_per_1000_found with little coverage is unknown, not "
+                      f"poor: yield_known needs {YIELD_MIN_SCORED}+ scored.",
         "overall": _stages(r["funnel"]),
         **{f"by_{k}": {s: _stages(v) for s, v in src[part].items()} for k, part in (
             ("source", "seen_in"), ("source_only", "only_seen_in"), ("first_source", "first_found_by"),
