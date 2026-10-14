@@ -662,8 +662,11 @@ def test_the_evaluation_keeps_each_lanes_reads(store: Any, monkeypatch: pytest.M
     sdk = FakeSdk({}, {})
     monkeypatch.setattr(engine, "background", lambda: sdk)
     monkeypatch.setitem(engine._evaluate_state, "lanes", {lane: {"reads": 0.0, "wallets": 0.0} for lane in engine.LANES})
+    monkeypatch.setitem(engine._evaluate_state, "lane_outcomes",
+                        {lane: dict.fromkeys((*engine.OUTCOMES, "recommended"), 0) for lane in engine.LANES})  # fmt: skip
     engine.directory().add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", rank=3),
                             Seen(BEN, "market", "Sports", trades=1, usd=5000.0)], at=now - DAY)  # fmt: skip
     engine.evaluate_round()  # both dormant (no trades): a quick look each
     lanes = engine._evaluate_state["lanes"]
     assert lanes["board"]["wallets"] == 1 and lanes["off_board"]["wallets"] == 1 and lanes["board"]["reads"] == 1
+    assert engine._evaluate_state["lane_outcomes"]["board"]["dormant"] == 1  # each lane's yield, for /api/directory

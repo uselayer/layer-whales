@@ -625,7 +625,9 @@ READS_DECAY = 0.98  # each round, older reads count a little less, so the share 
 _evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None, "leaderboards": None,
                                    "since_launch": dict.fromkeys(OUTCOMES, 0), "reads": {"new": 0.0, "other": 0.0},
                                    # never-looked-at wallets' reads and how many, by lane (Directory.due's LANES)
-                                   "lanes": {lane: {"reads": 0.0, "wallets": 0.0} for lane in LANES}}  # fmt: skip
+                                   "lanes": {lane: {"reads": 0.0, "wallets": 0.0} for lane in LANES},
+                                   # what came of each lane's wallets since launch: a lane's yield, for the owner
+                                   "lane_outcomes": {lane: dict.fromkeys((*OUTCOMES, "recommended"), 0) for lane in LANES}}  # fmt: skip
 
 
 def presented_wallets() -> frozenset[str]:
@@ -661,6 +663,7 @@ def _count_reads(kind: str, outcome: str, lane: str | None = None) -> None:
     if lane in _evaluate_state["lanes"]:
         _evaluate_state["lanes"][lane]["reads"] += reads
         _evaluate_state["lanes"][lane]["wallets"] += 1
+        _evaluate_state["lane_outcomes"][lane][outcome] += 1
 
 
 def _lane_shares() -> tuple[dict[str, float], dict[str, float]]:
@@ -733,6 +736,8 @@ def evaluate_one(item: dict[str, Any]) -> str:
         d.score_failed(w, f"{type(e).__name__}: {e}")
         return "failed"
     d.keep_scores([_with_odds(scored) | {"format": WORTH_FORMAT}], "background")
+    if item.get("lane") in LANES and scored.get("segment") in RECOMMENDED:
+        _evaluate_state["lane_outcomes"][item["lane"]]["recommended"] += 1
     return "scored"
 
 
