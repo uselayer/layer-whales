@@ -34,7 +34,7 @@
   }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 "Host Grotesk", -apple-system,
+  body { margin: 0; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); font: 15px/1.45 "Host Grotesk", -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
   body.noscroll { overflow: hidden; }
   a { color: inherit; text-decoration: none; }
@@ -56,8 +56,8 @@
   .tabs a.on { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent); }
   .account { margin-left: auto; display: flex; align-items: center; min-height: 32px; }
   .tabbar { display: none; }
-  main.wrap { padding-top: 28px; padding-bottom: 40px; min-height: 70vh; }
-  footer.foot { color: var(--faint); font-size: 12.5px; padding-top: 8px; padding-bottom: 36px; text-align: center; }
+  main.wrap { flex: 1 0 auto; width: 100%; padding-top: 28px; padding-bottom: 40px; } /* takes the slack: the footer stays at the bottom */
+  footer.foot { width: 100%; color: var(--faint); font-size: 12.5px; padding-top: 8px; padding-bottom: 36px; text-align: center; }
   footer.foot a { color: var(--muted); }
 
   /* bits */
@@ -556,7 +556,7 @@
 <body>
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#/"><span class="logo"><svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><rect x="3" y="11" width="3" height="6" rx="1"/><rect x="8.5" y="7" width="3" height="10" rx="1"/><rect x="14" y="3" width="3" height="14" rx="1"/></svg></span>Signals</a>
+    <a class="brand" href="#/traders"><span class="logo"><svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><rect x="3" y="11" width="3" height="6" rx="1"/><rect x="8.5" y="7" width="3" height="10" rx="1"/><rect x="14" y="3" width="3" height="14" rx="1"/></svg></span>Signals</a>
     <nav class="tabs" aria-label="Main">
       <a href="#/" data-tab="feed">Feed</a><a href="#/traders" data-tab="traders">Traders</a>
     </nav>
@@ -657,6 +657,15 @@ function signInPage() {
       `<button class="btn" id="gatesignin">Sign in</button> ${traders}`);
   const b = $("#gatesignin"); if (b) b.onclick = () => window.Clerk.openSignIn();
 }
+// A link to the Feed while signed out (its tab, or any #/ link): Clerk's sign-in, as Follow opens, then that Feed page.
+document.addEventListener("click", (e) => {
+  const a = e.target.closest?.('a[href^="#/"]');
+  if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const href = a.getAttribute("href");
+  if (!["#/", "#/recommended", "#/big"].includes(href) || gateState() !== "closed") return;
+  e.preventDefault();
+  whenSignedIn(() => { location.hash = href; });
+});
 function drawAccount() {
   const el = $("#account");
   if (!el || !auth.on) return;
@@ -2323,12 +2332,12 @@ async function checkPage(wallet, market) {
 }
 
 // ---- routing ----
-// #/ the Feed's Following · #/recommended its Recommended · #/big Big trades · #/traders[/top|/explore] · #/worth/<wallet> · #/t/<venue>/<id> ·
+// usesignals.app with no hash lands on Traders. #/ the Feed's Following (alerts link there) · #/recommended its Recommended · #/big Big trades · #/traders[/top|/explore] · #/worth/<wallet> · #/t/<venue>/<id> ·
 // #/check/<wallet>/<market> (an alert's "Check your price").
 // Old links still work: Big trades used to be #/traders/big; My trades (#/mine, #/copied) went with the sandbox.
 const OLD = { "#/live": "#/", "#/worth": "#/traders", "#/copied": "#/", "#/mine": "#/", "#/traders/big": "#/big" };
 function routeName() {
-  const h = location.hash || "#/";
+  const h = location.hash || "#/traders"; // landing on the site: Traders, which needs no account
   if (h === "#/" || h === "#") return "feed";
   if (h === "#/big") return "feed:big";
   if (h === "#/recommended") return "feed:rec";
@@ -2364,7 +2373,7 @@ function route() {
   else if (check) checkPage(check[1].toLowerCase(), decodeURIComponent(check[2]));
   else if (t && !venuesOn.includes(t[1])) venueOffPage(t[1]); // an old link to a Kalshi trader
   else if (t) traderPage(t[1], decodeURIComponent(t[2]));
-  else location.replace("#/");
+  else location.replace("#/traders");
 }
 window.addEventListener("hashchange", route);
 api("/api/config").then((c) => { venuesOn = c.venues; exploreOn = !!c.explore; if (c.clerk_key) startAuth(c.clerk_key, c.alerts); })
