@@ -2248,11 +2248,15 @@ def _who(wallet: str) -> str:
 
 
 CONNECTED = (
-    "Connected. You'll get a message here a few minutes after a trader you follow buys or sells, whatever the amount: "
-    "what they traded, at what price, the price now and when they traded. Polymarket's public data runs a few minutes "
-    "behind, so alerts are never instant. When two or more of them buy the same thing, one message lists them all, and it's "
-    f"updated as more buy. If you've picked markets on Signals, trades of ${WHALE_USD:,.0f} or more there come too. "
-    f"At most {DAILY_CAP} alerts a day.\n\nFollowing: {{names}}\n/list: who you follow · /stop: turn alerts off"
+    "Connected. You'll get a message here a few minutes after a trader you follow buys or sells, of any size: what "
+    "they traded, at what price, the price now and when they traded. Polymarket's public data runs a few minutes "
+    "behind, so alerts are never instant.\n\n"
+    "Not every trade gets its own message. A trader's buys of one outcome within 30 minutes come as one, and after a "
+    f"message, more buys of that outcome (or more sells of it) are left out for {ALERT_AGAIN_S // 3600} hours. When two or "
+    "more traders you follow buy the same thing, one message lists them all and is updated as more buy. Nothing comes "
+    "for a market that's all but decided (2¢ or less, 98¢ or more). If you've picked markets on Signals, trades of "
+    f"${WHALE_USD:,.0f} or more there come too. At most {DAILY_CAP} alerts a day."
+    "\n\nFollowing: {names}\n/list: who you follow · /stop: turn alerts off"
 )
 
 
