@@ -2008,8 +2008,9 @@ ALERT_AGAIN_S = 6 * 3600  # one alert per trader and market in this long, howeve
 # A trader you follow is read on their own every round (Polymarket returns a trade there within seconds, measured
 # 1–14 s on 2026-10-14), so their alerts come one round or so after the trade. A big trade comes from Polymarket's
 # feed of every trade, which runs 3–5 minutes behind (its newest trade was 158–299 s old when read).
-FOLLOW_DELAY = f"Signals reads followed traders' trades about every {LIVE_POLL_S} seconds."
-BIG_DELAY = "Big trades come from Polymarket's feed of every trade, which runs about 3–5 minutes behind."
+# "typically": both vary with load and with how Polymarket's API is answering; the measured line is the real one
+FOLLOW_DELAY = f"Signals typically reads followed traders' trades every {LIVE_POLL_S} seconds."
+BIG_DELAY = "Big trades come from Polymarket's feed of every trade, which typically runs 3–5 minutes behind."
 DAILY_CAP = 20  # alerts per person per UTC day (a group counts once); then one "limit reached" message
 CAP_TEXT = "You've reached today's alert limit; more tomorrow."
 GROUP_S = 6 * 3600  # 2+ traders you follow buying the same outcome within this long make one grouped alert

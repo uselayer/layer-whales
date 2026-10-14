@@ -205,7 +205,7 @@ def test_each_alert_says_how_late_it_can_be_for_where_its_trade_came_from(api: T
     # a trader you follow is read on their own every round: no "3–5 minutes", and never "instant"
     assert "3–5" not in engine.FOLLOW_DELAY and str(engine.LIVE_POLL_S) in engine.FOLLOW_DELAY
     # big trades come from Polymarket's feed of every trade, which does run 3–5 minutes behind
-    assert "3–5 minutes behind" in engine.BIG_DELAY
+    assert "typically runs 3–5 minutes behind" in engine.BIG_DELAY and "typically" in engine.FOLLOW_DELAY
     for line in (engine.FOLLOW_DELAY, engine.BIG_DELAY):
         assert not any(w in line.lower() for w in ("instant", "real time", "real-time", "immediately"))
     page = api.get("/").text

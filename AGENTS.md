@@ -98,8 +98,8 @@ behind Vercel (see README, "Hosting").
   Every alert and trade card keeps the link to the market, whoever the trader. Every alert, and the Feed, says
   how late it can be for where its trades come from, never a blanket figure and never "instant": a trader you
   follow is read on their own about every 30 seconds (Polymarket returns their trades there within seconds), so
-  their alerts say "Signals reads followed traders' trades about every 30 seconds" (`FOLLOW_DELAY`); big trades
-  come from Polymarket's feed of every trade, which runs 3–5 minutes behind (`BIG_DELAY`, and the Feed's Big
+  their alerts say "Signals typically reads followed traders' trades every 30 seconds" (`FOLLOW_DELAY`); big trades
+  come from Polymarket's feed of every trade, which typically runs 3–5 minutes behind (`BIG_DELAY`, and the Feed's Big
   trades). A trade's time is its Polymarket timestamp (its transaction's block time), and every alert measures
   from it ("Traded 14:02 UTC, 6 min before this alert."). The engine checks Clerk's session token itself (public keys,
   no Clerk secret). Never let one account see or change another's follows, and never let an answer about a

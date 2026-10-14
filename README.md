@@ -66,9 +66,9 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     for sale within that limit, when the book was read, and what you get if it wins. Their price is shown for
     context only. The engine reads the price and whether the market is still taking orders itself (Polymarket's
     market status, not the price). It's an estimate, not a guaranteed fill. **Buy on Polymarket ↗** opens the
-    market there; Signals places no orders. It reads each trader's trades about every 30 seconds (Recommended
-    traders about once a minute), and Polymarket returns a trader's trades within seconds; Big trades come from
-    Polymarket's feed of every trade, which runs 3–5 minutes behind. A trade's time is when it was made on Polymarket.
+    market there; Signals places no orders. It typically reads each trader's trades every 30 seconds (Recommended
+    traders about once a minute), and Polymarket typically returns a trader's trades within seconds; Big trades come from
+    Polymarket's feed of every trade, which typically runs 3–5 minutes behind. A trade's time is when it was made on Polymarket.
   - **Big trades** (`#/big`, linked from the foot of Recommended; the old `#/traders/big` link still works): trades of $250 or more right now on
     Polymarket, one card per trade, opened on your markets like the rest of the Feed. A named trader's card
     opens their page. With Kalshi on, it shows every big trade on both venues instead ("Anonymous trader" when

@@ -701,8 +701,8 @@ const NOT_A_TIP = "Use their trades to learn what they're doing, not as a signal
 // (Following, Recommended), or Polymarket's feed of every trade, which runs 3–5 minutes behind (Big trades).
 // "Updated" is measured: when the oldest of what's shown was read. Each card's time is when the trade was made.
 const LAGS = {
-  traders: ["Read every 30–60 s", "Signals reads each of these traders' trades on Polymarket about every 30 seconds (Recommended traders about once a minute). “Updated” is when the oldest of them was last read; each trade's time is when it was made."],
-  big: ["3–5 min behind", "Big trades come from Polymarket's feed of every trade, which runs 3–5 minutes behind, so they show up here a few minutes after they're made."],
+  traders: ["Typically read every 30–60 s", "Signals typically reads each of these traders' trades on Polymarket every 30 seconds (Recommended traders about once a minute); it can take longer when Polymarket is busy. “Updated” is when the oldest of them was last read; each trade's time is when it was made."],
+  big: ["Typically 3–5 min behind", "Big trades come from Polymarket's feed of every trade, which typically runs 3–5 minutes behind, so they show up here a few minutes after they're made."],
 };
 const lag = (kind) => `<span class="lag"><button type="button" class="lag-btn" aria-describedby="lagtip">${LAGS[kind][0]}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><span class="lag-tip" role="tooltip" id="lagtip">${LAGS[kind][1]}</span></span>`;
 const fresh = (ms, kind = "traders") => `<span class="fresh"><span class="updated" id="updated">${updatedAgo(ms)}</span>·${lag(kind)}</span>`;
