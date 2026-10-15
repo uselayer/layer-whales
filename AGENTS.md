@@ -141,14 +141,17 @@ behind Vercel (see README, "Hosting").
     cue anywhere: their status in grey in the Copying column, and an open trade of theirs (their page, a Feed
     card, a trader page) says only "Now 52¢ · they paid 49¢", never green or "you can still get in". The
     "Buy on Polymarket" link, which only opens the market, "Check your price" and "What buying now costs" stay
-    for everyone: neutral market data, not a copy cue. Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
+    for everyone: neutral market data, not a copy cue. Every figure names its period: only profit follows the 7D/30D/90D switch; consistency is 12 weeks,
     win record and usual trade the last 30 days. Consistency is "X of N weeks up", where a week counts profit
     taken plus the change in value of trades still open. A copy estimate prices the copy at the ask (uselayer
     0.8.1's `copy_entry`), never the middle price. A positive copy estimate that isn't reliably above zero says so
     ("If you'd bought after them: +0.7% after fees (range −1.2% to +2.6%), but we can't tell that from luck"),
     never shown as a gain.
     One bar: filters on the left (market chips = the onboarding choice, Copyable only), how you view the list on
-    the right (search name or wallet, period, sort). Columns are grouped as Track record, Style and Copying.
+    the right (search name or wallet, period, sort). Columns are grouped as Skill (Price after buys, the figure Recommended ranks
+    by, so the order explains itself), Track record, Style and Copying: one figure per cell, right-aligned (the
+    rest is on the trader's page), no profit sparkline (each one stretched to its own scale, so $2 and $2M looked
+    alike), and a trader with under 4 weeks of history is marked New instead of ranked.
     Recommendations never include Big profit, edge unproven; Profit rests on one win (big profit that's a loss
     without their biggest win: the only tier that says luck); Edge not proven; Not enough data (too few trades
     could be checked: never shown as a verdict on skill); or No view traders, and the checks are never loosened to
