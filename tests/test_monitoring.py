@@ -186,6 +186,36 @@ def test_the_funnel_goes_found_screened_evaluated_recommended_qualified(d: Direc
     assert r["funnel"]["qualified_per_1000_found"] == 200.0 and r["funnel"]["qualified_share_of_evaluated"] == 0.3333
 
 
+def test_dropouts_entries_and_re_entries_as_traders_are_scored_again(d: Directory) -> None:
+    """Each score against the wallet's score before it: AMY stays recommended (rising → proven is kept), BEN drops
+    to no_edge then comes back (a re-entry), CAL enters on its first score, DAN's import-to-score pair isn't compared,
+    and EVE's score before the window still counts as the one before (a dropout on the window's first day)."""
+    d.add([Seen(w, "market", "Sports", category="Sports") for w in (AMY, BEN, CAL, DAN, EVE)], at=NOW - 9 * DAY)
+    d.keep_scores([score(EVE, "rising")], "background", at=NOW - 5 * DAY)  # before the 3-day window
+    d.keep_scores([score(EVE, "too_few")], "background", at=NOW - 2 * DAY)
+    d.keep_scores([score(AMY, "rising")], "background", at=NOW - 2 * DAY + 60)
+    d.keep_scores([score(AMY, "proven")], "background", at=NOW - DAY)
+    d.keep_scores([score(BEN, "quiet")], "background", at=NOW - 2 * DAY + 120)
+    d.keep_scores([score(BEN, "no_edge")], "background", at=NOW - DAY + 60)
+    d.keep_scores([score(BEN, "quiet")], "background", at=NOW - 3600)
+    d.keep_scores([score(CAL, "rising")], "background", at=NOW - 7200)
+    d.keep_scores([score(DAN, "rising")], "import", at=NOW - 2 * DAY + 180)
+    d.keep_scores([score(DAN, "no_edge")], "background", at=NOW - 1800)
+    q = d.monitoring(days=3, now=NOW)["qualification"]
+    days = {x["day"]: x for x in q["by_day"]}
+    assert [x["day"] for x in q["by_day"]] == ["2026-10-14", "2026-10-13", "2026-10-12"]  # newest first
+    first, second, today = days["2026-10-12"], days["2026-10-13"], days["2026-10-14"]
+    # 10-12: EVE drops (her rising score was before the window); AMY and BEN enter; DAN's import isn't a pair
+    assert (first["dropped"], first["dropped_to"], first["entered"], first["net"]) == (1, {"too_few": 1}, 2, 1)
+    assert (second["rescored"], second["kept"], second["dropped"], second["dropped_to"]) == (2, 1, 1, {"no_edge": 1})
+    # today: BEN back (a re-entry), CAL's first score (an entry); DAN's score after his import isn't compared
+    assert (today["re_entered"], today["entered"], today["dropped"], today["net"]) == (1, 1, 0, 2)
+    assert q["skipped_import"] == 2  # DAN's imported score (not an entry) and the score after it (not a dropout)
+    assert (q["window"]["rescored"], q["window"]["kept"], q["window"]["dropped"]) == (3, 1, 2)
+    assert q["window"]["kept_share"] == 0.333 and q["window"]["dropped_to"] == {"too_few": 1, "no_edge": 1}
+    assert (q["recommended_now"], q["ever_recommended"]) == (3, 5)  # AMY, BEN, CAL now; EVE and DAN once
+
+
 def test_coverage_and_qualified_traders_by_category(d: Directory) -> None:
     directory_of_five(d)
     c = d.monitoring(days=3, now=NOW)["by_category"]

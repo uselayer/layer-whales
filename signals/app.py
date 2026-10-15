@@ -55,6 +55,7 @@ from signals import monitoring, us_match
 from signals.budget import POLYMARKET_HOSTS, BackgroundHttp, Budget
 from signals.directory import (
     CHECK_BOARDS,
+    EVIDENCE,
     EXPLORE_GROUPS,
     LISTED_FRESH_S,
     QUICK_TRADES,
@@ -1310,6 +1311,10 @@ def monitoring_report(days: int = 14) -> dict[str, Any]:
                     "egress and cost. A day before counted_from has them as null (not counted), never 0.",
             "since_launch": "api.since_launch, api.polymarket_reads_since_launch and infrastructure.since_launch_usd "
                             "start again at each restart (infrastructure.uptime_h).",
+            "qualification": "History, from every score kept (score_history, back to 2026-10-13): each score compared "
+                             "with the wallet's score before it, tiers as kept when scored. A recommended trader whose "
+                             "score only grew stale (not rescored) isn't a dropout here: freshness.recommended says "
+                             "how many are past fresh. Pairs either side of an imported score aren't compared.",
             "counted_from": r["counted_from"],
         }  # fmt: skip
         r["as_of"] = datetime.fromtimestamp(now, UTC).isoformat()
@@ -1657,6 +1662,53 @@ def _stored_score(wallet: str, now: float | None = None) -> dict[str, Any] | Non
     return s | {"stored_at": s["scored_at"]} if now - s["scored_at"] < fresh else None
 
 
+# ---- a trader's record, as Polymarket reports it: for a page without a fresh score ----
+# Limited evidence, a quick look or not checked yet: their page had only our quick look's counts. This adds the
+# facts Polymarket itself publishes (all-time profit, volume, trades, biggest win, open positions and their sizes,
+# the categories of the markets they hold and lately traded). A record, never a skill verdict: the page says so.
+# About 5 reads (profile, stats, positions, latest trades, the markets' categories) on the checks' budget (checker:
+# "Check now"'s, so never the Feed's share), kept RECORD_TTL_S per wallet.
+RECORD_TTL_S = 600
+RECORD_TRADES = 20  # their latest trades, for the categories they trade lately
+RECORD_POSITIONS = 8  # open positions listed, biggest first (all of them, up to the SDK's 50, are counted)
+
+
+def _record(wallet: str) -> dict[str, Any]:
+    d = checker().trader("polymarket", wallet, trades=RECORD_TRADES, closed=0)
+    held = sorted(d.positions, key=lambda p: p.value or 0.0, reverse=True)
+    markets = list(dict.fromkeys([p.market for p in held] + [t.market for t in d.trades]))
+    try:
+        cats = _categories(markets) if markets else {}
+    except VenueError:
+        cats = {}  # the record still shows, without categories
+    per = Counter({m.partition(":")[0]: c for m, c in cats.items()}.values())  # markets, not outcomes, per category
+    values = [p.value for p in held if p.value is not None]
+    return {
+        "wallet": wallet,
+        "name": d.trader.name,
+        "joined": d.joined,
+        "stats": {k: d.stats.get(k) for k in ("trading_pnl", "realized_pnl", "unrealized_pnl", "pnl", "income",
+                                              "volume_usd", "trades", "biggest_win")},  # fmt: skip
+        "open": {"count": len(held), "at_least": len(held) >= 50, "value": round(sum(values), 2) if values else None},
+        "positions": [p.to_dict() | {"category": cats.get(p.market)} for p in held[:RECORD_POSITIONS]],
+        "categories": [{"category": c, "markets": n} for c, n in per.most_common()],
+        "trades_read": len(d.trades),
+        "read_at": time.time(),
+    }
+
+
+@app.get("/api/record/{wallet}")
+def record(wallet: str) -> dict[str, Any]:
+    """A Polymarket wallet's record as Polymarket reports it (``_record``), kept RECORD_TTL_S."""
+    w = wallet.lower()
+    if not _WALLET.fullmatch(w):
+        raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
+    try:
+        return cached(f"record:{w}", RECORD_TTL_S, lambda: _record(w))  # type: ignore[no-any-return]
+    except VenueError as e:
+        raise venue_error(e) from e
+
+
 def _client(request: Request | None) -> str:
     if request is None:
         return "local"
@@ -1696,23 +1748,25 @@ def check_now(wallet: str, request: Request | None = None) -> dict[str, Any]:
 
 @app.get("/api/traders")
 def explore(group: str = "passed", q: str = "", category: str = "", active: int = 0, min_usd: float = 0,
-            board: str = "", makers: int = 0, unchecked: int = 0, sort: str = "recent",
+            board: str = "", makers: int = 0, unchecked: int = 0, evidence: str = "", sort: str = "recent",
             offset: int = 0) -> dict[str, Any]:  # fmt: skip
     """A page of Explore (see Directory.browse), with how many each group lists. From directory.db only, never
     Polymarket. A search (``q``) looks through the limited-evidence and checked groups, and the not-checked-yet one
     too with ``unchecked=1``; otherwise ``unchecked_matches`` says how many of those it would find (up to 20)."""
     if not EXPLORE_ON:
         raise HTTPException(404, detail="Not found")
-    if group not in EXPLORE_GROUPS or sort not in SORTS or not 0 <= offset <= EXPLORE_MAX_OFFSET:
-        raise HTTPException(400, detail="Unknown group, sort or page.")
+    if (group not in EXPLORE_GROUPS or sort not in SORTS or (evidence and evidence not in EVIDENCE)
+            or not 0 <= offset <= EXPLORE_MAX_OFFSET):  # fmt: skip
+        raise HTTPException(400, detail="Unknown group, sort, filter or page.")
     q = q.strip()[:64]
     if q and len(q) < 2:
         raise HTTPException(400, detail="Type at least 2 letters to search.")
     search_in = ("limited", "checked", "recommended", *(("unchecked",) if unchecked else ()))
-    args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, sort, offset)
+    args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, evidence, sort, offset)
     page = cached(f"explore:{args}", EXPLORE_TTL_S, lambda: directory().browse(
         group, q=q, category=category or None, active_days=active or None, min_usd=min_usd or None,
-        board=board or None, makers=bool(makers), sort=sort, limit=EXPLORE_PAGE, offset=offset,
+        board=board or None, makers=bool(makers), evidence=evidence or None, sort=sort, limit=EXPLORE_PAGE,
+        offset=offset,
         search_in=search_in))  # fmt: skip
     counts = cached("explore:counts", EXPLORE_COUNTS_TTL_S, lambda: directory().explore_counts())
     others = None
