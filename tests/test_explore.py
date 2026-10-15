@@ -363,6 +363,22 @@ def test_each_group_shows_figures_for_what_its_for(run_js: Any) -> None:
     assert kv(run_js(STATS, f"exStats({quick}, true)"))[2] == ["Markets, 30d", "5+", None]
 
 
+SUB = ("ago", "boardText", "foundText", "BOARD_SHOWN", "boardShort", "exSub")
+
+
+def test_a_rows_line_under_the_name_is_short_and_shows_only_a_top_100_board_place(run_js: Any) -> None:
+    got = run_js(SUB, """[
+      exSub({group: "limited", evidence: "quick", category: "Sports", board: {place: "PNL WEEK SPORTS", rank: 23}}),
+      exSub({group: "checked", evidence: "scored", category: "Politics", board: {place: "VOL WEEK MENTIONS", rank: 89}}),
+      exSub({group: "limited", evidence: "quick", category: "Sports", board: {place: "VOL DAY SPORTS", rank: 9389}}),
+      exSub({group: "unchecked", category: "Sports", board: {place: "VOL DAY SPORTS", rank: 9389}}),
+    ]""")
+    assert got[0] == ["Sports", "#23 weekly profit", "quick look"]  # the market first, not said twice
+    assert got[1] == ["Politics", "#89 weekly volume, Mentions", "full check"]  # another board's category stays
+    assert got[2] == ["Sports", "quick look"]  # #9,389 is on their page, not the row
+    assert got[3] == ["Sports", "Found #9,389 on the daily volume board, Sports"]  # nothing else known: where we found them
+
+
 DEFAULTS = ("ex", "EX_DEFAULTS", "exDefaults", "EX_EMPTY", "exPick", "usd", "EX_CHIP", "exChips", "exChanged")
 
 

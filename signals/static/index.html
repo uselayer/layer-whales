@@ -334,6 +334,7 @@
   .ex-who { grid-area: who; display: grid; gap: 3px; min-width: 0; }
   .ex-sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ex-badges { grid-area: badges; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .ex-badges .tier { white-space: normal; text-align: right; border-radius: 10px; } /* a long label wraps in its column */
   .ex-stats { grid-area: stats; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .ex-stat { display: grid; gap: 2px; min-width: 0; }
   .ex-stat .k { font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -349,7 +350,7 @@
   .ex-opts button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .ex-factions { display: flex; justify-content: space-between; gap: 10px; margin-top: 22px; }
   @media (max-width: 1040px) {
-    .ex-row { grid-template-columns: 40px minmax(0, 1fr) 330px auto; }
+    .ex-row { grid-template-columns: 40px minmax(0, 1fr) 330px 150px; } /* fixed, so every row's figures line up */
   }
   .lb-board { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
   .lb-cols { display: grid; grid-template-columns: 28px minmax(0, 1fr) 180px 120px 96px 104px 116px 136px; gap: 12px; align-items: center; padding: 14px 18px; }
@@ -545,7 +546,6 @@
     .ex-row { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "av who badges" "stats stats stats"; gap: 10px; padding: 14px; align-items: start; }
     .ex-stats { gap: 8px; padding-top: 2px; }
     .ex-stat .v small { display: block; }
-    .ex-sub { white-space: normal; }
     .ex-bar { flex-direction: column; align-items: stretch; }
     .ex-groups { display: flex; }
     .ex-groups button { flex: 1 0 auto; padding: 6px 12px; }
@@ -1848,14 +1848,21 @@ function exBadges(r) {
 }
 // Under their name: their market, and how we know what the row says (a quick look at their trades, a full check,
 // when a tier was scored, or where we found them).
+// One line (cut short with "…" when it doesn't fit, a phone's too), most useful first: market, a top-100 board place,
+// then how we know.
 function exSub(r) {
   const how = r.group === "unchecked" ? foundText(r) : r.group === "passed" || r.group === "recommended" ? (r.scored_at ? `scored ${ago(r.scored_at * 1000)}` : null)
     : r.evidence === "quick" ? "quick look" : "full check";
-  return [r.category, how, r.group !== "unchecked" && r.board ? boardShort(r.board.place, r.board.rank) : null].filter(Boolean);
+  const board = r.group !== "unchecked" && r.board && r.board.rank <= BOARD_SHOWN ? boardShort(r.board.place, r.board.rank, r.category) : null;
+  return [r.category, board, how].filter(Boolean);
 }
-// "PNL WEEK SPORTS" #23 → "#23 weekly profit, Sports": their best place on a Polymarket board, a fact about the board
-function boardShort(place, rank) {
-  return boardText(place, rank).replace(" on the ", " ").replace(" board", "");
+// A board place on a row only when it's a top one; any place is on their page ("Found")
+const BOARD_SHOWN = 100;
+// "PNL WEEK SPORTS" #23 → "#23 weekly profit", with the board's category only when it isn't the row's ("#89 weekly
+// volume, Mentions" for a Politics trader): their best place on a Polymarket board, a fact about the board
+function boardShort(place, rank, category) {
+  const t = boardText(place, rank).replace(" on the ", " ").replace(" board", "");
+  return category && t.endsWith(`, ${category}`) ? t.slice(0, -(category.length + 2)) : t;
 }
 // A row's figures, each { k: what it is, v: the value, sub: its unit, sign: green or red }. Which ones depend on what
 // the row is for: Whales, size and recency first; a tier, profit, the price move we saw and copying, each its own
