@@ -68,6 +68,56 @@ def test_why_theyre_here_says_what_how_why_listed_and_copying_in_plain_lines() -
     assert bare["trades"] is None and bare["how"] == "2 new markets a week."  # nothing made up
 
 
+def test_a_listed_traders_why_says_where_the_same_test_holds_on_its_own() -> None:
+    cats = [{"category": "Politics", "bets": 30, "edge": {"n": 28}, "strong": True},
+            {"category": "Sports", "bets": 12, "edge": {"n": 12}, "strong": False}]  # fmt: skip
+    s = COPYABLE | {"categories": cats, "strong_categories": ["Politics"], "edge": {"mean": 0.02, "margin": 0.01, "n": 42, "z": 3}}
+    listed = engine.why_lines(s | engine._board(s))["listed"]
+    assert "and it holds without their best trades. The same shows in Politics on its own (28 trades)." in listed
+    # never for a trader we don't list (it would read against "Not on our list"), nor one who trades one kind only
+    off = s | {"segment": "no_edge", "reason": "The price doesn't clearly move their way."}
+    assert "on its own" not in engine.why_lines(off | engine._board(off))["listed"]
+    one = s | {"categories": cats[:1]}
+    assert "on its own" not in engine.why_lines(one | engine._board(one))["listed"]
+
+
+def test_a_best_day_worth_more_than_all_their_profit_is_said_in_words() -> None:
+    s = {"risks": ["10731% of their trading profit over these 30 days came on one day.",
+                   "62% of their trading profit over these 30 days came on one day.",
+                   "Without their biggest win ($80K) they'd be down from trading, all time."]}  # fmt: skip
+    assert engine._risks(s) == [
+        "Their best day made more than their whole trading profit over these 30 days: taken together, they lost money"
+        " on the other days.",
+        "62% of their trading profit over these 30 days came on one day.",  # a share of it: as the SDK says
+        "Without their biggest win ($80K) they'd be down from trading, all time.",
+    ]
+    assert engine._risks({}) == []
+
+
+def test_a_wallet_scored_on_its_page_counts_wins_over_every_checked_trade(monkeypatch: pytest.MonkeyPatch) -> None:
+    """As the check and the background count them: over all 45 checked trades, not the 30 the directory keeps, so
+    the same wallet's "Won" doesn't change with where its score came from; with what their prices implied."""
+    w = "0x" + "5" * 40
+    bets = [{"price": 0.8, "payout": 1 if i < 40 else 0} for i in range(45)]
+    monkeypatch.setattr(engine, "_worth_one", {})
+    monkeypatch.setattr(engine, "_directory_later", lambda f: None)
+    monkeypatch.setattr(engine.reads, "whales", type("W", (), {"score": lambda self, x: type("S", (), {
+        "to_dict": lambda _: {"wallet": x, "segment": "no_edge", "sample": list(bets)}})()})())  # fmt: skip
+    s = engine._score_of(w)
+    assert (s["won"], s["settled"], round(s["odds"], 2)) == (40, 45, 0.8)
+    kept = s | {"sample": s["sample"][:30]}  # as directory.db keeps it
+    assert {k: engine._board(kept).get(k, kept.get(k)) for k in ("won", "settled")} == {"won": 40, "settled": 45}
+
+
+def test_the_profile_dates_its_figures_and_shows_what_the_prices_implied(run_js: Any) -> None:
+    got = run_js(("scoredAt", "impliedWins"), """[
+      scoredAt({ window: ["2026-09-14T00:00:00+00:00", "2026-10-14T09:00:00+00:00"], stored_at: 1 }),
+      scoredAt({ stored_at: 1760000000 }), scoredAt({}),
+      impliedWins({ won: 40, settled: 46, odds: 0.73 }), impliedWins({ won: 3, settled: 0, odds: null }), impliedWins({ won: 1, settled: 2 })]""")
+    assert got == ["2026-10-14T09:00:00+00:00", 1760000000000, None, 34, None, None]
+    assert ">Today</text>" not in (engine.HERE / "static" / "index.html").read_text()  # the chart ends when the score was worked out, which it says
+
+
 def test_a_traders_page_carries_the_why_lines(api: TestClient) -> None:
     why = api.get("/api/worth/0xabc").json()["why"]
     assert set(why) == {"trades", "how", "listed", "copying"} and why["copying"].startswith("Copyable: ")
