@@ -1662,6 +1662,53 @@ def _stored_score(wallet: str, now: float | None = None) -> dict[str, Any] | Non
     return s | {"stored_at": s["scored_at"]} if now - s["scored_at"] < fresh else None
 
 
+# ---- a trader's record, as Polymarket reports it: for a page without a fresh score ----
+# Limited evidence, a quick look or not checked yet: their page had only our quick look's counts. This adds the
+# facts Polymarket itself publishes (all-time profit, volume, trades, biggest win, open positions and their sizes,
+# the categories of the markets they hold and lately traded). A record, never a skill verdict: the page says so.
+# About 5 reads (profile, stats, positions, latest trades, the markets' categories) on the checks' budget (checker:
+# "Check now"'s, so never the Feed's share), kept RECORD_TTL_S per wallet.
+RECORD_TTL_S = 600
+RECORD_TRADES = 20  # their latest trades, for the categories they trade lately
+RECORD_POSITIONS = 8  # open positions listed, biggest first (all of them, up to the SDK's 50, are counted)
+
+
+def _record(wallet: str) -> dict[str, Any]:
+    d = checker().trader("polymarket", wallet, trades=RECORD_TRADES, closed=0)
+    held = sorted(d.positions, key=lambda p: p.value or 0.0, reverse=True)
+    markets = list(dict.fromkeys([p.market for p in held] + [t.market for t in d.trades]))
+    try:
+        cats = _categories(markets) if markets else {}
+    except VenueError:
+        cats = {}  # the record still shows, without categories
+    per = Counter({m.partition(":")[0]: c for m, c in cats.items()}.values())  # markets, not outcomes, per category
+    values = [p.value for p in held if p.value is not None]
+    return {
+        "wallet": wallet,
+        "name": d.trader.name,
+        "joined": d.joined,
+        "stats": {k: d.stats.get(k) for k in ("trading_pnl", "realized_pnl", "unrealized_pnl", "pnl", "income",
+                                              "volume_usd", "trades", "biggest_win")},  # fmt: skip
+        "open": {"count": len(held), "at_least": len(held) >= 50, "value": round(sum(values), 2) if values else None},
+        "positions": [p.to_dict() | {"category": cats.get(p.market)} for p in held[:RECORD_POSITIONS]],
+        "categories": [{"category": c, "markets": n} for c, n in per.most_common()],
+        "trades_read": len(d.trades),
+        "read_at": time.time(),
+    }
+
+
+@app.get("/api/record/{wallet}")
+def record(wallet: str) -> dict[str, Any]:
+    """A Polymarket wallet's record as Polymarket reports it (``_record``), kept RECORD_TTL_S."""
+    w = wallet.lower()
+    if not _WALLET.fullmatch(w):
+        raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
+    try:
+        return cached(f"record:{w}", RECORD_TTL_S, lambda: _record(w))  # type: ignore[no-any-return]
+    except VenueError as e:
+        raise venue_error(e) from e
+
+
 def _client(request: Request | None) -> str:
     if request is None:
         return "local"

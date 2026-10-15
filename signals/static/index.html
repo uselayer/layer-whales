@@ -403,6 +403,10 @@
   .pf-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-top: 16px; }
   .pf-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
   .pf-card h2 { font-size: 16px; margin: 0; }
+  .pf-card h2 small { font-size: 13px; font-weight: 400; margin-left: 6px; }
+  .pf-sub { font-size: 14px; margin: 18px 0 0; }
+  .pf-facts.pf-pos { grid-template-columns: minmax(0, 1fr) auto; }
+  .pf-facts.pf-pos dd { text-align: right; }
   .pf-chart svg { width: 100%; height: auto; display: block; }
   .pf-chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
   .pf-legend { font-size: 12px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
@@ -2022,19 +2026,62 @@ function evidenceFacts(r) {
     ["Based on", when],
   ];
 }
+// Their record as Polymarket reports it (/api/record): facts, kept apart from our skill test on the same page.
+// [name, value as HTML]; what Polymarket didn't say shows "—".
+function recordFacts(rec) {
+  const st = rec.stats || {}, open = rec.open || {};
+  const open_ = st.unrealized_pnl == null ? null : Math.abs(st.unrealized_pnl) < 0.5 ? "nothing still open" : `${usd(st.unrealized_pnl, true)} still open`;
+  const split = st.realized_pnl != null && open_ ? ` <small class="muted">${usd(st.realized_pnl, true)} closed, ${open_}</small>` : "";
+  const joined = rec.joined && !Number.isNaN(new Date(rec.joined).getTime())
+    ? new Date(rec.joined).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : null;
+  return [
+    ["Profit from trading", st.trading_pnl != null ? `${pl(st.trading_pnl, usd(st.trading_pnl, true))} all time${split}` : "—"],
+    ["Volume", st.volume_usd != null ? `${usd(st.volume_usd)} traded, all time` : "—"],
+    ["Trades", st.trades != null ? Number(st.trades).toLocaleString("en-US") : "—"],
+    ["Biggest win", st.biggest_win != null ? usd(st.biggest_win) : "—"],
+    // Polymarket's positions list leaves out any under 1 contract, which its open profit still counts: said, never "None"
+    ["Open now", (open.count ? `${open.count}${open.at_least ? "+" : ""} position${open.count === 1 ? "" : "s"} over 1 contract${open.value != null ? `, worth ${usd(open.value)}` : ""}`
+      : "No positions over 1 contract") + (open_ && open_ !== "nothing still open" ? ` <small class="muted">smaller ones can still add to the ${usd(st.unrealized_pnl, true)} still open</small>` : "")],
+    ["Markets", (rec.categories || []).length ? esc(rec.categories.map((c) => `${c.category} ${c.markets}`).join(" · ")) + ` <small class="muted">held or traded lately</small>` : "—"],
+    ...(joined ? [["Joined", `${esc(joined)} <small class="muted">on Polymarket</small>`]] : []),
+  ];
+}
+// Their biggest open positions: the market, the side, what it's worth now, and the price they paid → the price now.
+function recordPositions(rec) {
+  return (rec.positions || []).map((p) => {
+    const [paid, now] = centsPair(p.avg_price, p.current_price);
+    return [`${esc(p.title || "A market")}${p.outcome ? ` <small class="muted">${esc(p.outcome)}</small>` : ""}`,
+      `${p.value != null ? usd(p.value) : "—"} <small class="muted">${paid} → ${now}${p.category ? ` · ${esc(p.category)}` : ""}</small>`];
+  });
+}
+const RECORD_NOTE = "Polymarket's own figures. A record, not a test of skill: profit can come from a few big wins or from luck, and none of this says buying after them makes money.";
+async function loadRecord(wallet) {
+  const box = $("#record");
+  if (!box) return;
+  let rec;
+  try { rec = await api(`/api/record/${wallet}`); } catch (e) { box.innerHTML = `<h2>Track record</h2><p class="muted">Polymarket's figures couldn't be read just now: ${esc(e.message)}</p>`; return; }
+  if (location.hash !== `#/worth/${wallet}` || !$("#record")) return;
+  const pos = recordPositions(rec);
+  $("#record").innerHTML = `<h2>Track record <small class="muted">Polymarket's figures</small></h2><p class="pf-copying">${esc(RECORD_NOTE)}</p>
+    <dl class="pf-facts">${recordFacts(rec).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    ${pos.length ? `<h3 class="pf-sub">Biggest open positions</h3><dl class="pf-facts pf-pos">${pos.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` : ""}`;
+}
 function renderUnchecked(s, wallet) {
   const app = $("#app"), r = s.directory, name = displayName(s.name, wallet);
-  const limited = r && r.group === "limited";
-  const label = limited ? `<span class="tier t3">Limited evidence</span><span class="tier t2">Quick look</span>` : r && r.evidence === "quick" ? exBadges(r) : `<span class="tier t2">Not checked yet</span>`;
-  const note = limited ? `Fewer than 8 bets in the last 30 days, which is too few to judge skill either way. This isn't a recommendation.`
+  const limited = r && r.group === "limited", full = r && r.evidence === "scored";
+  const label = limited ? `<span class="tier t3">Limited evidence</span><span class="tier t2">${full ? "Full check" : "Quick look"}</span>` : r && r.evidence === "quick" ? exBadges(r) : `<span class="tier t2">Not checked yet</span>`;
+  const note = limited ? (full ? "Our full check found too few of their trades whose prices we could check to measure skill either way. This isn't a recommendation."
+    : "Fewer than 8 markets traded in the last 30 days, which is too few to judge skill either way. This isn't a recommendation.")
     : r && r.evidence === "quick" ? esc(r.label || "") : "We haven't checked this trader's record yet, so nothing about it has been measured.";
   app.innerHTML = `<a class="back" href="#/traders/explore">← Explore</a>
     <div class="pf-head">${avatar(wallet, 64)}
       <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${label}</div><div class="pf-tag">${[r?.category].filter(Boolean).map(esc).join(" · ")}${r?.category ? " · " : ""}${profileLink(`https://polymarket.com/profile/${wallet}`)}</div></div>
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(wallet)}"></div></div></div>
-    <section class="pf-card"><h2>What we know so far</h2><p class="pf-copying">${note}</p>
+    <section class="pf-card"><h2>Skill <small class="muted">our test</small></h2><p class="pf-copying">${note}</p>
       <dl class="pf-facts">${evidenceFacts(r).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-      <p style="margin-top:16px"><button class="btn" id="checknow">Check now</button> <span class="muted" style="font-size:13px">Reads their last 30 days of trades, usually under a minute.</span></p></section>`;
+      <p style="margin-top:16px"><button class="btn" id="checknow">Check now</button> <span class="muted" style="font-size:13px">Reads their last 30 days of trades, usually under a minute.</span></p></section>
+    <section class="pf-card" id="record"><h2>Track record <small class="muted">Polymarket's figures</small></h2>${skelRows(3)}</section>`;
+  loadRecord(wallet);
   $("#checknow").onclick = async (e) => {
     e.target.disabled = true; e.target.textContent = "Checking…";
     let full;
