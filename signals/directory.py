@@ -1113,6 +1113,22 @@ class Directory:
                                   "WHERE status = 'failed'", args).fetchone()  # fmt: skip
             sweeps = con.execute("SELECT started, finished, sightings, new, error FROM sweeps WHERE started >= :since "
                                  "ORDER BY started DESC", args).fetchall()  # fmt: skip
+            # each score of a wallet ever scored a recommended tier and scored in the window, with the score before it
+            # (LAG over all of its history, so the window's first score still has the one before) and whether any
+            # earlier one was; wallets with no score in the window are left out, so the cost follows the window
+            pairs = con.execute(
+                f"""SELECT date(scored_at, 'unixepoch'), segment, via, prev, prev_via, was FROM (
+                  SELECT scored_at, segment, via,
+                    LAG(segment) OVER w AS prev, LAG(via) OVER w AS prev_via,
+                    MAX(segment IN ({_RECOMMENDED_SQL})) OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS was
+                  FROM score_history WHERE wallet IN (SELECT wallet FROM score_history WHERE segment IN ({_RECOMMENDED_SQL})
+                    INTERSECT SELECT wallet FROM score_history WHERE scored_at >= :since)
+                  WINDOW w AS (PARTITION BY wallet ORDER BY scored_at))
+                WHERE scored_at >= :since""",
+                args,
+            ).fetchall()  # fmt: skip
+            ever = con.execute(f"SELECT COUNT(DISTINCT wallet) FROM score_history WHERE segment IN ({_RECOMMENDED_SQL})").fetchone()[0]
+            recommended_now = con.execute(f"SELECT COUNT(*) FROM wallets w WHERE {_TIERED}").fetchone()[0]
         for f in by_cat.values():
             f["strong_in"] = 0
         for c, n in strong.items():
@@ -1120,6 +1136,7 @@ class Directory:
         due_now = {KINDS[i]: {"wallets": n, "most_overdue_h": round(max(0.0, now - at) / 3600, 1)} for i, n, at in backlog}
         return {
             "funnel": total,
+            "qualification": _qualification(first_day, now, pairs, recommended_now, ever),
             "by_category": by_cat,
             "sources": {"seen_in": seen, "only_seen_in": only, "first_found_by": first, "leaderboards": boards,
                         "best_rank": bands},  # fmt: skip
@@ -1153,6 +1170,57 @@ _QUALIFIED = f"({_TIERED} AND w.scored_at >= :fresh)"
 _FUNNEL = f"COUNT(*), SUM({_SCREENED}), SUM(w.scored_at IS NOT NULL), SUM({_TIERED}), SUM({_QUALIFIED})"
 AGE_BANDS = ((86400, "under_1d"), (2 * 86400, "1_2d"), (7 * 86400, "2_7d"), (30 * 86400, "7_30d"),
              (float("inf"), "over_30d"))  # fmt: skip
+
+
+QUALIFICATION = ("rescored", "kept", "dropped", "entered", "re_entered", "net")
+
+
+def _qualification(first_day: str, now: float, pairs: list[tuple[str, str | None, str, str | None, str | None, int | None]],
+                   recommended_now: int, ever: int) -> dict[str, Any]:  # fmt: skip
+    """How the recommended set changes as traders are scored again, each UTC day from ``first_day`` (newest first)
+    and over them all. Per score: one after a recommended score is ``rescored`` and either ``kept`` a recommended tier
+    (a move between them, rising to proven, is kept) or ``dropped`` (``dropped_to``: the tier it got); one after a
+    score that wasn't recommended, or a first score, that is ``entered`` the first time, ``re_entered`` after an
+    earlier recommended score. ``net``: entered + re-entered − dropped. A pair either side of an imported score (an
+    older format, kept on launch) isn't compared (``skipped_import``). Tiers are as kept when scored."""
+    rec = set(RECOMMENDED)
+    days: dict[str, dict[str, Any]] = {}
+    at = datetime.fromisoformat(first_day + "T00:00:00+00:00").timestamp()
+    while at <= now:
+        days[_day(at)] = dict.fromkeys(QUALIFICATION, 0) | {"day": _day(at), "dropped_to": Counter()}
+        at += 86400
+    skipped = 0
+    for day, seg, via, prev, prev_via, was in pairs:
+        d = days.get(day)
+        if d is None:
+            continue
+        if "import" in (via, prev_via):
+            skipped += 1
+            continue
+        if prev in rec:
+            d["rescored"] += 1
+            if seg in rec:
+                d["kept"] += 1
+            else:
+                d["dropped"] += 1
+                d["dropped_to"][seg or "None"] += 1
+        elif seg in rec:
+            d["re_entered" if was else "entered"] += 1
+    total = dict.fromkeys(QUALIFICATION, 0) | {"dropped_to": Counter()}
+    for d in days.values():
+        d["net"] = d["entered"] + d["re_entered"] - d["dropped"]
+        for k in QUALIFICATION:
+            total[k] += d[k]
+        total["dropped_to"].update(d["dropped_to"])
+    out = [d | {"dropped_to": dict(d["dropped_to"].most_common())} for d in sorted(days.values(), key=lambda x: x["day"], reverse=True)]
+    return {
+        "recommended_now": recommended_now,
+        "ever_recommended": ever,
+        "window": total | {"dropped_to": dict(total["dropped_to"].most_common()),
+                           "kept_share": round(total["kept"] / total["rescored"], 3) if total["rescored"] else None},
+        "by_day": out,
+        "skipped_import": skipped,
+    }  # fmt: skip
 
 
 def _age(col: str) -> str:

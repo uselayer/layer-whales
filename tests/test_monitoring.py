@@ -48,19 +48,19 @@ def counts(monkeypatch: pytest.MonkeyPatch) -> Usage:
     return fresh
 
 
-def directory_of_five(d: Directory) -> None:
+def directory_of_five(d: Directory, now: float = NOW) -> None:
     """AMY: on the monthly board (rank 40), recommended with a fresh score, strong in Sports. BEN: in a Sports market
     only, recommended but scored 3 days ago. CAL: in a market, quick-checked (too few bets). DAN: on a board (rank
     2,000), never looked at. EVE: followed only, scored and failed since."""
-    d.add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", category=None, rank=40)], at=NOW - 3 * DAY)
+    d.add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", category=None, rank=40)], at=now - 3 * DAY)
     d.add([Seen(BEN, "market", "Sports", category="Sports"), Seen(CAL, "market", "Politics", category="Politics")],
-          at=NOW - DAY + 60)  # fmt: skip
-    d.add([Seen(DAN, "leaderboard", "VOL WEEK SPORTS", category="Sports", rank=2000), Seen(EVE, "follow")], at=NOW - 60)
-    d.keep_scores([score(AMY, "proven", strong=True)], "background", at=NOW - 3600)
-    d.keep_scores([score(BEN, "rising")], "check", at=NOW - 3 * DAY)
-    d.quick_checked(CAL, QuickLook(False, "not_enough_recent_evidence", 2, 4, None, None), at=NOW - 7200)
-    d.keep_scores([score(EVE, "no_edge", "Politics")], "page", at=NOW - 2 * DAY)
-    d.score_failed(EVE, "VenueError: polymarket didn't answer in time (attempt 3).", at=NOW - 600)
+          at=now - DAY + 60)  # fmt: skip
+    d.add([Seen(DAN, "leaderboard", "VOL WEEK SPORTS", category="Sports", rank=2000), Seen(EVE, "follow")], at=now - 60)
+    d.keep_scores([score(AMY, "proven", strong=True)], "background", at=now - 3600)
+    d.keep_scores([score(BEN, "rising")], "check", at=now - 3 * DAY)
+    d.quick_checked(CAL, QuickLook(False, "not_enough_recent_evidence", 2, 4, None, None), at=now - 7200)
+    d.keep_scores([score(EVE, "no_edge", "Politics")], "page", at=now - 2 * DAY)
+    d.score_failed(EVE, "VenueError: polymarket didn't answer in time (attempt 3).", at=now - 600)
 
 
 # ---- the counts kept in memory, and by day in directory.db ----
@@ -186,6 +186,36 @@ def test_the_funnel_goes_found_screened_evaluated_recommended_qualified(d: Direc
     assert r["funnel"]["qualified_per_1000_found"] == 200.0 and r["funnel"]["qualified_share_of_evaluated"] == 0.3333
 
 
+def test_dropouts_entries_and_re_entries_as_traders_are_scored_again(d: Directory) -> None:
+    """Each score against the wallet's score before it: AMY stays recommended (rising → proven is kept), BEN drops
+    to no_edge then comes back (a re-entry), CAL enters on its first score, DAN's import-to-score pair isn't compared,
+    and EVE's score before the window still counts as the one before (a dropout on the window's first day)."""
+    d.add([Seen(w, "market", "Sports", category="Sports") for w in (AMY, BEN, CAL, DAN, EVE)], at=NOW - 9 * DAY)
+    d.keep_scores([score(EVE, "rising")], "background", at=NOW - 5 * DAY)  # before the 3-day window
+    d.keep_scores([score(EVE, "too_few")], "background", at=NOW - 2 * DAY)
+    d.keep_scores([score(AMY, "rising")], "background", at=NOW - 2 * DAY + 60)
+    d.keep_scores([score(AMY, "proven")], "background", at=NOW - DAY)
+    d.keep_scores([score(BEN, "quiet")], "background", at=NOW - 2 * DAY + 120)
+    d.keep_scores([score(BEN, "no_edge")], "background", at=NOW - DAY + 60)
+    d.keep_scores([score(BEN, "quiet")], "background", at=NOW - 3600)
+    d.keep_scores([score(CAL, "rising")], "background", at=NOW - 7200)
+    d.keep_scores([score(DAN, "rising")], "import", at=NOW - 2 * DAY + 180)
+    d.keep_scores([score(DAN, "no_edge")], "background", at=NOW - 1800)
+    q = d.monitoring(days=3, now=NOW)["qualification"]
+    days = {x["day"]: x for x in q["by_day"]}
+    assert [x["day"] for x in q["by_day"]] == ["2026-10-14", "2026-10-13", "2026-10-12"]  # newest first
+    first, second, today = days["2026-10-12"], days["2026-10-13"], days["2026-10-14"]
+    # 10-12: EVE drops (her rising score was before the window); AMY and BEN enter; DAN's import isn't a pair
+    assert (first["dropped"], first["dropped_to"], first["entered"], first["net"]) == (1, {"too_few": 1}, 2, 1)
+    assert (second["rescored"], second["kept"], second["dropped"], second["dropped_to"]) == (2, 1, 1, {"no_edge": 1})
+    # today: BEN back (a re-entry), CAL's first score (an entry); DAN's score after his import isn't compared
+    assert (today["re_entered"], today["entered"], today["dropped"], today["net"]) == (1, 1, 0, 2)
+    assert q["skipped_import"] == 2  # DAN's imported score (not an entry) and the score after it (not a dropout)
+    assert (q["window"]["rescored"], q["window"]["kept"], q["window"]["dropped"]) == (3, 1, 2)
+    assert q["window"]["kept_share"] == 0.333 and q["window"]["dropped_to"] == {"too_few": 1, "no_edge": 1}
+    assert (q["recommended_now"], q["ever_recommended"]) == (3, 5)  # AMY, BEN, CAL now; EVE and DAN once
+
+
 def test_coverage_and_qualified_traders_by_category(d: Directory) -> None:
     directory_of_five(d)
     c = d.monitoring(days=3, now=NOW)["by_category"]
@@ -246,7 +276,7 @@ def api(counts: Usage, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> TestCl
 
 
 def test_the_report_has_every_part_in_counts_only(api: TestClient, counts: Usage) -> None:
-    directory_of_five(engine.directory())
+    directory_of_five(engine.directory(), time.time())  # as of now: the report reads the real clock
     counts.add("api_sent", "data-api.polymarket.com", 10)
     counts.add("api", "data-api.polymarket.com 2xx", 9)
     counts.add("lane", "background", 4)
@@ -301,7 +331,7 @@ def test_a_lanes_recommended_traders_are_counted_with_its_outcomes(counts: Usage
 
 
 def test_the_discovery_funnel_leads_the_report_in_explores_words(api: TestClient) -> None:
-    directory_of_five(engine.directory())
+    directory_of_five(engine.directory(), time.time())  # as of now: the report reads the real clock
     r = api.get("/api/monitoring?days=2").json()
     assert list(r)[:3] == ["discovery_funnel", "health", "data"]
     f = r["discovery_funnel"]
@@ -315,7 +345,7 @@ def test_the_discovery_funnel_leads_the_report_in_explores_words(api: TestClient
 
 
 def test_days_before_live_counting_say_not_counted_rather_than_zero(api: TestClient, counts: Usage) -> None:
-    directory_of_five(engine.directory())  # wallets found days ago: history, from directory.db
+    directory_of_five(engine.directory(), time.time())  # wallets found days ago: history, from directory.db
     counts.add("evaluated", "new:dormant", 1, at=time.time())
     engine._monitor_flush()
     days = api.get("/api/monitoring?days=4").json()["by_day"]
@@ -329,7 +359,7 @@ def test_a_sweep_a_restart_cut_off_says_so_and_errors_leave_addresses_out(api: T
     d.sweep_finished(d.sweep_started(at=time.time() - 7200), error=f"VenueError: GET /positions?user={AMY} failed")
     d.sweep_started(at=time.time() - 3600)  # cut off: never finished
     monkeypatch.setitem(engine._directory_state, "running", False)
-    r = api.get("/api/monitoring?days=1").json()
+    r = api.get("/api/monitoring?days=2").json()  # 2 days: sweeps an hour or two ago, whatever the hour (UTC)
     assert [s["status"] for s in r["sweeps"]] == ["cut_off_by_restart", "failed"]
     assert AMY not in repr(r) and "user=0x…" in r["sweeps"][1]["error"]
 
