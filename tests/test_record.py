@@ -98,10 +98,15 @@ def test_the_page_says_its_a_record_not_a_skill_test_and_unknown_stays_a_dash(ru
     assert facts["Profit from trading"].startswith('<span class="gain">+$5.2K</span> all time')
     assert "+$6K closed, −$800 still open" in facts["Profit from trading"]
     assert facts["Volume"] == "$410K traded, all time" and facts["Trades"] == "1,234" and facts["Biggest win"] == "—"
-    assert facts["Open now"] == "50+ positions, worth $9.1K" and facts["Joined"].startswith("Mar 2024")  # in UTC
+    assert facts["Open now"].startswith("50+ positions over 1 contract, worth $9.1K")
+    assert "smaller ones can still add to the −$800 still open" in facts["Open now"]
+    assert facts["Joined"].startswith("Mar 2024")  # in UTC
+    # none listed, yet profit still open: positions under 1 contract (Polymarket's list leaves them out), never "None"
+    small = dict(run_js(FACTS, "recordFacts({stats: {realized_pnl: 424, unrealized_pnl: 7.71}, open: {count: 0}})"))
+    assert small["Open now"].startswith("No positions over 1 contract") and "+$7.71 still open" in small["Open now"]
     tiny = run_js(FACTS, "recordFacts({stats: {trading_pnl: 1162, realized_pnl: 1162, unrealized_pnl: -0.0035}})")
     assert "+$1.2K closed, nothing still open" in dict(tiny)["Profit from trading"]  # never "−$0.00 still open"
     assert got[1][0][0].startswith("Big &lt;b&gt;") and "40¢ → 50¢ · Sports" in got[1][0][1]  # titles escaped
     assert "not a test of skill" in got[2] and "buying after them" in got[2]
     assert dict(got[3]) == {"Profit from trading": "—", "Volume": "—", "Trades": "—", "Biggest win": "—",
-                            "Open now": "None", "Markets": "—"}  # fmt: skip
+                            "Open now": "No positions over 1 contract", "Markets": "—"}  # fmt: skip

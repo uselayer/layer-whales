@@ -2016,7 +2016,9 @@ function recordFacts(rec) {
     ["Volume", st.volume_usd != null ? `${usd(st.volume_usd)} traded, all time` : "—"],
     ["Trades", st.trades != null ? Number(st.trades).toLocaleString("en-US") : "—"],
     ["Biggest win", st.biggest_win != null ? usd(st.biggest_win) : "—"],
-    ["Open now", open.count ? `${open.count}${open.at_least ? "+" : ""} position${open.count === 1 ? "" : "s"}${open.value != null ? `, worth ${usd(open.value)}` : ""}` : "None"],
+    // Polymarket's positions list leaves out any under 1 contract, which its open profit still counts: said, never "None"
+    ["Open now", (open.count ? `${open.count}${open.at_least ? "+" : ""} position${open.count === 1 ? "" : "s"} over 1 contract${open.value != null ? `, worth ${usd(open.value)}` : ""}`
+      : "No positions over 1 contract") + (open_ && open_ !== "nothing still open" ? ` <small class="muted">smaller ones can still add to the ${usd(st.unrealized_pnl, true)} still open</small>` : "")],
     ["Markets", (rec.categories || []).length ? esc(rec.categories.map((c) => `${c.category} ${c.markets}`).join(" · ")) + ` <small class="muted">held or traded lately</small>` : "—"],
     ...(joined ? [["Joined", `${esc(joined)} <small class="muted">on Polymarket</small>`]] : []),
   ];
