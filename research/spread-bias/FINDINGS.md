@@ -98,7 +98,7 @@ In the SDK skill test, take the half-spread off bets that filled as resting orde
 Leave the Rising thresholds alone for now. A tighter cut removes more real traders than chance ones at today's
 sample size; more bets per score (#27) is the better lever.
 
-## 7. Validation of the built correction (uselayer-sdk#28)
+## 6. Validation of the built correction (uselayer-sdk#28)
 
 **Are we subtracting only what resting orders earned?**
 - **Which fills rested.** Taken from Polymarket's taker-only trade feed. All 644 taker fills in a 10-wallet check
@@ -165,7 +165,7 @@ resting buys.
 - Polymarket's profit figures are untouched.
 - Only the skill test (`edge`, `edge_verdict`, the tiers) stops counting the spread as foresight.
 
-## 8. Rollout recommendation (nothing deployed)
+## 7. Rollout recommendation (nothing deployed)
 
 1. **Review and merge uselayer-sdk#28 with #27.** They touch different code; whichever lands second keeps both
    blocks of appended tests (2,271 pass combined).
@@ -180,7 +180,7 @@ resting buys.
    marked as the release, not churn. Check the "Beats the price" text on one resting trader's page.
 5. **Only then** revisit Rising, with #27's larger sample, if the owner wants.
 
-## 9. Retired estimates
+## 8. Retired estimates
 
 The owner retired these on 2026-10-15. They came from an earlier session's placebo and persistence inference.
 They never reached the repo, a PR or the site, and must not be cited:
@@ -195,7 +195,7 @@ What stands instead is section 2: Rising's chance share is real but not pinned d
 90% range 16–75%). `research/scoring79-findings.md`'s "4–8% of no-signal wallets reach z ≥ 2" is a separate,
 measured calibration and stays; it predates the spread finding.
 
-## 10. Wording for the "1 in 3 Rising" warning (not published)
+## 9. Wording for the "1 in 3 Rising" warning (not published)
 
 The evidence supports "some Rising traders will turn out to be chance; we can't yet say how many". It doesn't
 support "1 in 3". Wording with direct support:
