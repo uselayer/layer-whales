@@ -354,7 +354,7 @@
   }
   .lb-board { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
   /* one figure per cell, figures right-aligned so their sizes line up down the column */
-  .lb-cols { display: grid; grid-template-columns: 28px minmax(0, 1fr) 92px 84px 72px 72px 168px 80px 76px 124px; gap: 12px; align-items: center; padding: 11px 18px; }
+  .lb-cols { display: grid; grid-template-columns: 28px minmax(0, 1fr) 92px 84px 68px 94px 164px 80px 76px 124px; gap: 12px; align-items: center; padding: 11px 18px; }
   .lb-num { text-align: right; justify-self: end; }
   /* every column name has a plain one-line description under it (not a tooltip: always visible) */
   .lb-head { align-items: start; }
@@ -474,7 +474,7 @@
   }
 
   @media (max-width: 1180px) {
-    .lb-cols { grid-template-columns: 28px minmax(0, 1fr) 84px 76px 64px 64px 164px 76px 68px 116px; gap: 10px; }
+    .lb-cols { grid-template-columns: 28px minmax(0, 1fr) 84px 76px 62px 90px 160px 76px 68px 116px; gap: 10px; }
   }
   @media (max-width: 1040px) {
     .lb-toolbar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; }
