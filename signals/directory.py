@@ -38,7 +38,11 @@ Each wallet's evaluation (phases 2 and 3), on its row in ``wallets``:
 - ``scored_at``: when its latest score was worked out; ``tried_at``: the last try, whatever came of it.
 - ``next_check``: when it's due to be looked at again (``next_check_at``); ``failures``: tries failed in a row.
 - ``seen_category``: the category it was first seen in, so the evaluation can take each category in turn before
-  a wallet has a score (``category``) of its own.
+  a wallet has a score (``category``) of its own. Where a wallet was found says little about what it trades (a
+  Tech board lists people who mostly trade Sports), so a page names it only as where they were found.
+- ``traded_category``: where most of the dollars they bought over the 90 days went, from the quick check's read of
+  their trades (``traded_category``): what they trade, for a wallet without a score. Kept when a later look finds no
+  buys (they traded it, the last time they traded).
 - ``last_active``: their latest trade whose time we know: a Feed trade, the last buy a score saw, or the latest
   trade a quick check read. A leaderboard or market sighting has no trade time, so it never sets this.
 - ``segment`` and ``category`` (where most of their checked bets were), from the latest score.
@@ -158,7 +162,7 @@ _PHASE_3_COLUMNS = (("next_check", "REAL"), ("failures", "INTEGER NOT NULL DEFAU
 _PHASE_3_INDEXES = "CREATE INDEX IF NOT EXISTS wallets_by_next_check ON wallets (next_check);"
 # Explore: what a list row shows and filters on, and search by name.
 _EXPLORE_COLUMNS = (("market_usd", "REAL"), ("evidence_cut", "INTEGER"), ("typical_usd", "REAL"),
-                    ("listed", "INTEGER NOT NULL DEFAULT 0"))  # fmt: skip
+                    ("listed", "INTEGER NOT NULL DEFAULT 0"), ("traded_category", "TEXT"))  # fmt: skip
 PUBLIC_SOURCES = ("leaderboard", "market", "feed", "check")
 _EXPLORE_INDEXES = """
 CREATE INDEX IF NOT EXISTS wallets_by_name ON wallets (name COLLATE NOCASE);
@@ -253,6 +257,7 @@ class QuickLook:
     last_trade: float | None
     market_usd: float | None = None  # the middle of the dollars they bought a market with, over EVIDENCE_DAYS
     cut: bool = False  # the read stopped before reaching back EVIDENCE_DAYS: the counts are "at least"
+    category: str | None = None  # where most of their dollars went over EVIDENCE_DAYS (``traded_category``)
 
 
 def quick_look(trades: list[tuple[Any, ...]], now: float, read_all: bool,
@@ -286,6 +291,30 @@ def quick_look(trades: list[tuple[Any, ...]], now: float, read_all: bool,
     middle = (usds[len(usds) // 2] if len(usds) % 2 else (usds[len(usds) // 2 - 1] + usds[len(usds) // 2]) / 2) if usds else None
     return QuickLook(reason is None, reason, buys_30d, buys_90d, last_buy, max((t[0] for t in trades), default=None),
                      None if middle is None else round(middle, 2), covered > evidence)  # fmt: skip
+
+
+CATEGORY_MARKETS = 20  # the markets the quick check reads categories of: their biggest by dollars, one Gamma read
+
+
+def top_markets(trades: list[tuple[Any, ...]], now: float, n: int = CATEGORY_MARKETS) -> list[tuple[str, float]]:
+    """From a quick check's trades (as ``quick_look`` takes them), the ``n`` markets they put the most dollars in
+    over EVIDENCE_DAYS, biggest first, with the dollars."""
+    since = now - EVIDENCE_DAYS * 86400
+    per: dict[str, float] = {}
+    for t in trades:
+        if t[1] and t[0] >= since and len(t) > 3 and t[3]:
+            per[t[2]] = per.get(t[2], 0.0) + float(t[3])
+    return sorted(per.items(), key=lambda kv: kv[1], reverse=True)[:n]
+
+
+def traded_category(spent: list[tuple[str, float]], categories: dict[str, str]) -> str | None:
+    """The category most of ``spent``'s dollars went to (``top_markets``), from each market's category; None when
+    none of the markets' categories is known."""
+    per: Counter[str] = Counter()
+    for market, usd in spent:
+        if (c := categories.get(market)) is not None:
+            per[c] += usd
+    return per.most_common(1)[0][0] if per else None
 
 
 CHECK_GROUPS = ("passed", "limited", "checked", "unchecked")  # what our checks found: each listed wallet is in one
@@ -323,8 +352,13 @@ SORTS = {
 # Explore's "what we checked" filter: ``full``, wallets whose latest look is a full check (a score), not a quick look
 EVIDENCE = {"full": "(w.scored_at IS NOT NULL AND w.status != 'checked')"}
 _WALLETISH = re.compile(r"0x[0-9a-f]{2,40}")
-_ROW = """w.wallet, w.name, COALESCE(w.category, w.seen_category) AS category, w.last_active, w.status, w.not_recommended,
-  w.segment, w.scored_at, w.tried_at, w.buys_30d, w.buys_90d, w.last_buy, w.market_usd, w.evidence_cut, w.typical_usd,
+# A wallet's category: its score's, else what its trades show, else where it was first seen; ``category_from`` says
+# which ("score", "trades", "seen"), so a page names a "seen" one as where they were found, not what they trade.
+_CATEGORY = "COALESCE(w.category, w.traded_category, w.seen_category)"
+_CATEGORY_FROM = ("CASE WHEN w.category IS NOT NULL THEN 'score' WHEN w.traded_category IS NOT NULL THEN 'trades' "
+                  "WHEN w.seen_category IS NOT NULL THEN 'seen' END")  # fmt: skip
+_ROW = f"w.wallet, w.name, {_CATEGORY} AS category, {_CATEGORY_FROM} AS category_from, " + """w.last_active,
+  w.status, w.not_recommended, w.segment, w.scored_at, w.tried_at, w.buys_30d, w.buys_90d, w.last_buy, w.market_usd, w.evidence_cut, w.typical_usd,
   w.first_seen, w.first_source, sc.bets AS bets_checked, sc.format AS score_format, sc.skill, sc.copyable,
   sc.edge, sc.edge_z, sc.copy AS copy_mean, sc.copy_low, sc.trading_pnl_window, sc.window_end,
   (SELECT b.place || '|' || b.rank FROM sightings b WHERE b.wallet = w.wallet AND b.source = 'leaderboard'
@@ -648,6 +682,8 @@ class Directory:
                 (look.last_trade, look.last_trade, look.buys_30d, look.buys_90d, look.last_buy, look.last_buy,
                  look.market_usd, int(look.cut), w),
             )
+            if look.category is not None:
+                con.execute("UPDATE wallets SET traded_category = ? WHERE wallet = ?", (look.category, w))
             if not look.score:
                 segment = con.execute("SELECT segment FROM wallets WHERE wallet = ?", (w,)).fetchone()[0]
                 con.execute(
@@ -974,7 +1010,7 @@ class Directory:
         else:
             where.append(_group(group, now))
         if category:
-            where.append("COALESCE(w.category, w.seen_category) = ?")
+            where.append(f"{_CATEGORY} = ?")
             args.append(category)
         if active_days:
             where.append("w.last_active >= ?")
@@ -1162,9 +1198,10 @@ class Directory:
 # ---- phase 6: monitoring's definitions ----
 # The lines Explore draws: screened is any look at a wallet (a quick check's evidence, or a score); fully evaluated,
 # a score; recommended, a recommended tier (Explore's _TIERED); qualified, one whose score is fresh (PASSED_FRESH_S,
-# "Passed our checks": what Traders can serve). A wallet's category: its score's, else where it was first seen.
+# "Passed our checks": what Traders can serve). A wallet's category: its score's, else what its trades show, else
+# where it was first seen.
 FUNNEL = ("found", "screened", "fully_evaluated", "recommended", "qualified")
-_CAT = "COALESCE(w.category, w.seen_category, 'Other')"
+_CAT = "COALESCE(w.category, w.traded_category, w.seen_category, 'Other')"
 _SCREENED = "(w.status = 'checked' OR w.scored_at IS NOT NULL OR w.buys_30d IS NOT NULL)"
 _QUALIFIED = f"({_TIERED} AND w.scored_at >= :fresh)"
 _FUNNEL = f"COUNT(*), SUM({_SCREENED}), SUM(w.scored_at IS NOT NULL), SUM({_TIERED}), SUM({_QUALIFIED})"

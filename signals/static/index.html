@@ -1854,11 +1854,15 @@ function exBadges(r) {
 // when a tier was scored, or where we found them).
 // One line (cut short with "…" when it doesn't fit, a phone's too), most useful first: market, a top-100 board place,
 // then how we know.
+// Their market: what their score or trades show, or, when we only know where we found them (a board, a market),
+// that, named as such: a Tech board lists people who mostly trade Sports.
+const exCategory = (r) => !r?.category ? null : r.category_from === "seen" ? `found in ${r.category}` : r.category;
 function exSub(r) {
   const how = r.group === "unchecked" ? foundText(r) : r.group === "passed" || r.group === "recommended" ? (r.scored_at ? `scored ${ago(r.scored_at * 1000)}` : null)
     : r.evidence === "quick" ? "quick look" : "full check";
   const board = r.group !== "unchecked" && r.board && r.board.rank <= BOARD_SHOWN ? boardShort(r.board.place, r.board.rank, r.category) : null;
-  return [r.category, board, how].filter(Boolean);
+  const cat = r.group === "unchecked" && r.category_from === "seen" && r.board ? null : exCategory(r); // the board says it
+  return [cat, board, how].filter(Boolean);
 }
 // A board place on a row only when it's a top one; any place is on their page ("Found")
 const BOARD_SHOWN = 100;
@@ -2075,7 +2079,7 @@ function renderUnchecked(s, wallet) {
     : r && r.evidence === "quick" ? esc(r.label || "") : "We haven't checked this trader's record yet, so nothing about it has been measured.";
   app.innerHTML = `<a class="back" href="#/traders/explore">← Explore</a>
     <div class="pf-head">${avatar(wallet, 64)}
-      <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${label}</div><div class="pf-tag">${[r?.category].filter(Boolean).map(esc).join(" · ")}${r?.category ? " · " : ""}${profileLink(`https://polymarket.com/profile/${wallet}`)}</div></div>
+      <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${label}</div><div class="pf-tag">${[exCategory(r)].filter(Boolean).map(esc).join(" · ")}${r?.category ? " · " : ""}${profileLink(`https://polymarket.com/profile/${wallet}`)}</div></div>
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(wallet)}"></div></div></div>
     <section class="pf-card"><h2>Skill <small class="muted">our test</small></h2><p class="pf-copying">${note}</p>
       <dl class="pf-facts">${evidenceFacts(r).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>

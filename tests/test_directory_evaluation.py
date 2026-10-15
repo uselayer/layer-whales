@@ -30,9 +30,11 @@ from signals.directory import (
     QuickLook,
     Seen,
     fresh_for,
+    traded_category,
     next_check_at,
     quick_look,
     reason_label,
+    top_markets,
 )  # fmt: skip
 
 AMY = "0x" + "a1" * 20
@@ -392,12 +394,22 @@ class FakeSdk:
     """The background's SDK reads: each wallet's latest trades, and its score (or an error)."""
 
     def __init__(self, trades: dict[str, list[Any]], scores: dict[str, Any],
-                 boards: dict[tuple[str, str, str | None], list[str]] | None = None) -> None:  # fmt: skip
+                 boards: dict[tuple[str, str, str | None], list[str]] | None = None,
+                 tags: dict[str, tuple[str, bool]] | None = None) -> None:  # fmt: skip
         self._trades, self._scores, self._boards = trades, scores, boards or {}
+        self._tags: dict[str, tuple[str, bool]] | None = tags or {}  # conditionId: (Gamma tag, closed); None: down
         self.scored: list[tuple[str, bool]] = []
         self.checked: list[str] = []
         self.board_reads = 0
-        self._poly = SimpleNamespace(leaderboard=self.leaderboard)
+        self.market_reads: list[tuple[list[str], bool]] = []
+        self._poly = SimpleNamespace(leaderboard=self.leaderboard, markets=self.markets)
+
+    def markets(self, condition_ids: list[str], *, closed: bool) -> list[dict[str, Any]]:
+        self.market_reads.append((list(condition_ids), closed))
+        if self._tags is None:
+            raise VenueError("venue_unavailable", "Polymarket is down.", venue="polymarket")
+        return [{"conditionId": c, "tags": [{"label": self._tags[c][0]}]} for c in condition_ids
+                if c in self._tags and self._tags[c][1] == closed]  # fmt: skip
 
     def leaderboard(self, order: str, period: str, limit: int, *, category: str | None = None, offset: int = 0) -> list[Any]:
         self.board_reads += 1
@@ -423,6 +435,7 @@ def store(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     engine._cache.clear()
     monkeypatch.setattr(engine, "STORE_DIR", tmp_path)
     monkeypatch.setitem(engine._evaluate_state, "since_launch", dict.fromkeys(engine.OUTCOMES, 0))
+    monkeypatch.setattr(engine, "_market_categories", {})
     return tmp_path
 
 
@@ -454,6 +467,52 @@ def test_a_new_wallet_gets_the_quick_check_and_is_scored_only_with_the_evidence_
     assert d.wallet(BEN)["last_active"] == pytest.approx(now - 95 * DAY)  # type: ignore[index]
     assert all(d.wallet(w) for w in (AMY, BEN, CAL, DAN)) and engine.directory().due(10) == []  # kept, for later
     assert engine._evaluate_state["since_launch"]["scored"] == 2
+
+
+def test_the_quick_check_names_what_they_trade_from_their_biggest_markets(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    now = time.time()
+    tags = {"0xs1": ("NFL", False), "0xs2": ("NBA", True), "0xp1": ("Politics", False)}
+    sdk = FakeSdk(
+        {AMY: [trade(now - 3600, market="0xs1", usd=500), trade(now - 7200, market="0xs2", usd=400),
+               trade(now - 9000, market="0xp1", usd=600)],  # Sports $900 against Politics $600
+         BEN: [trade(now - 95 * DAY, market="0xp1")],  # dormant: no buys in the 90 days
+         CAL: [trade(now - 3600, market="0xp1", usd=50), trade(now - 3600, action="sell", market="0xs1", usd=9000)]},
+        {}, tags=tags,
+    )  # fmt: skip
+    monkeypatch.setattr(engine, "background", lambda: sdk)
+    looks = {w: engine.quick_check(w) for w in (AMY, BEN, CAL)}
+    assert {w: x.category for w, x in looks.items()} == {AMY: "Sports", BEN: None, CAL: "Politics"}  # a sell isn't a buy
+    # biggest first, open markets in one read and the closed one left in another; CAL's market was known by then,
+    # and BEN, dormant, cost nothing more
+    assert sdk.market_reads == [(["0xp1", "0xs1", "0xs2"], False), (["0xs2"], True)]
+    d = engine.directory()
+    d.add([Seen(AMY, "leaderboard", "VOL MONTH TECH", category="Tech")])
+    d.quick_checked(AMY, looks[AMY])
+    assert (d.explore_row(AMY)["category"], d.explore_row(AMY)["category_from"]) == ("Sports", "trades")  # type: ignore[index]
+
+
+def test_a_quick_check_whose_categories_cant_be_read_still_keeps_its_evidence(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    now = time.time()
+    sdk = FakeSdk({AMY: [trade(now - 3600, market="0xs1")]}, {})
+    sdk._tags = None  # Gamma down
+    monkeypatch.setattr(engine, "background", lambda: sdk)
+    d = engine.directory()
+    d.add([Seen(AMY, "search")])
+    assert engine.evaluate_round()["done"]["not_enough_recent_evidence"] == 1
+    assert (d.wallet(AMY)["buys_30d"], d.wallet(AMY)["traded_category"]) == (1, None)  # type: ignore[index]
+
+
+def test_traded_category_follows_the_dollars_among_their_biggest_markets() -> None:
+    now = 1_800_000_000.0
+    trades = [(now - 3600, True, "a", 10.0), (now - 3600, True, "b", 300.0), (now - 3600, True, "a", 250.0),
+              (now - 3600, False, "c", 9999.0), (now - 100 * DAY, True, "d", 9999.0)]  # a sell, and a buy too long ago
+    assert top_markets(trades, now) == [("b", 300.0), ("a", 260.0)] and top_markets(trades, now, n=1) == [("b", 300.0)]
+    assert traded_category([("b", 300.0), ("a", 260.0), ("e", 100.0)], {"b": "Crypto", "a": "Sports", "e": "Sports"}) == "Sports"
+    assert traded_category([("b", 300.0)], {}) is None
 
 
 def test_a_recommended_trader_is_scored_again_without_the_quick_check(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:

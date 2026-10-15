@@ -363,7 +363,7 @@ def test_each_group_shows_figures_for_what_its_for(run_js: Any) -> None:
     assert kv(run_js(STATS, f"exStats({quick}, true)"))[2] == ["Markets, 30d", "5+", None]
 
 
-SUB = ("ago", "boardText", "foundText", "BOARD_SHOWN", "boardShort", "exSub")
+SUB = ("ago", "boardText", "foundText", "BOARD_SHOWN", "boardShort", "exCategory", "exSub")
 
 
 def test_a_rows_line_under_the_name_is_short_and_shows_only_a_top_100_board_place(run_js: Any) -> None:
@@ -377,6 +377,33 @@ def test_a_rows_line_under_the_name_is_short_and_shows_only_a_top_100_board_plac
     assert got[1] == ["Politics", "#89 weekly volume, Mentions", "full check"]  # another board's category stays
     assert got[2] == ["Sports", "quick look"]  # #9,389 is on their page, not the row
     assert got[3] == ["Sports", "Found #9,389 on the daily volume board, Sports"]  # nothing else known: where we found them
+
+
+def test_a_category_known_only_from_where_we_found_them_is_named_as_that(run_js: Any) -> None:
+    got = run_js(SUB, """[
+      exSub({group: "limited", evidence: "quick", category: "Tech", category_from: "seen"}),
+      exSub({group: "limited", evidence: "quick", category: "Sports", category_from: "trades"}),
+      exSub({group: "checked", evidence: "scored", category: "Politics", category_from: "score"}),
+      exSub({group: "unchecked", category: "Sports", category_from: "seen", board: {place: "VOL DAY SPORTS", rank: 9389}}),
+      exSub({group: "unchecked", category: "Crypto", category_from: "seen", seen_in: "BTC up?"}),
+    ]""")
+    assert got[0] == ["found in Tech", "quick look"]  # a Tech board lists people who mostly trade Sports
+    assert got[1] == ["Sports", "quick look"] and got[2] == ["Politics", "full check"]  # what they trade
+    assert got[3] == ["Found #9,389 on the daily volume board, Sports"]  # the board already says where
+    assert got[4] == ["found in Crypto", "Seen trading in “BTC up?”"]
+
+
+def test_explore_rows_say_where_their_category_comes_from(d: Directory) -> None:
+    rows = {r["wallet"]: r for g in ("limited", "checked", "unchecked") for r in d.browse(g)["rows"]}
+    assert (rows[SEL]["category"], rows[SEL]["category_from"]) == ("Politics", "seen")  # a quick look, no category read
+    assert (rows[PAID]["category"], rows[PAID]["category_from"]) == ("Politics", "score")
+    assert rows[NEW]["category_from"] is None  # an overall board: nothing known
+    d.quick_checked(SEL, QuickLook(False, "not_enough_recent_evidence", 5, 14, NOW, NOW, 120.0, False, "Sports"), at=NOW)
+    sel = d.explore_row(SEL)
+    assert (sel["category"], sel["category_from"]) == ("Sports", "trades")  # type: ignore[index]
+    assert wallets(d.browse("limited", category="Sports")) == [SEL] and SEL not in wallets(d.browse("limited", category="Politics"))
+    d.quick_checked(SEL, QuickLook(False, "dormant", 0, 0, None, NOW, None, False), at=NOW + 1)  # no buys now: kept
+    assert d.explore_row(SEL)["category"] == "Sports"  # type: ignore[index]
 
 
 DEFAULTS = ("ex", "EX_DEFAULTS", "exDefaults", "EX_EMPTY", "exPick", "usd", "EX_CHIP", "exChips", "exChanged")
