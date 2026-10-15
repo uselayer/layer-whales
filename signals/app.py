@@ -55,6 +55,7 @@ from signals import monitoring, us_match
 from signals.budget import POLYMARKET_HOSTS, BackgroundHttp, Budget
 from signals.directory import (
     CHECK_BOARDS,
+    EVIDENCE,
     EXPLORE_GROUPS,
     LISTED_FRESH_S,
     QUICK_TRADES,
@@ -1700,23 +1701,25 @@ def check_now(wallet: str, request: Request | None = None) -> dict[str, Any]:
 
 @app.get("/api/traders")
 def explore(group: str = "passed", q: str = "", category: str = "", active: int = 0, min_usd: float = 0,
-            board: str = "", makers: int = 0, unchecked: int = 0, sort: str = "recent",
+            board: str = "", makers: int = 0, unchecked: int = 0, evidence: str = "", sort: str = "recent",
             offset: int = 0) -> dict[str, Any]:  # fmt: skip
     """A page of Explore (see Directory.browse), with how many each group lists. From directory.db only, never
     Polymarket. A search (``q``) looks through the limited-evidence and checked groups, and the not-checked-yet one
     too with ``unchecked=1``; otherwise ``unchecked_matches`` says how many of those it would find (up to 20)."""
     if not EXPLORE_ON:
         raise HTTPException(404, detail="Not found")
-    if group not in EXPLORE_GROUPS or sort not in SORTS or not 0 <= offset <= EXPLORE_MAX_OFFSET:
-        raise HTTPException(400, detail="Unknown group, sort or page.")
+    if (group not in EXPLORE_GROUPS or sort not in SORTS or (evidence and evidence not in EVIDENCE)
+            or not 0 <= offset <= EXPLORE_MAX_OFFSET):  # fmt: skip
+        raise HTTPException(400, detail="Unknown group, sort, filter or page.")
     q = q.strip()[:64]
     if q and len(q) < 2:
         raise HTTPException(400, detail="Type at least 2 letters to search.")
     search_in = ("limited", "checked", "recommended", *(("unchecked",) if unchecked else ()))
-    args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, sort, offset)
+    args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, evidence, sort, offset)
     page = cached(f"explore:{args}", EXPLORE_TTL_S, lambda: directory().browse(
         group, q=q, category=category or None, active_days=active or None, min_usd=min_usd or None,
-        board=board or None, makers=bool(makers), sort=sort, limit=EXPLORE_PAGE, offset=offset,
+        board=board or None, makers=bool(makers), evidence=evidence or None, sort=sort, limit=EXPLORE_PAGE,
+        offset=offset,
         search_in=search_in))  # fmt: skip
     counts = cached("explore:counts", EXPLORE_COUNTS_TTL_S, lambda: directory().explore_counts())
     others = None
