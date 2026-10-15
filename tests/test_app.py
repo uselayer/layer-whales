@@ -70,6 +70,9 @@ def test_polymarket_volume_is_contracts_and_its_trades_figure_is_left_out(
     d = api.get("/api/trader/polymarket/0xabc").json()
     assert d["trader"]["volume_unit"] == "contracts"
     assert d["stats"] == {"trading_pnl": 900.0, "volume_contracts": 43e6, "biggest_win": 10.0}
+    # an SDK that gets them right (uselayer-sdk#30: dollars, contracts, fills): passed through as they are
+    fixed = {"volume_usd": 20e6, "volume_contracts": 43e6, "trades": 16002}
+    assert engine.poly_stats(fixed) == fixed
 
 
 SCORE = {"wallet": "0xabc", "name": "sharpie", "segment": "quiet", "action": "follow", "sample": [{"market": "m"}]}
