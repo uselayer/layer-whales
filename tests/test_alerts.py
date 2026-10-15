@@ -582,6 +582,25 @@ def test_fills_seen_before_there_was_a_price_add_into_the_next_alert_across_a_re
     assert engine.alert_pass(now=t0.timestamp() + 90) == 1 and "($120)" in engine.tg.sent[-1]["text"]
 
 
+def test_fills_from_one_transaction_all_add_into_the_alert(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Polymarket's trade id is the transaction's hash, and one transaction can fill several orders: each fill counts
+    (it used to keep only the first, so the alert said $60 for a $160 buy), and reading them again adds nothing."""
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50}))
+    t0 = datetime.now(UTC) - timedelta(minutes=5)
+    engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
+    one, two = trade(SAM, t0, 0.48, 60, "0xcid:0", "tx"), trade(SAM, t0, 0.50, 100, "0xcid:0", "tx")
+    assert one.trade_id == two.trade_id  # the same transaction
+    trades += [one, two]
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 60) == 1
+    assert "bought <b>Yes</b> at 49¢ ($160)" in engine.tg.sent[-1]["text"]  # both fills, at their average price
+    again = [trade(ANN, t0, 0.48, 60, "0xcid:1", "tx"), trade(ANN, t0, 0.50, 100, "0xcid:1", "tx")]
+    engine._add_up(ANN, again, t0.timestamp() + 90)
+    assert engine._add_up(ANN, again, t0.timestamp() + 95)["0xcid:1"][1] == 160  # read twice, kept once
+
+
 # ---- sells ----
 
 

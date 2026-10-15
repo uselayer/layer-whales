@@ -3345,6 +3345,14 @@ def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
     return 1 if aid else 0
 
 
+def _fill_key(f: WhaleTrade) -> str:
+    """A fill's key in pending. Polymarket's trade id is its transaction's hash, and one transaction can hold several
+    fills (one per order it matched: 1.2% of 301,425 fills read for PR #106), so the hash alone kept only the first
+    and an alert's dollars came up short. The outcome, side, size and price tell them apart (none of those fills
+    collided) and stay the same when the fill is read again."""
+    return f"{f.trade_id}:{f.market}:{f.action}:{f.size!r}:{f.price!r}"
+
+
 def _add_up(w: str, fills: list[WhaleTrade], now: float) -> dict[str, tuple[float, float, float]]:
     """Keep these new fills (alerts.db: pending) and return, per market, the running total of this trader's fills
     not alerted yet over the last ALERT_MAX_AGE_S, this round's and earlier rounds' (and before a restart):
@@ -3352,7 +3360,7 @@ def _add_up(w: str, fills: list[WhaleTrade], now: float) -> dict[str, tuple[floa
     with _db() as con:
         con.execute("DELETE FROM pending WHERE at < ?", (now - ALERT_MAX_AGE_S,))
         con.executemany("INSERT OR IGNORE INTO pending VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        [(f.trade_id, w, f.market, f.price, f.size, f.usd, f.at.timestamp()) for f in fills])  # fmt: skip
+                        [(_fill_key(f), w, f.market, f.price, f.size, f.usd, f.at.timestamp()) for f in fills])  # fmt: skip
         rows = con.execute("SELECT market, SUM(size), SUM(usd), MIN(at) FROM pending WHERE trader = ? AND at >= ?"
                            " GROUP BY market", (w, now - ALERT_MAX_AGE_S)).fetchall()  # fmt: skip
     return {m: (size, usd, at) for m, size, usd, at in rows if size}
