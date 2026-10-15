@@ -2036,6 +2036,7 @@ function recordFacts(rec) {
     ? new Date(rec.joined).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : null;
   return [
     ["Profit from trading", st.trading_pnl != null ? `${pl(st.trading_pnl, usd(st.trading_pnl, true))} all time${split}` : "—"],
+    ...recordPeriods(rec),
     ["Volume", st.volume_usd != null ? `${usd(st.volume_usd)} traded, all time` : "—"],
     ["Trades", st.trades != null ? Number(st.trades).toLocaleString("en-US") : "—"],
     ["Biggest win", st.biggest_win != null ? usd(st.biggest_win) : "—"],
@@ -2046,6 +2047,11 @@ function recordFacts(rec) {
     ...(joined ? [["Joined", `${esc(joined)} <small class="muted">on Polymarket</small>`]] : []),
   ];
 }
+// Profit from trading over the last 90 days and 12 months: all time can be one old run. A period reaching back past
+// their first trade (``since``) is their whole history, the all-time figure again, so it isn't shown twice.
+const RECORD_PERIOD_NAMES = { 90: "Last 90 days", 365: "Last 12 months" };
+const recordPeriods = (rec) => (rec.periods || []).filter((p) => RECORD_PERIOD_NAMES[p.days] && p.pnl != null && p.since == null)
+  .map((p) => [RECORD_PERIOD_NAMES[p.days], `${pl(p.pnl, usd(p.pnl, true))} <small class="muted">from trading</small>`]);
 // Their biggest open positions: the market, the side, what it's worth now, and the price they paid → the price now.
 function recordPositions(rec) {
   return (rec.positions || []).map((p) => {

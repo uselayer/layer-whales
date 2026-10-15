@@ -44,7 +44,15 @@ def api(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, FakeChecker]:
     monkeypatch.setattr(engine, "checker", lambda: fake)
     cats = {"0xb:1": "Sports", "0xb:0": "Sports", "0xt:1": "Politics", "0xs:0": "Sports"}
     monkeypatch.setattr(engine, "_categories", lambda ms: {m: cats[m] for m in ms if m in cats})
+    monkeypatch.setattr(engine, "_pnl_points", lambda w: PNL)
     return TestClient(engine.app), fake
+
+
+DAY = 86400
+T = 1_792_000_000
+# their profit from trading by day: −$300 a year ago, +$1,000 90 days ago, +$1,400 now
+PNL = [{"timestamp": T - 400 * DAY, "position_pnl": 0.0}, {"timestamp": T - 365 * DAY, "position_pnl": -300.0},
+       {"timestamp": T - 90 * DAY, "position_pnl": 1000.0}, {"timestamp": T, "position_pnl": 1400.0}]  # fmt: skip
 
 
 def test_the_record_is_polymarkets_figures_with_open_positions_biggest_first(api: tuple[TestClient, FakeChecker]) -> None:
@@ -83,9 +91,48 @@ def test_the_record_is_kept_for_minutes_and_bad_input_or_a_failed_read_says_so(
     assert r["categories"] == [] and r["open"]["count"] == 10  # the record still shows, without categories
 
 
+def test_profit_over_90_days_and_12_months_is_the_change_since_each_periods_start() -> None:
+    assert engine.period_profit(PNL) == [{"days": 90, "pnl": 400.0, "since": None}, {"days": 365, "pnl": 1700.0, "since": None}]
+    # in between two days: the last point on or before the start; out of order, or missing a figure, still fine
+    gaps = [PNL[3], {"timestamp": T - 100 * DAY, "position_pnl": 900.0}, {"timestamp": T - 5 * DAY, "position_pnl": None}]
+    assert engine.period_profit(gaps, (90,)) == [{"days": 90, "pnl": 500.0, "since": None}]
+    # history from their first trade, 30 days ago: both periods are their whole history (from 0), said with `since`
+    new = [{"timestamp": T - 30 * DAY, "position_pnl": -20.0}, {"timestamp": T, "position_pnl": 80.0}]
+    assert engine.period_profit(new) == [{"days": 90, "pnl": 80.0, "since": T - 30 * DAY},
+                                         {"days": 365, "pnl": 80.0, "since": T - 30 * DAY}]  # fmt: skip
+    assert engine.period_profit([]) == []
+
+
+def test_the_record_has_its_periods_and_shows_without_them_when_they_cant_be_read(
+    api: tuple[TestClient, FakeChecker], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, _ = api
+    assert client.get(f"/api/record/{W}").json()["periods"][0] == {"days": 90, "pnl": 400.0, "since": None}
+
+    def down(w: str) -> Any:
+        raise VenueError("unavailable", "Polymarket is down", venue="polymarket", retryable=True)
+
+    monkeypatch.setattr(engine, "_pnl_points", down)
+    r = client.get("/api/record/0x" + "d" * 40).json()
+    assert r["periods"] is None and r["stats"]["trading_pnl"] == STATS["trading_pnl"]
+
+
 # ---- the page ----
 
-FACTS = ("usd", "pl", "esc", "cents", "tenths", "centsPair", "recordFacts", "recordPositions", "RECORD_NOTE")
+FACTS = ("usd", "pl", "esc", "cents", "tenths", "centsPair", "RECORD_PERIOD_NAMES", "recordPeriods", "recordFacts",
+         "recordPositions", "RECORD_NOTE")  # fmt: skip
+
+
+def test_the_page_shows_the_last_90_days_and_12_months_after_all_time_never_their_whole_history_twice(run_js: Any) -> None:
+    both = '{stats: {trading_pnl: 5200}, periods: [{days: 90, pnl: -400, since: null}, {days: 365, pnl: 1700, since: null}]}'
+    got = run_js(FACTS, f"recordFacts({both}).map(([k]) => k)")
+    assert got[:3] == ["Profit from trading", "Last 90 days", "Last 12 months"]
+    rows = dict(run_js(FACTS, f"recordFacts({both})"))
+    assert rows["Last 90 days"].startswith('<span class="loss">−$400</span>') and "from trading" in rows["Last 90 days"]
+    # joined 30 days ago: 12 months is the all-time figure again, so only what's a real period shows
+    young = "{stats: {trading_pnl: 80}, periods: [{days: 90, pnl: 80, since: 1}, {days: 365, pnl: 80, since: 1}]}"
+    assert "Last 12 months" not in dict(run_js(FACTS, f"recordFacts({young})"))
+    assert "Last 90 days" not in dict(run_js(FACTS, "recordFacts({periods: null})"))
 
 
 def test_the_page_says_its_a_record_not_a_skill_test_and_unknown_stays_a_dash(run_js: Any) -> None:

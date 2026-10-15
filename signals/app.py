@@ -1665,12 +1665,42 @@ def _stored_score(wallet: str, now: float | None = None) -> dict[str, Any] | Non
 # ---- a trader's record, as Polymarket reports it: for a page without a fresh score ----
 # Limited evidence, a quick look or not checked yet: their page had only our quick look's counts. This adds the
 # facts Polymarket itself publishes (all-time profit, volume, trades, biggest win, open positions and their sizes,
-# the categories of the markets they hold and lately traded). A record, never a skill verdict: the page says so.
-# About 5 reads (profile, stats, positions, latest trades, the markets' categories) on the checks' budget (checker:
-# "Check now"'s, so never the Feed's share), kept RECORD_TTL_S per wallet.
+# the categories of the markets they hold and lately traded, and their profit from trading over the last 90 days and
+# 12 months). A record, never a skill verdict: the page says so.
+# About 6 reads (profile, stats, positions, latest trades, the markets' categories, their profit by day) on the checks'
+# budget (checker: "Check now"'s, so never the Feed's share), kept RECORD_TTL_S per wallet.
 RECORD_TTL_S = 600
 RECORD_TRADES = 20  # their latest trades, for the categories they trade lately
 RECORD_POSITIONS = 8  # open positions listed, biggest first (all of them, up to the SDK's 50, are counted)
+RECORD_PERIODS = (90, 365)  # days: profit from trading over each, from Polymarket's profit by day
+
+
+def _pnl_points(wallet: str) -> list[dict[str, Any]]:
+    """Polymarket's profit for a wallet, one point a day (``/v2/user-pnl``, ``fidelity=1d``: ~400 points a year where
+    the hourly default is ~9,000), from their first trade, on the checks' budget."""
+    poly = checker()._poly
+    body = poly._get(poly._data + "/v2/user-pnl", {"user": wallet, "interval": "all", "fidelity": "1d"})
+    data = body.get("data") if isinstance(body, dict) else None
+    return list((data or {}).get("points") or [])
+
+
+def period_profit(points: list[dict[str, Any]], days: tuple[int, ...] = RECORD_PERIODS) -> list[dict[str, Any]]:
+    """Profit from trading (``position_pnl``: closed and still open, as the all-time figure counts it) over each of
+    ``days`` up to their latest point: that point less the last one on or before the period's start. Polymarket's
+    history starts at their first trade (profit 0 before it), so a period reaching back past it is their whole history:
+    ``since`` is then when that was, else None. Empty when there's no history."""
+    pts = sorted((p for p in points if p.get("timestamp") is not None and p.get("position_pnl") is not None),
+                 key=lambda p: p["timestamp"])  # fmt: skip
+    if not pts:
+        return []
+    last, out = pts[-1], []
+    for d in days:
+        start = last["timestamp"] - d * 86400
+        before = [p for p in pts if p["timestamp"] <= start]
+        base = before[-1]["position_pnl"] if before else 0.0
+        out.append({"days": d, "pnl": round(last["position_pnl"] - base, 2),
+                    "since": None if before else pts[0]["timestamp"]})  # fmt: skip
+    return out
 
 
 def _record(wallet: str) -> dict[str, Any]:
@@ -1683,6 +1713,10 @@ def _record(wallet: str) -> dict[str, Any]:
         cats = {}  # the record still shows, without categories
     per = Counter({m.partition(":")[0]: c for m, c in cats.items()}.values())  # markets, not outcomes, per category
     values = [p.value for p in held if p.value is not None]
+    try:
+        periods: list[dict[str, Any]] | None = period_profit(_pnl_points(wallet))
+    except VenueError:
+        periods = None  # the record still shows, without them
     return {
         "wallet": wallet,
         "name": d.trader.name,
@@ -1692,6 +1726,7 @@ def _record(wallet: str) -> dict[str, Any]:
         "open": {"count": len(held), "at_least": len(held) >= 50, "value": round(sum(values), 2) if values else None},
         "positions": [p.to_dict() | {"category": cats.get(p.market)} for p in held[:RECORD_POSITIONS]],
         "categories": [{"category": c, "markets": n} for c, n in per.most_common()],
+        "periods": periods,
         "trades_read": len(d.trades),
         "read_at": time.time(),
     }
