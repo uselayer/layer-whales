@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import base64
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -151,7 +151,7 @@ def test_every_new_buy_alerts_with_how_far_the_price_moved(api: TestClient, monk
     api.post("/api/me/follows", json={"wallet": SHARP}, headers=auth())
     connect(api)
     now_price = {"0xcid:0": 0.41, "0xcid:1": 0.60}
-    trades = [buy(1, datetime(2026, 10, 1, tzinfo=UTC))]
+    trades = [buy(1, datetime.now(UTC) - timedelta(days=2))]  # under QUIET_DAYS: no "first trade in N days"
     detail = lambda *a, **k: TraderDetail(  # noqa: E731
         Trader(venue="polymarket", id=SHARP, name="Sharp"), "visible", {},
         [WhalePosition(m, None, "Yes", 100, 0.4, p, None, None) for m, p in now_price.items()], list(trades))  # fmt: skip

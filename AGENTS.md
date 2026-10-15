@@ -176,7 +176,12 @@ behind Vercel (see README, "Hosting").
     the traders in Sharps and Rising, with neutral cards for anyone not copy_ok. Recommended
     stays quiet (fewer, bigger trades) and never more prominent than Following: second in the switch, never the
     default. Both keep the switch "Only trades I can still get into", one card per outcome with "Also bought
-    by", and the delay line. Big trades (`#/big`) is linked from the foot of Recommended. Traders' trades come from
+    by", and the delay line. Every card, its sheet and its alert say what's noteworthy (`signals/notes.py`,
+    README "What stands out"), at three levels kept apart: observation (new position or adding to one, the share
+    sold, first trade in N days), context (against their own record: size vs their usual buy, a category none of
+    their checked buys were in) and interpretation (one, apart from the facts, always with "we don't know why").
+    Unusual is never informed: no note may say or imply a trade is skilled, informed or likely to pay, and a note
+    the data can't back is left out, never guessed. Notes read nothing; they never rank, filter or hold an alert. Big trades (`#/big`) is linked from the foot of Recommended. Traders' trades come from
     one background poller (`_live_loop`, one read at a time, in 30 s rounds: everyone followed each round,
     Recommended's every 60 s while the round's slot allows, oldest first, so a bigger pool is read less often,
     never faster). Per trader it reads their trades, and their open positions only when there's a trade from the

@@ -4,6 +4,7 @@ Useful / Not useful, saved interests and big-trade alerts. No network: Telegram 
 from __future__ import annotations
 
 import base64
+import html
 import json
 import time
 import urllib.parse
@@ -18,6 +19,7 @@ from uselayer import Trader, TraderDetail, WhalePosition, WhaleTrade
 
 from conftest import live_reads
 from signals import app as engine
+from signals.notes import EXPOSURE
 
 FAPI = "clerk.signals.test"
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -582,6 +584,34 @@ def test_fills_seen_before_there_was_a_price_add_into_the_next_alert_across_a_re
     assert engine.alert_pass(now=t0.timestamp() + 90) == 1 and "($120)" in engine.tg.sent[-1]["text"]
 
 
+def test_an_alert_says_whats_noteworthy_under_the_market_with_the_interpretation_apart(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new position about 7× their usual buy, after 12 days without a trade, in a category none of their checked
+    buys were in: observed and context in one line under the market, then the interpretation in italics, alone."""
+    scores = engine._worth_data["scores"]
+    scores[0] |= {"typical_usd": 150.0, "window": ["2026-09-14T00:00:00+00:00", "2026-10-14T00:00:00+00:00"],
+                  "categories": [{"category": "Sports", "bets": 40}]}  # fmt: skip
+    user(follows=(SAM,))
+    t0 = datetime.now(UTC) - timedelta(minutes=6)
+    trades: list[WhaleTrade] = [trade(SAM, t0 - timedelta(days=12, hours=2), 0.30, 60, "0xold:0", "old")]
+    held: dict[str, float] = {}
+    live_reads(monkeypatch, lambda *a, **k: TraderDetail(
+        Trader(venue="polymarket", id=SAM, name=None), "visible", {},
+        [WhalePosition(m, None, "Yes", n, 0.5, 0.50, None, None) for m, n in held.items()], list(trades)))  # fmt: skip
+    engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
+    trades.insert(0, trade(SAM, t0, 0.49, 1000))
+    held["0xcid:0"] = 1000 / 0.49  # all of it bought just now: a new position
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 6 * 60) == 1
+    lines = engine.tg.sent[-1]["text"].splitlines()
+    assert lines[:2] == ["<b>Sam</b> bought <b>Yes</b> at 49¢ ($1,000)", "Will it &lt;rain&gt;?"]
+    assert lines[2] == ("New position. Their first trade in 12 days. About 7× their usual buy ($150, last 30 days)."
+                        " None of the 40 buys we checked from their last 30 days were in Politics.")  # fmt: skip
+    assert lines[3] == f"<i>{html.escape(EXPOSURE)}</i>"
+    assert lines[4] == "Now 50¢." and lines[5].startswith("Traded ")  # then the facts every alert has, as before
+
+
 # ---- sells ----
 
 
@@ -604,11 +634,12 @@ def test_a_sell_alerts_with_the_price_now_while_they_still_hold_some_and_only_on
     assert engine.alert_pass(now=t0.timestamp() + 6 * 60) == 1
     m = engine.tg.sent[-1]
     lines = m["text"].splitlines()
-    assert lines[:4] == ["<b>Sam</b> sold <b>Yes</b> at 62¢ ($800)", "Will it &lt;rain&gt;?", "Now 61¢. They still hold some.",
-                         f"Traded {t0:%H:%M} UTC, 6 min before this alert."]  # fmt: skip
-    assert lines[4] == engine.TRADED_INTL
-    assert ">Check current price</a>" in lines[5] and ">Their record</a>" in lines[5] and ">Open on Polymarket International</a>" in lines[5]
-    assert lines[6] == engine.FOLLOW_DELAY and engine.COPY_LINE not in m["text"] and "get in" not in m["text"]
+    # they held 1 contract after selling 1,290: the note under the market says how much of it went
+    assert lines[:5] == ["<b>Sam</b> sold <b>Yes</b> at 62¢ ($800)", "Will it &lt;rain&gt;?", "Sold nearly all of their position.",
+                         "Now 61¢. They still hold some.", f"Traded {t0:%H:%M} UTC, 6 min before this alert."]  # fmt: skip
+    assert lines[5] == engine.TRADED_INTL
+    assert ">Check current price</a>" in lines[6] and ">Their record</a>" in lines[6] and ">Open on Polymarket International</a>" in lines[6]
+    assert lines[7] == engine.FOLLOW_DELAY and engine.COPY_LINE not in m["text"] and "get in" not in m["text"]
     assert m["reply_markup"]["inline_keyboard"][1][0]["callback_data"] == f"unf:{SAM}"  # Stop alerts from Sam
     assert engine._sent_today("user_1") == 1  # counts towards the daily cap
     trades.append(sold(SAM, t0 + timedelta(minutes=1), i="c"))  # sold more soon after: no second alert

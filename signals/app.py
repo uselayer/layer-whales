@@ -53,6 +53,7 @@ from uselayer.whale_scores import (
 
 from signals import monitoring, us_match
 from signals.budget import POLYMARKET_HOSTS, BackgroundHttp, Budget
+from signals.notes import trade_notes
 from signals.directory import (
     CHECK_BOARDS,
     EXPLORE_GROUPS,
@@ -2168,7 +2169,7 @@ def one_bet(wallet: str, market: str, response: Response, _: None = Depends(feed
     w = wallet.lower()
     if not _WALLET.fullmatch(w):
         raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
-    s = next((x for x in (_worth_load() or {}).get("scores", []) if x["wallet"] == w), None)
+    s = next((x for x in (_worth_load() or {}).get("scores", []) if x["wallet"] == w), None) or _stored_score(w)
     try:
         d = _live_read(w, priced=True)  # an older trade too: its price now is still wanted
     except VenueError as e:
@@ -2184,7 +2185,8 @@ def one_bet(wallet: str, market: str, response: Response, _: None = Depends(feed
         cat = _categories([market]).get(market)
     except VenueError:
         cat = None
-    return b | {"status": bet_status(b["price"], b["price_now"]), "category": cat}
+    return b | {"status": bet_status(b["price"], b["price_now"]), "category": cat,
+                "notes": _notes_of("buy", market, None, d, s, cat)}  # fmt: skip
 
 
 @app.get("/api/live")
@@ -2199,16 +2201,28 @@ def live(response: Response, _: None = Depends(feed_reader)) -> dict[str, Any]:
             "hours": FEED_HOURS, "min_usd": RECOMMENDED_MIN_USD} | got  # fmt: skip
 
 
-def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = False) -> dict[str, Any]:
+def _notes_of(side: str, market: str, since: float | None, d: Any, score: dict[str, Any] | None,
+              category: str | None) -> list[dict[str, Any]]:  # fmt: skip
+    """What's noteworthy about a trader's buys (or sells) of ``market`` from ``since``, from what the poller keeps
+    (``trade_notes``: a new position or adding to one, the share of a position sold, their first trade in N days,
+    size against their usual buy, a category none of their checked buys were in). No reads."""
+    return [n.to_dict() for n in trade_notes(side, market, since, list(d.trades), list(d.positions),
+                                             len(d.trades) < LIVE_TRADES, score, category)]  # fmt: skip
+
+
+def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = False,
+          scores: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:  # fmt: skip
     """These traders' buys over the last FEED_HOURS (one per outcome, ``min_usd`` or more), and their sells too
     when ``sells`` (``_sells_of``: Following's), newest first, with status (a buy's; None for a sell) and category, from what the poller keeps: a view never waits on Polymarket for dozens of traders. Only
     a trader the poller hasn't read yet (just followed, or just after a restart) is read here, at most
     LIVE_PAGE_READS a view; the rest are ``pending`` until its next round. ``failed``: traders that couldn't be read
     (or only longer ago than LIVE_SHOW_S). ``stale``: traders shown from an older read because the latest ones failed
     (``_live_errors``), so the page can say so rather than show them as current. ``as_of``: when the oldest of
-    what's shown was read (epoch ms)."""
+    what's shown was read (epoch ms). Each card has ``notes`` (``_notes_of``), from the trader's score in ``scores``
+    (by wallet), else ``people``'s own (Recommended's are whole scores)."""
     since = datetime.now(UTC) - timedelta(hours=FEED_HOURS)
     bets: list[dict[str, Any]] = []
+    of: dict[int, tuple[Any, dict[str, Any] | None]] = {}  # a card's trader: what the poller kept, and their score
     failed = pending = stale = 0
     reads_left, mono = LIVE_PAGE_READS, time.monotonic()
     oldest = mono
@@ -2232,7 +2246,9 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = Fals
         stale += w in _live_errors
         if not s.get("name"):
             s["name"] = d.trader.name  # a followed wallet we haven't scored: their Polymarket name, as on their cards
-        bets += [b for b in _bets_of(d, s, since) + (_sells_of(d, s, since) if sells else []) if b["usd"] >= min_usd]
+        got = [b for b in _bets_of(d, s, since) + (_sells_of(d, s, since) if sells else []) if b["usd"] >= min_usd]
+        of.update({id(b): (d, (scores or {}).get(w) or s) for b in got})
+        bets += got
     bets.sort(key=lambda b: b["at"], reverse=True)
     try:
         cats = _categories([b["market"] for b in bets]) if bets else {}
@@ -2241,6 +2257,8 @@ def _feed(people: list[dict[str, Any]], min_usd: float = 0.0, sells: bool = Fals
     for b in bets:
         b["status"] = None if b.get("side") == "sell" else bet_status(b["price"], b["price_now"])
         b["category"] = cats.get(b["market"])
+        d, score = of[id(b)]
+        b["notes"] = _notes_of(b.get("side") or "buy", b["market"], since.timestamp(), d, score, b["category"])
     as_of = round((time.time() - (time.monotonic() - oldest)) * 1000)
     return {"bets": bets, "failed": failed, "pending": pending, "stale": stale, "as_of": as_of}
 
@@ -2566,13 +2584,13 @@ def my_feed(response: Response, uid: str = Depends(signed_in)) -> dict[str, Any]
     _private(response)
     follows = list((_load_follows()["users"].get(uid) or {}).get("follows") or [])
     scores = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
-    people = []
+    people, theirs = [], {}
     for w in follows:
-        s = scores.get(w) or _stored_score(w) or {}
+        s = theirs[w] = scores.get(w) or _stored_score(w) or {}
         label = s.get("label") or (SEGMENTS[s["segment"]][0] if s.get("segment") in SEGMENTS else None)
         people.append({"wallet": w, "name": s.get("name"), "segment": s.get("segment"), "label": label}
                       | copy_fields(s or None))  # fmt: skip
-    return {"traders": people, "hours": FEED_HOURS} | _feed(people, sells=True)
+    return {"traders": people, "hours": FEED_HOURS} | _feed(people, sells=True, scores=theirs)
 
 
 @app.post("/api/me/telegram")
@@ -3081,8 +3099,17 @@ def _traded(at: float, seen: float) -> str:
     return f"Traded {datetime.fromtimestamp(at, UTC):%H:%M} UTC, {_lag(at, seen)} before this alert."
 
 
+def _notes_lines(notes: list[dict[str, Any]] | None) -> list[str]:
+    """An alert's notes (``_notes_of``) under the market: what's observed and its context in one line, then the
+    interpretation, if any, in italics on its own line, so the three levels never read as one claim."""
+    facts = " ".join(n["text"] for n in notes or [] if n["level"] != "interpretation")
+    why = [f"<i>{html.escape(n['text'])}</i>" for n in notes or [] if n["level"] == "interpretation"]
+    return ([html.escape(facts)] if facts else []) + why
+
+
 def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, at: float, seen: float,
-                record: bool, aid: str | None, delay: str = FOLLOW_DELAY) -> str:  # fmt: skip
+                record: bool, aid: str | None, delay: str = FOLLOW_DELAY,
+                notes: list[dict[str, Any]] | None = None) -> str:  # fmt: skip
     """What happened, the same for every trader: ``head`` (who bought which outcome, at what price, for how much),
     the market, the price now (", price already moved" outside the "can still get in" range, ``bet_status``), and
     when they traded, measured against this alert, and where (``_venue_line``:
@@ -3090,12 +3117,13 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
     copying is offered for them and the price is still in range. Links: "Check current price" (the trade's own page
     on Signals, neutral for every trader), their record, "View on Polymarket US" with a twin (it leads the venues),
     "Buy on Polymarket International" (it only opens the market: Signals places no orders); then ``delay``, how late
-    this kind of alert can be (FOLLOW_DELAY, or BIG_DELAY for a big trade)."""
+    this kind of alert can be (FOLLOW_DELAY, or BIG_DELAY for a big trade). ``notes``, under the market: what's
+    noteworthy about it (``_notes_lines``)."""
     e = html.escape
     status = bet_status(paid, now)
     where, us_url = _venue_line(t)
-    lines = [head, e(t.title or "A Polymarket market"), f"Now {_cents(now)}{', price already moved' if status != 'in' else ''}.",
-             _traded(at, seen), where]  # fmt: skip
+    lines = [head, e(t.title or "A Polymarket market"), *_notes_lines(notes),
+             f"Now {_cents(now)}{', price already moved' if status != 'in' else ''}.", _traded(at, seen), where]  # fmt: skip
     if status == "in" and _copy_offered(wallet):
         lines.append(COPY_LINE)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}"),
@@ -3105,13 +3133,13 @@ def _trade_text(head: str, wallet: str, t: WhaleTrade, paid: float, now: float, 
 
 
 def _alert_text(wallet: str, t: WhaleTrade, paid: float, now: float, usd: float, at: float, seen: float,
-                aid: str | None = None) -> str:  # fmt: skip
+                aid: str | None = None, notes: list[dict[str, Any]] | None = None) -> str:  # fmt: skip
     """The Telegram message for one new buy by a trader you follow, whoever they are: following is research
     first, so every trader's buy gets the same facts (``_trade_text``). ``paid`` is their average across the fills,
     ``at`` their first fill, ``seen`` when this alert was made."""
     e = html.escape
     head = f"<b>{e(_who(wallet))}</b> bought <b>{e(t.outcome or 'Yes')}</b> at {_cents(paid)} (${usd:,.0f})"
-    return _trade_text(head, wallet, t, paid, now, at, seen, True, aid)
+    return _trade_text(head, wallet, t, paid, now, at, seen, True, aid, notes=notes)
 
 
 def _group_text(members: list[tuple[str, float, float]], t: WhaleTrade, now: float, seen: float,
@@ -3155,25 +3183,27 @@ class NewBuy:
         self.paid, self.now = self.usd / self.size, now  # what they paid on average, across those buys
         self.outcome = self.t.token or self.t.market  # the exact outcome token; the outcome index is sometimes junk
         self.seen = time.time() if seen is None else seen
+        self.notes: list[dict[str, Any]] = []  # what's noteworthy about it (_notes_of), set before it's sent
         self._text: str | None = None
 
     def text(self, aid: str) -> str:
         if self._text is None:
-            self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.usd, self.at, self.seen, ALERT_ID_MARK)
+            self._text = _alert_text(self.wallet, self.t, self.paid, self.now, self.usd, self.at, self.seen, ALERT_ID_MARK,
+                                     self.notes)  # fmt: skip
         return self._text.replace(ALERT_ID_MARK, aid)
 
 
 def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool, now: float | None, at: float,
-               seen: float, aid: str | None = None) -> str:  # fmt: skip
+               seen: float, aid: str | None = None, notes: list[dict[str, Any]] | None = None) -> str:  # fmt: skip
     """The Telegram message for a sell by a trader you follow, whoever they are: information only, never a
     suggestion to sell and nothing about copying. Who sold which outcome at what price (their average across the
     fills) and for how much, the market, and when they traded, measured against this alert. While they still hold
     some of it: the price now and "Check current price"; once they hold none, "They no longer hold it." and no price
-    (there's no position to read it from, and no number is made up)."""
+    (there's no position to read it from, and no number is made up). ``notes`` under the market, as a buy's."""
     e = html.escape
     still = ("They still hold some." if now is None else f"Now {_cents(now)}. They still hold some.") if held else "They no longer hold it."
     lines = [f"<b>{e(_who(wallet))}</b> sold <b>{e(t.outcome or 'Yes')}</b> at {_cents(price)} (${usd:,.0f})",
-             e(t.title or "A Polymarket market"), still, _traded(at, seen)]  # fmt: skip
+             e(t.title or "A Polymarket market"), *_notes_lines(notes), still, _traded(at, seen)]  # fmt: skip
     where, us_url = _venue_line(t)
     lines.append(where)
     links = _links(("Check current price", f"{SITE}/#/check/{wallet}/{t.market}" if held else None),
@@ -3192,6 +3222,7 @@ class NewSell:
         self.at = min(f.at for f in fills).timestamp()
         self.price = self.usd / self.size
         self.outcome = self.t.token or self.t.market
+        self.notes: list[dict[str, Any]] = []  # as NewBuy's
         self._text: str | None = None
 
     def settled(self) -> bool:
@@ -3201,7 +3232,7 @@ class NewSell:
     def text(self, aid: str) -> str:
         if self._text is None:
             self._text = _sell_text(self.wallet, self.t, self.price, self.usd, self.held, self.now, self.at, self.seen,
-                                    ALERT_ID_MARK)  # fmt: skip
+                                    ALERT_ID_MARK, self.notes)  # fmt: skip
         return self._text.replace(ALERT_ID_MARK, aid)
 
 
@@ -3359,6 +3390,7 @@ def alert_pass(now: float | None = None) -> int:
     new_buys: list[NewBuy] = []
     new_sells: list[NewSell] = []
     looked: dict[str, list[WhaleTrade]] = {}
+    details: dict[str, TraderDetail] = {}  # each trader's read this round: their alerts' notes come from it
     for w in to:
         try:  # what the poller keeps (it reads everyone followed first, each round); read here only if it hasn't yet
             d = hit[1] if (hit := _live_kept(w)) else _live_read(w, LIVE_ALERT_S)
@@ -3375,7 +3407,7 @@ def alert_pass(now: float | None = None) -> int:
                 except VenueError:
                     pass
         seen = _seen.setdefault(w, set())
-        looked[w] = list(d.trades)
+        looked[w], details[w] = list(d.trades), d
         new = [t for t in d.trades if t.trade_id not in seen]
         seen.update(t.trade_id for t in d.trades)
         if len(seen) > 2000:
@@ -3409,6 +3441,13 @@ def alert_pass(now: float | None = None) -> int:
         cats = _categories([b.t.market for b in new_buys]) if new_buys else {}
     except VenueError:
         cats = {}  # grouped over the longer window
+    if new_buys or new_sells:
+        worth = {s["wallet"]: s for s in (_worth_load() or {}).get("scores", [])}
+        score = {w: worth.get(w) or _stored_score(w) for w in {x.wallet for x in [*new_buys, *new_sells]}}
+        for b in new_buys:
+            b.notes = _notes_of("buy", b.t.market, b.at, details[b.wallet], score[b.wallet], cats.get(b.t.market))
+        for sell in new_sells:
+            sell.notes = _notes_of("sell", sell.t.market, sell.at, details[sell.wallet], score[sell.wallet], None)
     sent = 0
     for b in new_buys:
         for uid in to[b.wallet]:
