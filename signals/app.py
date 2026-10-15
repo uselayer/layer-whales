@@ -504,6 +504,7 @@ def _feed_note(trades: list[WhaleTrade], cats: dict[str, str]) -> None:
     ])  # fmt: skip
 
 
+SWEEP_STOPPED = "Stopped before it finished (the app was shutting down)."  # a deploy: the next sweep picks up
 MARKETS_PART = "markets"  # the sweep's market part, as sweep_parts names it (a leaderboard is "PNL MONTH POLITICS")
 
 
@@ -552,7 +553,7 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
         found = background().find_wallets(leaderboards=bool(boards), boards=boards, markets=markets)  # the budget paces it
         for s in found:
             if halt.is_set():
-                error = "Stopped before it finished (the app was shutting down)."
+                error = SWEEP_STOPPED
                 break
             where = s.where if s.source == "leaderboard" else None
             if where != board:  # on to the next board, or to the markets
@@ -1104,7 +1105,7 @@ SCREENED_KINDS = ("new", "recheck")  # what the evaluation quick-checks first (r
 
 
 LIVE_FIELDS = ("screened", "screened_never_looked_at_before", "evaluated", "api", "polymarket_reads_by_budget",
-               "evaluated_by_lane", "infra")  # fmt: skip
+               "evaluated_by_lane", "api_failed", "infra")  # fmt: skip
 
 
 def _by_lane(tally: dict[str, float]) -> dict[str, dict[str, int]]:
@@ -1138,6 +1139,8 @@ def _day_view(day: dict[str, Any], counted_from: str | None) -> dict[str, Any]:
         "api": monitoring.api_counts(t.get("api_sent", {}), t.get("api", {})),
         "polymarket_reads_by_budget": {k: int(v) for k, v in t.get("lane", {}).items()},
         "evaluated_by_lane": _by_lane(t.get("evaluated_lane", {})),
+        # which endpoints failed, and how ("data-api.polymarket.com /positions 403"), most first
+        "api_failed": dict(sorted(((k, int(v)) for k, v in t.get("api_failed", {}).items()), key=lambda kv: -kv[1])[:15]),
         "infra": {"cpu_s": round(infra.get("cpu_s", 0)), "ram_gb_h": round(infra.get("ram_gb_s", 0) / 3600, 2),
                   "egress_mb": round(infra.get("egress_bytes", infra.get("served_bytes", 0)) / 2**20, 1),
                   "served_mb": round(infra.get("served_bytes", 0) / 2**20, 1),
@@ -1154,7 +1157,7 @@ def _health(r: dict[str, Any], now: float) -> list[str]:
     sweep = directory().last_sweep()
     if DIRECTORY_ON and not _directory_state["running"] and (sweep is None or now - sweep["finished"] > DIRECTORY_SWEEP_S + 6 * 3600):
         out.append("No sweep has finished in the last 30 hours." if sweep else "No sweep has finished yet.")
-    if err := directory().last_error():
+    if (err := directory().last_error()) and not err["error"].startswith(SWEEP_STOPPED):  # a deploy's isn't a failure
         out.append(f"The last sweep stopped early: {err['error']}")
     if EVALUATE_ON and _evaluate_state["error"]:
         out.append(f"The evaluation's last round failed: {_evaluate_state['error']}")
@@ -1254,7 +1257,8 @@ def _sweep_status(sweeps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     restart (a deploy: it never got to say; the next sweep picked up from the board it was on)."""
     out = []
     for i, s in enumerate(sweeps):
-        status = ("failed" if s["error"] else "finished") if s["finished"] is not None else (
+        stopped = (s["error"] or "").startswith(SWEEP_STOPPED)  # a deploy shut the app down mid-sweep: not a failure
+        status = ("cut_off_by_restart" if stopped else "failed" if s["error"] else "finished") if s["finished"] is not None else (
             "running" if i == 0 and _directory_state["running"] else "cut_off_by_restart")  # fmt: skip
         out.append(s | {"status": status, "error": _scrub(s["error"])})
     return out
