@@ -1,0 +1,50 @@
+branch scores: 286  by group Counter({'ctrl': 100, 'ctrl_prior': 100, 'rec': 43, 'rec_prior': 43})
+rebuild check (no spread taken off): existing rebuild == branch tier for 59 of 59
+
+=== reference: mid-to-mid 5 min (other window) ===
+[rec]
+  passes existing                    n= 36  ref edge>0  67%  mean ref z +1.11  mean ref edge +2.05¢
+  passes corrected                   n= 25  ref edge>0  84%  mean ref z +2.19  mean ref edge +2.96¢
+  removed by the correction          n= 11  ref edge>0  27%  mean ref z -1.35  mean ref edge -0.00¢
+  kept by both                       n= 25  ref edge>0  84%  mean ref z +2.19  mean ref edge +2.96¢
+  passes neither (8+ bets)           n= 30  ref edge>0  50%  mean ref z +0.09  mean ref edge +1.95¢
+[all]
+  passes existing                    n= 51  ref edge>0  61%  mean ref z +0.78  mean ref edge +1.64¢
+  passes corrected                   n= 32  ref edge>0  88%  mean ref z +2.10  mean ref edge +2.79¢
+  removed by the correction          n= 19  ref edge>0  16%  mean ref z -1.46  mean ref edge -0.31¢
+  kept by both                       n= 32  ref edge>0  88%  mean ref z +2.10  mean ref edge +2.79¢
+  passes neither (8+ bets)           n=169  ref edge>0  46%  mean ref z -0.73  mean ref edge -0.04¢
+
+=== reference: settlement vs mid (other window) ===
+[rec]
+  passes existing                    n= 35  ref edge>0  54%  mean ref z -0.00  mean ref edge +1.03¢
+  passes corrected                   n= 26  ref edge>0  65%  mean ref z +0.24  mean ref edge +2.84¢
+  removed by the correction          n=  9  ref edge>0  22%  mean ref z -0.71  mean ref edge -4.20¢
+  kept by both                       n= 26  ref edge>0  65%  mean ref z +0.24  mean ref edge +2.84¢
+  passes neither (8+ bets)           n= 28  ref edge>0  68%  mean ref z +1.04  mean ref edge +4.61¢
+[all]
+  passes existing                    n= 50  ref edge>0  48%  mean ref z +0.00  mean ref edge +0.71¢
+  passes corrected                   n= 33  ref edge>0  67%  mean ref z +0.44  mean ref edge +3.85¢
+  removed by the correction          n= 17  ref edge>0  12%  mean ref z -0.84  mean ref edge -5.39¢
+  kept by both                       n= 33  ref edge>0  67%  mean ref z +0.44  mean ref edge +3.85¢
+  passes neither (8+ bets)           n=160  ref edge>0  49%  mean ref z -0.34  mean ref edge -1.81¢
+
+=== does the current z predict the other window's spread-free edge? (Spearman, wallets with 8+ bets both) ===
+  midmid: n=210  existing z ρ=+0.290   corrected z ρ=+0.504
+  settle: n=195  existing z ρ=+0.008   corrected z ρ=+0.081
+
+=== the 43 recommended (production windows): who changes, and why ===
+  0xcf7379b4     proven → big_profit  resting 100%  spread 0.49¢/bet  edge +0.32¢ (z +2.8) → -0.17¢ (z -1.5) | prior mid-mid -0.21¢ z-3.0  settle -5.3¢ n59
+  0x2d6ac4f7     proven → big_profit  resting 100%  spread 0.47¢/bet  edge +0.28¢ (z +3.4) → -0.19¢ (z -2.2) | prior mid-mid -1.15¢ z-1.4  settle +0.1¢ n59
+  0xadfb6cba     proven → big_profit  resting  98%  spread 0.64¢/bet  edge +0.57¢ (z +2.3) → -0.08¢ (z -0.3) | prior mid-mid -0.32¢ z-1.8  settle -2.2¢ n58
+  0x200ffb57     proven → no_edge     resting 100%  spread 0.58¢/bet  edge +1.26¢ (z +2.2) → +0.67¢ (z +1.2) | prior mid-mid -0.30¢ z-3.7  settle -7.0¢ n58
+  0xf2f6af4f     rising → big_profit  resting  64%  spread 0.36¢/bet  edge +0.58¢ (z +3.3) → +0.22¢ (z +1.0) | prior mid-mid +5.82¢ z+0.9  settle n/a
+  0x80a0da00     rising → big_profit  resting  28%  spread 0.16¢/bet  edge +0.38¢ (z +2.1) → +0.22¢ (z +1.1) | prior mid-mid -0.44¢ z-0.8  settle -12.6¢ n6
+  0xfb07f485     rising → no_edge     resting 100%  spread 0.57¢/bet  edge +0.58¢ (z +1.5) → +0.01¢ (z +0.0) | prior mid-mid -1.30¢ z-3.2  settle -12.9¢ n60
+  0x6cfce245     rising → no_edge     resting  94%  spread 0.23¢/bet  edge +0.12¢ (z +1.4) → -0.11¢ (z -1.1) | prior mid-mid -1.60¢ z-1.1  settle -2.0¢ n6
+  transitions: [(('rising', 'rising'), 17), (('proven', 'proven'), 6), (('no_view', 'no_view'), 4), (('no_edge', 'no_edge'), 3), (('proven', 'big_profit'), 3), (('quiet', 'quiet'), 3), (('big_profit', 'big_profit'), 2), (('rising', 'big_profit'), 2), (('rising', 'no_edge'), 2), (('proven', 'no_edge'), 1)]
+
+=== reads per score ===
+  scores 286: reads mean 68.0 median 78.0; taker-feed reads mean 4.86 max 6 → +7.7% on the existing 63.2
+  buys classified: mean 100.0%, scores with any unknown 0 of 265
+  seconds per score (sequential, cache warming): median 11.6

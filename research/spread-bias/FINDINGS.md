@@ -86,22 +86,116 @@ checked × (prior-positive share − 0.57) / 0.43.
 - **#27's 120-bet option is the lever for Rising's chance share.** It cut edge error 1.29¢ → 0.72¢ at +54% reads,
   without a threshold change. That decision belongs to that work, not this one.
 
-## 5. Recommendation: the smallest defensible fix
+## 5. Recommendation: the smallest defensible fix (built: uselayer-sdk#28, draft, not released)
 
 In the SDK skill test, take the half-spread off bets that filled as resting orders:
-`moved[300] − maker_share_of_that_bet × half_spread(mid)`.
+`moved[300] − maker share of that buy × half_spread(mid)`.
 
 - Uses `half_spread`, which the copy test already uses.
-- Classifying the checked bets takes one taker-only `/trades` read per 10 markets: about 6 reads per 60-bet score
-  (~+12%).
 - No threshold change, and takers are left as they are, so it can only remove passers, never add one.
-- Expected effect on today's list: 10 of 43 out (7 Proven, 3 Rising), Sharps 18 → 10.
 - Ship it in the next batch release with #26/#27. Re-measure the list after it's live before any Rising decision.
 
 Leave the Rising thresholds alone for now. A tighter cut removes more real traders than chance ones at today's
 sample size; more bets per score (#27) is the better lever.
 
-## 6. Wording for the "1 in 3 Rising" warning (not published)
+## 7. Validation of the built correction (uselayer-sdk#28)
+
+**Are we subtracting only what resting orders earned?**
+- **Which fills rested.** Taken from Polymarket's taker-only trade feed. All 644 taker fills in a 10-wallet check
+  matched an `/activity` fill exactly (same transaction, token and size), so the SDK classifies the fills it
+  already read.
+- **How much they earned.** On 5,156 maker fills where the 1-minute mid didn't move around the fill:
+  - `half_spread(mid)` equals the measured gain on 73–76%;
+  - it is above it on 2–4%, so it never takes off more than the order earned;
+  - it is below it on books wider than two ticks (mean measured 1.58¢ against 0.55¢). It's a lower bound.
+- **Only the resting part.** A partly-resting buy gets that share of the half-spread, and takers get nothing.
+
+**Against independent history** (`validation/validation.txt`):
+- **Scores:** 286 from the branch code: the 43 recommended on their production windows and their prior 30 days,
+  and 100 controls on both windows.
+- **"Existing":** the same bets and rules with the edge from the fill price. The rebuild matches the branch on all
+  59 scores where nothing came off.
+- **References:** from the *other* window, built from 1-minute mids, and not using the correction:
+
+| Passers | Other window: mid-to-mid 5-min edge > 0 | mean z | Settlement vs mid, per bet |
+|---|---|---|---|
+| Existing rule | 61% (n 51) | +0.78 | +0.7¢ |
+| **Corrected** | **88%** (n 32) | **+2.10** | **+3.9¢** |
+| Removed by the correction | 16% (n 19) | −1.46 | −5.4¢ |
+| Pass neither (8+ bets) | 46% (n 169) | −0.73 | −1.8¢ |
+
+- **Removed traders do worse than no-skill wallets.** That fits resting bids that tend to fill as the price falls
+  through them.
+- **Ranking improves:** the current z's rank correlation with the other window's mid-to-mid edge goes from 0.29 to
+  0.50 (n 210). Settlement is too noisy over 30 days to rank by (0.01 → 0.08).
+
+**Who changes on today's list, and why** (branch run, production windows): 8 of 43, every one of them mostly
+resting buys.
+
+| Wallet | Was | Becomes | Resting buys | Spread / bet | Edge from fill → corrected | Prior month, spread-free |
+|---|---|---|---|---|---|---|
+| 0xcf7379b4 | Proven | Big profit, edge unproven | 100% | 0.49¢ | +0.32¢ z+2.8 → −0.17¢ z−1.5 | −0.21¢ z−3.0 |
+| 0x2d6ac4f7 | Proven | Big profit, edge unproven | 100% | 0.47¢ | +0.28¢ z+3.4 → −0.19¢ z−2.2 | −1.15¢ z−1.4 |
+| 0xadfb6cba | Proven | Big profit, edge unproven | 98% | 0.64¢ | +0.57¢ z+2.3 → −0.08¢ z−0.3 | −0.32¢ z−1.8 |
+| 0x200ffb57 | Proven | Edge not proven | 100% | 0.58¢ | +1.26¢ z+2.2 → +0.67¢ z+1.2 | −0.30¢ z−3.7 |
+| 0xfb07f485 | Rising | Edge not proven | 100% | 0.57¢ | +0.58¢ z+1.5 → +0.01¢ z+0.0 | −1.30¢ z−3.2 |
+| 0x6cfce245 | Rising | Edge not proven | 94% | 0.23¢ | +0.12¢ z+1.4 → −0.11¢ z−1.1 | −1.60¢ z−1.1 |
+| 0xf2f6af4f | Rising | Big profit, edge unproven | 64% | 0.36¢ | +0.58¢ z+3.3 → +0.22¢ z+1.0 | +5.82¢ z+0.9 (11 bets) |
+| 0x80a0da00 | Rising | Big profit, edge unproven | 28% | 0.16¢ | +0.38¢ z+2.1 → +0.22¢ z+1.1 | −0.44¢ z−0.8 |
+
+- **Six of the eight lost money against the mid in their prior month.** 0xf2f6af4f is the one plausible real edge
+  removed, on 11 bets.
+- **Their profit stays on record.** Most land in "Big profit, edge unproven": their profit is shown, and the
+  "Beats the price" check now says how much of their buying rested and what the spread got them.
+- **Why 8 here and 10 in section 1:**
+  - Section 1b applied each trader's measured spread to production's own scores.
+  - This run re-picks the bets with #26's stable sample, which already puts 0xd950ef37 and 0xa697d0b3 outside a
+    recommended tier before any correction. That difference is #26's, not this fix's.
+  - 0xa19cbaba stays Rising here.
+
+**Cost** (reads counted per score):
+- **Reads:** +4.9 taker-feed reads a score on average (max 6), +7.7% on 63.2.
+- **Classification:** 100% of checked buys classified.
+- **Background throughput:** at Signals' 4 reads/s, about 7% fewer full scores an hour (roughly 215 → 200).
+- **"Check now":** about +2 s at 3 reads/s.
+
+**Maker profitability is kept, apart from skill:**
+- `Bet.moved` still counts from their fill price.
+- `edge_at_fill`, `spread_earned` and `maker_bets` record what they got and how.
+- Polymarket's profit figures are untouched.
+- Only the skill test (`edge`, `edge_verdict`, the tiers) stops counting the spread as foresight.
+
+## 8. Rollout recommendation (nothing deployed)
+
+1. **Review and merge uselayer-sdk#28 with #27.** They touch different code; whichever lands second keeps both
+   blocks of appended tests (2,271 pass combined).
+2. **One batch release with #26 + #27 + #28,** so tiers reshuffle once. The owner approves PyPI.
+3. **Signals lock bump PR,** with two changes:
+   - `WORTH_FORMAT` 9 → 10.
+   - Older scores in a recommended tier are treated as stale. Today `_consistent` keeps an older score whose
+     `segment_of` tier matches, but `segment_of` can't apply this correction: an old score has no maker data. So
+     those scores would keep their inflated tier until rescored. The rule is that they drop out until rescored.
+     Recommended traders are rescored every 6 h.
+4. **After deploy,** watch `/api/monitoring` → `qualification`. Expect about 8 dropouts (mostly to big_profit),
+   marked as the release, not churn. Check the "Beats the price" text on one resting trader's page.
+5. **Only then** revisit Rising, with #27's larger sample, if the owner wants.
+
+## 9. Retired estimates
+
+The owner retired these on 2026-10-15. They came from an earlier session's placebo and persistence inference.
+They never reached the repo, a PR or the site, and must not be cited:
+- **"About 8–9 of the 35 recommended are likely chance"** (ranges 2–16 Rising, 0–7 Sharps).
+- **"Rising: about 1 in 3 chance"** (31–38%).
+- **"Sharps: about 1 in 10 chance"** (4–13%). This one was wrong in kind: the Sharp problem is spread capture
+  (section 1), and with the spread removed, sharps held up out of sample.
+- **The placebo pass rates** (5.4% at z ≥ 2, "2.4× nominal"). They rested on resampling with the spread bias still
+  in.
+
+What stands instead is section 2: Rising's chance share is real but not pinned down (point estimate about 4 in 10,
+90% range 16–75%). `research/scoring79-findings.md`'s "4–8% of no-signal wallets reach z ≥ 2" is a separate,
+measured calibration and stays; it predates the spread finding.
+
+## 10. Wording for the "1 in 3 Rising" warning (not published)
 
 The evidence supports "some Rising traders will turn out to be chance; we can't yet say how many". It doesn't
 support "1 in 3". Wording with direct support:
@@ -122,4 +216,6 @@ support "1 in 3". Wording with direct support:
   a proposal: it discards real information priced in during the first minute.
 
 Files: `spread_study.py` (collection, public Polymarket reads only), `analyze.py`, `chance_share.py`,
-`exclusions.py`, `results.txt`, `rows.jsonl.gz`, `recommended-2026-10-15.json`, `snapshot_history.py`.
+`exclusions.py`, `results.txt`, `rows.jsonl.gz`, `recommended-2026-10-15.json`, `snapshot_history.py`;
+`validation/` (`validate_run.py` scores with the uselayer-sdk#28 branch and counts reads, `validate_analyze.py`,
+`validation.txt`, `branch-scores.jsonl.gz`).
