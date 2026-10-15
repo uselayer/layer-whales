@@ -1905,7 +1905,10 @@ LIVE_PAGE_READS = 3  # a Feed view reads at most this many traders the poller ha
 LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
 LIVE_REC_FLOOR = 4  # Recommended reads a round even when everyone followed fills the slot, so it never stops
 LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; further back when there's a gap
-POSITIONS_PER_READ = 20  # conditionIds per read of the positions a trader's 50 biggest left out
+# conditionIds per read of the positions a trader's 50 biggest left out. Polymarket's firewall (Cloudflare) answers 403
+# with a block page once the query passes ~1,300 characters: 19 ids (1,272) pass, 20 (1,339) never do (2026-10-15),
+# and that failed the trader's whole read every round. 15 (1,004) keeps well under it.
+POSITIONS_PER_READ = 15
 _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
 # wallet -> its failures in a row since its last good read: how many, since when (monotonic), and the last error, so

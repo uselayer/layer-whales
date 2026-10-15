@@ -249,6 +249,23 @@ def test_positions_are_read_only_with_a_trade_to_price_and_kept_while_the_trades
 
 
 
+def test_positions_left_out_are_read_in_batches_polymarkets_firewall_lets_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Polymarket's firewall blocks a positions read whose market list passes ~1,300 characters (20 conditionIds of
+    66 did, 2026-10-15): every batch stays well under it, and every market left out is still asked for."""
+    asked: list[str] = []
+
+    def positions(venue: str, w: str, limit: int = 50, market: str | None = None) -> list[Any]:
+        if market is not None:
+            asked.append(market)
+        return []
+
+    monkeypatch.setattr(engine.reads.whales, "positions", positions)
+    markets = [f"0x{i:064x}:0" for i in range(37)]  # conditionIds as Polymarket's: 0x and 64 hex characters
+    engine._open_positions(COPY, markets)
+    assert all(len(m) <= 1100 for m in asked) and len(asked) == 3  # 15 + 15 + 7
+    assert sorted(c for m in asked for c in m.split(",")) == sorted(m.partition(":")[0] for m in markets)
+
+
 def test_open_positions_are_the_sdks_one_read_of_open_bets(monkeypatch: pytest.MonkeyPatch) -> None:
     """The poller's positions come from uselayer's ``whales.positions``: one request, settled bets left out."""
     import httpx
