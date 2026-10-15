@@ -394,15 +394,18 @@
   .pf-cta small { color: var(--muted); font-size: 13px; max-width: 280px; }
   .pf-cta .btn[disabled] { background: var(--soft); color: var(--faint); cursor: default; }
   .pf-follow { display: contents; }
-  /* two columns: Their numbers (every figure, label then value) on the left; chart, why and their trades on the right */
-  .pf-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 20px; align-items: start; margin-top: 22px; }
+  /* Their numbers: a summary (realized and open P&L, wallet, win rate) beside the chart, the rest of the figures under
+     it beside why they're here and their trades. On a phone: summary, chart, the rest of the figures, then the rest. */
+  .pf-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); grid-template-areas: "sum chart" "det rest"; gap: 16px 20px; align-items: start; margin-top: 22px; }
   .pf-grid > * { min-width: 0; }
-  .pf-grid .pf-side, .pf-main > .pf-card:first-child { margin-top: 0; }
+  .pf-grid > .pf-card { margin-top: 0; }
+  .pf-sum { grid-area: sum; } .pf-grid > .pf-chart { grid-area: chart; } .pf-det { grid-area: det; } .pf-rest { grid-area: rest; }
+  .pf-rest > .pf-card:first-child, .pf-det h3:first-child { margin-top: 0; }
   .pf-hero { padding: 6px 0 4px; }
   .pf-hero > span { display: block; font-size: 13px; color: var(--muted); }
   .pf-hero b { display: block; font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin-top: 2px; }
   .pf-hero small { font-size: 13px; color: var(--muted); }
-  .pf-side h3 { font-size: 13px; font-weight: 600; margin: 20px 0 0; }
+  .pf-det h3, .fold h3.pf-more { font-size: 13px; font-weight: 600; margin: 20px 0 0; }
   .pf-rows { margin: 0; font-size: 14px; }
   .pf-rows div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--line); }
   .pf-rows div:last-child { border-bottom: 0; }
@@ -446,7 +449,7 @@
   .pf-li .r { text-align: right; }
   .pf-oc { display: inline-block; font-size: 12px; background: var(--soft); border-radius: 6px; padding: 1px 7px; margin-right: 6px; color: var(--fg); }
   .pf-empty { color: var(--muted); padding: 18px 2px; }
-  @media (max-width: 920px) { .pf-grid { grid-template-columns: minmax(0, 1fr); gap: 0; } .pf-main > .pf-card:first-child { margin-top: 16px; } }
+  @media (max-width: 920px) { .pf-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "sum" "chart" "det" "rest"; } }
   @media (max-width: 760px) {
     .pf-facts { grid-template-columns: 100px minmax(0, 1fr); gap: 8px 12px; }
     .pf-cta { justify-items: start; text-align: left; width: 100%; }
@@ -2186,69 +2189,68 @@ function lastBuyAt(s, d) {
 const boldStatus = (t) => { const l = COPY_LABELS.find((x) => t.startsWith(x)); return l ? `<b>${l}</b>${esc(t.slice(l.length))}` : esc(t); };
 const WARN_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 15 14H1z"/><path d="M8 6.2v3.6M8 11.9v.1"/></svg>`;
 
-// "Their numbers", the profile's left column: every figure on a scored profile, one row each, label then value,
-// in groups. The rows are the one place to add, rename or drop a figure; the layout draws whatever comes back.
+// "Their numbers": a trader's figures, label then value, for the profile's two columns. The definitions are the
+// trader profile audit's ("Trader profile layout and definitions"); the layout draws whatever comes back.
 // A row is { k: its label, v: the value (html; null shows "—", never 0), sub: what it's based on and its period,
-// weeks: their 12 weekly results for the bars }. Only the hero and the profit rows follow the 7D/30D/90D switch.
+// weeks: their weekly results for the bars }. `summary` sits at the top (on a phone, before the chart), `groups`
+// below it, `fold` in "How we measure this". Only the hero (realized P&L) and the chart follow 7D/30D/90D.
+// Left out until they count settled positions never redeemed (Polymarket's closed positions leave those losers
+// out): the last closed positions' won/lost/sold record and the share held until the market settles.
 function profileNumbers(s, d, acct, n) {
   const P = PF_PERIOD[n], pct = (x) => x == null ? null : `${Math.round(x * 100)}%`;
-  const profit = profitOf(s, n), perDollar = perDollarOf(s, n), up = weeksUp(s), known = weeksOf(s);
-  const per = s.periods?.[n] || (n === "30d" ? { realized: s.realized_window, unrealized: s.unrealized_window, income: s.income_window } : {});
-  const started = s.pnl_since && Date.now() - new Date(s.pnl_since) < { "7d": 7, "30d": 30, "90d": 90 }[n] * 864e5 ? s.pnl_since : null;
   const money = (x) => x == null ? null : pl(x, usd(x, true));
+  const realized = s.periods?.[n]?.realized ?? (n === "30d" ? s.realized_window : null) ?? null; // the score's curve
+  const started = s.pnl_since && Date.now() - new Date(s.pnl_since) < PERIOD_DAYS[n] * 864e5 ? s.pnl_since : null;
+  // Polymarket's own all-time figures, from the trader read (/api/trader): "…" while it loads, "—" if it failed.
+  // Never the score's 30-day change in open value in their place: that isn't what's open now.
+  const stats = d && !d.error ? d.stats || {} : null, loading = d == null;
+  const now = (k) => stats ? money(stats[k] ?? null) : loading ? "…" : null;
+  const allRealized = stats?.realized_pnl ?? null;
   // Their wallet: cash (read on-chain) plus open positions, read now (else as the check read them), with when.
   // A total only when both parts were read: one part alone is said to be one part, never shown as the wallet.
   const cash = acct.cash_usd ?? null, inPositions = acct.positions_usd ?? null;
   const wallet = cash != null && inPositions != null ? cash + inPositions : null;
-  const share = wallet && s.typical_usd != null ? s.typical_usd / wallet : null;
   const reading = pf.account === null && cash == null && inPositions == null;
-  const asOf = acct.read_at ? ` · as of ${ago(acct.read_at)}` : "";
-  const allTime = s.trading_pnl ?? null; // from trading: never Polymarket's figure with rewards in
-  const without = allTime != null && s.biggest_win != null ? allTime - s.biggest_win : null;
-  const weeks = s.pnl_weeks || [];
-  let run = 0, longest = 0; for (const w of weeks) { run = w < 0 ? run + 1 : 0; longest = Math.max(longest, run); }
+  const when = acct.read_at ? `as of ${ago(acct.read_at)}` : "now";
+  const up = weeksUp(s), known = weeksOf(s), weeks = s.pnl_weeks || [];
   const worst90 = pfChart(s, "90d")?.worst;
-  // how their last closed positions ended (uselayer 0.7): held to the end and won or lost, or sold first
-  const closed = d && !d.error && Array.isArray(d.closed) ? d.closed : null;
-  const ended = (k) => closed.filter((c) => c.result === k).length;
-  const open = d && !d.error && Array.isArray(d.positions) ? d.positions.filter((p) => !["won", "lost", "closed"].includes(p.status)).length : null;
-  const cats = s.categories || [], total = cats.reduce((a, c) => a + (c.bets || 0), 0);
+  const cats = (s.categories || []).filter((c) => c.bets), events = cats.reduce((a, c) => a + c.bets, 0);
+  const shares = cats.map((c) => [c.category, Math.round((100 * c.bets) / events)]).filter(([, p]) => p >= 5).slice(0, 3);
   const band = Array.isArray(s.price_band) ? `${cents(s.price_band[0])}–${cents(s.price_band[1])}` : null;
-  const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way a minute after they bought
+  const perDay = s.trades_per_day, gap = s.edge_by_delay?.["60"]?.mean;
+  const allTime = s.trading_pnl ?? null, without = allTime != null && s.biggest_win != null ? allTime - s.biggest_win : null;
   return {
-    hero: { k: `Profit, ${P}`, v: money(profit),
-      sub: started ? `since their first trade, ${ago(started)}` : perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit" },
+    hero: { k: `Realized P&L, ${P}`, v: money(realized),
+      sub: `${started ? `taken since their first trade, ${ago(started)}` : `taken in the last ${P}`}${
+        allRealized != null ? ` · ${usd(allRealized, true)} all time` : loading ? " · all time …" : ""}` },
+    summary: [
+      { k: "Open P&L", v: now("unrealized_pnl"), sub: "on positions still open · Polymarket's figure" },
+      { k: "Wallet", v: wallet != null ? usd(wallet) : reading ? "…" : null,
+        sub: reading ? "reading their wallet" : wallet != null ? `cash ${usd(cash)} + open positions ${usd(inPositions)}, ${when}`
+          : cash != null ? `cash ${usd(cash)}; open positions couldn't be read` : inPositions != null ? `open positions ${usd(inPositions)}; cash couldn't be read` : "couldn't be read just now" },
+      { k: "Made money on", v: null, sub: "every closed or settled position they've had · not available yet" },
+    ],
     groups: [
-      { title: "Profit", rows: [
-        { k: `Taken, ${P}`, v: money(per.realized), sub: "sold or settled, after fees" },
-        { k: `Still open, ${P}`, v: money(per.unrealized), sub: "positions still open, at today's prices" },
-        { k: "Profit from trading, all time", v: money(allTime), sub: per.income ? `rewards and rebates (${usd(per.income)}) not counted` : null },
-        { k: "All time without their biggest win", v: money(without) },
-        { k: "Biggest win, all time", v: s.biggest_win != null ? usd(s.biggest_win) : null },
-        { k: "Worst drop from a high, 90 days", v: worst90 != null ? usd(-worst90) : null },
-      ] },
       { title: "Record", rows: [
-        { k: "12-week consistency", v: up != null && known ? `${up} of ${known} weeks up` : null,
-          sub: known && known < 12 ? "since their first trade" : null, weeks: up != null && known ? weeks : null },
-        { k: `Won, ${readPeriod(s)}`, v: s.settled ? `${s.won} of ${s.settled}` : null, sub: "checked trades that settled" },
-        { k: `Last ${closed?.length || 50} closed positions`, v: closed?.some((c) => c.result) ? `${ended("won")} won · ${ended("lost")} lost · ${ended("sold")} sold` : null },
-        { k: "Longest run of losing weeks", v: weeks.length ? plural(longest, "week") : null },
-      ] },
-      { title: "Wallet", rows: [
-        { k: "Wallet", v: wallet != null ? usd(wallet) : reading ? "…" : null,
-          sub: reading ? "reading their wallet" : wallet != null ? `cash + open positions${asOf}` : cash != null || inPositions != null ? `only part of it could be read${asOf}` : "couldn't be read just now" },
-        { k: "Cash", v: cash != null ? usd(cash) : null },
-        { k: "In open positions", v: inPositions != null ? usd(inPositions) : null, sub: open != null ? (open >= 50 ? "50 or more open" : `${plural(open, "position")} open`) : null },
-        { k: `Usual trade, ${readPeriod(s)}`, v: s.typical_usd != null ? usd(s.typical_usd) : null, sub: share != null ? `${lbPct(share).replace("+", "")} of their wallet` : null },
+        { k: "Worst drop from a high", v: worst90 != null ? usd(-worst90) : null, sub: "trading profit, last 90 days" },
+        { k: "Weeks up", v: up != null && known ? `${up} of ${known}` : null, sub: known && known < 12 ? "since their first trade" : "last 12 weeks",
+          weeks: up != null && known ? weeks : null },
+        { k: "Markets", v: shares.length ? shares.map(([c, p]) => `${esc(c)} ${p}%`).join(" · ") : null,
+          sub: events ? `of ${plural(events, "event")} checked, ${readPeriod(s)}` : readPeriod(s) },
       ] },
       { title: "How they trade", rows: [
-        { k: `Markets, ${readPeriod(s)}`, v: total ? cats.slice(0, 3).map((c) => `${esc(c.category)} ${Math.round((100 * c.bets) / total)}%`).join(" · ") : null },
-        { k: `Usual price, ${readPeriod(s)}`, v: band || (s.avg_price != null ? `${cents(s.avg_price)} on average` : null) },
-        { k: `New markets, ${readPeriod(s)}`, v: s.trades_per_day != null ? perDayText(s.trades_per_day) : null },
-        { k: "Held until the market settles", v: pct(s.held_share), sub: "last 50 closed positions" },
-        { k: "Resting orders (maker)", v: pct(s.maker_share), sub: "last 500 fills" },
-        { k: "How far the price moved before you could buy", v: gap != null ? centsSigned(gap).replace("+", "") : null },
+        { k: "Usual opening buy", v: s.typical_usd != null ? usd(s.typical_usd) : null, sub: readPeriod(s) },
+        { k: "Usual price paid", v: band, sub: `middle half of positions checked, ${readPeriod(s)}` },
+        { k: "New positions", v: perDay == null ? null : perDay >= 1 ? `about ${Math.round(perDay)} a day`
+          : Math.round(perDay * 7) ? `about ${Math.round(perDay * 7)} a week` : "fewer than one a week", sub: readPeriod(s) },
       ] },
+    ],
+    fold: [
+      { k: `Won, ${readPeriod(s)}`, v: s.settled ? `${s.won} of ${s.settled}` : null, sub: "checked trades that settled their way" },
+      { k: "Resting orders (maker)", v: pct(s.maker_share), sub: "last 500 fills" },
+      { k: "How far the price moved before you could buy", v: gap != null ? centsSigned(gap).replace("+", "") : null, sub: "a minute after they bought, on average" },
+      { k: "Biggest win, all time", v: s.biggest_win != null ? usd(s.biggest_win) : null, sub: "Polymarket's figure" },
+      { k: "All time without their biggest win", v: money(without), sub: "trading profit, including positions still open" },
     ],
   };
 }
@@ -2310,16 +2312,19 @@ function renderProfile() {
       <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${tier(s.segment, true)}</div><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null, s.stored_at ? `checked ${ago(s.stored_at * 1000)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy || s.stored_at ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div>${copyStatus}</div></div>
     <div class="pf-grid">
-      <aside class="pf-card pf-side" aria-label="Their numbers">
+      <section class="pf-card pf-sum" aria-label="Their numbers">
         <div class="pf-card-head"><h2>Their numbers</h2>${period}</div>
         <div class="pf-hero"><span>${esc(nums.hero.k)}</span><b>${nums.hero.v ?? "—"}</b><small>${esc(nums.hero.sub)}</small></div>
+        <dl class="pf-rows">${nums.summary.map(numberRow).join("")}</dl>
+      </section>
+      <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Trading profit, ${PF_PERIOD[n]}</h2></div>
+        ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span><span>Profit taken plus positions still open</span></div>`
+          : `<p class="pf-empty">Their profit history isn't available yet.</p>`}</section>
+      <section class="pf-card pf-det" aria-label="More of their numbers">
         ${nums.groups.map((g) => `<h3>${esc(g.title)}</h3><dl class="pf-rows">${g.rows.map(numberRow).join("")}</dl>`).join("")}
-        ${s.periods ? `<p class="pf-statnote">Only profit follows ${Object.keys(PF_PERIOD).map((p) => p.toUpperCase()).join("/")}. Every other figure names its own period.</p>` : ""}
-      </aside>
-      <div class="pf-main">
-        <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Profit, ${PF_PERIOD[n]}</h2></div>
-          ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
-            : `<p class="pf-empty">Their profit history isn't available yet.</p>`}</section>
+        ${s.periods ? `<p class="pf-statnote">Only realized P&L and the chart follow ${Object.keys(PF_PERIOD).map((p) => p.toUpperCase()).join("/")}. Every other figure names its own period.</p>` : ""}
+      </section>
+      <div class="pf-rest">
         <section class="pf-card"><h2>Why they're here</h2>
           ${why.listed ? `<p class="pf-verdict">${esc(why.listed)}</p>` : ""}
           <p class="pf-copying" id="pfcopy">${boldStatus(why.copying || s.copy_why || `${copyLabel(s)}.`)}${s.copy_return != null ? ` ${esc(copyFigure(s))}.` : ""}</p>
@@ -2331,7 +2336,7 @@ function renderProfile() {
           <dl class="pf-facts">${evidenceFacts(s.directory).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl></section>` : ""}
         <div class="pf-tabs" role="tablist">${[["positions", "Positions"], ["activity", "Activity"]].map(([k, l]) => `<button type="button" role="tab" data-pftab="${k}" aria-selected="${pf.tab === k}">${l}</button>`).join("")}</div>
         <div>${body}</div>
-        <details class="fold"><summary>How we measure this</summary>${worthDetails(s)}</details>
+        <details class="fold"><summary>How we measure this</summary><h3 class="pf-more">More figures</h3><dl class="pf-rows">${nums.fold.map(numberRow).join("")}</dl>${worthDetails(s)}</details>
       </div>
     </div>`;
   $$("[data-pfperiod]", app).forEach((b) => (b.onclick = () => { pf.period = b.dataset.pfperiod; renderProfile(); }));
@@ -2356,10 +2361,9 @@ function worthDetails(s) {
       · <a class="ext" href="https://polymarket.com/profile/${esc(s.wallet)}" target="_blank" rel="noopener">${INTL} profile ↗</a></p>
     <h3>What the numbers mean</h3><ul>
       <li><b>Won:</b> of the trades we checked (their first buy in each market over the ${readPeriod(s)}, bought at 2¢–98¢, up to 60), how many settled their way. Selling early doesn't change it.</li>
-      <li><b>Usual trade:</b> the middle of their first buys in each market over the ${readPeriod(s)}. Adding to a trade isn't counted.</li>
-      <li><b>New markets:</b> how many markets they bought into for the first time, a day.</li>
-      <li><b>Closed positions:</b> their last 50, from Polymarket. "Sold" means they sold at least half before the market settled.</li>
-      <li><b>Held until the market settles:</b> of those closed positions where we could tell how they got out.</li>
+      <li><b>Usual opening buy:</b> the middle of their first buys into each position over the ${readPeriod(s)}. Adding to a position isn't counted.</li>
+      <li><b>New positions:</b> how many outcomes they bought into for the first time, a day.</li>
+      <li><b>Closed positions</b> (the Positions tab): their last 50, from Polymarket, which leaves out settled positions they never redeemed. "Sold" means they sold at least half before the market settled.</li>
       <li><b>Resting orders:</b> of their last 500 fills.</li>
       ${readDays(s) < 30 ? `<li>They trade a lot: we read their last 5,000 fills, which go back ${readDays(s)} days, not 30.</li>` : ""}
     </ul>

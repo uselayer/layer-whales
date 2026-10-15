@@ -82,42 +82,57 @@ def test_the_profile_card_and_the_price_check_have_the_new_lines(api: TestClient
                   "Order book and market status read at", "for context."):  # fmt: skip
         assert words in page, words
     for gone in ("<b>Lately</b>", "<b>Worth knowing</b>", "<b>Consistent</b>", "<b>Can you copy them</b>",
-                 "What copying it costs", "within 3¢ of their price", 'class="pf-stats"', '["stats", "Stats"]'):  # the old lines
+                 "What copying it costs", "within 3¢ of their price", 'class="pf-stats"', '["stats", "Stats"]', "Held until the market settles:"):  # the old lines
         assert gone not in page, gone
 
 
-NUMBERS = ("usd", "pl", "esc", "cents", "centsSigned", "ago", "plural", "lbPct", "perDayText", "readDays", "readPeriod",
-           "profitOf", "perDollarOf", "weeksUp", "weeksOf", "PF_PERIOD", "pf", "pfChart", "profileNumbers")  # fmt: skip
+NUMBERS = ("usd", "pl", "esc", "cents", "centsSigned", "ago", "plural", "lbPct", "readDays", "readPeriod", "weeksUp",
+           "weeksOf", "PERIOD_DAYS", "PF_PERIOD", "pf", "pfChart", "profileNumbers")  # fmt: skip
 
 
-def test_their_numbers_are_rows_in_groups_and_only_profit_follows_the_period(run_js: Any) -> None:
-    """The profile's left column: groups of label → value rows, a figure we don't have is null (shown "—", never
-    0), the wallet is a total only when cash and open positions were both read, and the switch moves profit only."""
-    s = {"periods": {"7d": {"trading_pnl": -50, "realized": -20, "unrealized": -30},
-                     "30d": {"trading_pnl": 336000, "realized": 336000, "unrealized": 0, "return_per_dollar": 0.14}},
-         "trading_pnl": 900000, "biggest_win": 120000, "weeks_up": 4, "weeks_known": 6, "pnl_weeks": [1, -1, -2, 3, 4, 5],
-         "won": 30, "settled": 58, "typical_usd": 24800, "trades_per_day": 2, "held_share": 1, "categories": [{"category": "Sports", "bets": 44}]}
-    detail = {"positions": [{"status": "in"}, {"status": "won"}], "closed": [{"result": "won"}, {"result": "sold"}]}
-    got = run_js(NUMBERS, f"(() => {{ pf.account = {{}}; const acct = {{cash_usd: 800000, positions_usd: 300000}};"
-                          f" return [profileNumbers({s}, {detail}, acct, '30d'), profileNumbers({s}, null, {{cash_usd: 5}}, '7d')]; }})()")
-    month, week = got
-    rows = {g["title"]: {r["k"]: r for r in g["rows"]} for g in month["groups"]}
-    assert [g["title"] for g in month["groups"]] == ["Profit", "Record", "Wallet", "How they trade"]
-    assert month["hero"]["k"] == "Profit, 30 days" and "+$336K" in month["hero"]["v"] and month["hero"]["sub"] == "+14% per $ traded"
-    assert "+$780K" in rows["Profit"]["All time without their biggest win"]["v"]
-    assert rows["Record"]["12-week consistency"]["v"] == "4 of 6 weeks up" and rows["Record"]["12-week consistency"]["weeks"]
-    assert rows["Record"]["Longest run of losing weeks"]["v"] == "2 weeks"
-    assert rows["Record"]["Last 2 closed positions"]["v"] == "1 won · 0 lost · 1 sold"
-    assert rows["Wallet"]["Wallet"]["v"] == "$1.1M" and rows["Wallet"]["In open positions"]["sub"] == "1 position open"
-    assert rows["Wallet"]["Usual trade, last 30 days"]["sub"] == "2.3% of their wallet"
-    assert rows["How they trade"]["Resting orders (maker)"]["v"] is None  # not read: "—", never 0
-    # 7D moves the profit rows only; a wallet read in part is never shown as the wallet
-    assert week["hero"]["k"] == "Profit, 7 days" and "−$50" in week["hero"]["v"]
-    wk = {g["title"]: {r["k"]: r for r in g["rows"]} for g in week["groups"]}
-    assert "Taken, 7 days" in wk["Profit"] and "−$20" in wk["Profit"]["Taken, 7 days"]["v"]
-    assert wk["Record"]["Won, last 30 days"]["v"] == "30 of 58"
-    assert wk["Wallet"]["Wallet"]["v"] is None and wk["Wallet"]["Cash"]["v"] == "$5.00"
-    assert wk["Wallet"]["Wallet"]["sub"] == "only part of it could be read"
+def test_their_numbers_lead_with_realized_and_open_pnl_wallet_and_the_win_rate_slot(run_js: Any) -> None:
+    """The profile's numbers (the trader profile audit's definitions): realized P&L for the period leads, with
+    Polymarket's all-time realized; open P&L is Polymarket's figure now ("…" while the trader read loads, "—" if
+    it failed, never the score's 30-day change in open value); the wallet is a total only when both parts were
+    read; the switch moves realized P&L only; the closed-positions record and held-to-settlement aren't shown."""
+    s = {"periods": {"7d": {"realized": -20, "unrealized": -30}, "30d": {"realized": 336000, "unrealized": 0}},
+         "unrealized_window": 999, "trading_pnl": 900000, "biggest_win": 120000, "weeks_up": 4, "weeks_known": 6,
+         "pnl_weeks": [1, -1, -2, 3, 4, 5], "won": 30, "settled": 58, "typical_usd": 24800, "trades_per_day": 2.4,
+         "held_share": 1, "price_band": [0.35, 0.54], "categories": [{"category": "Sports", "bets": 41}, {"category": "Tennis", "bets": 1}]}
+    detail = {"stats": {"realized_pnl": 3100000, "unrealized_pnl": 5400}, "positions": [], "closed": [{"result": "won"}]}
+    got = run_js(NUMBERS, f"(() => {{ pf.account = {{}}; return ["
+                          f"profileNumbers({s}, {detail}, {{cash_usd: 800000, positions_usd: 300000}}, '30d'),"
+                          f"profileNumbers({s}, null, {{cash_usd: 5}}, '7d'),"
+                          f"profileNumbers({s}, {{error: 'x'}}, {{}}, '30d')]; }})()")
+    month, week, failed = got
+
+    def rows(r: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        return {x["k"]: x for g in [{"rows": r["summary"]}, *r["groups"], {"rows": r["fold"]}] for x in g["rows"]}
+
+    m = rows(month)
+    assert month["hero"]["k"] == "Realized P&L, 30 days" and "+$336K" in month["hero"]["v"]
+    assert month["hero"]["sub"] == "taken in the last 30 days · +$3.1M all time"
+    assert [r["k"] for r in month["summary"]] == ["Open P&L", "Wallet", "Made money on"]
+    assert "+$5.4K" in m["Open P&L"]["v"] and m["Open P&L"]["sub"] == "on positions still open · Polymarket's figure"
+    assert m["Wallet"]["v"] == "$1.1M" and m["Wallet"]["sub"].startswith("cash $800K + open positions $300K")
+    assert m["Made money on"]["v"] is None  # "—" until the SDK reads every settled position
+    assert [g["title"] for g in month["groups"]] == ["Record", "How they trade"]
+    assert m["Weeks up"]["v"] == "4 of 6" and m["Weeks up"]["sub"] == "since their first trade" and m["Weeks up"]["weeks"]
+    assert m["Markets"]["v"] == "Sports 98%" and m["Markets"]["sub"] == "of 42 events checked, last 30 days"  # under 5% left out
+    assert m["Usual opening buy"]["v"] == "$24.8K" and m["Usual price paid"]["v"] == "35¢–54¢"
+    assert m["New positions"]["v"] == "about 2 a day"
+    assert m["Won, last 30 days"]["v"] == "30 of 58" and "+$780K" in m["All time without their biggest win"]["v"]  # in the fold
+    assert m["Resting orders (maker)"]["v"] is None  # not read: "—", never 0
+    shown = " ".join(m)
+    assert "closed positions" not in shown.lower() and "settles" not in shown and "Held" not in shown
+    # 7D moves realized P&L only; the trader read still loading is "…"; a wallet read in part isn't the wallet
+    w = rows(week)
+    assert week["hero"]["k"] == "Realized P&L, 7 days" and "−$20" in week["hero"]["v"] and week["hero"]["sub"].endswith("all time …")
+    assert w["Open P&L"]["v"] == "…" and w["Won, last 30 days"]["v"] == "30 of 58"
+    assert w["Wallet"]["v"] is None and w["Wallet"]["sub"] == "cash $5.00; open positions couldn't be read"
+    # the trader read failed: "—", never the score's change in open value over 30 days
+    f = rows(failed)
+    assert f["Open P&L"]["v"] is None and failed["hero"]["sub"] == "taken in the last 30 days"
 
 
 # ---- the price check ----
