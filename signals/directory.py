@@ -317,7 +317,11 @@ SORTS = {
     "recent": "w.last_active DESC NULLS LAST",
     "size": "COALESCE(w.typical_usd, w.market_usd) DESC NULLS LAST",
     "new": "w.first_seen DESC",
+    # depth of record: markets bought in the last 90 days, as the last quick check read them (a count, not a grade)
+    "record": "w.buys_90d DESC NULLS LAST, w.buys_30d DESC NULLS LAST",
 }
+# Explore's "what we checked" filter: ``full``, wallets whose latest look is a full check (a score), not a quick look
+EVIDENCE = {"full": "(w.scored_at IS NOT NULL AND w.status != 'checked')"}
 _WALLETISH = re.compile(r"0x[0-9a-f]{2,40}")
 _ROW = """w.wallet, w.name, COALESCE(w.category, w.seen_category) AS category, w.last_active, w.status, w.not_recommended,
   w.segment, w.scored_at, w.tried_at, w.buys_30d, w.buys_90d, w.last_buy, w.market_usd, w.evidence_cut, w.typical_usd,
@@ -948,8 +952,8 @@ class Directory:
 
     def browse(self, group: str = "limited", *, q: str = "", category: str | None = None,
                active_days: int | None = None, min_usd: float | None = None, board: str | None = None,
-               makers: bool = False, sort: str = "recent", limit: int = 50, offset: int = 0,
-               search_in: tuple[str, ...] = ("limited", "checked", "recommended"),
+               makers: bool = False, evidence: str | None = None, sort: str = "recent", limit: int = 50,
+               offset: int = 0, search_in: tuple[str, ...] = ("limited", "checked", "recommended"),
                now: float | None = None) -> dict[str, Any]:  # fmt: skip
         """A page of Explore: the wallets in ``group`` (one of EXPLORE_GROUPS), or with ``q``, the wallets in the
         ``search_in`` groups whose name has it in it (or whose wallet starts with it), filtered and sorted by facts
@@ -981,6 +985,8 @@ class Directory:
         if board in ("on", "off"):
             where.append(f"{'' if board == 'on' else 'NOT '}EXISTS (SELECT 1 FROM sightings b WHERE b.wallet = w.wallet "
                          "AND b.source = 'leaderboard')")  # fmt: skip
+        if evidence in EVIDENCE:
+            where.append(EVIDENCE[evidence])
         if not makers:
             where.append("COALESCE(w.segment, '') != 'no_view'")
         order = SORTS.get(sort, SORTS["recent"])

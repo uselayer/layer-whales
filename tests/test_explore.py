@@ -132,6 +132,19 @@ def test_filters_are_facts_and_sorts_put_the_unknown_last(d: Directory) -> None:
     assert PRO not in wallets(d.browse("checked")) and PRO in wallets(d.browse("checked", makers=True))  # makers hidden
 
 
+def test_full_checks_can_be_picked_out_and_the_longest_records_come_first(d: Directory) -> None:
+    """``evidence="full"``: wallets whose latest look is a full check (a score), not a quick look; ``sort="record"``:
+    markets bought in 90 days, most first, unknown (no quick check yet) last. Facts, never a grade."""
+    assert wallets(d.browse("checked", evidence="full")) == [PRO]  # DORM: a quick look only
+    assert wallets(d.browse("limited", evidence="full")) == [PAID]  # a score that found too few, not SEL's quick look
+    more = "0x" + "9" * 40
+    d.add([Seen(more, "market", "Politics", name="MoreMo", category="Politics")], at=NOW - DAY)
+    d.quick_checked(more, QuickLook(False, "not_enough_recent_evidence", 7, 40, NOW - DAY, NOW - DAY, 80.0, False), at=NOW)
+    assert wallets(d.browse("limited", sort="record", now=NOW)) == [more, SEL, PAID]  # 40, 14, then unknown
+    d.quick_checked(PRO, QuickLook(False, "not_enough_recent_evidence", 2, 3, NOW, NOW, 10.0, False), at=NOW + 1)
+    assert PRO not in wallets(d.browse("checked", evidence="full"))  # its latest look is a quick one now
+
+
 def test_a_quick_look_keeps_the_usual_market_size_and_whether_its_counts_are_at_least(tmp_path: Any) -> None:
     trades = [(NOW - 3600, True, "0xa", 100.0), (NOW - 3500, True, "0xa", 200.0), (NOW - 2 * DAY, True, "0xb", 1000.0),
               (NOW - 3 * DAY, True, "0xc", 50.0), (NOW - DAY, False, "0xd", 9999.0)]  # fmt: skip
@@ -212,6 +225,9 @@ def test_browsing_and_searching_read_only_the_directory(api: TestClient, monkeyp
     assert [x["wallet"] for x in api.get("/api/traders", params={"q": "ned", "unchecked": 1}).json()["rows"]] == [NEW]
     assert api.get("/api/traders", params={"q": "n"}).status_code == 400
     assert api.get("/api/traders", params={"group": "best"}).status_code == 400
+    full = api.get("/api/traders", params={"group": "checked", "evidence": "full", "sort": "record"}).json()
+    assert [x["wallet"] for x in full["rows"]] == [PRO]
+    assert api.get("/api/traders", params={"evidence": "skilled"}).status_code == 400
 
 
 def test_a_page_opened_from_explore_isnt_checked_until_asked(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -334,8 +350,13 @@ def test_a_passed_row_keeps_profit_the_price_move_and_copying_apart_and_leaves_t
 def test_each_group_shows_figures_for_what_its_for(run_js: Any) -> None:
     quick = '{group: "limited", evidence: "quick", market_usd: 12000, buys_30d: 5, evidence_cut: true}'
     assert kv(run_js(STATS, f"exStats({quick})")) == [["Markets, 30d", "5+", None], ["Usual bet", "$12K", "a market"], ["Last trade", "unknown", None]]
-    checked = '{group: "checked", evidence: "scored", typical_usd: 50, bets_checked: 12}'
-    assert kv(run_js(STATS, f"exStats({checked})")) == [["Usual bet", "$50", "a trade"], ["Last trade", "unknown", None], ["Bets checked", "12", "30d"]]
+    deep = '{group: "limited", evidence: "quick", buys_30d: 6, buys_90d: 31, evidence_cut: false}'
+    assert kv(run_js(STATS, f"exStats({deep})"))[0] == ["Markets, 30d", "6", "31 in 90d"]  # their 90 days too
+    # a full check: its record (profit, bets checked) first; the label beside it says what skill it showed
+    checked = '{group: "checked", evidence: "scored", typical_usd: 50, bets_checked: 12, trading_pnl_window: 300}'
+    assert kv(run_js(STATS, f"exStats({checked})")) == [["Profit, 30d", "+$300", None], ["Bets checked", "12", "30d"], ["Last trade", "unknown", None]]
+    dormant = '{group: "checked", evidence: "quick", buys_30d: 0, buys_90d: 0}'
+    assert kv(run_js(STATS, f"exStats({dormant})")) == [["Usual bet", "unknown", None], ["Last trade", "unknown", None], ["Markets, 30d", "0", "0 in 90d"]]
     # Whales: size and recency first, whatever the group; then profit when scored, a quick look's count when not
     passed = '{group: "passed", typical_usd: 40000, trading_pnl_window: -900}'
     assert kv(run_js(STATS, f"exStats({passed}, true)")) == [["Usual bet", "$40K", "a trade"], ["Last trade", "unknown", None], ["Profit, 30d", "−$900", None]]
@@ -355,9 +376,13 @@ def test_each_group_has_its_own_defaults_and_the_market_carries_across(run_js: A
     })()""")
     assert got[0] == ["whales", 30, 1000, "size", ""]  # Explore opens on Whales
     assert got[1] == [["active", "Traded in 30 days"], ["size", "Bets $1K+"]] and got[2] is False  # what it shows, said
-    assert got[3] == ["limited", 0, 0, "recent", "Politics"] and got[4] == [["category", "Politics"]]
+    assert got[3] == ["limited", 0, 0, "record", "Politics"] and got[4] == [["category", "Politics"]]  # longest records first
     assert got[5] == ["whales", 30, 1000, "size", "Politics"]
     assert got[6][-1] == ["board", "On a leaderboard"] and got[7] is True
+    checked = run_js(DEFAULTS, """(() => { exPick("checked"); const a = [ex.evidence, exChips(), exChanged()];
+      ex.evidence = ""; return [...a, exChanged()]; })()""")
+    # Checked opens on full checks, said in a chip; showing every look (mostly dormant quick looks) is a change
+    assert checked == ["full", [["evidence", "Full checks only"]], False, True]
 
 
 def test_search_looks_through_every_trader_we_found_whatever_the_filters(run_js: Any) -> None:
