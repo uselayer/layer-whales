@@ -1,0 +1,171 @@
+Using CPython 3.14.7 interpreter at: /opt/homebrew/opt/python@3.14/bin/python3.14
+Creating virtual environment at: /Users/preciousemakenemi/dev/signals/.claude/worktrees/spread-bias-study/.venv
+   Building signals @ file:///Users/preciousemakenemi/dev/signals/.claude/worktrees/spread-bias-study
+      Built signals @ file:///Users/preciousemakenemi/dev/signals/.claude/worktrees/spread-bias-study
+Installed 29 packages in 42ms
+rows 774 Counter({'ctrl_prior': 346, 'ctrl_overlooked': 236, 'ctrl_big': 73, 'rec': 43, 'rec_prior': 43, 'ctrl_leaderboard': 33})
+
+=== 1. How much of the measured edge is the spread ===
+rec: wallets 43, bets with mid-before 2171, maker/taker known 100%
+   maker bets  1223  fill vs mid before: mean +2.37¢ median +0.50¢  | prod edge +2.34¢  from mid -0.03¢  1m→5m +0.30¢  spread-neutral +1.83¢  half-spread 0.52¢
+   taker bets   946  fill vs mid before: mean -2.93¢ median -1.50¢  | prod edge +4.18¢  from mid +7.11¢  1m→5m +1.04¢  spread-neutral +4.73¢  half-spread 0.56¢
+ctrl: wallets 342, bets with mid-before 18281, maker/taker known 100%
+   maker bets  9027  fill vs mid before: mean +2.20¢ median +1.00¢  | prod edge -0.45¢  from mid -2.64¢  1m→5m -0.08¢  spread-neutral -0.98¢  half-spread 0.55¢
+   taker bets  9252  fill vs mid before: mean -2.57¢ median -0.91¢  | prod edge -0.27¢  from mid +2.30¢  1m→5m +0.17¢  spread-neutral +0.28¢  half-spread 0.56¢
+
+per recommended trader (current window, SDK main sample): prod tier | edge prod / from-mid / 1m→5m (z) | maker share of checked bets | spread share
+  0xad5353af big_pro +1.80¢ ( +1.7) +1.86¢ ( +1.7) | +0.49¢ ( +0.3) -0.29¢ ( -0.7)  maker 0.44  offset +1.24¢  tiers big_pr/big_pr | big_pr/big_pr
+  0xa697d0b3 big_pro +0.11¢ ( +0.9) -0.39¢ ( -3.4) | -0.53¢ ( -3.7) -0.09¢ ( -1.2)  maker 1.00  offset +0.63¢  tiers big_pr/big_pr | big_pr/big_pr
+  0xd950ef37 no_edge +0.10¢ ( +0.1) -0.49¢ ( -0.6) | -2.81¢ ( -2.5) +0.15¢ ( +0.6)  maker 0.98  offset +2.91¢  tiers no_edg/no_edg | no_edg/no_edg
+  0xdb405a9a no_edge -0.82¢ ( -0.4) -1.26¢ ( -0.7) | -2.64¢ ( -1.4) -0.40¢ ( -1.3)  maker 0.98  offset +1.77¢  tiers no_edg/no_edg | no_edg/no_edg
+  0x8efa1ea8 no_edge -0.12¢ ( -1.1) -0.62¢ ( -5.6) | -0.71¢ ( -6.2) -0.07¢ ( -1.6)  maker 1.00  offset +0.59¢  tiers no_edg/no_edg | no_edg/no_edg
+  0xc0e4f49b no_view +3.98¢ ( +1.9) +4.61¢ ( +2.2) | +8.46¢ ( +3.7) +3.60¢ ( +2.1)  maker 0.00  offset -4.15¢  tiers no_vie/no_vie | no_vie/no_vie
+  0x3e68c310 no_view +12.55¢ ( +3.2) +12.73¢ ( +3.2) | +18.29¢ ( +4.9) +2.90¢ ( +0.9)  maker 0.38  offset -5.44¢  tiers no_vie/no_vie | no_vie/no_vie
+  0x05561a28 no_view +3.75¢ ( +1.9) +3.88¢ ( +2.0) | +5.06¢ ( +2.4) +1.96¢ ( +1.0)  maker 0.38  offset -1.53¢  tiers no_vie/no_vie | no_vie/no_vie
+  0x00dbea66 no_view +8.38¢ ( +1.4) +8.89¢ ( +1.5) | +22.26¢ ( +3.8) +13.09¢ ( +2.2)  maker 0.00  offset -13.88¢  tiers no_vie/no_vie | no_vie/no_vie
+  0xcf7379b4 proven  +0.32¢ ( +2.8) -0.16¢ ( -1.5) | -0.33¢ ( -2.9) -0.06¢ ( -0.8)  maker 1.00  offset +0.67¢  tiers proven/big_pr | big_pr/big_pr
+  0x924379a7 proven  +0.38¢ ( +4.7) +0.85¢ (+10.3) | +1.10¢ (+12.2) +0.01¢ ( +0.2)  maker 0.02  offset -0.71¢  tiers proven/proven | proven/big_pr
+  0x2d6ac4f7 proven  +0.28¢ ( +3.4) -0.19¢ ( -2.3) | -0.33¢ ( -3.4) -0.05¢ ( -1.7)  maker 1.00  offset +0.60¢  tiers proven/big_pr | big_pr/big_pr
+  0x30c7ac01 proven  +1.16¢ ( +8.9) +1.27¢ ( +7.8) | +1.35¢ ( +5.9) -0.14¢ ( -0.9)  maker 0.39  offset -0.19¢  tiers proven/proven | proven/big_pr
+  0x6b97ebe9 proven  +1.31¢ ( +4.2) +1.33¢ ( +4.3) | +1.38¢ ( +2.9) -0.20¢ ( -1.2)  maker 0.46  offset -0.07¢  tiers proven/proven | proven/big_pr
+  0x200ffb57 proven  +1.26¢ ( +2.2) +0.69¢ ( +1.2) | +0.10¢ ( +0.2) +0.13¢ ( +2.0)  maker 1.00  offset +1.16¢  tiers proven/no_edg | no_edg/proven
+  0xadfb6cba proven  +0.57¢ ( +2.3) -0.08¢ ( -0.3) | -0.38¢ ( -1.3) +0.15¢ ( +0.6)  maker 0.98  offset +0.94¢  tiers proven/big_pr | big_pr/big_pr
+  0x06dc5182 proven  +1.29¢ ( +5.1) +1.39¢ ( +5.5) | +1.84¢ ( +2.3) +0.14¢ ( +0.9)  maker 0.42  offset -0.51¢  tiers proven/proven | proven/big_pr
+  0x23d81ba9 proven  +1.98¢ ( +4.6) +2.03¢ ( +4.5) | +2.08¢ ( +3.2) +0.48¢ ( +2.1)  maker 0.56  offset +0.07¢  tiers proven/proven | proven/proven
+  0xbe74297f proven  +5.14¢ ( +3.5) +5.31¢ ( +3.5) | +6.10¢ ( +3.8) +0.19¢ ( +0.3)  maker 0.39  offset -0.98¢  tiers proven/proven | proven/no_edg
+  0x923cab91 quiet   +10.70¢ ( +4.4) +10.02¢ ( +4.1) | -7.54¢ ( -4.8) -0.58¢ ( -0.9)  maker 1.00  offset +18.84¢  tiers quiet/quiet | no_edg/no_edg
+  0x29681930 quiet   +4.02¢ ( +2.7) +3.99¢ ( +2.7) | +1.67¢ ( +1.2) +1.22¢ ( +2.3)  maker 0.66  offset +0.70¢  tiers quiet/quiet | rising/quiet
+  0x0a2afaaa quiet   +13.91¢ ( +2.7) +13.37¢ ( +2.6) | +12.58¢ ( +2.0) +35.23¢ ( +2.1)  maker 1.00  offset +0.70¢  tiers quiet/quiet | quiet/too_fe
+  0x9506e646 rising  +1.02¢ ( +1.5) +1.70¢ ( +2.5) | +3.45¢ ( +5.5) -0.49¢ ( -1.5)  maker 0.00  offset -2.42¢  tiers rising/proven | proven/no_edg
+  0xfb07f485 rising  +0.58¢ ( +1.5) +0.02¢ ( +0.1) | -1.86¢ ( -5.0) -0.18¢ ( -1.3)  maker 1.00  offset +2.44¢  tiers rising/no_edg | no_edg/no_edg
+  0xa19cbaba rising  +1.70¢ ( +3.6) +1.22¢ ( +2.6) | -0.40¢ ( -0.9) +0.28¢ ( +0.8)  maker 0.95  offset +1.97¢  tiers rising/rising | big_pr/big_pr
+  0x12d6cccf rising  +0.85¢ ( +4.2) +0.76¢ ( +3.2) | +0.35¢ ( +1.4) +0.03¢ ( +0.2)  maker 0.49  offset +0.42¢  tiers rising/rising | big_pr/big_pr
+  0xbe89905c rising  +2.88¢ ( +4.2) +3.09¢ ( +4.2) | +3.46¢ ( +4.0) +0.19¢ ( +2.4)  maker 0.29  offset -0.78¢  tiers rising/rising | rising/rising
+  0xd67ba35a rising  +1.88¢ ( +3.5) +2.12¢ ( +3.7) | +3.15¢ ( +2.9) +0.80¢ ( +1.6)  maker 0.27  offset -1.51¢  tiers rising/rising | rising/big_pr
+  0xf2f6af4f rising  +0.58¢ ( +3.3) +0.32¢ ( +1.3) | -0.42¢ ( -0.6) +0.12¢ ( +0.5)  maker 0.69  offset +0.93¢  tiers rising/big_pr | big_pr/big_pr
+  0xa3b79846 rising  +5.19¢ ( +3.3) +5.32¢ ( +3.5) | +4.80¢ ( +4.5) +2.24¢ ( +2.2)  maker 0.23  offset -0.80¢  tiers rising/rising | rising/rising
+  0xc6a29107 rising  +1.57¢ ( +2.3) +1.52¢ ( +2.1) | +1.47¢ ( +1.6) -0.25¢ ( -1.1)  maker 0.40  offset -0.17¢  tiers rising/rising | rising/no_edg
+  0x309b39e4 rising  +11.92¢ ( +3.6) +12.70¢ ( +3.8) | +14.50¢ ( +4.5) -5.89¢ ( -2.7)  maker 0.01  offset -2.51¢  tiers rising/rising | rising/no_edg
+  0x2e0b70d4 rising  +0.22¢ ( +3.1) +0.35¢ ( +2.3) | +0.39¢ ( +2.0) +0.00¢ ( +0.6)  maker 0.45  offset -0.11¢  tiers rising/rising | rising/big_pr
+  0x2c3928af rising  +3.70¢ ( +3.0) +4.00¢ ( +3.2) | +5.85¢ ( +4.1) +1.07¢ ( +1.2)  maker 0.20  offset -1.89¢  tiers rising/rising | rising/big_pr
+  0x1cc16713 rising  +1.83¢ ( +3.0) +1.58¢ ( +2.4) | +1.15¢ ( +1.5) +0.78¢ ( +1.2)  maker 0.67  offset +0.66¢  tiers rising/rising | big_pr/big_pr
+  0x65757591 rising  +2.00¢ ( +2.6) +2.27¢ ( +2.8) | +2.60¢ ( +2.6) +0.25¢ ( +0.6)  maker 0.21  offset -0.32¢  tiers rising/rising | rising/big_pr
+  0xf6eab31d rising  +0.97¢ ( +2.6) +0.86¢ ( +2.3) | +0.37¢ ( +0.9) +0.23¢ ( +1.0)  maker 0.59  offset +0.40¢  tiers rising/rising | no_edg/no_edg
+  0x80a0da00 rising  +0.38¢ ( +2.1) +0.43¢ ( +2.0) | +0.65¢ ( +1.8) +0.27¢ ( +1.0)  maker 0.44  offset -0.02¢  tiers rising/big_pr | big_pr/big_pr
+  0x2ee42afb rising  +2.28¢ ( +1.8) +1.83¢ ( +1.4) | +1.73¢ ( +1.3) +2.03¢ ( +1.6)  maker 0.95  offset +0.57¢  tiers rising/rising | rising/rising
+  0x5f74816a rising  +3.07¢ ( +1.7) +3.65¢ ( +2.0) | +7.64¢ ( +3.5) +2.99¢ ( +1.7)  maker 0.00  offset -4.56¢  tiers rising/rising | rising/rising
+  0x8651d5dc rising  +11.28¢ ( +1.7) +11.80¢ ( +1.8) | +12.55¢ ( +1.7) +1.10¢ ( +0.1)  maker 0.00  offset -0.46¢  tiers rising/rising | rising/no_edg
+  0x44c9e959 rising  +8.16¢ ( +1.4) +7.62¢ ( +1.3) | +4.99¢ ( +0.8) +30.48¢ ( +1.8)  maker 1.00  offset +2.72¢  tiers rising/rising | no_edg/too_fe
+  0x6cfce245 rising  +0.12¢ ( +1.4) -0.05¢ ( -0.5) | -0.24¢ ( -3.5) -0.03¢ ( -1.5)  maker 0.93  offset +0.48¢  tiers rising/no_edg | no_edg/no_edg
+
+=== 1b. Production's own edge, less this trader's measured maker spread per bet ===
+  0xcf7379b4 proven prod  +0.43¢ z +8.11 n 53 | maker spread/bet 0.48¢ (112% of edge) → z -0.96 out    | symmetric → z -0.96 out
+  0x9506e646 proven prod  +2.00¢ z +4.21 n 59 | maker spread/bet 0.00¢ (  0% of edge) → z +4.21 sharp  | symmetric → z +5.67 sharp
+  0x924379a7 proven prod  +0.54¢ z +4.03 n 43 | maker spread/bet 0.01¢ (  2% of edge) → z +3.94 sharp  | symmetric → z +7.61 sharp
+  0x2d6ac4f7 proven prod  +0.30¢ z +3.92 n 54 | maker spread/bet 0.47¢ (157% of edge) → z -2.23 out    | symmetric → z -2.23 out
+  0xad5353af proven prod  +3.00¢ z +3.39 n 59 | maker spread/bet 0.23¢ (  8% of edge) → z +3.13 sharp  | symmetric → z +3.46 sharp
+  0x30c7ac01 proven prod  +1.15¢ z +3.27 n 53 | maker spread/bet 0.22¢ ( 19% of edge) → z +2.64 sharp  | symmetric → z +3.59 sharp
+  0x6b97ebe9 proven prod  +1.13¢ z +3.16 n 52 | maker spread/bet 0.27¢ ( 24% of edge) → z +2.40 sharp  | symmetric → z +3.21 sharp
+  0xfb07f485 proven prod  +0.73¢ z +3.11 n 59 | maker spread/bet 0.56¢ ( 76% of edge) → z +0.75 out    | symmetric → z +0.75 out
+  0x200ffb57 proven prod  +0.29¢ z +3.08 n 57 | maker spread/bet 0.57¢ (198% of edge) → z -3.02 out    | symmetric → z -3.02 out
+  0xadfb6cba proven prod  +0.44¢ z +2.69 n 57 | maker spread/bet 0.65¢ (149% of edge) → z -1.32 out    | symmetric → z -1.27 out
+  0xa697d0b3 proven prod  +0.41¢ z +2.55 n 52 | maker spread/bet 0.50¢ (122% of edge) → z -0.57 out    | symmetric → z -0.57 out
+  0xa19cbaba proven prod  +1.48¢ z +2.46 n 45 | maker spread/bet 0.49¢ ( 33% of edge) → z +1.64 rising | symmetric → z +1.69 rising
+  0xc0e4f49b proven prod  +4.09¢ z +2.41 n 48 | maker spread/bet 0.00¢ (  0% of edge) → z +2.41 sharp  | symmetric → z +2.78 sharp
+  0xd950ef37 proven prod  +0.89¢ z +2.41 n 46 | maker spread/bet 0.62¢ ( 69% of edge) → z +0.74 out    | symmetric → z +0.76 out
+  0x923cab91 quiet  prod  +8.10¢ z +3.38 n 47 | maker spread/bet 0.69¢ (  9% of edge) → z +3.09 sharp  | symmetric → z +3.09 sharp
+  0x3e68c310 quiet  prod +15.84¢ z +3.10 n 41 | maker spread/bet 0.30¢ (  2% of edge) → z +3.04 sharp  | symmetric → z +3.13 sharp
+  0x29681930 quiet  prod  +4.01¢ z +2.71 n 31 | maker spread/bet 0.20¢ (  5% of edge) → z +2.58 sharp  | symmetric → z +2.75 sharp
+  0x0a2afaaa quiet  prod +17.10¢ z +2.37 n 34 | maker spread/bet 0.54¢ (  3% of edge) → z +2.29 sharp  | symmetric → z +2.29 sharp
+  0x06dc5182 rising prod  +2.48¢ z +5.31 n 39 | maker spread/bet 0.19¢ (  8% of edge) → z +4.91 sharp  | symmetric → z +5.55 sharp
+  0x12d6cccf rising prod  +0.65¢ z +4.74 n 18 | maker spread/bet 0.23¢ ( 35% of edge) → z +3.06 rising | symmetric → z +4.74 rising
+  0x23d81ba9 rising prod  +2.01¢ z +4.20 n 35 | maker spread/bet 0.24¢ ( 12% of edge) → z +3.71 sharp  | symmetric → z +4.18 sharp
+  0xbe89905c rising prod  +2.88¢ z +4.16 n 24 | maker spread/bet 0.14¢ (  5% of edge) → z +3.96 rising | symmetric → z +4.51 rising
+  0xd67ba35a rising prod  +1.88¢ z +3.45 n 32 | maker spread/bet 0.16¢ (  8% of edge) → z +3.16 sharp  | symmetric → z +3.99 sharp
+  0xf2f6af4f rising prod  +0.58¢ z +3.32 n 11 | maker spread/bet 0.38¢ ( 66% of edge) → z +1.14 rising | symmetric → z +1.62 rising
+  0xa3b79846 rising prod  +5.19¢ z +3.31 n 24 | maker spread/bet 0.13¢ (  3% of edge) → z +3.23 rising | symmetric → z +3.42 rising
+  0xc6a29107 rising prod  +2.58¢ z +3.24 n 24 | maker spread/bet 0.21¢ (  8% of edge) → z +2.98 rising | symmetric → z +3.18 rising
+  0x309b39e4 rising prod +11.04¢ z +3.09 n 13 | maker spread/bet 0.01¢ (  0% of edge) → z +3.09 rising | symmetric → z +3.30 rising
+  0x2e0b70d4 rising prod  +0.22¢ z +3.08 n  8 | maker spread/bet 0.02¢ ( 10% of edge) → z +2.77 rising | symmetric → z +4.27 rising
+  0x2c3928af rising prod  +3.61¢ z +3.07 n 27 | maker spread/bet 0.10¢ (  3% of edge) → z +2.99 sharp  | symmetric → z +3.38 sharp
+  0x1cc16713 rising prod  +1.83¢ z +2.96 n  8 | maker spread/bet 0.34¢ ( 18% of edge) → z +2.41 rising | symmetric → z +2.62 rising
+  0x65757591 rising prod  +2.02¢ z +2.69 n 32 | maker spread/bet 0.10¢ (  5% of edge) → z +2.56 sharp  | symmetric → z +3.01 sharp
+  0xf6eab31d rising prod  +0.97¢ z +2.66 n 34 | maker spread/bet 0.19¢ ( 20% of edge) → z +2.13 sharp  | symmetric → z +2.50 sharp
+  0xdb405a9a rising prod  +1.13¢ z +2.18 n 23 | maker spread/bet 0.47¢ ( 42% of edge) → z +1.27 rising | symmetric → z +1.30 rising
+  0x80a0da00 rising prod  +0.38¢ z +2.08 n 10 | maker spread/bet 0.28¢ ( 74% of edge) → z +0.55 out    | symmetric → z +1.62 rising
+  0x8efa1ea8 rising prod  +0.29¢ z +1.93 n 59 | maker spread/bet 0.50¢ (175% of edge) → z -1.44 out    | symmetric → z -1.44 out
+  0x2ee42afb rising prod  +2.28¢ z +1.76 n 19 | maker spread/bet 0.48¢ ( 21% of edge) → z +1.39 rising | symmetric → z +1.41 rising
+  0x05561a28 rising prod  +3.36¢ z +1.74 n 48 | maker spread/bet 0.22¢ (  7% of edge) → z +1.62 rising | symmetric → z +1.83 rising
+  0x5f74816a rising prod  +3.07¢ z +1.71 n 21 | maker spread/bet 0.00¢ (  0% of edge) → z +1.71 rising | symmetric → z +2.03 rising
+  0x8651d5dc rising prod +11.28¢ z +1.67 n 29 | maker spread/bet 0.00¢ (  0% of edge) → z +1.67 rising | symmetric → z +1.75 rising
+  0xbe74297f rising prod  +2.73¢ z +1.58 n 49 | maker spread/bet 0.22¢ (  8% of edge) → z +1.45 rising | symmetric → z +1.69 rising
+  0x44c9e959 rising prod  +9.67¢ z +1.45 n 48 | maker spread/bet 0.53¢ (  6% of edge) → z +1.37 rising | symmetric → z +1.37 rising
+  0x6cfce245 rising prod  +0.12¢ z +1.43 n 26 | maker spread/bet 0.18¢ (155% of edge) → z -0.79 out    | symmetric → z -0.60 out
+  0x00dbea66 rising prod  +8.38¢ z +1.41 n 52 | maker spread/bet 0.00¢ (  0% of edge) → z +1.41 rising | symmetric → z +1.50 rising
+  summary: [(('proven', 'maker-only', 'out'), 7), (('proven', 'maker-only', 'rising'), 1), (('proven', 'maker-only', 'sharp'), 6), (('proven', 'symmetric', 'out'), 7), (('proven', 'symmetric', 'rising'), 1), (('proven', 'symmetric', 'sharp'), 6), (('quiet', 'maker-only', 'sharp'), 4), (('quiet', 'symmetric', 'sharp'), 4), (('rising', 'maker-only', 'out'), 3), (('rising', 'maker-only', 'rising'), 16), (('rising', 'maker-only', 'sharp'), 6), (('rising', 'symmetric', 'out'), 2), (('rising', 'symmetric', 'rising'), 17), (('rising', 'symmetric', 'sharp'), 6)]
+
+=== 2/3. Corrections: who passes now, and how they did on their prior 30 days (spread-free edge from mid) ===
+validation = prior-window edge from mid before (v1), wallets with 8+ prior events. 'kept' passers whose prior edge >0; 'excluded genuine' = passes R0 but not the rule while its prior v1 z ≥ 2.
+R0 current (prod edge, z≥1/2)
+   rec  pass  34 (sharp  13)  excluded vs R0   0  | validated  29: prior edge>0  24, prior z≥2   8  | excluded with prior z≥2: 0
+   ctrl pass  40 (sharp  20)  excluded vs R0   0  | validated  38: prior edge>0  31, prior z≥2  12  | excluded with prior z≥2: 0
+R1 spread-neutral (±half spread by role)
+   rec  pass  26 (sharp  10)  excluded vs R0   8  | validated  21: prior edge>0  19, prior z≥2   8  | excluded with prior z≥2: 0
+   ctrl pass  43 (sharp  19)  excluded vs R0   3  | validated  37: prior edge>0  31, prior z≥2  13  | excluded with prior z≥2: 0
+R1m maker-only (−half spread on maker fills)
+   rec  pass  26 (sharp   9)  excluded vs R0   8  | validated  21: prior edge>0  19, prior z≥2   8  | excluded with prior z≥2: 0
+   ctrl pass  29 (sharp  15)  excluded vs R0  11  | validated  27: prior edge>0  24, prior z≥2  11  | excluded with prior z≥2: 1
+R1m2 maker-only, Rising z≥1.645
+   rec  pass  23 (sharp   9)  excluded vs R0  11  | validated  19: prior edge>0  17, prior z≥2   7  | excluded with prior z≥2: 1
+   ctrl pass  20 (sharp  15)  excluded vs R0  20  | validated  18: prior edge>0  17, prior z≥2   9  | excluded with prior z≥2: 3
+R1m3 maker-only, Rising z≥2
+   rec  pass  20 (sharp   9)  excluded vs R0  14  | validated  18: prior edge>0  16, prior z≥2   7  | excluded with prior z≥2: 1
+   ctrl pass  17 (sharp  15)  excluded vs R0  23  | validated  15: prior edge>0  15, prior z≥2   9  | excluded with prior z≥2: 3
+R1b spread-neutral, Rising z≥1.645
+   rec  pass  24 (sharp  10)  excluded vs R0  10  | validated  20: prior edge>0  18, prior z≥2   8  | excluded with prior z≥2: 0
+   ctrl pass  26 (sharp  19)  excluded vs R0  17  | validated  23: prior edge>0  22, prior z≥2  11  | excluded with prior z≥2: 2
+R1c spread-neutral, Rising z≥2
+   rec  pass  23 (sharp  10)  excluded vs R0  11  | validated  20: prior edge>0  18, prior z≥2   8  | excluded with prior z≥2: 0
+   ctrl pass  24 (sharp  19)  excluded vs R0  18  | validated  22: prior edge>0  21, prior z≥2  11  | excluded with prior z≥2: 2
+S1 edge from mid before (sensitivity)
+   rec  pass  20 (sharp   8)  excluded vs R0  14  | validated  15: prior edge>0  13, prior z≥2   7  | excluded with prior z≥2: 1
+   ctrl pass  48 (sharp  26)  excluded vs R0  14  | validated  37: prior edge>0  31, prior z≥2  12  | excluded with prior z≥2: 2
+S2 edge 1m→5m (sensitivity)
+   rec  pass   7 (sharp   3)  excluded vs R0  27  | validated   3: prior edge>0   2, prior z≥2   0  | excluded with prior z≥2: 8
+   ctrl pass  25 (sharp   3)  excluded vs R0  25  | validated  22: prior edge>0  16, prior z≥2   2  | excluded with prior z≥2: 10
+R3 prod edge, Rising z≥2
+   rec  pass  27 (sharp  13)  excluded vs R0   7  | validated  25: prior edge>0  21, prior z≥2   7  | excluded with prior z≥2: 1
+   ctrl pass  24 (sharp  20)  excluded vs R0  16  | validated  22: prior edge>0  19, prior z≥2   9  | excluded with prior z≥2: 3
+R4 prod edge, Rising z≥1.645
+   rec  pass  30 (sharp  13)  excluded vs R0   4  | validated  25: prior edge>0  21, prior z≥2   7  | excluded with prior z≥2: 1
+   ctrl pass  28 (sharp  20)  excluded vs R0  12  | validated  26: prior edge>0  23, prior z≥2  11  | excluded with prior z≥2: 1
+R7 prod edge + BH q=0.10 (BH p≤0.0166, z≈2.13)
+   rec  pass  26 (sharp  13)  excluded vs R0   8  | validated  24: prior edge>0  20, prior z≥2   7  | excluded with prior z≥2: 1
+   ctrl pass  21 (sharp  19)  excluded vs R0  19  | validated  19: prior edge>0  17, prior z≥2   9  | excluded with prior z≥2: 3
+R8 spread-neutral + BH q=0.10 (BH p≤0.0130, z≈2.23)
+   rec  pass  21 (sharp  10)  excluded vs R0  13  | validated  19: prior edge>0  17, prior z≥2   8  | excluded with prior z≥2: 0
+   ctrl pass  20 (sharp  18)  excluded vs R0  22  | validated  18: prior edge>0  18, prior z≥2  10  | excluded with prior z≥2: 3
+R9 maker-only + BH q=0.10 (BH p≤0.0103, z≈2.31)
+   rec  pass  19 (sharp   9)  excluded vs R0  15  | validated  17: prior edge>0  15, prior z≥2   7  | excluded with prior z≥2: 1
+   ctrl pass  14 (sharp  13)  excluded vs R0  26  | validated  12: prior edge>0  12, prior z≥2   8  | excluded with prior z≥2: 4
+
+=== 4. Share by chance, from the prior 30 days ===
+[current edge] null proxy (current |z|<1): n=94, prior spread-neutral edge >0: 54%
+  Sharp   n= 30 prior edge>0 83%  prior z≥2 47%  → share by chance ≈ 36% (90% range 14%–65%)  [rec 12]
+  Rising  n= 37 prior edge>0 81%  prior z≥2 16%  → share by chance ≈ 41% (90% range 20%–70%)  [rec 17]
+  All rec n= 67 prior edge>0 82%  prior z≥2 30%  → share by chance ≈ 39% (90% range 22%–59%)  [rec 29]
+
+[maker spread removed] null proxy (current |z|<1): n=90, prior spread-neutral edge >0: 57%
+  Sharp   n= 21 prior edge>0 100%  prior z≥2 67%  → share by chance ≈ 0% (90% range 0%–0%)  [rec 8]
+  Rising  n= 27 prior edge>0 81%  prior z≥2 19%  → share by chance ≈ 43% (90% range 16%–75%)  [rec 13]
+  All rec n= 48 prior edge>0 90%  prior z≥2 40%  → share by chance ≈ 24% (90% range 9%–44%)  [rec 21]
+
+=== 5. Who each correction removes ===
+null proxy q0=0.57 (n=90); genuine-excluded estimate = n_val × max(0,(share prior>0 − q0)/(1 − q0))
+spread fix only (z≥1)        pass  55 | removed vs today  19 (checked 19: prior>0 12, z≥2  1; est. genuine  2.8) | beyond spread fix   0 (checked  0: prior>0  0; est. genuine  0.0)
++ Rising z≥1.645             pass  43 | removed vs today  31 (checked 30: prior>0 21, z≥2  4; est. genuine  9.2) | beyond spread fix  12 (checked 11: prior>0  9; est. genuine  6.4)
++ Rising z≥2                 pass  37 | removed vs today  37 (checked 34: prior>0 24, z≥2  4; est. genuine 10.9) | beyond spread fix  18 (checked 15: prior>0 12; est. genuine  8.1)
++ BH FDR 10% (all tiers)     pass  33 | removed vs today  41 (checked 38: prior>0 28, z≥2  5; est. genuine 14.9) | beyond spread fix  22 (checked 19: prior>0 16; est. genuine 12.1)
+no spread fix, Rising z≥2    pass  51 | removed vs today  23 (checked 20: prior>0 15, z≥2  4; est. genuine  8.5) | beyond spread fix  14 (checked 11: prior>0 10; est. genuine  8.7)
+no spread fix, BH            pass  47 | removed vs today  27 (checked 24: prior>0 18, z≥2  4; est. genuine 10.2) | beyond spread fix  16 (checked 13: prior>0 11; est. genuine  8.4)
+BH cuts: {'vm': 0.0103, 'v0': 0.0166}
