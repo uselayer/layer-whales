@@ -112,7 +112,10 @@ def watch(client: Any, counts: Usage | None = None) -> None:
 
     def answered(response: Any) -> None:
         if response.request.extensions.get("signals_counted"):
-            (counts or usage).add("api", f"{response.request.url.host or ''} {status_class(response.status_code)}")
+            url, cls = response.request.url, status_class(response.status_code)
+            (counts or usage).add("api", f"{url.host or ''} {cls}")
+            if cls != "2xx":  # which endpoint failed: its path's first part only (never an id, nor the query's wallet)
+                (counts or usage).add("api_failed", f"{url.host or ''} /{url.path.strip('/').split('/')[0]} {cls}")
 
     client.event_hooks = {"request": [*hooks.get("request", []), sent], "response": [*hooks.get("response", []), answered]}
 

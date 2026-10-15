@@ -98,7 +98,7 @@ def test_every_request_the_sdks_client_sends_is_counted_by_host_and_how_it_ended
     def answer(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/down":
             raise httpx.ConnectError("no route", request=request)
-        return httpx.Response({"/ok": 200, "/slow": 429, "/gone": 404, "/err": 503}[request.url.path])
+        return httpx.Response({"/ok": 200, "/slow": 429, "/gone": 404, "/err": 503}.get(request.url.path, 404))
 
     u = Usage(clock=lambda: NOW)
     client = httpx.Client(transport=httpx.MockTransport(answer))
@@ -108,8 +108,12 @@ def test_every_request_the_sdks_client_sends_is_counted_by_host_and_how_it_ended
     with pytest.raises(httpx.ConnectError):
         client.get("https://data-api.polymarket.com/down")
     client.get("https://api.telegram.org/ok")
+    client.get(f"https://data-api.polymarket.com/positions?user={AMY}&market=0xabc")
     got = api_counts(u.since_launch("api_sent"), u.since_launch("api"))
-    assert got == {"data-api.polymarket.com": {"requests": 6, "2xx": 2, "429": 1, "404": 1, "503": 1, "error": 1},
+    # which endpoint failed: the path's first part only (the wallet in the query never kept)
+    assert u.since_launch("api_failed") == {"data-api.polymarket.com /slow 429": 1, "data-api.polymarket.com /gone 404": 1,
+                                            "data-api.polymarket.com /err 503": 1, "data-api.polymarket.com /positions 404": 1}
+    assert got == {"data-api.polymarket.com": {"requests": 7, "2xx": 2, "429": 1, "404": 2, "503": 1, "error": 1},
                    "api.telegram.org": {"requests": 1, "2xx": 1, "error": 0}}  # fmt: skip
 
 
@@ -357,11 +361,13 @@ def test_days_before_live_counting_say_not_counted_rather_than_zero(api: TestCli
 def test_a_sweep_a_restart_cut_off_says_so_and_errors_leave_addresses_out(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     d = engine.directory()
     d.sweep_finished(d.sweep_started(at=time.time() - 7200), error=f"VenueError: GET /positions?user={AMY} failed")
+    d.sweep_finished(d.sweep_started(at=time.time() - 5400), error=engine.SWEEP_STOPPED)  # a deploy stopped it
     d.sweep_started(at=time.time() - 3600)  # cut off: never finished
     monkeypatch.setitem(engine._directory_state, "running", False)
     r = api.get("/api/monitoring?days=2").json()  # 2 days: sweeps an hour or two ago, whatever the hour (UTC)
-    assert [s["status"] for s in r["sweeps"]] == ["cut_off_by_restart", "failed"]
-    assert AMY not in repr(r) and "user=0x…" in r["sweeps"][1]["error"]
+    assert [s["status"] for s in r["sweeps"]] == ["cut_off_by_restart", "cut_off_by_restart", "failed"]
+    assert AMY not in repr(r) and "user=0x…" in r["sweeps"][2]["error"]
+    assert not any("stopped early" in h for h in r["health"])  # the latest ended by a deploy: no warning
 
 
 def test_a_deploy_stopping_the_app_isnt_a_failed_try(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
