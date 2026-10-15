@@ -2232,7 +2232,6 @@ function profileNumbers(s, d, acct, n) {
     ],
     groups: [
       { title: "Record", rows: [
-        { k: "Worst drop from a high", v: worst90 != null ? usd(-worst90) : null, sub: "trading profit, last 90 days" },
         { k: "Weeks up", v: up != null && known ? `${up} of ${known}` : null, sub: known && known < 12 ? "since their first trade" : "last 12 weeks",
           weeks: up != null && known ? weeks : null },
         { k: "Markets", v: shares.length ? shares.map(([c, p]) => `${esc(c)} ${p}%`).join(" · ") : null,
@@ -2246,7 +2245,12 @@ function profileNumbers(s, d, acct, n) {
       ] },
     ],
     fold: [
-      { k: `Won, ${readPeriod(s)}`, v: s.settled ? `${s.won} of ${s.settled}` : null, sub: "checked trades that settled their way" },
+      { k: `Won, ${readPeriod(s)}`, v: s.settled ? `${s.won} of ${s.settled}` : null,
+        sub: "checked trades that settled; won = the outcome they bought paid out, even if they sold first" },
+      // One reading a day, at the hour the score was made: a game in play at that hour can set it (#129's notes).
+      // Back in Record once the SDK works it out from the whole hourly curve.
+      { k: "Worst drop from a high", v: worst90 != null ? usd(-worst90) : null,
+        sub: "trading profit, last 90 days · read once a day, so it can miss or exaggerate a drop within a day" },
       { k: "Resting orders (maker)", v: pct(s.maker_share), sub: "last 500 fills" },
       { k: "How far the price moved before you could buy", v: gap != null ? centsSigned(gap).replace("+", "") : null, sub: "a minute after they bought, on average" },
       { k: "Biggest win, all time", v: s.biggest_win != null ? usd(s.biggest_win) : null, sub: "Polymarket's figure" },

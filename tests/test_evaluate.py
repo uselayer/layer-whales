@@ -117,6 +117,9 @@ def test_their_numbers_lead_with_realized_and_open_pnl_wallet_and_the_win_rate_s
     assert m["Wallet"]["v"] == "$1.1M" and m["Wallet"]["sub"].startswith("cash $800K + open positions $300K")
     assert m["Made money on"]["v"] is None  # "—" until the SDK reads every settled position
     assert [g["title"] for g in month["groups"]] == ["Record", "How they trade"]
+    # one reading a day can miss or exaggerate a drop: the fold's, not Record's, until the SDK uses the hourly curve
+    assert "Worst drop from a high" in [r["k"] for r in month["fold"]]
+    assert "Worst drop from a high" not in [r["k"] for g in month["groups"] for r in g["rows"]]
     assert m["Weeks up"]["v"] == "4 of 6" and m["Weeks up"]["sub"] == "since their first trade" and m["Weeks up"]["weeks"]
     assert m["Markets"]["v"] == "Sports 98%" and m["Markets"]["sub"] == "of 42 events checked, last 30 days"  # under 5% left out
     assert m["Usual opening buy"]["v"] == "$24.8K" and m["Usual price paid"]["v"] == "35¢–54¢"
