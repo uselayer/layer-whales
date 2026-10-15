@@ -1310,6 +1310,10 @@ def monitoring_report(days: int = 14) -> dict[str, Any]:
                     "egress and cost. A day before counted_from has them as null (not counted), never 0.",
             "since_launch": "api.since_launch, api.polymarket_reads_since_launch and infrastructure.since_launch_usd "
                             "start again at each restart (infrastructure.uptime_h).",
+            "qualification": "History, from every score kept (score_history, back to 2026-10-13): each score compared "
+                             "with the wallet's score before it, tiers as kept when scored. A recommended trader whose "
+                             "score only grew stale (not rescored) isn't a dropout here: freshness.recommended says "
+                             "how many are past fresh. Pairs either side of an imported score aren't compared.",
             "counted_from": r["counted_from"],
         }  # fmt: skip
         r["as_of"] = datetime.fromtimestamp(now, UTC).isoformat()
