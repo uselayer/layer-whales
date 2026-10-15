@@ -81,12 +81,14 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
   their way before a copy gets in) or **Not offered**. A Proven sharp can be costly to copy.
   - One bar: on the left the market chips (your onboarding choice) and **Copyable only**; on the right
     **Search name or wallet**, the period (7D / 30D / 90D, once the SDK provides it) and the sort: Recommended
-    (the checks' order), Most consistent, Profit, Win rate, Most active, Copy result.
-  - Columns, grouped: **Skill** (price after buys: how far the price moved their way after they bought, and over
-    how many trades; Recommended ranks by it), **Track record** (12-week consistency, profit, won X of Y settled in
-    the last 30 days), **Style** (their usual trade over the last 30 days), **Copying** (copy status). One figure
-    per cell; how often they trade, per $ traded and the copy estimate are on the trader's page. A trader with
-    under 4 weeks of history is marked New instead of ranked. On a phone each trader is one card.
+    (the checks' order), Most consistent, Profit, Win rate, Most active, Copy result, Return per $, Most settled
+    trades.
+  - Columns, each answering a question traders ask, with a one-line description under its name: **Results**
+    (profit for the period, return per $ traded, win rate, settled trades in the last 30 days), **Consistency and
+    risk** (weeks in profit out of the last 12, trend, biggest drop: "—" until its figure is fixed), **Copying**
+    (copy status). Under the name, the markets they're good at. One figure per cell; the price move after they
+    buy, how often they trade and the copy estimate are on the trader's page. A trader with under 4 weeks of
+    history is marked New instead of ranked. On a phone each trader is one card.
   - Weeks in profit, 7D/90D and the "per $ traded" return come from the SDK's profit history (uselayer
     0.6). Until then they show "—" and **Most consistent** says "coming soon"; nothing is made up.
   - A trader matches your markets when it's the category they trade most or one they're strong in. Searching a
