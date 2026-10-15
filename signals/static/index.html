@@ -923,7 +923,7 @@ function usBox(b, { button = true } = {}) {
   if (!us) return `<div class="card copybox usbox">${head}<p>We couldn't check for a Polymarket US match just now.</p></div>`;
   if (!us.found) return `<div class="card copybox usbox">${head}<p><b>No verified US match found.</b> Layer hasn't matched this market to one on Polymarket US. It may still be listed there, possibly with different rules.</p></div>`;
   return `<div class="card copybox usbox">${head}
-    <p>Layer matched ${sitsOut(us) ? "this player's line" : "the same market"} on Polymarket US, through Kalshi${us.outcome ? `: <b>${esc(us.outcome)}</b>` : ""}. Polymarket US has its own order book and fees, so prices and liquidity there may differ, and this trader's price isn't one to expect there.</p>
+    <p>Layer matched ${sitsOut(us) ? "this player's line" : "the same market"} on Polymarket US${us.outcome ? `: <b>${esc(us.outcome)}</b>` : ""}. Polymarket US has its own order book and fees, so prices and liquidity there may differ, and this trader's price isn't one to expect there.</p>
     ${diffs.length ? `<p>How the two may settle differently:</p><ul>${diffs.map((x) => `<li>${esc(x.text)}</li>`).join("")}</ul>` : "<p>Layer states no differences in how the two settle.</p>"}
     ${button ? `<a class="btn ghost wide" href="${esc(us.url)}" target="_blank" rel="noopener" style="display:block;text-align:center">View on Polymarket US ↗</a>` : ""}</div>`;
 }
