@@ -160,8 +160,10 @@ _PHASE_3_INDEXES = "CREATE INDEX IF NOT EXISTS wallets_by_next_check ON wallets 
 _EXPLORE_COLUMNS = (("market_usd", "REAL"), ("evidence_cut", "INTEGER"), ("typical_usd", "REAL"),
                     ("listed", "INTEGER NOT NULL DEFAULT 0"))  # fmt: skip
 PUBLIC_SOURCES = ("leaderboard", "market", "feed", "check")
-# The evaluation's lanes for wallets never looked at (``due``): their best place on any leaderboard, and the most
-# dollars a trade they were seen with in a market or the Feed's big trades. Kept as sightings come in (``_add``).
+# The evaluation's lanes for wallets never looked at (``due``): their best place on a day, week or month leaderboard
+# (all-time boards leave it out: measured 2026-10-15, top-100 wallets there yielded 0 of 25, against 3 of 35 on the
+# shorter boards), and the most dollars a trade they were seen with in a market or the Feed's big trades. Kept as
+# sightings come in (``_add``).
 _QUEUE_COLUMNS = (("best_rank", "INTEGER"), ("seen_usd", "REAL"))
 _QUEUE_INDEXES = """
 CREATE INDEX IF NOT EXISTS wallets_new_by_rank ON wallets (best_rank) WHERE status = 'found';
@@ -169,18 +171,27 @@ CREATE INDEX IF NOT EXISTS wallets_new_by_size ON wallets (seen_usd) WHERE statu
 CREATE INDEX IF NOT EXISTS wallets_new ON wallets (wallet) WHERE status = 'found';
 """
 # Wallets never looked at come from three lanes, so no one kind of trader takes the evaluation (``due``):
-# - ``board``: promising leaderboard wallets, best place on any board first;
-# - ``off_board``: wallets on no leaderboard, seen trading in markets or in the Feed's big trades, the biggest dollars
-#   a trade first (large and selective bettors the boards miss);
+# - ``board``: promising leaderboard wallets, best place on a day, week or month board first;
+# - ``off_board``: wallets on no leaderboard at all, seen trading in markets or in the Feed's big trades, the biggest
+#   dollars a trade first (large and selective bettors the boards miss);
 # - ``sample``: every wallet not looked at yet, in wallet-address order, which is as good as random: a broad,
-#   unbiased sample, so nothing is only ever reached by being promising.
+#   unbiased sample, so nothing is only ever reached by being promising;
+# - ``recheck``: wallets due a look again (most of them a quick look: one read), selective traders first (8+ markets
+#   in 90 days, short of 8 in 30), so one who reaches enough bets is scored then, not after every new wallet.
 # Each round, a slot goes to the lane that has used the least of the evaluation's reads lately (``lane_reads``).
-LANES = ("board", "off_board", "sample")
+LANES = ("board", "off_board", "sample", "recheck")
+_ON_BOARD = "EXISTS (SELECT 1 FROM sightings b WHERE b.wallet = q.wallet AND b.source = 'leaderboard')"
 _LANE_SQL = {
     "board": ("best_rank IS NOT NULL", "best_rank, wallet"),
-    "off_board": ("best_rank IS NULL AND seen_usd IS NOT NULL", "seen_usd DESC, wallet"),
+    "off_board": (f"seen_usd IS NOT NULL AND NOT {_ON_BOARD}", "seen_usd DESC, wallet"),
     "sample": ("1", "wallet"),
 }
+_SHORT_BOARDS = "(s.place LIKE '% DAY %' OR s.place LIKE '% WEEK %' OR s.place LIKE '% MONTH %')"
+
+
+def _short_board(place: str) -> bool:
+    """A day, week or month leaderboard ("PNL MONTH POLITICS"), not an all-time one."""
+    return place.split(" ")[1:2] in (["DAY"], ["WEEK"], ["MONTH"])
 LANE_COST = 14.0  # reads a never-looked-at wallet costs, about, until a lane has its own figure (a quick look, a
 #                   score for one in four: measured 2026-10-14)
 _EXPLORE_INDEXES = """
@@ -516,7 +527,7 @@ class Directory:
         if "best_rank" not in have:  # once: each wallet's lanes, from the sightings already kept
             con.execute(
                 "UPDATE wallets SET best_rank = (SELECT MIN(rank) FROM sightings s WHERE s.wallet = wallets.wallet "
-                "AND s.source = 'leaderboard' AND s.rank IS NOT NULL), seen_usd = (SELECT MAX(usd / trades) FROM "
+                f"AND s.source = 'leaderboard' AND s.rank IS NOT NULL AND {_SHORT_BOARDS}), seen_usd = (SELECT MAX(usd / trades) FROM "
                 "sightings s WHERE s.wallet = wallets.wallet AND s.source IN ('market', 'feed') AND s.trades > 0)"
             )
         if "listed" not in have:  # once: which wallets were already found somewhere public
@@ -579,7 +590,8 @@ class Directory:
         con.executemany("UPDATE wallets SET listed = 1 WHERE wallet = ? AND listed = 0",
                         [(w,) for w in {s.wallet.lower() for s in rows if s.source in PUBLIC_SOURCES}])  # fmt: skip
         con.executemany("UPDATE wallets SET best_rank = MIN(COALESCE(best_rank, ?), ?) WHERE wallet = ?",
-                        [(s.rank, s.rank, s.wallet.lower()) for s in rows if s.source == "leaderboard" and s.rank])
+                        [(s.rank, s.rank, s.wallet.lower()) for s in rows
+                         if s.source == "leaderboard" and s.rank and _short_board(s.place)])  # fmt: skip
         con.executemany(
             "UPDATE wallets SET seen_usd = MAX(COALESCE(seen_usd, ?), ?) WHERE wallet = ?",
             [(s.usd / s.trades, s.usd / s.trades, s.wallet.lower()) for s in rows
@@ -722,16 +734,25 @@ class Directory:
                 "on_leaderboard": bool(b)} for w, k, c, st, at, n, b in rows]  # fmt: skip
         shown = [x for x in old if x["kind"] == "presented"]
         rec = [x for x in old if x["kind"] == "recommended"]
-        rest = [x for x in old if x["kind"] == "recheck"]
-        return (shown + (new + rec if new_first else rec + new) + rest)[:limit]
+        return (shown + (new + rec if new_first else rec + new))[:limit]  # rechecks: a lane in ``new``
 
     @staticmethod
     def _new(con: sqlite3.Connection, limit: int, args: dict[str, Any], reads: dict[str, float],
              cost: dict[str, float]) -> list[dict[str, Any]]:  # fmt: skip
-        """Up to ``limit`` wallets never looked at, from the LANES: each lane's next ones (its own order, the
-        categories taking turns), and each slot to the lane whose reads, with what this round adds at its cost a
-        wallet, are the fewest, so no lane monopolises the budget and a lane with nobody left gives way."""
+        """Up to ``limit`` wallets from the LANES: never looked at (board, off-board, the sample: each its own order,
+        the categories taking turns) and due again (recheck), each slot to the lane whose reads, with what this round
+        adds at its cost a wallet, are the fewest, so no lane monopolises the budget and a lane with nobody left gives
+        way."""
         queues: dict[str, list[dict[str, Any]]] = {}
+        rechecks = con.execute(
+            f"""SELECT wallet, COALESCE(category, seen_category, 'Other'), name, status, scored_at,
+              {_LISTED.replace("?", ":listed_after")} FROM wallets q WHERE {_DUE} AND status != 'found' AND {_KIND} = 3
+            ORDER BY (COALESCE(buys_90d, 0) >= {RISING_BETS} AND COALESCE(buys_30d, 0) < {RISING_BETS}) DESC,
+              next_check, wallet LIMIT :n""",
+            args | {"n": limit * 4},
+        ).fetchall()
+        queues["recheck"] = [{"wallet": w, "kind": "recheck", "category": c, "status": st, "scored_at": at, "name": n,
+                              "on_leaderboard": bool(b), "lane": "recheck"} for w, c, n, st, at, b in rechecks]  # fmt: skip
         for lane, (where, order) in _LANE_SQL.items():
             rows = con.execute(
                 f"""SELECT wallet, COALESCE(category, seen_category, 'Other'), name, {_LISTED.replace("?", ":listed_after")}
