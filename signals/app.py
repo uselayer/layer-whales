@@ -55,6 +55,7 @@ from signals import monitoring, us_match
 from signals.budget import POLYMARKET_HOSTS, BackgroundHttp, Budget
 from signals.directory import (
     CHECK_BOARDS,
+    EVIDENCE,
     EXPLORE_GROUPS,
     LANES,
     LISTED_FRESH_S,
@@ -504,6 +505,7 @@ def _feed_note(trades: list[WhaleTrade], cats: dict[str, str]) -> None:
     ])  # fmt: skip
 
 
+SWEEP_STOPPED = "Stopped before it finished (the app was shutting down)."  # a deploy: the next sweep picks up
 MARKETS_PART = "markets"  # the sweep's market part, as sweep_parts names it (a leaderboard is "PNL MONTH POLITICS")
 
 
@@ -552,7 +554,7 @@ def directory_sweep(stop: threading.Event | None = None) -> dict[str, Any]:
         found = background().find_wallets(leaderboards=bool(boards), boards=boards, markets=markets)  # the budget paces it
         for s in found:
             if halt.is_set():
-                error = "Stopped before it finished (the app was shutting down)."
+                error = SWEEP_STOPPED
                 break
             where = s.where if s.source == "leaderboard" else None
             if where != board:  # on to the next board, or to the markets
@@ -1126,7 +1128,7 @@ SCREENED_KINDS = ("new", "recheck")  # what the evaluation quick-checks first (r
 
 
 LIVE_FIELDS = ("screened", "screened_never_looked_at_before", "evaluated", "api", "polymarket_reads_by_budget",
-               "evaluated_by_lane", "infra")  # fmt: skip
+               "evaluated_by_lane", "api_failed", "infra")  # fmt: skip
 
 
 def _by_lane(tally: dict[str, float]) -> dict[str, dict[str, int]]:
@@ -1160,6 +1162,8 @@ def _day_view(day: dict[str, Any], counted_from: str | None) -> dict[str, Any]:
         "api": monitoring.api_counts(t.get("api_sent", {}), t.get("api", {})),
         "polymarket_reads_by_budget": {k: int(v) for k, v in t.get("lane", {}).items()},
         "evaluated_by_lane": _by_lane(t.get("evaluated_lane", {})),
+        # which endpoints failed, and how ("data-api.polymarket.com /positions 403"), most first
+        "api_failed": dict(sorted(((k, int(v)) for k, v in t.get("api_failed", {}).items()), key=lambda kv: -kv[1])[:15]),
         "infra": {"cpu_s": round(infra.get("cpu_s", 0)), "ram_gb_h": round(infra.get("ram_gb_s", 0) / 3600, 2),
                   "egress_mb": round(infra.get("egress_bytes", infra.get("served_bytes", 0)) / 2**20, 1),
                   "served_mb": round(infra.get("served_bytes", 0) / 2**20, 1),
@@ -1176,7 +1180,7 @@ def _health(r: dict[str, Any], now: float) -> list[str]:
     sweep = directory().last_sweep()
     if DIRECTORY_ON and not _directory_state["running"] and (sweep is None or now - sweep["finished"] > DIRECTORY_SWEEP_S + 6 * 3600):
         out.append("No sweep has finished in the last 30 hours." if sweep else "No sweep has finished yet.")
-    if err := directory().last_error():
+    if (err := directory().last_error()) and not err["error"].startswith(SWEEP_STOPPED):  # a deploy's isn't a failure
         out.append(f"The last sweep stopped early: {err['error']}")
     if EVALUATE_ON and _evaluate_state["error"]:
         out.append(f"The evaluation's last round failed: {_evaluate_state['error']}")
@@ -1276,7 +1280,8 @@ def _sweep_status(sweeps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     restart (a deploy: it never got to say; the next sweep picked up from the board it was on)."""
     out = []
     for i, s in enumerate(sweeps):
-        status = ("failed" if s["error"] else "finished") if s["finished"] is not None else (
+        stopped = (s["error"] or "").startswith(SWEEP_STOPPED)  # a deploy shut the app down mid-sweep: not a failure
+        status = ("cut_off_by_restart" if stopped else "failed" if s["error"] else "finished") if s["finished"] is not None else (
             "running" if i == 0 and _directory_state["running"] else "cut_off_by_restart")  # fmt: skip
         out.append(s | {"status": status, "error": _scrub(s["error"])})
     return out
@@ -1333,6 +1338,10 @@ def monitoring_report(days: int = 14) -> dict[str, Any]:
                     "egress and cost. A day before counted_from has them as null (not counted), never 0.",
             "since_launch": "api.since_launch, api.polymarket_reads_since_launch and infrastructure.since_launch_usd "
                             "start again at each restart (infrastructure.uptime_h).",
+            "qualification": "History, from every score kept (score_history, back to 2026-10-13): each score compared "
+                             "with the wallet's score before it, tiers as kept when scored. A recommended trader whose "
+                             "score only grew stale (not rescored) isn't a dropout here: freshness.recommended says "
+                             "how many are past fresh. Pairs either side of an imported score aren't compared.",
             "counted_from": r["counted_from"],
         }  # fmt: skip
         r["as_of"] = datetime.fromtimestamp(now, UTC).isoformat()
@@ -1680,6 +1689,53 @@ def _stored_score(wallet: str, now: float | None = None) -> dict[str, Any] | Non
     return s | {"stored_at": s["scored_at"]} if now - s["scored_at"] < fresh else None
 
 
+# ---- a trader's record, as Polymarket reports it: for a page without a fresh score ----
+# Limited evidence, a quick look or not checked yet: their page had only our quick look's counts. This adds the
+# facts Polymarket itself publishes (all-time profit, volume, trades, biggest win, open positions and their sizes,
+# the categories of the markets they hold and lately traded). A record, never a skill verdict: the page says so.
+# About 5 reads (profile, stats, positions, latest trades, the markets' categories) on the checks' budget (checker:
+# "Check now"'s, so never the Feed's share), kept RECORD_TTL_S per wallet.
+RECORD_TTL_S = 600
+RECORD_TRADES = 20  # their latest trades, for the categories they trade lately
+RECORD_POSITIONS = 8  # open positions listed, biggest first (all of them, up to the SDK's 50, are counted)
+
+
+def _record(wallet: str) -> dict[str, Any]:
+    d = checker().trader("polymarket", wallet, trades=RECORD_TRADES, closed=0)
+    held = sorted(d.positions, key=lambda p: p.value or 0.0, reverse=True)
+    markets = list(dict.fromkeys([p.market for p in held] + [t.market for t in d.trades]))
+    try:
+        cats = _categories(markets) if markets else {}
+    except VenueError:
+        cats = {}  # the record still shows, without categories
+    per = Counter({m.partition(":")[0]: c for m, c in cats.items()}.values())  # markets, not outcomes, per category
+    values = [p.value for p in held if p.value is not None]
+    return {
+        "wallet": wallet,
+        "name": d.trader.name,
+        "joined": d.joined,
+        "stats": {k: d.stats.get(k) for k in ("trading_pnl", "realized_pnl", "unrealized_pnl", "pnl", "income",
+                                              "volume_usd", "trades", "biggest_win")},  # fmt: skip
+        "open": {"count": len(held), "at_least": len(held) >= 50, "value": round(sum(values), 2) if values else None},
+        "positions": [p.to_dict() | {"category": cats.get(p.market)} for p in held[:RECORD_POSITIONS]],
+        "categories": [{"category": c, "markets": n} for c, n in per.most_common()],
+        "trades_read": len(d.trades),
+        "read_at": time.time(),
+    }
+
+
+@app.get("/api/record/{wallet}")
+def record(wallet: str) -> dict[str, Any]:
+    """A Polymarket wallet's record as Polymarket reports it (``_record``), kept RECORD_TTL_S."""
+    w = wallet.lower()
+    if not _WALLET.fullmatch(w):
+        raise HTTPException(400, detail="That isn't a Polymarket wallet address.")
+    try:
+        return cached(f"record:{w}", RECORD_TTL_S, lambda: _record(w))  # type: ignore[no-any-return]
+    except VenueError as e:
+        raise venue_error(e) from e
+
+
 def _client(request: Request | None) -> str:
     if request is None:
         return "local"
@@ -1719,23 +1775,25 @@ def check_now(wallet: str, request: Request | None = None) -> dict[str, Any]:
 
 @app.get("/api/traders")
 def explore(group: str = "passed", q: str = "", category: str = "", active: int = 0, min_usd: float = 0,
-            board: str = "", makers: int = 0, unchecked: int = 0, sort: str = "recent",
+            board: str = "", makers: int = 0, unchecked: int = 0, evidence: str = "", sort: str = "recent",
             offset: int = 0) -> dict[str, Any]:  # fmt: skip
     """A page of Explore (see Directory.browse), with how many each group lists. From directory.db only, never
     Polymarket. A search (``q``) looks through the limited-evidence and checked groups, and the not-checked-yet one
     too with ``unchecked=1``; otherwise ``unchecked_matches`` says how many of those it would find (up to 20)."""
     if not EXPLORE_ON:
         raise HTTPException(404, detail="Not found")
-    if group not in EXPLORE_GROUPS or sort not in SORTS or not 0 <= offset <= EXPLORE_MAX_OFFSET:
-        raise HTTPException(400, detail="Unknown group, sort or page.")
+    if (group not in EXPLORE_GROUPS or sort not in SORTS or (evidence and evidence not in EVIDENCE)
+            or not 0 <= offset <= EXPLORE_MAX_OFFSET):  # fmt: skip
+        raise HTTPException(400, detail="Unknown group, sort, filter or page.")
     q = q.strip()[:64]
     if q and len(q) < 2:
         raise HTTPException(400, detail="Type at least 2 letters to search.")
     search_in = ("limited", "checked", "recommended", *(("unchecked",) if unchecked else ()))
-    args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, sort, offset)
+    args = (group, q.lower(), category, active, min_usd, board, makers, unchecked, evidence, sort, offset)
     page = cached(f"explore:{args}", EXPLORE_TTL_S, lambda: directory().browse(
         group, q=q, category=category or None, active_days=active or None, min_usd=min_usd or None,
-        board=board or None, makers=bool(makers), sort=sort, limit=EXPLORE_PAGE, offset=offset,
+        board=board or None, makers=bool(makers), evidence=evidence or None, sort=sort, limit=EXPLORE_PAGE,
+        offset=offset,
         search_in=search_in))  # fmt: skip
     counts = cached("explore:counts", EXPLORE_COUNTS_TTL_S, lambda: directory().explore_counts())
     others = None
@@ -1874,7 +1932,10 @@ LIVE_PAGE_READS = 3  # a Feed view reads at most this many traders the poller ha
 LIVE_KEEP_S = 300  # a trader nobody recommends or follows any more drops out of the cache after this
 LIVE_REC_FLOOR = 4  # Recommended reads a round even when everyone followed fills the slot, so it never stops
 LIVE_TRADES, LIVE_GAP_TRADES = 100, 500  # a trader's latest trades per read; further back when there's a gap
-POSITIONS_PER_READ = 20  # conditionIds per read of the positions a trader's 50 biggest left out
+# conditionIds per read of the positions a trader's 50 biggest left out. Polymarket's firewall (Cloudflare) answers 403
+# with a block page once the query passes ~1,300 characters: 19 ids (1,272) pass, 20 (1,339) never do (2026-10-15),
+# and that failed the trader's whole read every round. 15 (1,004) keeps well under it.
+POSITIONS_PER_READ = 15
 _live_priced: dict[str, float] = {}  # wallet -> when (monotonic) its open positions were last read
 _live_failed: dict[str, float] = {}  # wallet -> when (monotonic) the poller last couldn't read it
 # wallet -> its failures in a row since its last good read: how many, since when (monotonic), and the last error, so
@@ -2695,7 +2756,8 @@ CONNECTED = (
     "they traded, at what price, the price now and when they traded. Polymarket's public data runs a few minutes "
     "behind, so alerts are never instant.\n\n"
     "Not every trade gets its own message. A trader's buys of one outcome within 30 minutes come as one, and after a "
-    f"message, more buys of that outcome (or more sells of it) are left out for {ALERT_AGAIN_S // 3600} hours. When two or "
+    f"message, more buys of that outcome (or more sells of it) are left out for {ALERT_AGAIN_S // 3600} hours, except "
+    "the sale that leaves them holding none of it. When two or "
     "more traders you follow buy the same thing, one message lists them all and is updated as more buy. Nothing comes "
     "for a market that's all but decided (2¢ or less, 98¢ or more). If you've picked markets on Signals, trades of "
     f"${WHALE_USD:,.0f} or more there come too. At most {DAILY_CAP} alerts a day, and {TRADER_DAILY} from any one "
@@ -3182,6 +3244,9 @@ class NewBuy:
         return self._text.replace(ALERT_ID_MARK, aid)
 
 
+EXITED = "They no longer hold it."  # a sale that leaves them none: _exited_recently finds it in a kept alert by this
+
+
 def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool, now: float | None, at: float,
                seen: float, aid: str | None = None) -> str:  # fmt: skip
     """The Telegram message for a sell by a trader you follow, whoever they are: information only, never a
@@ -3190,7 +3255,7 @@ def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool,
     some of it: the price now and "Check current price"; once they hold none, "They no longer hold it." and no price
     (there's no position to read it from, and no number is made up)."""
     e = html.escape
-    still = ("They still hold some." if now is None else f"Now {_cents(now)}. They still hold some.") if held else "They no longer hold it."
+    still = ("They still hold some." if now is None else f"Now {_cents(now)}. They still hold some.") if held else EXITED
     lines = [f"<b>{e(_who(wallet))}</b> sold <b>{e(t.outcome or 'Yes')}</b> at {_cents(price)} (${usd:,.0f})",
              e(t.title or "A Polymarket market"), still, _traded(at, seen)]  # fmt: skip
     where, us_url = _venue_line(t)
@@ -3231,6 +3296,15 @@ def _sold_recently(trader: str, outcome: str, now: float) -> bool:
         q = ("SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ?"
              " UNION ALL SELECT 1 FROM held WHERE side = 'sell' AND trader = ? AND outcome = ? AND at >= ? LIMIT 1")  # fmt: skip
         return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S) * 2).fetchone() is not None
+
+
+def _exited_recently(trader: str, outcome: str, now: float) -> bool:
+    """Whether a sale that left this trader holding none of this outcome was already alerted (to anyone) in the
+    last ALERT_AGAIN_S, from alerts.db (the kept message says EXITED), so a restart doesn't alert it again."""
+    with _db() as con:
+        q = ("SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ? AND body LIKE ?"
+             " LIMIT 1")  # fmt: skip
+        return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S, f"%{EXITED}%")).fetchone() is not None
 
 
 def _told(uid: str, trader: str, outcome: str, now: float) -> bool:
@@ -3301,6 +3375,14 @@ def _deliver(uid: str, chat: str, b: NewBuy, category: str | None) -> int:
     return 1 if aid else 0
 
 
+def _fill_key(f: WhaleTrade) -> str:
+    """A fill's key in pending. Polymarket's trade id is its transaction's hash, and one transaction can hold several
+    fills (one per order it matched: 1.2% of 301,425 fills read for PR #106), so the hash alone kept only the first
+    and an alert's dollars came up short. The outcome, side, size and price tell them apart (none of those fills
+    collided) and stay the same when the fill is read again."""
+    return f"{f.trade_id}:{f.market}:{f.action}:{f.size!r}:{f.price!r}"
+
+
 def _add_up(w: str, fills: list[WhaleTrade], now: float) -> dict[str, tuple[float, float, float]]:
     """Keep these new fills (alerts.db: pending) and return, per market, the running total of this trader's fills
     not alerted yet over the last ALERT_MAX_AGE_S, this round's and earlier rounds' (and before a restart):
@@ -3308,7 +3390,7 @@ def _add_up(w: str, fills: list[WhaleTrade], now: float) -> dict[str, tuple[floa
     with _db() as con:
         con.execute("DELETE FROM pending WHERE at < ?", (now - ALERT_MAX_AGE_S,))
         con.executemany("INSERT OR IGNORE INTO pending VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        [(f.trade_id, w, f.market, f.price, f.size, f.usd, f.at.timestamp()) for f in fills])  # fmt: skip
+                        [(_fill_key(f), w, f.market, f.price, f.size, f.usd, f.at.timestamp()) for f in fills])  # fmt: skip
         rows = con.execute("SELECT market, SUM(size), SUM(usd), MIN(at) FROM pending WHERE trader = ? AND at >= ?"
                            " GROUP BY market", (w, now - ALERT_MAX_AGE_S)).fetchall()  # fmt: skip
     return {m: (size, usd, at) for m, size, usd, at in rows if size}
@@ -3409,9 +3491,17 @@ def alert_pass(now: float | None = None) -> int:
                 (fills if t.action == "buy" else sold).setdefault(t.market, []).append(t)
         for market, ts in sold.items():
             sell = NewSell(w, ts, market in prices, prices.get(market), now)
-            if now - _alerted.get((w, f"sell:{market}"), 0) < ALERT_AGAIN_S or sell.settled() or _sold_recently(w, sell.outcome, now):
+            if sell.settled():
+                continue
+            again = now - _alerted.get((w, f"sell:{market}"), 0) < ALERT_AGAIN_S or _sold_recently(w, sell.outcome, now)
+            # after a sell alert, more sells of it are left out for ALERT_AGAIN_S, except the one that leaves them
+            # holding none: "They still hold some." isn't the last word on it (once in that time, across a restart)
+            if again and (sell.held or now - _alerted.get((w, f"exit:{market}"), 0) < ALERT_AGAIN_S
+                          or _exited_recently(w, sell.outcome, now)):  # fmt: skip
                 continue
             _alerted[(w, f"sell:{market}")] = now
+            if not sell.held:
+                _alerted[(w, f"exit:{market}")] = now
             new_sells.append(sell)
         totals = _add_up(w, [f for ts in fills.values() for f in ts], now) if fills else {}
         for market, ts in fills.items():

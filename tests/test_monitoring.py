@@ -98,7 +98,7 @@ def test_every_request_the_sdks_client_sends_is_counted_by_host_and_how_it_ended
     def answer(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/down":
             raise httpx.ConnectError("no route", request=request)
-        return httpx.Response({"/ok": 200, "/slow": 429, "/gone": 404, "/err": 503}[request.url.path])
+        return httpx.Response({"/ok": 200, "/slow": 429, "/gone": 404, "/err": 503}.get(request.url.path, 404))
 
     u = Usage(clock=lambda: NOW)
     client = httpx.Client(transport=httpx.MockTransport(answer))
@@ -108,8 +108,12 @@ def test_every_request_the_sdks_client_sends_is_counted_by_host_and_how_it_ended
     with pytest.raises(httpx.ConnectError):
         client.get("https://data-api.polymarket.com/down")
     client.get("https://api.telegram.org/ok")
+    client.get(f"https://data-api.polymarket.com/positions?user={AMY}&market=0xabc")
     got = api_counts(u.since_launch("api_sent"), u.since_launch("api"))
-    assert got == {"data-api.polymarket.com": {"requests": 6, "2xx": 2, "429": 1, "404": 1, "503": 1, "error": 1},
+    # which endpoint failed: the path's first part only (the wallet in the query never kept)
+    assert u.since_launch("api_failed") == {"data-api.polymarket.com /slow 429": 1, "data-api.polymarket.com /gone 404": 1,
+                                            "data-api.polymarket.com /err 503": 1, "data-api.polymarket.com /positions 404": 1}
+    assert got == {"data-api.polymarket.com": {"requests": 7, "2xx": 2, "429": 1, "404": 2, "503": 1, "error": 1},
                    "api.telegram.org": {"requests": 1, "2xx": 1, "error": 0}}  # fmt: skip
 
 
@@ -184,6 +188,36 @@ def test_the_funnel_goes_found_screened_evaluated_recommended_qualified(d: Direc
     assert {k: r["funnel"][k] for k in ("found", "screened", "fully_evaluated", "recommended", "qualified")} == {
         "found": 5, "screened": 4, "fully_evaluated": 3, "recommended": 2, "qualified": 1}  # fmt: skip
     assert r["funnel"]["qualified_per_1000_found"] == 200.0 and r["funnel"]["qualified_share_of_evaluated"] == 0.3333
+
+
+def test_dropouts_entries_and_re_entries_as_traders_are_scored_again(d: Directory) -> None:
+    """Each score against the wallet's score before it: AMY stays recommended (rising → proven is kept), BEN drops
+    to no_edge then comes back (a re-entry), CAL enters on its first score, DAN's import-to-score pair isn't compared,
+    and EVE's score before the window still counts as the one before (a dropout on the window's first day)."""
+    d.add([Seen(w, "market", "Sports", category="Sports") for w in (AMY, BEN, CAL, DAN, EVE)], at=NOW - 9 * DAY)
+    d.keep_scores([score(EVE, "rising")], "background", at=NOW - 5 * DAY)  # before the 3-day window
+    d.keep_scores([score(EVE, "too_few")], "background", at=NOW - 2 * DAY)
+    d.keep_scores([score(AMY, "rising")], "background", at=NOW - 2 * DAY + 60)
+    d.keep_scores([score(AMY, "proven")], "background", at=NOW - DAY)
+    d.keep_scores([score(BEN, "quiet")], "background", at=NOW - 2 * DAY + 120)
+    d.keep_scores([score(BEN, "no_edge")], "background", at=NOW - DAY + 60)
+    d.keep_scores([score(BEN, "quiet")], "background", at=NOW - 3600)
+    d.keep_scores([score(CAL, "rising")], "background", at=NOW - 7200)
+    d.keep_scores([score(DAN, "rising")], "import", at=NOW - 2 * DAY + 180)
+    d.keep_scores([score(DAN, "no_edge")], "background", at=NOW - 1800)
+    q = d.monitoring(days=3, now=NOW)["qualification"]
+    days = {x["day"]: x for x in q["by_day"]}
+    assert [x["day"] for x in q["by_day"]] == ["2026-10-14", "2026-10-13", "2026-10-12"]  # newest first
+    first, second, today = days["2026-10-12"], days["2026-10-13"], days["2026-10-14"]
+    # 10-12: EVE drops (her rising score was before the window); AMY and BEN enter; DAN's import isn't a pair
+    assert (first["dropped"], first["dropped_to"], first["entered"], first["net"]) == (1, {"too_few": 1}, 2, 1)
+    assert (second["rescored"], second["kept"], second["dropped"], second["dropped_to"]) == (2, 1, 1, {"no_edge": 1})
+    # today: BEN back (a re-entry), CAL's first score (an entry); DAN's score after his import isn't compared
+    assert (today["re_entered"], today["entered"], today["dropped"], today["net"]) == (1, 1, 0, 2)
+    assert q["skipped_import"] == 2  # DAN's imported score (not an entry) and the score after it (not a dropout)
+    assert (q["window"]["rescored"], q["window"]["kept"], q["window"]["dropped"]) == (3, 1, 2)
+    assert q["window"]["kept_share"] == 0.333 and q["window"]["dropped_to"] == {"too_few": 1, "no_edge": 1}
+    assert (q["recommended_now"], q["ever_recommended"]) == (3, 5)  # AMY, BEN, CAL now; EVE and DAN once
 
 
 def test_coverage_and_qualified_traders_by_category(d: Directory) -> None:
@@ -327,11 +361,13 @@ def test_days_before_live_counting_say_not_counted_rather_than_zero(api: TestCli
 def test_a_sweep_a_restart_cut_off_says_so_and_errors_leave_addresses_out(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     d = engine.directory()
     d.sweep_finished(d.sweep_started(at=time.time() - 7200), error=f"VenueError: GET /positions?user={AMY} failed")
+    d.sweep_finished(d.sweep_started(at=time.time() - 5400), error=engine.SWEEP_STOPPED)  # a deploy stopped it
     d.sweep_started(at=time.time() - 3600)  # cut off: never finished
     monkeypatch.setitem(engine._directory_state, "running", False)
     r = api.get("/api/monitoring?days=2").json()  # 2 days: sweeps an hour or two ago, whatever the hour (UTC)
-    assert [s["status"] for s in r["sweeps"]] == ["cut_off_by_restart", "failed"]
-    assert AMY not in repr(r) and "user=0x…" in r["sweeps"][1]["error"]
+    assert [s["status"] for s in r["sweeps"]] == ["cut_off_by_restart", "cut_off_by_restart", "failed"]
+    assert AMY not in repr(r) and "user=0x…" in r["sweeps"][2]["error"]
+    assert not any("stopped early" in h for h in r["health"])  # the latest ended by a deploy: no warning
 
 
 def test_a_deploy_stopping_the_app_isnt_a_failed_try(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:

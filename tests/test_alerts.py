@@ -582,6 +582,25 @@ def test_fills_seen_before_there_was_a_price_add_into_the_next_alert_across_a_re
     assert engine.alert_pass(now=t0.timestamp() + 90) == 1 and "($120)" in engine.tg.sent[-1]["text"]
 
 
+def test_fills_from_one_transaction_all_add_into_the_alert(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Polymarket's trade id is the transaction's hash, and one transaction can fill several orders: each fill counts
+    (it used to keep only the first, so the alert said $60 for a $160 buy), and reading them again adds nothing."""
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    live_reads(monkeypatch, detail_of(trades, {"0xcid:0": 0.50}))
+    t0 = datetime.now(UTC) - timedelta(minutes=5)
+    engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
+    one, two = trade(SAM, t0, 0.48, 60, "0xcid:0", "tx"), trade(SAM, t0, 0.50, 100, "0xcid:0", "tx")
+    assert one.trade_id == two.trade_id  # the same transaction
+    trades += [one, two]
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 60) == 1
+    assert "bought <b>Yes</b> at 49¢ ($160)" in engine.tg.sent[-1]["text"]  # both fills, at their average price
+    again = [trade(ANN, t0, 0.48, 60, "0xcid:1", "tx"), trade(ANN, t0, 0.50, 100, "0xcid:1", "tx")]
+    engine._add_up(ANN, again, t0.timestamp() + 90)
+    assert engine._add_up(ANN, again, t0.timestamp() + 95)["0xcid:1"][1] == 160  # read twice, kept once
+
+
 # ---- sells ----
 
 
@@ -621,6 +640,38 @@ def test_a_sell_alerts_with_the_price_now_while_they_still_hold_some_and_only_on
     trades.append(sold(SAM, t0 + timedelta(minutes=2), i="d"))
     engine._cache.clear()
     assert engine.alert_pass(now=t0.timestamp() + 9 * 60) == 0  # alerts.db remembers the sell
+
+
+def test_selling_the_rest_soon_after_a_partial_sell_still_alerts_once(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """After "They still hold some.", a sale that leaves them none within ALERT_AGAIN_S still goes out (it isn't
+    left out with the other sells), once in that time, and a restart doesn't send it again."""
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    prices = {"0xcid:0": 0.61}
+    live_reads(monkeypatch, detail_of(trades, prices))
+    t0 = datetime.now(UTC) - timedelta(minutes=6)
+    engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
+    trades.append(sold(SAM, t0, 0.62, 500, i="a"))
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 6 * 60) == 1
+    assert "They still hold some." in engine.tg.sent[-1]["text"]
+    trades.append(sold(SAM, t0 + timedelta(minutes=2), 0.60, 300, i="b"))  # sold the rest
+    prices.clear()
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 8 * 60) == 1
+    lines = engine.tg.sent[-1]["text"].splitlines()
+    assert lines[:3] == ["<b>Sam</b> sold <b>Yes</b> at 60¢ ($300)", "Will it &lt;rain&gt;?", engine.EXITED]
+    trades.append(sold(SAM, t0 + timedelta(minutes=3), 0.60, 100, i="c"))  # bought back and sold again: left out
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 9 * 60) == 0
+    engine._seen.clear()  # a restart
+    engine._alerted.clear()
+    engine._cache.clear()
+    engine.alert_pass(now=t0.timestamp() + 10 * 60)  # first round after it: noted only
+    trades.append(sold(SAM, t0 + timedelta(minutes=4), 0.60, 100, i="d"))
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 11 * 60) == 0  # alerts.db remembers the exit
+    assert len(engine.tg.sent) == 2
 
 
 def test_a_sell_of_everything_says_so_and_never_makes_up_a_price(api: TestClient) -> None:

@@ -334,6 +334,7 @@
   .ex-who { grid-area: who; display: grid; gap: 3px; min-width: 0; }
   .ex-sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ex-badges { grid-area: badges; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .ex-badges .tier { white-space: normal; text-align: right; border-radius: 10px; } /* a long label wraps in its column */
   .ex-stats { grid-area: stats; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .ex-stat { display: grid; gap: 2px; min-width: 0; }
   .ex-stat .k { font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -349,7 +350,7 @@
   .ex-opts button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .ex-factions { display: flex; justify-content: space-between; gap: 10px; margin-top: 22px; }
   @media (max-width: 1040px) {
-    .ex-row { grid-template-columns: 40px minmax(0, 1fr) 330px auto; }
+    .ex-row { grid-template-columns: 40px minmax(0, 1fr) 330px 150px; } /* fixed, so every row's figures line up */
   }
   .lb-board { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
   .lb-cols { display: grid; grid-template-columns: 28px minmax(0, 1fr) 180px 120px 96px 104px 116px 136px; gap: 12px; align-items: center; padding: 14px 18px; }
@@ -402,6 +403,10 @@
   .pf-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-top: 16px; }
   .pf-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
   .pf-card h2 { font-size: 16px; margin: 0; }
+  .pf-card h2 small { font-size: 13px; font-weight: 400; margin-left: 6px; }
+  .pf-sub { font-size: 14px; margin: 18px 0 0; }
+  .pf-facts.pf-pos { grid-template-columns: minmax(0, 1fr) auto; }
+  .pf-facts.pf-pos dd { text-align: right; }
   .pf-chart svg { width: 100%; height: auto; display: block; }
   .pf-chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
   .pf-legend { font-size: 12px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
@@ -545,7 +550,6 @@
     .ex-row { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "av who badges" "stats stats stats"; gap: 10px; padding: 14px; align-items: start; }
     .ex-stats { gap: 8px; padding-top: 2px; }
     .ex-stat .v small { display: block; }
-    .ex-sub { white-space: normal; }
     .ex-bar { flex-direction: column; align-items: stretch; }
     .ex-groups { display: flex; }
     .ex-groups button { flex: 1 0 auto; padding: 6px 12px; }
@@ -1774,22 +1778,29 @@ function renderWorth() {
 // never ranked: Whales (a usual bet of $1K or more, whatever our checks found, each row with its own label), Limited
 // evidence (too few bets to judge, from a quick look at their trades or a full check) and Checked (what a check
 // found); and, only when asked for in Filters, Not checked yet (nothing measured). Each group has its own defaults
-// (EX_DEFAULTS: Whales is active in 30 days, $1K+, biggest bet first); market and leaderboards carry across. Every
+// (EX_DEFAULTS: Whales is active in 30 days, $1K+, biggest bet first; Limited evidence the most markets in 90 days
+// first; Checked full checks only); market and leaderboards carry across. Every
 // filter that narrows the list shows as a chip under the bar. Traders who pass our checks are Recommended's: its
 // list, and from it every one of them (#/traders/passed), however many the list has room for.
 // A row is a few figures, each with its name; a figure we haven't read shows as unknown, never 0; a count from a
 // read that stopped early is "N+". The price move after their buys is what we saw; the tier says whether it's more
 // than chance (the z and the checks are on their page).
-const ex = { group: "whales", q: "", category: "", active: 30, size: 1000, board: "", sort: "size", unchecked: false, rows: [], more: false, offset: 0, counts: null };
+const ex = { group: "whales", q: "", category: "", active: 30, size: 1000, board: "", evidence: "", sort: "size", unchecked: false, rows: [], more: false, offset: 0, counts: null };
 const EX_GROUPS = [
   ["whales", "Whales", "Big bettors, whatever our checks found. A big bet isn't a sign of skill: the label on each says what we found."],
   ["limited", "Limited evidence", "Too few bets in the last 30 days to judge their skill either way. Their record so far, not a recommendation."],
   ["checked", "Checked", "We've looked at their trades: the label says what we found. Only Recommended recommends anyone."],
   ["unchecked", "Not checked yet", "Found on a leaderboard or trading in a market, not looked at yet: nothing about them has been measured."],
 ];
-const EX_DEFAULTS = { whales: { active: 30, size: 1000, sort: "size" } }; // any other group: any time, any size, recently active
-const exDefaults = (group) => EX_DEFAULTS[group] || { active: 0, size: 0, sort: "recent" };
-const EX_SORTS = [["recent", "Recently active"], ["size", "Biggest usual bet"], ["new", "Recently found"]];
+// Limited evidence opens on the longest records first (markets bought in 90 days); Checked on full checks, whose label
+// says what a score found (a quick look's are mostly "Dormant"). Any other group: any time, any size, recently active.
+const EX_DEFAULTS = {
+  whales: { active: 30, size: 1000, sort: "size" },
+  limited: { sort: "record" },
+  checked: { evidence: "full" },
+};
+const exDefaults = (group) => ({ active: 0, size: 0, evidence: "", sort: "recent", ...EX_DEFAULTS[group] });
+const EX_SORTS = [["recent", "Recently active"], ["record", "Most markets, 90 days"], ["size", "Biggest usual bet"], ["new", "Recently found"]];
 const EX_CATS = ["Politics", "Sports", "Crypto", "Esports", "Economy", "Culture", "Weather", "Tech", "Other"];
 // Filters: [key, title, options as [value, label]] (Whales' bet sizes start at its own $1K)
 const exFilters = (group) => [
@@ -1797,6 +1808,7 @@ const exFilters = (group) => [
   ["active", "Last trade", [[0, "Any time"], [7, "This week"], [30, "30 days"], [90, "90 days"]]],
   ["size", "Usual bet", [[0, "Any"], [100, "$100+"], [1000, "$1K+"], [10000, "$10K+"]].filter(([v]) => v >= (EX_DEFAULTS[group]?.size || 0))],
   ["board", "Leaderboards", [["", "Either"], ["on", "On a leaderboard"], ["off", "Off them"]]],
+  ["evidence", "What we checked", [["", "Any look"], ["full", "Full check only"]]],
 ];
 // The chip a filter that narrows the list shows (null when it doesn't)
 const EX_CHIP = {
@@ -1804,15 +1816,16 @@ const EX_CHIP = {
   active: (v) => v ? (v === 7 ? "Traded this week" : `Traded in ${v} days`) : null,
   size: (v) => v ? `Bets ${usd(v)}+` : null,
   board: (v) => v === "on" ? "On a leaderboard" : v === "off" ? "Off the leaderboards" : null,
+  evidence: (v) => v === "full" ? "Full checks only" : null,
 };
-const EX_EMPTY = { category: "", active: 0, size: 0, board: "" };
+const EX_EMPTY = { category: "", active: 0, size: 0, board: "", evidence: "" };
 function exPick(group) {
   if (group === ex.group) return;
   Object.assign(ex, exDefaults(group)); // market and leaderboards carry across
   ex.group = group;
 }
 const exChips = () => Object.keys(EX_CHIP).map((k) => [k, EX_CHIP[k](ex[k])]).filter(([, l]) => l);
-const exChanged = () => ["active", "size", "category", "board"].some((k) => ex[k] !== ({ ...EX_EMPTY, ...exDefaults(ex.group) })[k]);
+const exChanged = () => ["active", "size", "category", "board", "evidence"].some((k) => ex[k] !== ({ ...EX_EMPTY, ...exDefaults(ex.group) })[k]);
 let exTimer = null, exOpen = null; // exOpen: the wallet a row was tapped for, so its page doesn't check it unasked
 // a count we read ("12"), one from a read that stopped early ("12+"), or one we never read ("unknown")
 const exCount = (n, cut) => n == null ? "unknown" : cut ? `${n}+` : String(n);
@@ -1839,10 +1852,21 @@ function exBadges(r) {
 }
 // Under their name: their market, and how we know what the row says (a quick look at their trades, a full check,
 // when a tier was scored, or where we found them).
+// One line (cut short with "…" when it doesn't fit, a phone's too), most useful first: market, a top-100 board place,
+// then how we know.
 function exSub(r) {
   const how = r.group === "unchecked" ? foundText(r) : r.group === "passed" || r.group === "recommended" ? (r.scored_at ? `scored ${ago(r.scored_at * 1000)}` : null)
     : r.evidence === "quick" ? "quick look" : "full check";
-  return [r.category, how].filter(Boolean);
+  const board = r.group !== "unchecked" && r.board && r.board.rank <= BOARD_SHOWN ? boardShort(r.board.place, r.board.rank, r.category) : null;
+  return [r.category, board, how].filter(Boolean);
+}
+// A board place on a row only when it's a top one; any place is on their page ("Found")
+const BOARD_SHOWN = 100;
+// "PNL WEEK SPORTS" #23 → "#23 weekly profit", with the board's category only when it isn't the row's ("#89 weekly
+// volume, Mentions" for a Politics trader): their best place on a Polymarket board, a fact about the board
+function boardShort(place, rank, category) {
+  const t = boardText(place, rank).replace(" on the ", " ").replace(" board", "");
+  return category && t.endsWith(`, ${category}`) ? t.slice(0, -(category.length + 2)) : t;
 }
 // A row's figures, each { k: what it is, v: the value, sub: its unit, sign: green or red }. Which ones depend on what
 // the row is for: Whales, size and recency first; a tier, profit, the price move we saw and copying, each its own
@@ -1852,13 +1876,15 @@ function exStats(r, whale = false) {
   const bet = r.typical_usd != null ? { k: "Usual bet", v: usd(r.typical_usd), sub: "a trade" } : r.market_usd != null ? { k: "Usual bet", v: usd(r.market_usd), sub: "a market" } : { k: "Usual bet", v: U };
   const last = { k: "Last trade", v: r.last_active ? ago(r.last_active * 1000) : U };
   const profit = { k: "Profit, 30d", v: r.trading_pnl_window != null ? usd(r.trading_pnl_window, true) : U, sign: r.trading_pnl_window };
-  const record = r.evidence === "quick" ? { k: "Markets, 30d", v: exCount(r.buys_30d, r.evidence_cut) } : { k: "Bets checked", v: r.bets_checked != null ? String(r.bets_checked) : U, sub: "30d" };
+  const ninety = r.buys_90d != null ? `${exCount(r.buys_90d, r.evidence_cut)} in 90d` : undefined;
+  const record = r.evidence === "quick" ? { k: "Markets, 30d", v: exCount(r.buys_30d, r.evidence_cut), sub: ninety } : { k: "Bets checked", v: r.bets_checked != null ? String(r.bets_checked) : U, sub: "30d" };
   const tiered = r.group === "passed" || r.group === "recommended";
   if (whale) return [bet, last, r.group === "unchecked" ? { k: "Checked", v: "not yet" } : r.evidence === "quick" ? record : profit];
   if (tiered) return [profit, { k: "Price after buys", v: r.edge != null ? centsSigned(r.edge) : U, sub: r.bets_checked != null ? `${r.bets_checked} bets` : "", sign: r.edge },
     { k: "Copying", v: r.copy_label || U }];
   if (r.group === "unchecked") return [last, { k: "Markets, 30d", v: exCount(r.buys_30d, r.evidence_cut) }, bet];
   if (r.group === "limited") return [record, bet, last];
+  if (r.evidence === "scored") return [profit, record, last]; // a full check: its record; the label says what skill it showed
   return [bet, last, record];
 }
 const exStat = (s) => `<span class="ex-stat"><span class="k">${esc(s.k)}</span><span class="v${s.v === "unknown" ? " u" : ""}">${s.sign ? pl(s.sign, esc(s.v)) : esc(s.v)}${s.sub ? ` <small>${esc(s.sub)}</small>` : ""}</span></span>`;
@@ -1876,6 +1902,7 @@ function exQuery(offset = 0) {
   if (ex.active) p.set("active", String(ex.active));
   if (ex.size) p.set("min_usd", String(ex.size));
   if (ex.board) p.set("board", ex.board);
+  if (ex.evidence) p.set("evidence", ex.evidence);
   return `/api/traders?${p}`;
 }
 const SEARCH_ICON = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M14 14l4 4"/></svg>`;
@@ -1999,19 +2026,62 @@ function evidenceFacts(r) {
     ["Based on", when],
   ];
 }
+// Their record as Polymarket reports it (/api/record): facts, kept apart from our skill test on the same page.
+// [name, value as HTML]; what Polymarket didn't say shows "—".
+function recordFacts(rec) {
+  const st = rec.stats || {}, open = rec.open || {};
+  const open_ = st.unrealized_pnl == null ? null : Math.abs(st.unrealized_pnl) < 0.5 ? "nothing still open" : `${usd(st.unrealized_pnl, true)} still open`;
+  const split = st.realized_pnl != null && open_ ? ` <small class="muted">${usd(st.realized_pnl, true)} closed, ${open_}</small>` : "";
+  const joined = rec.joined && !Number.isNaN(new Date(rec.joined).getTime())
+    ? new Date(rec.joined).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : null;
+  return [
+    ["Profit from trading", st.trading_pnl != null ? `${pl(st.trading_pnl, usd(st.trading_pnl, true))} all time${split}` : "—"],
+    ["Volume", st.volume_usd != null ? `${usd(st.volume_usd)} traded, all time` : "—"],
+    ["Trades", st.trades != null ? Number(st.trades).toLocaleString("en-US") : "—"],
+    ["Biggest win", st.biggest_win != null ? usd(st.biggest_win) : "—"],
+    // Polymarket's positions list leaves out any under 1 contract, which its open profit still counts: said, never "None"
+    ["Open now", (open.count ? `${open.count}${open.at_least ? "+" : ""} position${open.count === 1 ? "" : "s"} over 1 contract${open.value != null ? `, worth ${usd(open.value)}` : ""}`
+      : "No positions over 1 contract") + (open_ && open_ !== "nothing still open" ? ` <small class="muted">smaller ones can still add to the ${usd(st.unrealized_pnl, true)} still open</small>` : "")],
+    ["Markets", (rec.categories || []).length ? esc(rec.categories.map((c) => `${c.category} ${c.markets}`).join(" · ")) + ` <small class="muted">held or traded lately</small>` : "—"],
+    ...(joined ? [["Joined", `${esc(joined)} <small class="muted">on Polymarket</small>`]] : []),
+  ];
+}
+// Their biggest open positions: the market, the side, what it's worth now, and the price they paid → the price now.
+function recordPositions(rec) {
+  return (rec.positions || []).map((p) => {
+    const [paid, now] = centsPair(p.avg_price, p.current_price);
+    return [`${esc(p.title || "A market")}${p.outcome ? ` <small class="muted">${esc(p.outcome)}</small>` : ""}`,
+      `${p.value != null ? usd(p.value) : "—"} <small class="muted">${paid} → ${now}${p.category ? ` · ${esc(p.category)}` : ""}</small>`];
+  });
+}
+const RECORD_NOTE = "Polymarket's own figures. A record, not a test of skill: profit can come from a few big wins or from luck, and none of this says buying after them makes money.";
+async function loadRecord(wallet) {
+  const box = $("#record");
+  if (!box) return;
+  let rec;
+  try { rec = await api(`/api/record/${wallet}`); } catch (e) { box.innerHTML = `<h2>Track record</h2><p class="muted">Polymarket's figures couldn't be read just now: ${esc(e.message)}</p>`; return; }
+  if (location.hash !== `#/worth/${wallet}` || !$("#record")) return;
+  const pos = recordPositions(rec);
+  $("#record").innerHTML = `<h2>Track record <small class="muted">Polymarket's figures</small></h2><p class="pf-copying">${esc(RECORD_NOTE)}</p>
+    <dl class="pf-facts">${recordFacts(rec).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    ${pos.length ? `<h3 class="pf-sub">Biggest open positions</h3><dl class="pf-facts pf-pos">${pos.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` : ""}`;
+}
 function renderUnchecked(s, wallet) {
   const app = $("#app"), r = s.directory, name = displayName(s.name, wallet);
-  const limited = r && r.group === "limited";
-  const label = limited ? `<span class="tier t3">Limited evidence</span><span class="tier t2">Quick look</span>` : r && r.evidence === "quick" ? exBadges(r) : `<span class="tier t2">Not checked yet</span>`;
-  const note = limited ? `Fewer than 8 bets in the last 30 days, which is too few to judge skill either way. This isn't a recommendation.`
+  const limited = r && r.group === "limited", full = r && r.evidence === "scored";
+  const label = limited ? `<span class="tier t3">Limited evidence</span><span class="tier t2">${full ? "Full check" : "Quick look"}</span>` : r && r.evidence === "quick" ? exBadges(r) : `<span class="tier t2">Not checked yet</span>`;
+  const note = limited ? (full ? "Our full check found too few of their trades whose prices we could check to measure skill either way. This isn't a recommendation."
+    : "Fewer than 8 markets traded in the last 30 days, which is too few to judge skill either way. This isn't a recommendation.")
     : r && r.evidence === "quick" ? esc(r.label || "") : "We haven't checked this trader's record yet, so nothing about it has been measured.";
   app.innerHTML = `<a class="back" href="#/traders/explore">← Explore</a>
     <div class="pf-head">${avatar(wallet, 64)}
       <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${label}</div><div class="pf-tag">${[r?.category].filter(Boolean).map(esc).join(" · ")}${r?.category ? " · " : ""}${profileLink(`https://polymarket.com/profile/${wallet}`)}</div></div>
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(wallet)}"></div></div></div>
-    <section class="pf-card"><h2>What we know so far</h2><p class="pf-copying">${note}</p>
+    <section class="pf-card"><h2>Skill <small class="muted">our test</small></h2><p class="pf-copying">${note}</p>
       <dl class="pf-facts">${evidenceFacts(r).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-      <p style="margin-top:16px"><button class="btn" id="checknow">Check now</button> <span class="muted" style="font-size:13px">Reads their last 30 days of trades, usually under a minute.</span></p></section>`;
+      <p style="margin-top:16px"><button class="btn" id="checknow">Check now</button> <span class="muted" style="font-size:13px">Reads their last 30 days of trades, usually under a minute.</span></p></section>
+    <section class="pf-card" id="record"><h2>Track record <small class="muted">Polymarket's figures</small></h2>${skelRows(3)}</section>`;
+  loadRecord(wallet);
   $("#checknow").onclick = async (e) => {
     e.target.disabled = true; e.target.textContent = "Checking…";
     let full;
