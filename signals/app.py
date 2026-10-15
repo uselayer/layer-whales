@@ -3095,7 +3095,7 @@ LINK_TARGETS = {"Buy on Polymarket International": "market", "Open on Polymarket
 # Where the trade happened, said on every alert: the traders Signals follows trade on Polymarket International.
 # With a verified Polymarket US twin (us_match), that it's the same market, never the same price.
 TRADED_INTL = "Traded on Polymarket International."
-US_TWIN_LINE = (f"{TRADED_INTL} The same market is on Polymarket US (matched through Kalshi), where prices and"
+US_TWIN_LINE = (f"{TRADED_INTL} The same market is on Polymarket US (matched through Layer), where prices and"
                 " liquidity may differ.")  # fmt: skip
 US_DIFFERS = " Some settlement rules differ."
 NO_US_TWIN_LINE = f"{TRADED_INTL} No verified US match found."
