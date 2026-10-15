@@ -623,6 +623,38 @@ def test_a_sell_alerts_with_the_price_now_while_they_still_hold_some_and_only_on
     assert engine.alert_pass(now=t0.timestamp() + 9 * 60) == 0  # alerts.db remembers the sell
 
 
+def test_selling_the_rest_soon_after_a_partial_sell_still_alerts_once(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """After "They still hold some.", a sale that leaves them none within ALERT_AGAIN_S still goes out (it isn't
+    left out with the other sells), once in that time, and a restart doesn't send it again."""
+    user(follows=(SAM,))
+    trades: list[WhaleTrade] = []
+    prices = {"0xcid:0": 0.61}
+    live_reads(monkeypatch, detail_of(trades, prices))
+    t0 = datetime.now(UTC) - timedelta(minutes=6)
+    engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
+    trades.append(sold(SAM, t0, 0.62, 500, i="a"))
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 6 * 60) == 1
+    assert "They still hold some." in engine.tg.sent[-1]["text"]
+    trades.append(sold(SAM, t0 + timedelta(minutes=2), 0.60, 300, i="b"))  # sold the rest
+    prices.clear()
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 8 * 60) == 1
+    lines = engine.tg.sent[-1]["text"].splitlines()
+    assert lines[:3] == ["<b>Sam</b> sold <b>Yes</b> at 60¢ ($300)", "Will it &lt;rain&gt;?", engine.EXITED]
+    trades.append(sold(SAM, t0 + timedelta(minutes=3), 0.60, 100, i="c"))  # bought back and sold again: left out
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 9 * 60) == 0
+    engine._seen.clear()  # a restart
+    engine._alerted.clear()
+    engine._cache.clear()
+    engine.alert_pass(now=t0.timestamp() + 10 * 60)  # first round after it: noted only
+    trades.append(sold(SAM, t0 + timedelta(minutes=4), 0.60, 100, i="d"))
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 11 * 60) == 0  # alerts.db remembers the exit
+    assert len(engine.tg.sent) == 2
+
+
 def test_a_sell_of_everything_says_so_and_never_makes_up_a_price(api: TestClient) -> None:
     t = sold(SAM, datetime(2026, 10, 13, 14, 2, tzinfo=UTC))
     at = t.at.timestamp()

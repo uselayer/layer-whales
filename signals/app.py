@@ -2726,7 +2726,8 @@ CONNECTED = (
     "they traded, at what price, the price now and when they traded. Polymarket's public data runs a few minutes "
     "behind, so alerts are never instant.\n\n"
     "Not every trade gets its own message. A trader's buys of one outcome within 30 minutes come as one, and after a "
-    f"message, more buys of that outcome (or more sells of it) are left out for {ALERT_AGAIN_S // 3600} hours. When two or "
+    f"message, more buys of that outcome (or more sells of it) are left out for {ALERT_AGAIN_S // 3600} hours, except "
+    "the sale that leaves them holding none of it. When two or "
     "more traders you follow buy the same thing, one message lists them all and is updated as more buy. Nothing comes "
     "for a market that's all but decided (2¢ or less, 98¢ or more). If you've picked markets on Signals, trades of "
     f"${WHALE_USD:,.0f} or more there come too. At most {DAILY_CAP} alerts a day, and {TRADER_DAILY} from any one "
@@ -3213,6 +3214,9 @@ class NewBuy:
         return self._text.replace(ALERT_ID_MARK, aid)
 
 
+EXITED = "They no longer hold it."  # a sale that leaves them none: _exited_recently finds it in a kept alert by this
+
+
 def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool, now: float | None, at: float,
                seen: float, aid: str | None = None) -> str:  # fmt: skip
     """The Telegram message for a sell by a trader you follow, whoever they are: information only, never a
@@ -3221,7 +3225,7 @@ def _sell_text(wallet: str, t: WhaleTrade, price: float, usd: float, held: bool,
     some of it: the price now and "Check current price"; once they hold none, "They no longer hold it." and no price
     (there's no position to read it from, and no number is made up)."""
     e = html.escape
-    still = ("They still hold some." if now is None else f"Now {_cents(now)}. They still hold some.") if held else "They no longer hold it."
+    still = ("They still hold some." if now is None else f"Now {_cents(now)}. They still hold some.") if held else EXITED
     lines = [f"<b>{e(_who(wallet))}</b> sold <b>{e(t.outcome or 'Yes')}</b> at {_cents(price)} (${usd:,.0f})",
              e(t.title or "A Polymarket market"), still, _traded(at, seen)]  # fmt: skip
     where, us_url = _venue_line(t)
@@ -3262,6 +3266,15 @@ def _sold_recently(trader: str, outcome: str, now: float) -> bool:
         q = ("SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ?"
              " UNION ALL SELECT 1 FROM held WHERE side = 'sell' AND trader = ? AND outcome = ? AND at >= ? LIMIT 1")  # fmt: skip
         return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S) * 2).fetchone() is not None
+
+
+def _exited_recently(trader: str, outcome: str, now: float) -> bool:
+    """Whether a sale that left this trader holding none of this outcome was already alerted (to anyone) in the
+    last ALERT_AGAIN_S, from alerts.db (the kept message says EXITED), so a restart doesn't alert it again."""
+    with _db() as con:
+        q = ("SELECT 1 FROM alerts WHERE kind = 'sell' AND trader = ? AND outcome = ? AND sent_at >= ? AND body LIKE ?"
+             " LIMIT 1")  # fmt: skip
+        return con.execute(q, (trader, outcome, now - ALERT_AGAIN_S, f"%{EXITED}%")).fetchone() is not None
 
 
 def _told(uid: str, trader: str, outcome: str, now: float) -> bool:
@@ -3440,9 +3453,17 @@ def alert_pass(now: float | None = None) -> int:
                 (fills if t.action == "buy" else sold).setdefault(t.market, []).append(t)
         for market, ts in sold.items():
             sell = NewSell(w, ts, market in prices, prices.get(market), now)
-            if now - _alerted.get((w, f"sell:{market}"), 0) < ALERT_AGAIN_S or sell.settled() or _sold_recently(w, sell.outcome, now):
+            if sell.settled():
+                continue
+            again = now - _alerted.get((w, f"sell:{market}"), 0) < ALERT_AGAIN_S or _sold_recently(w, sell.outcome, now)
+            # after a sell alert, more sells of it are left out for ALERT_AGAIN_S, except the one that leaves them
+            # holding none: "They still hold some." isn't the last word on it (once in that time, across a restart)
+            if again and (sell.held or now - _alerted.get((w, f"exit:{market}"), 0) < ALERT_AGAIN_S
+                          or _exited_recently(w, sell.outcome, now)):  # fmt: skip
                 continue
             _alerted[(w, f"sell:{market}")] = now
+            if not sell.held:
+                _alerted[(w, f"exit:{market}")] = now
             new_sells.append(sell)
         totals = _add_up(w, [f for ts in fills.values() for f in ts], now) if fills else {}
         for market, ts in fills.items():
