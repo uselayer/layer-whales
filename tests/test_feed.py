@@ -64,6 +64,32 @@ def test_recommended_is_the_three_sections_and_bigger_trades_only(api: TestClien
     assert {b["wallet"]: b["copy_ok"] for b in r["bets"]} == {COPY: True, RISE: False, WATCH: False}  # neutral cards for the rest
 
 
+def test_each_feed_card_says_whats_noteworthy_from_the_traders_own_record(api: TestClient) -> None:
+    """Every card has ``notes``: here each buy opened the position (their only trades), and Cora's $2,500 is about
+    17× her usual $150 buy, so her card also has the context and the one interpretation."""
+    engine._worth_data["scores"][0]["typical_usd"] = 150.0
+    engine.live_poll_once()
+    bets = {b["wallet"]: b for b in api.get("/api/live", headers=auth()).json()["bets"]}
+    assert [n["text"] for n in bets[RISE]["notes"]] == ["New position."]  # no usual size known for Rita: nothing more
+    assert [(n["level"], n["kind"]) for n in bets[COPY]["notes"]] == [("observation", "new"), ("context", "size"),
+                                                                     ("interpretation", "exposure")]  # fmt: skip
+    assert bets[COPY]["notes"][1]["text"] == "About 17× their usual buy ($150, last 30 days)."
+
+
+def test_the_page_shows_a_trades_notes_on_its_card_and_the_interpretation_only_in_its_sheet(run_js: Any) -> None:
+    got = run_js(("esc", "factsOf", "notesLine", "notableOf"), """(() => {
+      const b = { notes: [{ level: "observation", kind: "new", text: "New position." },
+                          { level: "context", kind: "size", text: "About 7× their usual buy ($150, last 30 days)." },
+                          { level: "interpretation", kind: "exposure", text: "That's unusual. We don't know why." }] };
+      return [notesLine(b), notableOf(b), notesLine({}), notableOf({ notes: [] })];
+    })()""")
+    assert got[0] == '<p class="notes">New position. About 7× their usual buy ($150, last 30 days).</p>'
+    assert "We don't know why" not in got[0]  # the card keeps to what's observed and its context
+    assert "<li>New position.</li><li>About 7× their usual buy ($150, last 30 days).</li>" in got[1]
+    assert got[1].endswith('</ul><p class="explain">That&#39;s unusual. We don&#39;t know why.</p></div>')  # apart, after
+    assert got[2:] == ["", ""]
+
+
 def test_following_works_whatever_a_traders_status_and_each_card_says_what_we_know(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

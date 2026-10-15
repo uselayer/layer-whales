@@ -159,6 +159,10 @@
   .trade-nums b { color: var(--fg); font-weight: 600; }
   .trade-nums .amt { color: var(--fg); font-weight: 500; white-space: nowrap; }
   .also { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+  .notes { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+  .notable-box { margin-top: 18px; } .notable-box h3 { font-size: 15px; }
+  .notable { margin: 6px 0 0; padding: 0; list-style: none; font-size: 14px; }
+  .notable li + li { margin-top: 4px; }
   .venue { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
   .venue .ext { white-space: nowrap; }
   .usbox ul { margin: 0 0 14px; padding-left: 18px; color: var(--muted); font-size: 14px; }
@@ -955,6 +959,7 @@ function tradeCard(b, i, { who = true } = {}) {
     ${b.outcome || b.url ? `<div class="trade-tags">${b.outcome ? `<span class="chip">${esc(b.outcome)}</span>` : ""}${b.venue === "kalshi" ? marketLink(b.url, "Kalshi ↗") : marketLink(b.url)}</div>` : ""}
     ${b.venue === "kalshi" ? "" : venueNote(b.us)}
     <div class="trade-nums"><span>Bought at <b>${paid}</b><span class="sep">·</span>Now <b>${offered ? pl(moveOf(b), now) : now}</b></span><span class="amt">${usd(b.usd)} in</span></div>
+    ${notesLine(b)}
     ${alsoBought(b)}
     <div class="trade-foot">${tradeStatus(b, offered)}${act}</div>
   </article>`;
@@ -970,9 +975,23 @@ function sellCard(b) {
     ${b.outcome || b.url ? `<div class="trade-tags">${b.outcome ? `<span class="chip">${esc(b.outcome)}</span>` : ""}${marketLink(b.url)}</div>` : ""}
     ${venueNote(b.us)}
     <div class="trade-nums"><span>Sold at <b>${cents(b.price)}</b>${now}</span><span class="amt">${usd(b.usd)} out</span></div>
+    ${notesLine(b)}
     ${alsoBought(b, "sold")}
     <div class="trade-foot"><span class="muted" style="font-size:14px">${b.held ? "They still hold some." : "They no longer hold it."}</span></div>
   </article>`;
+}
+// What's noteworthy about a trade, from the engine's notes: what's observed and its context ("New position. About 6×
+// their usual buy ($2,000, last 30 days)."), never colored. The interpretation ("We don't know why…") is the sheet's.
+const factsOf = (b) => (b.notes || []).filter((n) => n.level !== "interpretation").map((n) => n.text);
+function notesLine(b) {
+  const facts = factsOf(b);
+  return facts.length ? `<p class="notes">${facts.map(esc).join(" ")}</p>` : "";
+}
+// The sheet: each fact on its own line, then the interpretation, if any, apart from them.
+function notableOf(b) {
+  const facts = factsOf(b), why = (b.notes || []).filter((n) => n.level === "interpretation").map((n) => n.text);
+  if (!facts.length && !why.length) return "";
+  return `<div class="notable-box"><h3>What stands out</h3>${facts.length ? `<ul class="notable">${facts.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}${why.map((t) => `<p class="explain">${esc(t)}</p>`).join("")}</div>`;
 }
 // Other traders we follow who bought (or sold) the same thing (one card per trade): names only, never "the same person".
 function alsoBought(b, did = "bought") {
@@ -989,6 +1008,7 @@ function tradeSheet(b) {
     <h2>${esc(b.title || "Untitled market")}</h2>
     ${b.outcome ? `<div style="margin-top:10px"><span class="chip">${esc(b.outcome)}</span></div>` : ""}
     <div style="margin-top:18px" id="sheetstatus">${!offered && OPEN.has(b.status) ? tradeStatus(b, false) : `${statusLine(b.status)}<p class="explain">${statusExplain(b)}</p>`}</div>
+    ${notableOf(b)}
     ${alsoBought(b)}
     <div class="kv">
       <div><span>Bought at</span><b>${paid}</b></div><div><span>Price now</span><b>${offered ? pl(moveOf(b), now) : now}</b></div>

@@ -54,6 +54,16 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     trades, plus their open positions when there's a trade from the last day to price. "Updated" says when the
     oldest of what's shown was read. A page never waits on Polymarket for the list: it reads at most 3 traders
     the engine hasn't read yet, and says "Still reading N traders" for the rest.
+  - What stands out (`signals/notes.py`, from what the engine already holds: no extra reads): under the numbers,
+    a line on what's noteworthy about the trade, the same in its sheet ("What stands out") and in its Telegram
+    alert. What's observed: "New position." / "Adds to a position they already held (about $600 at the price
+    now).", "Sold about 40% of their position.", "Their first trade in 12 days." Its context, from their own
+    record: "About 7× their usual buy ($150, last 30 days)." (one buy, fills within a minute, against the median of
+    their first buys; "Smaller than…" at half or under), "None of the 40 buys we checked from their last 30 days
+    were in Politics." And one interpretation, only for a new or added position 3× their usual buy or more, apart
+    from the facts (the sheet's last line, the alert's italic one): "That's an unusual increase in their exposure
+    to this outcome. We don't know why, and it isn't a sign they're right." A note the data can't back (what they
+    held before isn't in the read, the positions read is behind, no score) is left out, never guessed.
   - Both: one card per trade, opened on your markets, three across on a desktop: the market, their pick, what they paid, the price now, how much they put in,
     and one status line. **You can still get in** means the price is between 5¢ below and 3¢ above what they
     paid; **Price moved away** means further either way. A bigger drop means
