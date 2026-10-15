@@ -255,3 +255,7 @@ uv run python research/notable_calibrate.py <read-only dump of alerts.db as JSON
 
 The wallets are those in `notable-scenarios.json` (the cache is pulled with `--max-rows 120000`). Pulling now gives
 newer trades, so re-run the replay with a later `--to`.
+
+## Follow-up (2026-10-15)
+
+The owner asked for 7- vs 30-day rarity, no penalty for following more traders, fewer and richer summaries, nothing dropped at the cap, and buys / sells / groups kept apart. Answers and a V1 proposal with API costs: `notable-v1-proposal.md` (script `notable_v1.py`, output `notable-v1-results.md`). This supersedes the recommendation above: the per-follows budget `min(3, 10 / follows)` is dropped for a fixed B = 3 per trader, and the cap is split 16 immediate + 4 summaries, so nothing is dropped.

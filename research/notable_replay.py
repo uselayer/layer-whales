@@ -65,6 +65,10 @@ TRADER_KINDS = ("buy", "sell")
 SITE = "https://usesignals.app"
 
 SEEN_LAG_S = 15  # a trade shows in the trader's own reads this long after it's made (measured 1–14 s)
+# An alert unit's dollars: its fills this long after the first. A live alert is sized from the fills its round saw
+# (~15–45 s after the first); later fills of it are held back by ALERT_AGAIN_S. 60 s matched NM-P best (45 s the same,
+# 30 min made every unit bigger than the alerts it's compared with: notable_v1's comparison).
+UNIT_ADD_S = 60
 HISTORY_S = 30 * 86400  # "typical" and "new position" look back this far
 THIN = 100  # fewer buys than this in 30 days: their last this many instead
 DUST = 1.0  # shares: Polymarket's positions leave out anything under 1 (sizeThreshold=1), so "no longer hold it"
@@ -195,6 +199,16 @@ class Event:
     # many a day were this big or bigger. "Unusual for them" that also counts how often they trade
     per_day_as_big: float | None = None
     rate: float | None = None  # their alerts on this side a day, over the same 30 days
+    # the same, a day this big or bigger: their alerts (a) or their episodes (e), over 7 or 30 days
+    rare_a7: float | None = None
+    rare_a30: float | None = None
+    rare_e7: float | None = None
+    rare_e30: float | None = None
+    rare_u7: float | None = None  # over "alert units": production's 6-hour rule built from trades alone (_units)
+    rare_u30: float | None = None
+    typical7: float | None = None  # median over 7 days (or their last 100)
+    ratio7: float | None = None
+    new7: bool | None = None  # buys: first buy of it in 7 days, not already holding it
     id: int = 0
 
 
@@ -225,9 +239,9 @@ class Typical:
         self.usd = [e[1] for e in eps]
         self.tok = [e[2] for e in eps]
 
-    def before(self, t: float) -> tuple[float | None, int]:
+    def before(self, t: float, window: float = HISTORY_S) -> tuple[float | None, int]:
         hi = bisect.bisect_left(self.ts, t)  # strictly before: the trade itself is left out
-        lo = bisect.bisect_left(self.ts, t - HISTORY_S)
+        lo = bisect.bisect_left(self.ts, t - window)
         if hi - lo < THIN:
             lo = max(0, hi - THIN)
         xs = self.usd[lo:hi]
@@ -236,6 +250,51 @@ class Typical:
     def bought_since(self, tok: str, lo: float, hi: float) -> bool:
         a, b = bisect.bisect_left(self.ts, lo), bisect.bisect_left(self.ts, hi)
         return any(self.tok[i] == tok for i in range(a, b))
+
+
+def _units(trades: list[WhaleTrade], side: str) -> list[tuple[float, float]]:
+    """A trader's buys (sells) as production's de-duplication would alert them, from trades alone (no prices, no
+    positions): per outcome, a new one only ALERT_AGAIN_S after the last one began, its dollars the fills within
+    UNIT_ADD_S of its first, never at a settled price. What a V1 can build from a backfill of their trades. Time-sorted (time, dollars)."""
+    out: list[tuple[float, float]] = []
+    cur: dict[str, list[float]] = {}  # token -> [start, dollars, contracts]
+
+    def keep(c: list[float]) -> None:
+        if c[2] and not _settled(c[1] / c[2]):  # production never alerts at a settled price (≤ 2¢, ≥ 98¢)
+            out.append((c[0], c[1]))
+
+    for t in sorted((t for t in trades if t.action == side), key=lambda t: t.at):
+        tok, ts = t.token or t.market, t.at.timestamp()
+        c = cur.get(tok)
+        if c is None or ts - c[0] >= ALERT_AGAIN_S:
+            if c is not None:
+                keep(c)
+            cur[tok] = [ts, t.usd, t.size]
+        elif ts - c[0] <= UNIT_ADD_S:
+            c[1] += t.usd
+            c[2] += t.size
+    for c in cur.values():
+        keep(c)
+    return sorted(out)
+
+
+def _rarity(ref: list[tuple[float, float]], queries: list[tuple[float, float]], window: float, since: float) -> list[float]:
+    """For each (time, dollars) query, in time order: how many of ``ref`` (time-sorted (time, dollars)) fell in the
+    ``window`` before it and were at least as big, per day (days covered: the window, or less when the history
+    starting at ``since`` is shorter)."""
+    out: list[float] = []
+    inside: list[float] = []  # sorted dollars of ref in [t - window, t)
+    lo = hi = 0
+    for t, usd in queries:
+        while hi < len(ref) and ref[hi][0] < t:
+            bisect.insort(inside, ref[hi][1])
+            hi += 1
+        while lo < hi and ref[lo][0] < t - window:
+            inside.pop(bisect.bisect_left(inside, ref[lo][1]))
+            lo += 1
+        days = max(1.0, min(window, t - since) / 86400)
+        out.append((len(inside) - bisect.bisect_left(inside, usd)) / days)
+    return out
 
 
 def trader_events(wallet: str, start: float, end: float, cats: dict[str, str | None]) -> tuple[list[Event], dict]:
@@ -366,7 +425,25 @@ def trader_events(wallet: str, start: float, end: float, cats: dict[str, str | N
             e.rate = len(window) / days
             bisect.insort(window, e.usd)
             queue.append(e)
-    med_fill =statistics.median([t.usd for t in trades if t.action == "buy"]) if trades else None
+    # the same rarity over 7 days, and over episodes (fills of one outcome within 30 min, straight from trades: no
+    # alert pass needed, so a backfill is just their trades); and the 7-day typical size and new position
+    for side, typ in (("buy", buys_typ), ("sell", sells_typ)):
+        side_evs = sorted((e for e in events if e.side == side), key=lambda e: e.at)
+        q = [(e.at, e.usd) for e in side_evs]
+        alerts_ref = q
+        eps_ref = list(zip(typ.ts, typ.usd))
+        units_ref = _units(trades, side)
+        for name, ref, w in (("rare_a7", alerts_ref, 7 * 86400), ("rare_a30", alerts_ref, HISTORY_S),
+                             ("rare_e7", eps_ref, 7 * 86400), ("rare_e30", eps_ref, HISTORY_S),
+                             ("rare_u7", units_ref, 7 * 86400), ("rare_u30", units_ref, HISTORY_S)):  # fmt: skip
+            for e, r in zip(side_evs, _rarity(ref, q, w, max(first_ts, start))):
+                setattr(e, name, r)
+        for e in side_evs:
+            t7, _ = typ.before(e.at, 7 * 86400)
+            e.typical7, e.ratio7 = t7, (e.usd / t7 if t7 else None)
+            if side == "buy":
+                e.new7 = e.held_before < DUST and not typ.bought_since(e.outcome, e.at - 7 * 86400, e.at)
+    med_fill = statistics.median([t.usd for t in trades if t.action == "buy"]) if trades else None
     stats["median_buy_fill_usd"] = med_fill
     stats["skip"] = dict(stats["skip"])
     return events, stats
