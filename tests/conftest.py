@@ -67,6 +67,16 @@ def checks_read_like_pages(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def no_pace_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Following a trader measures how busy they are on a thread that reads Polymarket: not in tests (they call
+    ``engine._pace_after_follow`` themselves, with a stand-in for the reads)."""
+    from signals import app as engine
+
+    monkeypatch.setattr(engine, "_pace_later", lambda uid, trader: None)
+    monkeypatch.setattr(engine, "_pace_later_quiet", lambda trader: None)
+
+
+@pytest.fixture(autouse=True)
 def no_us_twins(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test starts with no Polymarket US index (as before Layer's matches are read): no test sees another's."""
     monkeypatch.setattr(us_match, "twins", us_match.UsTwins())
