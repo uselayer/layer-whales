@@ -47,10 +47,9 @@ for Bigggggggg, against $4,284 and $1,857 from 7 days.
   suggested amount, moves into the warning.
 - **Today's "first 5 a day per trader".** It keeps whichever trades come first, not the ones you care about.
 
-## Open question for the owner
+## Daily limit (decided by the owner, 2026-10-16)
 
-**The 20-alerts-a-day limit.** "Every trade" and a 20-a-day limit don't fit together: someone who keeps every NM-P
-trade would hit 20 within an hour or two. Options:
-- keep 20 and say so in the warning;
-- raise it (e.g. 200) as protection against runaway volume only;
-- drop it and rely on the warning and the per-trader choice.
+**Raised from 20 to 200 alerts a day per person,** as protection against runaway volume only. The per-trader
+choice and the busy-trader warning do the real work. Today's "first 5 a day per trader" limit goes. At 200 the
+existing "limit reached, more tomorrow" message still goes out once. Someone who keeps every NM-P trade (~440 a day)
+would still reach it, and the warning should say so.
