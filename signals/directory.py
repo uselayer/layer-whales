@@ -41,8 +41,8 @@ Each wallet's evaluation (phases 2 and 3), on its row in ``wallets``:
   a wallet has a score (``category``) of its own. Where a wallet was found says little about what it trades (a
   Tech board lists people who mostly trade Sports), so a page names it only as where they were found.
 - ``traded_category``: where most of the dollars they bought over the 90 days went, from the quick check's read of
-  their trades (``traded_category``): what they trade, for a wallet without a score. Kept when a later look finds no
-  buys (they traded it, the last time they traded).
+  their trades (``traded_category``): what they trade, for a wallet without a score and with a record
+  (CATEGORY_MIN_MARKETS markets over the 90 days). Read once, then kept: a score's ``category`` supersedes it.
 - ``last_active``: their latest trade whose time we know: a Feed trade, the last buy a score saw, or the latest
   trade a quick check read. A leaderboard or market sighting has no trade time, so it never sets this.
 - ``segment`` and ``category`` (where most of their checked bets were), from the latest score.
@@ -294,6 +294,7 @@ def quick_look(trades: list[tuple[Any, ...]], now: float, read_all: bool,
 
 
 CATEGORY_MARKETS = 20  # the markets the quick check reads categories of: their biggest by dollars, one Gamma read
+CATEGORY_MIN_MARKETS = RISING_BETS  # markets bought over the 90 days before the quick check reads what they trade
 
 
 def top_markets(trades: list[tuple[Any, ...]], now: float, n: int = CATEGORY_MARKETS) -> list[tuple[str, float]]:

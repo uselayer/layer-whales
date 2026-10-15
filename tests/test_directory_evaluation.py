@@ -469,41 +469,50 @@ def test_a_new_wallet_gets_the_quick_check_and_is_scored_only_with_the_evidence_
     assert engine._evaluate_state["since_launch"]["scored"] == 2
 
 
-def test_the_quick_check_names_what_they_trade_from_their_biggest_markets(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_quick_check_reads_what_a_wallet_with_a_record_trades_once_and_only_when_no_score_follows(
+        store: Any, monkeypatch: pytest.MonkeyPatch) -> None:  # fmt: skip
     import time
 
     now = time.time()
+    old = now - 40 * DAY  # inside the 90 days, outside the 30: not enough recent evidence, so no score follows
+    small = [trade(old, market=f"0xo{i}", usd=10) for i in range(6)]  # markets Gamma doesn't know
     tags = {"0xs1": ("NFL", False), "0xs2": ("NBA", True), "0xp1": ("Politics", False)}
     sdk = FakeSdk(
-        {AMY: [trade(now - 3600, market="0xs1", usd=500), trade(now - 7200, market="0xs2", usd=400),
-               trade(now - 9000, market="0xp1", usd=600)],  # Sports $900 against Politics $600
-         BEN: [trade(now - 95 * DAY, market="0xp1")],  # dormant: no buys in the 90 days
-         CAL: [trade(now - 3600, market="0xp1", usd=50), trade(now - 3600, action="sell", market="0xs1", usd=9000)]},
+        {AMY: [trade(old, market="0xs1", usd=500), trade(old, market="0xs2", usd=400),
+               trade(old, market="0xp1", usd=600), *small],  # 9 markets: Sports $900 against Politics $600
+         BEN: [trade(now - 95 * DAY, market="0xp1")],  # dormant
+         CAL: [trade(old, market=f"0xc{i}") for i in range(3)],  # 3 markets in 90 days: too few to say
+         DAN: [trade(now - 3600 * i, market=f"0xd{i}") for i in range(9)]},  # scored next: the score says it
         {}, tags=tags,
     )  # fmt: skip
     monkeypatch.setattr(engine, "background", lambda: sdk)
-    looks = {w: engine.quick_check(w) for w in (AMY, BEN, CAL)}
-    assert {w: x.category for w, x in looks.items()} == {AMY: "Sports", BEN: None, CAL: "Politics"}  # a sell isn't a buy
-    # biggest first, open markets in one read and the closed one left in another; CAL's market was known by then,
-    # and BEN, dormant, cost nothing more
-    assert sdk.market_reads == [(["0xp1", "0xs1", "0xs2"], False), (["0xs2"], True)]
+    looks = {w: engine.quick_check(w) for w in (AMY, BEN, CAL, DAN)}
+    assert {w: x.category for w, x in looks.items()} == {AMY: "Sports", BEN: None, CAL: None, DAN: None}
+    assert looks[DAN].score and not looks[AMY].score
+    others = [f"0xo{i}" for i in range(6)]
+    # AMY only: biggest first, open markets in one read and the ones left in another
+    assert sdk.market_reads == [(["0xp1", "0xs1", "0xs2", *others], False), (["0xs2", *others], True)]
+    engine._market_categories.clear()
+    assert engine.quick_check(AMY, category_known=True).category is None and len(sdk.market_reads) == 2  # once only
     d = engine.directory()
     d.add([Seen(AMY, "leaderboard", "VOL MONTH TECH", category="Tech")])
     d.quick_checked(AMY, looks[AMY])
     assert (d.explore_row(AMY)["category"], d.explore_row(AMY)["category_from"]) == ("Sports", "trades")  # type: ignore[index]
+    engine.evaluate_one({"wallet": AMY, "kind": "recheck"})  # the evaluation passes what's known: no read again
+    assert len(sdk.market_reads) == 2
 
 
 def test_a_quick_check_whose_categories_cant_be_read_still_keeps_its_evidence(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     import time
 
     now = time.time()
-    sdk = FakeSdk({AMY: [trade(now - 3600, market="0xs1")]}, {})
+    sdk = FakeSdk({AMY: [trade(now - 40 * DAY, market=f"0xm{i}") for i in range(9)]}, {})
     sdk._tags = None  # Gamma down
     monkeypatch.setattr(engine, "background", lambda: sdk)
     d = engine.directory()
     d.add([Seen(AMY, "search")])
-    assert engine.evaluate_round()["done"]["not_enough_recent_evidence"] == 1
-    assert (d.wallet(AMY)["buys_30d"], d.wallet(AMY)["traded_category"]) == (1, None)  # type: ignore[index]
+    assert engine.evaluate_round()["done"]["not_enough_recent_evidence"] == 1 and sdk.market_reads
+    assert (d.wallet(AMY)["buys_90d"], d.wallet(AMY)["traded_category"]) == (9, None)  # type: ignore[index]
 
 
 def test_traded_category_follows_the_dollars_among_their_biggest_markets() -> None:

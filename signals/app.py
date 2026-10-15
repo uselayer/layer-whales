@@ -55,6 +55,7 @@ from uselayer.whale_scores import (
 from signals import monitoring, us_match
 from signals.budget import POLYMARKET_HOSTS, BackgroundHttp, Budget
 from signals.directory import (
+    CATEGORY_MIN_MARKETS,
     CHECK_BOARDS,
     EVIDENCE,
     EXPLORE_GROUPS,
@@ -669,14 +670,19 @@ def _count_reads(kind: str, outcome: str) -> None:
     _evaluate_state["reads"]["new" if kind == "new" else "other"] += reads
 
 
-def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None) -> QuickLook:
+def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None,
+                category_known: bool = False) -> QuickLook:  # fmt: skip
     """One read of a wallet's latest trades: the evidence, and whether a score is worth its reads (``quick_look``).
-    With any buy over the 90 days, what they trade too (``category``): their biggest markets' categories, in one
-    more read (two when some have closed), unless those are known already. A dormant wallet costs nothing more."""
+    And what they trade (``category``), for a wallet with a record that won't be scored now: their biggest markets'
+    categories, one or two more reads (~1.8 a wallet, measured), from the evaluation's own budget. So only when it's
+    worth them: not when a score follows (it says the category itself), not once known (``category_known``), and
+    not with under CATEGORY_MIN_MARKETS markets bought over the 90 days (Explore says where we found them instead)."""
     now = time.time() if now is None else now
     got = background().trades("polymarket", wallet, limit=QUICK_TRADES)
     trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0], t.usd) for t in got]
     look = quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
+    if look.score or category_known or look.buys_90d < CATEGORY_MIN_MARKETS:
+        return look
     if spent := top_markets(trades, now):
         try:
             cats = market_categories([m for m, _ in spent])
@@ -761,7 +767,8 @@ def evaluate_one(item: dict[str, Any]) -> str:
     d, w = directory(), item["wallet"]
     try:
         if item["kind"] not in ("presented", "recommended"):
-            look = quick_check(w, item.get("scored_at"))
+            known = (d.wallet(w) or {}).get("traded_category") is not None
+            look = quick_check(w, item.get("scored_at"), category_known=known)
             d.quick_checked(w, look)
             if not look.score:
                 return look.reason  # type: ignore[return-value]

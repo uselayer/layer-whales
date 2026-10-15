@@ -178,9 +178,9 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   earlier score kept), when it was last scored and last tried, its last activity (the latest trade of theirs
   whose time we know: a Feed trade, or the last buy a score saw; a leaderboard or market sighting never sets
   it), and the latest score's segment and main category. A wallet without a score gets its category from the quick
-  check: where most of the dollars it bought over the 90 days went (its 20 biggest markets' categories, one more
-  read, two when some have closed, none for a dormant wallet), else where it was first seen, which Explore and its
-  page name as "found in Tech", never as what they trade. Every score worked out is kept, at no extra reads: the
+  check: where most of the dollars it bought over the 90 days went (its 20 biggest markets' categories, ~1.8 more
+  reads, once; only for a wallet with 8+ markets over the 90 days that isn't about to be scored), else where it was
+  first seen, which Explore and its page name as "found in Tech", never as what they trade. Every score worked out is kept, at no extra reads: the
   Worth following check's 200, a wallet scored on its page, and a try that failed. The latest score is kept whole
   (compressed, 30 checked bets, about 6 KB a wallet), every score's headline figures stay in its history, and the
   latest score's price test in each category in its own table. A score never replaces a newer one, so a wallet a
