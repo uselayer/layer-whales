@@ -28,7 +28,6 @@ from collections import Counter, deque
 from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -55,7 +54,6 @@ from uselayer.whale_scores import (
 from signals import monitoring, us_match
 from signals.budget import POLYMARKET_HOSTS, BackgroundHttp, Budget
 from signals.directory import (
-    CATEGORY_MIN_MARKETS,
     CHECK_BOARDS,
     EVIDENCE,
     EXPLORE_GROUPS,
@@ -67,9 +65,7 @@ from signals.directory import (
     Seen,
     fresh_for,
     from_sighting,
-    traded_category,
     quick_look,
-    top_markets,
 )  # fmt: skip
 
 HERE = Path(__file__).parent
@@ -670,56 +666,12 @@ def _count_reads(kind: str, outcome: str) -> None:
     _evaluate_state["reads"]["new" if kind == "new" else "other"] += reads
 
 
-def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None,
-                category_known: bool = False) -> QuickLook:  # fmt: skip
-    """One read of a wallet's latest trades: the evidence, and whether a score is worth its reads (``quick_look``).
-    And what they trade (``category``), for a wallet with a record that won't be scored now: their biggest markets'
-    categories, one or two more reads (~1.8 a wallet, measured), from the evaluation's own budget. So only when it's
-    worth them: not when a score follows (it says the category itself), not once known (``category_known``), and
-    not with under CATEGORY_MIN_MARKETS markets bought over the 90 days (Explore says where we found them instead)."""
+def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None) -> QuickLook:
+    """One read of a wallet's latest trades: the evidence, and whether a score is worth its reads (``quick_look``)."""
     now = time.time() if now is None else now
     got = background().trades("polymarket", wallet, limit=QUICK_TRADES)
     trades = [(t.at.timestamp(), t.action == "buy", t.market.partition(":")[0], t.usd) for t in got]
-    look = quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
-    if look.score or category_known or look.buys_90d < CATEGORY_MIN_MARKETS:
-        return look
-    if spent := top_markets(trades, now):
-        try:
-            cats = market_categories([m for m, _ in spent])
-        except VenueError:
-            return look  # the evidence still counts; the category waits for the next look
-        look = replace(look, category=traded_category(spent, cats))
-    return look
-
-
-# Each market's category, as quick checks read them: just the name, never the market, so it stays small (a score's
-# MarketBook keeps whole markets). MARKET_CATEGORIES_KEEP at most; past that the oldest go first.
-MARKET_CATEGORIES_KEEP = 200_000
-_market_categories: dict[str, str] = {}
-_market_categories_lock = threading.Lock()
-
-
-def market_categories(condition_ids: list[str]) -> dict[str, str]:
-    """Each market's category (``category_of``), by conditionId: those not known yet read from Gamma on the
-    background's budget, 20 a read, open markets first, then closed ones. One not found is left out."""
-    with _market_categories_lock:
-        known = {c: _market_categories[c] for c in condition_ids if c in _market_categories}
-    todo = [c for c in dict.fromkeys(condition_ids) if c not in known]
-    poly = background()._poly
-    for i in range(0, len(todo), 20):
-        chunk, found = todo[i : i + 20], {}
-        for closed in (False, True):
-            for m in poly.markets([c for c in chunk if c not in found], closed=closed):
-                if m.get("conditionId"):
-                    found[m["conditionId"]] = category_of(m)
-            if len(found) == len(chunk):
-                break
-        known |= found
-        with _market_categories_lock:
-            _market_categories.update(found)
-            while len(_market_categories) > MARKET_CATEGORIES_KEEP:
-                del _market_categories[next(iter(_market_categories))]
-    return known
+    return quick_look(trades, now, read_all=len(got) < QUICK_TRADES, scored_at=scored_at)
 
 
 def listed_now() -> frozenset[str]:
@@ -767,8 +719,7 @@ def evaluate_one(item: dict[str, Any]) -> str:
     d, w = directory(), item["wallet"]
     try:
         if item["kind"] not in ("presented", "recommended"):
-            known = (d.wallet(w) or {}).get("traded_category") is not None
-            look = quick_check(w, item.get("scored_at"), category_known=known)
+            look = quick_check(w, item.get("scored_at"))
             d.quick_checked(w, look)
             if not look.score:
                 return look.reason  # type: ignore[return-value]
