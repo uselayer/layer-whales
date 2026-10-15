@@ -341,7 +341,7 @@ def kv(stats: list[dict[str, Any]]) -> list[list[Any]]:
 def test_a_passed_row_keeps_profit_the_price_move_and_copying_apart_and_leaves_the_z_to_their_page(run_js: Any) -> None:
     row = '{group: "passed", trading_pnl_window: 4200, edge: 0.031, edge_z: 2.44, bets_checked: 31, copy_label: "Copy not proven"}'
     got = run_js(STATS, f"exStats({row})")
-    assert kv(got) == [["Profit, 30d", "+$4.2K", None], ["Price after buys", "+3.1¢", "31 bets"], ["Copying", "Copy not proven", None]]
+    assert kv(got) == [["Profit, 30d", "+$4.2K", None], ["Price after buys", "+3.1¢", "31 events"], ["Copying", "Copy not proven", None]]
     assert "2.4" not in str(got)  # the z is on their page, not the row
     unknown = run_js(STATS, 'exStats({group: "passed"})')
     assert [x["v"] for x in unknown] == ["unknown", "unknown", "unknown"]  # never a made-up 0
@@ -349,17 +349,17 @@ def test_a_passed_row_keeps_profit_the_price_move_and_copying_apart_and_leaves_t
 
 def test_each_group_shows_figures_for_what_its_for(run_js: Any) -> None:
     quick = '{group: "limited", evidence: "quick", market_usd: 12000, buys_30d: 5, evidence_cut: true}'
-    assert kv(run_js(STATS, f"exStats({quick})")) == [["Markets, 30d", "5+", None], ["Usual bet", "$12K", "a market"], ["Last trade", "unknown", None]]
+    assert kv(run_js(STATS, f"exStats({quick})")) == [["Markets, 30d", "5+", None], ["Usual per market", "$12K", "90d"], ["Last trade", "unknown", None]]
     deep = '{group: "limited", evidence: "quick", buys_30d: 6, buys_90d: 31, evidence_cut: false}'
     assert kv(run_js(STATS, f"exStats({deep})"))[0] == ["Markets, 30d", "6", "31 in 90d"]  # their 90 days too
     # a full check: its record (profit, bets checked) first; the label beside it says what skill it showed
     checked = '{group: "checked", evidence: "scored", typical_usd: 50, bets_checked: 12, trading_pnl_window: 300}'
-    assert kv(run_js(STATS, f"exStats({checked})")) == [["Profit, 30d", "+$300", None], ["Bets checked", "12", "30d"], ["Last trade", "unknown", None]]
+    assert kv(run_js(STATS, f"exStats({checked})")) == [["Profit, 30d", "+$300", None], ["Events checked", "12", "30d"], ["Last trade", "unknown", None]]
     dormant = '{group: "checked", evidence: "quick", buys_30d: 0, buys_90d: 0}'
-    assert kv(run_js(STATS, f"exStats({dormant})")) == [["Usual bet", "unknown", None], ["Last trade", "unknown", None], ["Markets, 30d", "0", "0 in 90d"]]
+    assert kv(run_js(STATS, f"exStats({dormant})")) == [["Usual trade", "unknown", None], ["Last trade", "unknown", None], ["Markets, 30d", "0", "0 in 90d"]]
     # Whales: size and recency first, whatever the group; then profit when scored, a quick look's count when not
     passed = '{group: "passed", typical_usd: 40000, trading_pnl_window: -900}'
-    assert kv(run_js(STATS, f"exStats({passed}, true)")) == [["Usual bet", "$40K", "a trade"], ["Last trade", "unknown", None], ["Profit, 30d", "−$900", None]]
+    assert kv(run_js(STATS, f"exStats({passed}, true)")) == [["Usual trade", "$40K", "30d"], ["Last trade", "unknown", None], ["Profit, 30d", "−$900", None]]
     assert kv(run_js(STATS, f"exStats({quick}, true)"))[2] == ["Markets, 30d", "5+", None]
 
 
@@ -391,7 +391,7 @@ def test_each_group_has_its_own_defaults_and_the_market_carries_across(run_js: A
       return out;
     })()""")
     assert got[0] == ["whales", 30, 1000, "size", ""]  # Explore opens on Whales
-    assert got[1] == [["active", "Traded in 30 days"], ["size", "Bets $1K+"]] and got[2] is False  # what it shows, said
+    assert got[1] == [["active", "Traded in 30 days"], ["size", "Usually $1K+"]] and got[2] is False  # what it shows, said
     assert got[3] == ["limited", 0, 0, "record", "Politics"] and got[4] == [["category", "Politics"]]  # longest records first
     assert got[5] == ["whales", 30, 1000, "size", "Politics"]
     assert got[6][-1] == ["board", "On a leaderboard"] and got[7] is True
@@ -407,3 +407,19 @@ def test_search_looks_through_every_trader_we_found_whatever_the_filters(run_js:
     })()""")
     assert "q=sam" in url and "unchecked=1" in url
     assert "category" not in url and "min_usd" not in url and "board" not in url and "active" not in url
+
+
+def test_explore_says_what_each_figure_counts_never_bet() -> None:
+    """AGENTS.md: "trade", never "bet". Each figure says what it counts: markets traded (a quick look's distinct
+    markets), events checked (a score's distinct Polymarket events), their usual trade or usual amount per market.
+    Checked over the words the page shows (the text of its strings, not its code)."""
+    import re
+
+    from signals import directory
+
+    page = "\n".join(ln for ln in (engine.HERE / "static" / "index.html").read_text().splitlines()
+                     if not ln.lstrip().startswith("//"))  # fmt: skip
+    words = [re.sub(r"\$\{[^}]*\}", " ", m) for m in re.findall(r'"[^"\n]*"|`[^`\n]*`', page)]
+    said = [w for w in words if re.search(r"\b[Bb]et(s|tors?)?\b", w.replace("/api/bet", ""))]
+    assert said == []
+    assert not any(re.search(r"\bbets?\b", t) for t in directory.REASON_LABELS.values())

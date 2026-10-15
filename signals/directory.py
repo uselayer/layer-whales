@@ -73,8 +73,8 @@ STATUSES = ("found", "scored", "checked", "failed")
 REASONS = ("not_enough_recent_evidence", "not_trading_lately", "dormant", "too_few", "parlays", "edge_losing",
            "no_edge", "big_profit", "lucky", "no_view")  # fmt: skip
 REASON_LABELS = {
-    "not_enough_recent_evidence": "Not enough recent evidence: {buys_30d} bets in the last 30 days, and {need} are "
-                                  "needed to judge a trader",
+    "not_enough_recent_evidence": "Not enough recent evidence: {buys_30d} markets traded in the last 30 days, and {need}"
+                                  " are needed to judge a trader",
     "not_trading_lately": "Not trading lately: no buy in the last {active} days",
     "dormant": "Dormant: no buy in the last {evidence} days",
     "too_few": "Scored: limited evidence, too few of their trades could be checked to measure skill either way",

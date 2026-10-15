@@ -1775,10 +1775,10 @@ function renderWorth() {
 
 // ---- Explore: every trader the directory found somewhere public (SIGNALS_EXPLORE) ----
 // Search first: a name or a wallet, across every trader we've found (filters don't apply to it). Then three groups,
-// never ranked: Whales (a usual bet of $1K or more, whatever our checks found, each row with its own label), Limited
-// evidence (too few bets to judge, from a quick look at their trades or a full check) and Checked (what a check
+// never ranked: Whales (usually $1K or more a trade, or a market before a full check, whatever our checks found, each row with its own label), Limited
+// evidence (too few markets traded or events checked to judge, from a quick look at their trades or a full check) and Checked (what a check
 // found); and, only when asked for in Filters, Not checked yet (nothing measured). Each group has its own defaults
-// (EX_DEFAULTS: Whales is active in 30 days, $1K+, biggest bet first; Limited evidence the most markets in 90 days
+// (EX_DEFAULTS: Whales is active in 30 days, $1K+, biggest usual amount first; Limited evidence the most markets in 90 days
 // first; Checked full checks only); market and leaderboards carry across. Every
 // filter that narrows the list shows as a chip under the bar. Traders who pass our checks are Recommended's: its
 // list, and from it every one of them (#/traders/passed), however many the list has room for.
@@ -1787,8 +1787,8 @@ function renderWorth() {
 // than chance (the z and the checks are on their page).
 const ex = { group: "whales", q: "", category: "", active: 30, size: 1000, board: "", evidence: "", sort: "size", unchecked: false, rows: [], more: false, offset: 0, counts: null };
 const EX_GROUPS = [
-  ["whales", "Whales", "Big bettors, whatever our checks found. A big bet isn't a sign of skill: the label on each says what we found."],
-  ["limited", "Limited evidence", "Too few bets in the last 30 days to judge their skill either way. Their record so far, not a recommendation."],
+  ["whales", "Whales", "Usually $1K or more a trade (a market, before a full check), whatever our checks found. Trading big isn't a sign of skill: the label on each says what we found."],
+  ["limited", "Limited evidence", "Too few markets traded, or events we could check, in the last 30 days to judge their skill either way. Their record so far, not a recommendation."],
   ["checked", "Checked", "We've looked at their trades: the label says what we found. Only Recommended recommends anyone."],
   ["unchecked", "Not checked yet", "Found on a leaderboard or trading in a market, not looked at yet: nothing about them has been measured."],
 ];
@@ -1800,13 +1800,13 @@ const EX_DEFAULTS = {
   checked: { evidence: "full" },
 };
 const exDefaults = (group) => ({ active: 0, size: 0, evidence: "", sort: "recent", ...EX_DEFAULTS[group] });
-const EX_SORTS = [["recent", "Recently active"], ["record", "Most markets, 90 days"], ["size", "Biggest usual bet"], ["new", "Recently found"]];
+const EX_SORTS = [["recent", "Recently active"], ["record", "Most markets, 90 days"], ["size", "Biggest usual amount"], ["new", "Recently found"]];
 const EX_CATS = ["Politics", "Sports", "Crypto", "Esports", "Economy", "Culture", "Weather", "Tech", "Other"];
-// Filters: [key, title, options as [value, label]] (Whales' bet sizes start at its own $1K)
+// Filters: [key, title, options as [value, label]] (Whales' usual amounts start at its own $1K)
 const exFilters = (group) => [
   ["category", "Market", [["", "Any"], ...EX_CATS.map((c) => [c, c])]],
   ["active", "Last trade", [[0, "Any time"], [7, "This week"], [30, "30 days"], [90, "90 days"]]],
-  ["size", "Usual bet", [[0, "Any"], [100, "$100+"], [1000, "$1K+"], [10000, "$10K+"]].filter(([v]) => v >= (EX_DEFAULTS[group]?.size || 0))],
+  ["size", "Usual amount", [[0, "Any"], [100, "$100+"], [1000, "$1K+"], [10000, "$10K+"]].filter(([v]) => v >= (EX_DEFAULTS[group]?.size || 0))],
   ["board", "Leaderboards", [["", "Either"], ["on", "On a leaderboard"], ["off", "Off them"]]],
   ["evidence", "What we checked", [["", "Any look"], ["full", "Full check only"]]],
 ];
@@ -1814,7 +1814,7 @@ const exFilters = (group) => [
 const EX_CHIP = {
   category: (v) => v || null,
   active: (v) => v ? (v === 7 ? "Traded this week" : `Traded in ${v} days`) : null,
-  size: (v) => v ? `Bets ${usd(v)}+` : null,
+  size: (v) => v ? `Usually ${usd(v)}+` : null,
   board: (v) => v === "on" ? "On a leaderboard" : v === "off" ? "Off the leaderboards" : null,
   evidence: (v) => v === "full" ? "Full checks only" : null,
 };
@@ -1873,14 +1873,14 @@ function boardShort(place, rank, category) {
 // answer; limited evidence, how much there is to judge. Unknown stays "unknown".
 function exStats(r, whale = false) {
   const U = "unknown";
-  const bet = r.typical_usd != null ? { k: "Usual bet", v: usd(r.typical_usd), sub: "a trade" } : r.market_usd != null ? { k: "Usual bet", v: usd(r.market_usd), sub: "a market" } : { k: "Usual bet", v: U };
+  const bet = r.typical_usd != null ? { k: "Usual trade", v: usd(r.typical_usd), sub: "30d" } : r.market_usd != null ? { k: "Usual per market", v: usd(r.market_usd), sub: "90d" } : { k: "Usual trade", v: U };
   const last = { k: "Last trade", v: r.last_active ? ago(r.last_active * 1000) : U };
   const profit = { k: "Profit, 30d", v: r.trading_pnl_window != null ? usd(r.trading_pnl_window, true) : U, sign: r.trading_pnl_window };
   const ninety = r.buys_90d != null ? `${exCount(r.buys_90d, r.evidence_cut)} in 90d` : undefined;
-  const record = r.evidence === "quick" ? { k: "Markets, 30d", v: exCount(r.buys_30d, r.evidence_cut), sub: ninety } : { k: "Bets checked", v: r.bets_checked != null ? String(r.bets_checked) : U, sub: "30d" };
+  const record = r.evidence === "quick" ? { k: "Markets, 30d", v: exCount(r.buys_30d, r.evidence_cut), sub: ninety } : { k: "Events checked", v: r.bets_checked != null ? String(r.bets_checked) : U, sub: "30d" };
   const tiered = r.group === "passed" || r.group === "recommended";
   if (whale) return [bet, last, r.group === "unchecked" ? { k: "Checked", v: "not yet" } : r.evidence === "quick" ? record : profit];
-  if (tiered) return [profit, { k: "Price after buys", v: r.edge != null ? centsSigned(r.edge) : U, sub: r.bets_checked != null ? `${r.bets_checked} bets` : "", sign: r.edge },
+  if (tiered) return [profit, { k: "Price after buys", v: r.edge != null ? centsSigned(r.edge) : U, sub: r.bets_checked != null ? `${r.bets_checked} event${r.bets_checked === 1 ? "" : "s"}` : "", sign: r.edge },
     { k: "Copying", v: r.copy_label || U }];
   if (r.group === "unchecked") return [last, { k: "Markets, 30d", v: exCount(r.buys_30d, r.evidence_cut) }, bet];
   if (r.group === "limited") return [record, bet, last];
@@ -1990,7 +1990,7 @@ function exFilterSheet() {
 // rows as Explore's, paged, sorted by facts only.
 const pv = { sort: "recent", rows: [], more: false, offset: 0, count: null };
 let passedCount = null; // for Recommended's "All N traders who pass our checks"
-const passedLink = () => exploreOn && passedCount ? `<a class="ex-all" href="#/traders/passed"><span><b>Every trader who passes our checks <span class="n">${passedCount.toLocaleString("en-US")}</span></b><span class="muted">Including any this list has no room for, sortable by bet size and activity</span></span><span aria-hidden="true">→</span></a>` : "";
+const passedLink = () => exploreOn && passedCount ? `<a class="ex-all" href="#/traders/passed"><span><b>Every trader who passes our checks <span class="n">${passedCount.toLocaleString("en-US")}</span></b><span class="muted">Including any this list has no room for, sortable by usual amount and activity</span></span><span aria-hidden="true">→</span></a>` : "";
 async function passedView(more = false) {
   const box = $("#tview");
   if (!box) return;
@@ -2020,7 +2020,7 @@ function evidenceFacts(r) {
     : r.buys_30d != null ? "a quick look at their trades; their full check is still to come" : "nothing yet: not checked";
   return [
     ["Markets bought", r.evidence === "quick" || r.buys_30d != null ? `${exCount(r.buys_30d, r.evidence_cut)} in the last 30 days, ${exCount(r.buys_90d, r.evidence_cut)} in 90` : "unknown"],
-    ["Usual bet", r.typical_usd != null ? `${usd(r.typical_usd)} a trade` : r.market_usd != null ? `about ${usd(r.market_usd)} a market, last 90 days` : "unknown"],
+    [r.typical_usd == null && r.market_usd != null ? "Usual per market" : "Usual trade", r.typical_usd != null ? `${usd(r.typical_usd)} a trade` : r.market_usd != null ? `about ${usd(r.market_usd)} a market, last 90 days` : "unknown"],
     ["Last trade", r.last_active ? ago(r.last_active * 1000) : "unknown"],
     ["Found", foundText(r).replace(/^Found /, "")],
     ["Based on", when],
@@ -2304,7 +2304,7 @@ function renderProfile() {
       ${facts.length ? `<dl class="pf-facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` : ""}
     </section>
     ${s.directory && s.directory.group === "limited" && s.directory.evidence === "quick" ? `<section class="pf-card"><h2>What we know so far</h2>
-      <p class="pf-copying">Limited evidence: fewer than 8 bets in the last 30 days, which is too few to judge skill either way.</p>
+      <p class="pf-copying">Limited evidence: fewer than 8 markets traded in the last 30 days, which is too few to judge skill either way.</p>
       <dl class="pf-facts">${evidenceFacts(s.directory).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl></section>` : ""}
     <div class="pf-tabs" role="tablist">${[["positions", "Positions"], ["activity", "Activity"], ["stats", "Stats"]].map(([k, l]) => `<button type="button" role="tab" data-pftab="${k}" aria-selected="${pf.tab === k}">${l}</button>`).join("")}</div>
     <div>${body}</div>`;
