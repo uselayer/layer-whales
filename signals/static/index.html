@@ -1652,6 +1652,8 @@ const LB_SORTS = {
 };
 // Fewer than 4 weeks since their first trade: "New" instead of a rank (the same 4 weeks Most consistent ranks from).
 const isNewTrader = (s) => s.weeks_known != null && s.weeks_known < 4;
+// Price after buys in the list: whole cents, tenths only under 1¢ (so +2¢ and +19.8¢ don't sit side by side).
+const edgeCents = (x) => Math.abs(x) < 0.01 ? centsSigned(x) : `${x > 0 ? "+" : "−"}${Math.round(Math.abs(x) * 100)}¢`;
 
 function renderWorth() {
   const box = $("#tview"), r = worthLast;
@@ -1695,7 +1697,7 @@ function renderWorth() {
     return `<a class="lb-cols lb-row" href="#/worth/${esc(s.wallet)}" ${i >= RANKED && !open ? "hidden" : ""}>
       <span class="lb-rank">${rank}</span>
       <span class="lb-who">${avatar(s.wallet, 36)}<span style="min-width:0"><span class="nm">${esc(displayName(s.name, s.wallet))}</span><span class="lb-sub">${[cat, s.last_buy ? `active ${ago(s.last_buy)}` : ""].filter(Boolean).map(esc).join(" · ")}${notRec}</span></span></span>
-      <span class="lb-edge lb-num lb-line">${s.edge?.mean == null ? `<span class="lb-none">—</span>` : `<span class="lb-lbl">Price after buys </span><span class="lb-main">${centsSigned(s.edge.mean)}</span>${s.edge.n ? `<span class="lb-sub"> · ${plural(s.edge.n, "trade")}</span>` : ""}`}</span>
+      <span class="lb-edge lb-num lb-line">${s.edge?.mean == null ? `<span class="lb-none">—</span>` : `<span class="lb-lbl">Price after buys </span><span class="lb-main">${edgeCents(s.edge.mean)}</span>${s.edge.n ? `<span class="lb-sub"> · ${plural(s.edge.n, "trade")}</span>` : ""}`}</span>
       <span class="lb-cons">${up == null || !known ? `<span class="lb-none">—</span>` : `<span class="lb-weeks" aria-hidden="true">${s.pnl_weeks.map((w) => `<i class="${w == null ? "none" : w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span><span class="lb-sub">${up} of ${known}<span class="lb-lbl"> weeks up</span></span>`}</span>
       <span class="lb-pnl lb-num lb-line">${profit == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(profit, usd(profit, true))}</span>`}</span>
       <span class="lb-won lb-num lb-line">${s.settled ? `<span class="lb-main">${s.won} of ${s.settled}</span>${days30}` : `<span class="lb-none">—</span>`}</span>
