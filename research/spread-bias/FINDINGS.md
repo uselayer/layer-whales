@@ -41,26 +41,31 @@ now, 11 re-entries. That fits luck moving traders in and out under 0.12.0's stri
 luck from skill: a trader with ≤60 usable buys gets the same bets every rescore, and spread capture repeats on
 every rescore.
 
-**Independent check instead:** the spread-neutral edge on the prior 30 days. Traders whose current z is near 0
-show a positive prior edge 54–57% of the time (the null rate). Share by chance ≈ (1 − positive share) / (1 − null
-rate), assuming real skill always shows; that likely overstates chance a little for weak real edges.
+**Independent check instead:** the edge on the other 30 days, measured without the spread.
 
-| Passers (study population) | Prior edge > 0 | Share by chance (90% range) |
+| Passers | Other-window edge > 0 | Traders with no current edge |
 |---|---|---|
-| Sharps, current edge (30) | 83% | 36% (14–65%) |
-| **Sharps, maker spread removed (21)** | **100%** (67% at z ≥ 2) | **≈0%** |
-| Rising, current edge (37) | 81% | 41% (20–70%) |
-| **Rising, maker spread removed (27)** | **81%** | **43% (16–75%)** |
+| Sharps, current edge (study, 30) | 83% | 54–57% |
+| **Sharps, maker spread removed (study, 21)** | **100%** (67% at z ≥ 2) | 57% |
+| **Rising, corrected (uselayer-sdk#28 scores, 19)** | **89%** (17 of 19) | 47% (n 74) |
+| Corrected sharps (uselayer-sdk#28 scores, 13) | 85% | 47% |
 
 - **Sharps:** the earlier "about 1 in 10 by chance" missed the real problem. Their failure is spread capture
-  (section 1), and once that's removed the sharps that remain all held up.
-- **Rising:** chance is real, but the size isn't pinned down. "About 1 in 3" is inside the range; so are 1 in 6
-  and 3 in 4. n = 27, 13 of them current recommended.
+  (section 1), and once that's removed the sharps that remain held up.
+- **Rising: how many are chance can't be pinned down from these data.** The "about 4 in 10 (16–75%)" this
+  section gave earlier is **withdrawn** (section 8).
+  - It came from `(1 − positive share) / (1 − null share)`, which assumes a genuinely skilled trader *always*
+    shows a positive edge the other month.
+  - Corrected sharps replicate only 85% of the time, so that assumption fails. With the branch's own scores, the
+    answer is about 20% if real traders always replicate, about 1% at 90%, and 0% at 85%.
+  - What the data do show: Rising traders replicate far more often than traders with no edge (89% against 47%).
 
 ## 3. Corrections compared
 
 Pooled study population (43 recommended + controls, 74 pass today). "Genuine" estimate for the removed =
-checked × (prior-positive share − 0.57) / 0.43.
+checked × (prior-positive share − 0.57) / 0.43. That assumes real traders always replicate, which they don't
+(section 2), so these counts are **lower bounds** on the real traders a rule removes. The direct measurement is the
+"prior edge > 0" column: compare it with the 57% for traders with no current edge.
 
 | Rule | Still pass | Removed | Removed with a prior edge > 0 | Estimated genuine removed |
 |---|---|---|---|---|
@@ -76,7 +81,7 @@ checked × (prior-positive share − 0.57) / 0.43.
 - **Every stricter Rising cut on top of it removes mostly traders who did have one.** At this sample size (≤60
   bets) a higher z cut costs more real traders than chance ones. FDR is the most expensive.
 
-## 4. The stable-sampling work (uselayer-sdk#26 merged/unreleased, #27 open)
+## 4. The stable-sampling work (uselayer-sdk#26 and #27, both merged, unreleased)
 
 - **Different problems.** #26 and #27 choose *which* bets get checked; this fix changes *what each bet is measured
   against*. They don't overlap, and this one doesn't need re-measuring after them (results here already use
@@ -86,7 +91,7 @@ checked × (prior-positive share − 0.57) / 0.43.
 - **#27's 120-bet option is the lever for Rising's chance share.** It cut edge error 1.29¢ → 0.72¢ at +54% reads,
   without a threshold change. That decision belongs to that work, not this one.
 
-## 5. Recommendation: the smallest defensible fix (built: uselayer-sdk#28, draft, not released)
+## 5. Recommendation: the smallest defensible fix (built: uselayer-sdk#28, in review, not released)
 
 In the SDK skill test, take the half-spread off bets that filled as resting orders:
 `moved[300] − maker share of that buy × half_spread(mid)`.
@@ -104,10 +109,17 @@ sample size; more bets per score (#27) is the better lever.
 - **Which fills rested.** Taken from Polymarket's taker-only trade feed. All 644 taker fills in a 10-wallet check
   matched an `/activity` fill exactly (same transaction, token and size), so the SDK classifies the fills it
   already read.
-- **How much they earned.** On 5,156 maker fills where the 1-minute mid didn't move around the fill:
-  - `half_spread(mid)` equals the measured gain on 73–76%;
-  - it is above it on 2–4%, so it never takes off more than the order earned;
-  - it is below it on books wider than two ticks (mean measured 1.58¢ against 0.55¢). It's a lower bound.
+- **How much they earned (corrected 2026-10-15).** An earlier version said the correction "never takes off more
+  than the order earned". **That was wrong.** Measured with the branch's own mid (the 5-minute tape) against
+  1-minute prices, on 2,110 resting buys whose book didn't move around the fill:
+  - **Over:** it takes off more than the measured gain on **55 (2.6%)**, by a median 1¢. That excess is **2.9%**
+    of everything taken off.
+  - **Under:** on books wider than two ticks it takes off less (mean measured 1.58¢ against 0.55¢), so on
+    average it underestimates.
+  - **Tiers:** capping every buy at its measured gain changes **no tier** among the 286 scores below, including
+    all 8 changes (their z is unchanged).
+  - **Moving books:** the 1-minute "gain" includes the price drifting into the order, so it isn't a clean
+    reference there.
 - **Only the resting part.** A partly-resting buy gets that share of the half-spread, and takers get nothing.
 
 **Against independent history** (`validation/validation.txt`):
@@ -153,11 +165,25 @@ resting buys.
     recommended tier before any correction. That difference is #26's, not this fix's.
   - 0xa19cbaba stays Rising here.
 
-**Cost** (reads counted per score):
-- **Reads:** +4.9 taker-feed reads a score on average (max 6), +7.7% on 63.2.
-- **Classification:** 100% of checked buys classified.
-- **Background throughput:** at Signals' 4 reads/s, about 7% fewer full scores an hour (roughly 215 → 200).
+**Cost: #26–#28 together against production** (`validation/bench.txt`). The same 73 wallets were scored live,
+as production does, under each build at the same time, counting every data-API and Gamma read:
+
+| Build | Reads per score | vs 0.12.0 |
+|---|---|---|
+| 0.12.0 (production) | 64.6 | — |
+| + #26 | 72.5 | +12.3% |
+| + #26 + #27 (SDK main now) | 72.8 | +12.7% |
+| **+ #26 + #27 + #28** | **78.0** | **+20.7%** |
+
+- **#26:** most of the increase. Its stable sample spreads checked bets across the window, so fewer share a
+  price-history read (45.5 → 51.5).
+- **#28:** 5.2 taker-feed reads.
+- **Production:** about 56 reads per full score on 0.12.0 (Oct 15 so far: 28,150 background reads, 2,821 one-read
+  screenings, 453 full scores), so about 68 after the three.
+- **Throughput:** the same work needs about 19% more reads. At the fixed 4 reads/s, that's roughly **16% fewer
+  evaluations an hour**.
 - **"Check now":** about +2 s at 3 reads/s.
+- **Classification:** 100% of checked buys classified.
 
 **Maker profitability is kept, apart from skill:**
 - `Bet.moved` still counts from their fill price.
@@ -167,18 +193,23 @@ resting buys.
 
 ## 7. Rollout recommendation (nothing deployed)
 
-1. **Review and merge uselayer-sdk#28 with #27.** They touch different code; whichever lands second keeps both
-   blocks of appended tests (2,271 pass combined).
-2. **One batch release with #26 + #27 + #28,** so tiers reshuffle once. The owner approves PyPI.
-3. **Signals lock bump PR,** with two changes:
+1. **Review uselayer-sdk#28** (ready for review). #27 was merged on 2026-10-15 and main is merged into #28, with
+   2,271 tests passing. Merging #28 doesn't release anything.
+2. **Wait for Signals #88's measurement.** #88 deploys no earlier than 9:27 PM PT Oct 15, and its after-window
+   needs uselayer 0.12.0 live for 24 h. So nothing from #26–#28 reaches production before ~9:30 PM PT Oct 16, and
+   not before #88's comparison is posted. Releasing or bumping the lock inside that window would change tiers and
+   reads mid-measurement.
+3. **One batch release with #26 + #27 + #28,** so tiers reshuffle once. The owner approves PyPI.
+4. **Signals lock bump PR,** with two changes:
    - `WORTH_FORMAT` 9 → 10.
    - Older scores in a recommended tier are treated as stale. Today `_consistent` keeps an older score whose
      `segment_of` tier matches, but `segment_of` can't apply this correction: an old score has no maker data. So
      those scores would keep their inflated tier until rescored. The rule is that they drop out until rescored.
      Recommended traders are rescored every 6 h.
-4. **After deploy,** watch `/api/monitoring` → `qualification`. Expect about 8 dropouts (mostly to big_profit),
-   marked as the release, not churn. Check the "Beats the price" text on one resting trader's page.
-5. **Only then** revisit Rising, with #27's larger sample, if the owner wants.
+5. **After deploy,** watch `/api/monitoring` → `qualification`. Expect about 8 dropouts (mostly to big_profit),
+   marked as the release, not churn. Also watch full scores per hour: about 16% fewer is expected, from reads.
+   Check the "Beats the price" text on one resting trader's page.
+6. **Only then** revisit Rising, if the owner wants.
 
 ## 8. Retired estimates
 
@@ -190,9 +221,13 @@ They never reached the repo, a PR or the site, and must not be cited:
   (section 1), and with the spread removed, sharps held up out of sample.
 - **The placebo pass rates** (5.4% at z ≥ 2, "2.4× nominal"). They rested on resampling with the spread bias still
   in.
+- **"About 4 in 10 Rising are chance (16–75%)"**, from this study's first version. It assumed real traders always
+  replicate (section 2), and the data can't pin the share down.
+- **"Never takes off more than a resting order earned"**, from this study's first version. It does on 2.6% of
+  cleanly measured resting buys (section 6), and that changes no tier.
 
-What stands instead is section 2: Rising's chance share is real but not pinned down (point estimate about 4 in 10,
-90% range 16–75%). `research/scoring79-findings.md`'s "4–8% of no-signal wallets reach z ≥ 2" is a separate,
+What stands instead is section 2: Rising traders replicate far more often than traders with no edge (89% against
+47%), but how many are chance isn't known. `research/scoring79-findings.md`'s "4–8% of no-signal wallets reach z ≥ 2" is a separate,
 measured calibration and stays; it predates the spread finding.
 
 ## 9. Wording for the "1 in 3 Rising" warning (not published)
@@ -208,8 +243,8 @@ support "1 in 3". Wording with direct support:
   wallets, so the BH cut is computed on 385.
 - **Small numbers.** Rising has 27 passers with prior data, and the bootstrap isn't seeded (ranges move ±2 points
   between runs).
-- **The half-spread is a tick-based estimate** (0.5¢ / 1¢). A wider book earns makers more, so the fix is a lower
-  bound. Section 1b uses each trader's maker share and half-spread from a fresh stable sample of the same window,
+- **The half-spread is a tick-based estimate** (0.5¢ / 1¢). A wider book earns makers more, so on average the fix
+  takes off less than makers earn, though on 2.6% of cleanly measured resting buys it takes off more. Section 1b uses each trader's maker share and half-spread from a fresh stable sample of the same window,
   not production's exact bets.
 - **Historical windows lack biggest win** (`biggest_win`), so the "lucky" rule is off for them.
 - **The 1m→5m measure** (spread and own impact both removed) passes almost nobody. It is a sensitivity check, not
