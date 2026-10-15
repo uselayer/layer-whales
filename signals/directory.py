@@ -1107,14 +1107,16 @@ class Directory:
                                   "WHERE status = 'failed'", args).fetchone()  # fmt: skip
             sweeps = con.execute("SELECT started, finished, sightings, new, error FROM sweeps WHERE started >= :since "
                                  "ORDER BY started DESC", args).fetchall()  # fmt: skip
-            # each score of a wallet ever scored a recommended tier, with the score before it (LAG over all of its
-            # history, so the window's first score still has the one before) and whether any earlier one was
+            # each score of a wallet ever scored a recommended tier and scored in the window, with the score before it
+            # (LAG over all of its history, so the window's first score still has the one before) and whether any
+            # earlier one was; wallets with no score in the window are left out, so the cost follows the window
             pairs = con.execute(
                 f"""SELECT date(scored_at, 'unixepoch'), segment, via, prev, prev_via, was FROM (
                   SELECT scored_at, segment, via,
                     LAG(segment) OVER w AS prev, LAG(via) OVER w AS prev_via,
                     MAX(segment IN ({_RECOMMENDED_SQL})) OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS was
-                  FROM score_history WHERE wallet IN (SELECT wallet FROM score_history WHERE segment IN ({_RECOMMENDED_SQL}))
+                  FROM score_history WHERE wallet IN (SELECT wallet FROM score_history WHERE segment IN ({_RECOMMENDED_SQL})
+                    INTERSECT SELECT wallet FROM score_history WHERE scored_at >= :since)
                   WINDOW w AS (PARTITION BY wallet ORDER BY scored_at))
                 WHERE scored_at >= :since""",
                 args,
