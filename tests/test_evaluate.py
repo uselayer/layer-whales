@@ -70,6 +70,26 @@ def test_why_theyre_here_says_what_how_why_listed_and_copying_in_plain_lines() -
     assert bare["trades"] is None and bare["how"] == "2 new markets a week."  # nothing made up
 
 
+def test_a_wallet_scored_on_its_page_counts_wins_over_every_checked_trade(monkeypatch: pytest.MonkeyPatch) -> None:
+    """As the check and the background count them: over all 45 checked trades, not the 30 the directory keeps, so
+    the same wallet's "Won" doesn't change with where its score came from."""
+    w = "0x" + "5" * 40
+    bets = [{"price": 0.8, "payout": 1 if i < 40 else 0} for i in range(45)]
+    monkeypatch.setattr(engine, "_worth_one", {})
+    monkeypatch.setattr(engine, "_directory_later", lambda f: None)
+    monkeypatch.setattr(engine.reads, "whales", type("W", (), {"score": lambda self, x: type("S", (), {
+        "to_dict": lambda _: {"wallet": x, "segment": "no_edge", "sample": list(bets)}})()})())  # fmt: skip
+    s = engine._score_of(w)
+    assert (s["won"], s["settled"]) == (40, 45)
+    kept = s | {"sample": s["sample"][:30]}  # as directory.db keeps it
+    assert {k: engine._board(kept).get(k, kept.get(k)) for k in ("won", "settled")} == {"won": 40, "settled": 45}
+
+
+def test_the_profit_chart_ends_when_the_score_was_worked_out_not_today() -> None:
+    page = (engine.HERE / "static" / "index.html").read_text()
+    assert ">Today</text>" not in page and 'text-anchor="end">${s.window?.[1] ? ago(s.window[1]) : "Latest"}' in page
+
+
 def test_a_traders_page_carries_the_why_lines(api: TestClient) -> None:
     why = api.get("/api/worth/0xabc").json()["why"]
     assert set(why) == {"trades", "how", "listed", "copying"} and why["copying"].startswith("Copyable: ")
