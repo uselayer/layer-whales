@@ -75,15 +75,49 @@ def test_a_traders_page_carries_the_why_lines(api: TestClient) -> None:
 
 def test_the_profile_card_and_the_price_check_have_the_new_lines(api: TestClient) -> None:
     page = api.get("/").text
-    for words in ('class="pf-verdict"', 'id="pfcopy"', 'class="pf-warn"', 'class="pf-facts"', '"Markets"', '"Buys at"',
-                  '"Last bought"', "See activity", 'id="whycopy"', "Why?", "How we measure this",
+    for words in ('class="pf-verdict"', 'id="pfcopy"', 'class="pf-warn"', 'class="pf-facts"', "Their numbers", 'class="pf-grid"', 'class="pf-rows"',
+                  "<dt>Last bought</dt>", "See activity", 'id="whycopy"', "Why?", "How we measure this",
                   "What buying now costs", "An estimate, not a guaranteed fill", "is for sale within 3¢ of the cheapest price",
                   "Priced up to 3¢ above the cheapest price for sale", "Estimated slippage: your average fill",
                   "Order book and market status read at", "for context."):  # fmt: skip
         assert words in page, words
     for gone in ("<b>Lately</b>", "<b>Worth knowing</b>", "<b>Consistent</b>", "<b>Can you copy them</b>",
-                 "What copying it costs", "within 3¢ of their price"):  # the old lines
+                 "What copying it costs", "within 3¢ of their price", 'class="pf-stats"', '["stats", "Stats"]'):  # the old lines
         assert gone not in page, gone
+
+
+NUMBERS = ("usd", "pl", "esc", "cents", "centsSigned", "ago", "plural", "lbPct", "perDayText", "readDays", "readPeriod",
+           "profitOf", "perDollarOf", "weeksUp", "weeksOf", "PF_PERIOD", "pf", "pfChart", "profileNumbers")  # fmt: skip
+
+
+def test_their_numbers_are_rows_in_groups_and_only_profit_follows_the_period(run_js: Any) -> None:
+    """The profile's left column: groups of label → value rows, a figure we don't have is null (shown "—", never
+    0), the wallet is a total only when cash and open positions were both read, and the switch moves profit only."""
+    s = {"periods": {"7d": {"trading_pnl": -50, "realized": -20, "unrealized": -30},
+                     "30d": {"trading_pnl": 336000, "realized": 336000, "unrealized": 0, "return_per_dollar": 0.14}},
+         "trading_pnl": 900000, "biggest_win": 120000, "weeks_up": 4, "weeks_known": 6, "pnl_weeks": [1, -1, -2, 3, 4, 5],
+         "won": 30, "settled": 58, "typical_usd": 24800, "trades_per_day": 2, "held_share": 1, "categories": [{"category": "Sports", "bets": 44}]}
+    detail = {"positions": [{"status": "in"}, {"status": "won"}], "closed": [{"result": "won"}, {"result": "sold"}]}
+    got = run_js(NUMBERS, f"(() => {{ pf.account = {{}}; const acct = {{cash_usd: 800000, positions_usd: 300000}};"
+                          f" return [profileNumbers({s}, {detail}, acct, '30d'), profileNumbers({s}, null, {{cash_usd: 5}}, '7d')]; }})()")
+    month, week = got
+    rows = {g["title"]: {r["k"]: r for r in g["rows"]} for g in month["groups"]}
+    assert [g["title"] for g in month["groups"]] == ["Profit", "Record", "Wallet", "How they trade"]
+    assert month["hero"]["k"] == "Profit, 30 days" and "+$336K" in month["hero"]["v"] and month["hero"]["sub"] == "+14% per $ traded"
+    assert "+$780K" in rows["Profit"]["All time without their biggest win"]["v"]
+    assert rows["Record"]["12-week consistency"]["v"] == "4 of 6 weeks up" and rows["Record"]["12-week consistency"]["weeks"]
+    assert rows["Record"]["Longest run of losing weeks"]["v"] == "2 weeks"
+    assert rows["Record"]["Last 2 closed positions"]["v"] == "1 won · 0 lost · 1 sold"
+    assert rows["Wallet"]["Wallet"]["v"] == "$1.1M" and rows["Wallet"]["In open positions"]["sub"] == "1 position open"
+    assert rows["Wallet"]["Usual trade, last 30 days"]["sub"] == "2.3% of their wallet"
+    assert rows["How they trade"]["Resting orders (maker)"]["v"] is None  # not read: "—", never 0
+    # 7D moves the profit rows only; a wallet read in part is never shown as the wallet
+    assert week["hero"]["k"] == "Profit, 7 days" and "−$50" in week["hero"]["v"]
+    wk = {g["title"]: {r["k"]: r for r in g["rows"]} for g in week["groups"]}
+    assert "Taken, 7 days" in wk["Profit"] and "−$20" in wk["Profit"]["Taken, 7 days"]["v"]
+    assert wk["Record"]["Won, last 30 days"]["v"] == "30 of 58"
+    assert wk["Wallet"]["Wallet"]["v"] is None and wk["Wallet"]["Cash"]["v"] == "$5.00"
+    assert wk["Wallet"]["Wallet"]["sub"] == "only part of it could be read"
 
 
 # ---- the price check ----

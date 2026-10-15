@@ -384,7 +384,7 @@
   .lb-secnone { margin: 0; padding: 0 18px 18px; font-size: 14px; color: var(--muted); }
   .lb-foot { margin-top: 12px; font-size: 13px; color: var(--faint); line-height: 1.7; }
   .lb-foot .link { font-size: 13px; }
-  /* A trader's profile: header, stat strip, profit chart, why they're here, then Positions / Activity / Stats */
+  /* A trader's profile: header, then two columns: Their numbers | profit chart, why they're here, Positions / Activity */
   .pf-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
   .pf-head .grow { flex: 1; min-width: 0; }
   .pf-head h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0; overflow-wrap: anywhere; }
@@ -394,11 +394,22 @@
   .pf-cta small { color: var(--muted); font-size: 13px; max-width: 280px; }
   .pf-cta .btn[disabled] { background: var(--soft); color: var(--faint); cursor: default; }
   .pf-follow { display: contents; }
-  .pf-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 22px; }
-  .pf-stat { background: var(--card); padding: 14px 16px; min-width: 0; }
-  .pf-stat > span { display: block; font-size: 12px; color: var(--muted); }
-  .pf-stat b { display: block; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin-top: 2px; }
-  .pf-stat small { font-size: 12px; color: var(--muted); }
+  /* two columns: Their numbers (every figure, label then value) on the left; chart, why and their trades on the right */
+  .pf-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 20px; align-items: start; margin-top: 22px; }
+  .pf-grid > * { min-width: 0; }
+  .pf-grid .pf-side, .pf-main > .pf-card:first-child { margin-top: 0; }
+  .pf-hero { padding: 6px 0 4px; }
+  .pf-hero > span { display: block; font-size: 13px; color: var(--muted); }
+  .pf-hero b { display: block; font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin-top: 2px; }
+  .pf-hero small { font-size: 13px; color: var(--muted); }
+  .pf-side h3 { font-size: 13px; font-weight: 600; margin: 20px 0 0; }
+  .pf-rows { margin: 0; font-size: 14px; }
+  .pf-rows div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .pf-rows div:last-child { border-bottom: 0; }
+  .pf-rows dt { color: var(--muted); min-width: 0; flex: 1 1 auto; }
+  .pf-rows dt small { display: block; font-size: 12px; color: var(--faint); margin-top: 1px; }
+  .pf-rows dd { margin: 0; font-weight: 600; text-align: right; max-width: 62%; text-wrap: balance; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .pf-rows dd .lb-weeks { margin: 0; }
   .pf-statnote { margin: 8px 2px 0; font-size: 13px; color: var(--muted); }
   .pf-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-top: 16px; }
   .pf-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -434,22 +445,13 @@
   .pf-li .s { font-size: 13px; color: var(--muted); margin-top: 2px; }
   .pf-li .r { text-align: right; }
   .pf-oc { display: inline-block; font-size: 12px; background: var(--soft); border-radius: 6px; padding: 1px 7px; margin-right: 6px; color: var(--fg); }
-  .pf-group { margin-top: 20px; }
-  .pf-group h3 { font-size: 15px; margin: 0 0 4px; }
-  .pf-kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
-  .pf-kv div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-  .pf-kv div > span { color: var(--muted); }
-  .pf-kv b { font-weight: 600; text-align: right; }
-  .pf-mix { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin: 8px 0 6px; }
-  .pf-mix i { background: var(--fg); } .pf-mix i:nth-child(2) { background: var(--muted); } .pf-mix i:nth-child(n+3) { background: var(--faint); }
   .pf-empty { color: var(--muted); padding: 18px 2px; }
+  @media (max-width: 920px) { .pf-grid { grid-template-columns: minmax(0, 1fr); gap: 0; } .pf-main > .pf-card:first-child { margin-top: 16px; } }
   @media (max-width: 760px) {
-    .pf-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .pf-stats .pf-stat:last-child { grid-column: span 2; }
     .pf-facts { grid-template-columns: 100px minmax(0, 1fr); gap: 8px 12px; }
-    .pf-kv { grid-template-columns: minmax(0, 1fr); }
     .pf-cta { justify-items: start; text-align: left; width: 100%; }
     .pf-head h1 { font-size: 24px; }
+    .pf-hero b { font-size: 30px; }
   }
 
   @media (max-width: 1180px) {
@@ -2184,49 +2186,96 @@ function lastBuyAt(s, d) {
 const boldStatus = (t) => { const l = COPY_LABELS.find((x) => t.startsWith(x)); return l ? `<b>${l}</b>${esc(t.slice(l.length))}` : esc(t); };
 const WARN_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 15 14H1z"/><path d="M8 6.2v3.6M8 11.9v.1"/></svg>`;
 
-function renderProfile() {
-  const s = pf.s, d = pf.detail, n = pf.period, app = $("#app");
-  if (!s || !app) return;
-  const name = displayName(s.name, s.wallet);
-  const cats = s.categories || [], total = cats.reduce((a, c) => a + (c.bets || 0), 0);
-  const profit = profitOf(s, n), perDollar = perDollarOf(s, n), up = weeksUp(s);
+// "Their numbers", the profile's left column: every figure on a scored profile, one row each, label then value,
+// in groups. The rows are the one place to add, rename or drop a figure; the layout draws whatever comes back.
+// A row is { k: its label, v: the value (html; null shows "—", never 0), sub: what it's based on and its period,
+// weeks: their 12 weekly results for the bars }. Only the hero and the profit rows follow the 7D/30D/90D switch.
+function profileNumbers(s, d, acct, n) {
+  const P = PF_PERIOD[n], pct = (x) => x == null ? null : `${Math.round(x * 100)}%`;
+  const profit = profitOf(s, n), perDollar = perDollarOf(s, n), up = weeksUp(s), known = weeksOf(s);
+  const per = s.periods?.[n] || (n === "30d" ? { realized: s.realized_window, unrealized: s.unrealized_window, income: s.income_window } : {});
+  const started = s.pnl_since && Date.now() - new Date(s.pnl_since) < { "7d": 7, "30d": 30, "90d": 90 }[n] * 864e5 ? s.pnl_since : null;
+  const money = (x) => x == null ? null : pl(x, usd(x, true));
   // Their wallet: cash (read on-chain) plus open positions, read now (else as the check read them), with when.
   // A total only when both parts were read: one part alone is said to be one part, never shown as the wallet.
-  const fresh = pf.account && !pf.account.error ? pf.account : null;
-  const acct = fresh || { cash_usd: s.cash_usd ?? null, positions_usd: s.positions_usd ?? null, read_at: s.account_at ?? null };
   const cash = acct.cash_usd ?? null, inPositions = acct.positions_usd ?? null;
   const wallet = cash != null && inPositions != null ? cash + inPositions : null;
   const share = wallet && s.typical_usd != null ? s.typical_usd / wallet : null;
+  const reading = pf.account === null && cash == null && inPositions == null;
   const asOf = acct.read_at ? ` · as of ${ago(acct.read_at)}` : "";
-  const walletTile = wallet != null ? [usd(wallet), `cash + open positions${asOf}`]
-    : cash != null ? ["—", `cash ${usd(cash)}; open positions couldn't be read${asOf}`]
-    : inPositions != null ? ["—", `open positions ${usd(inPositions)}; cash couldn't be read${asOf}`]
-    : [pf.account === null ? "…" : "—", pf.account === null ? "reading their wallet" : "couldn't be read just now"];
   const allTime = s.trading_pnl ?? null; // from trading: never Polymarket's figure with rewards in
-  const per = s.periods?.[n] || (n === "30d" ? { realized: s.realized_window, unrealized: s.unrealized_window, income: s.income_window } : {});
-  const started = s.pnl_since && Date.now() - new Date(s.pnl_since) < { "7d": 7, "30d": 30, "90d": 90 }[n] * 864e5 ? s.pnl_since : null;
   const without = allTime != null && s.biggest_win != null ? allTime - s.biggest_win : null;
-  const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way a minute after they bought
+  const weeks = s.pnl_weeks || [];
+  let run = 0, longest = 0; for (const w of weeks) { run = w < 0 ? run + 1 : 0; longest = Math.max(longest, run); }
+  const worst90 = pfChart(s, "90d")?.worst;
+  // how their last closed positions ended (uselayer 0.7): held to the end and won or lost, or sold first
+  const closed = d && !d.error && Array.isArray(d.closed) ? d.closed : null;
+  const ended = (k) => closed.filter((c) => c.result === k).length;
+  const open = d && !d.error && Array.isArray(d.positions) ? d.positions.filter((p) => !["won", "lost", "closed"].includes(p.status)).length : null;
+  const cats = s.categories || [], total = cats.reduce((a, c) => a + (c.bets || 0), 0);
   const band = Array.isArray(s.price_band) ? `${cents(s.price_band[0])}–${cents(s.price_band[1])}` : null;
+  const gap = s.edge_by_delay?.["60"]?.mean; // how far the price had moved their way a minute after they bought
+  return {
+    hero: { k: `Profit, ${P}`, v: money(profit),
+      sub: started ? `since their first trade, ${ago(started)}` : perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit" },
+    groups: [
+      { title: "Profit", rows: [
+        { k: `Taken, ${P}`, v: money(per.realized), sub: "sold or settled, after fees" },
+        { k: `Still open, ${P}`, v: money(per.unrealized), sub: "positions still open, at today's prices" },
+        { k: "Profit from trading, all time", v: money(allTime), sub: per.income ? `rewards and rebates (${usd(per.income)}) not counted` : null },
+        { k: "All time without their biggest win", v: money(without) },
+        { k: "Biggest win, all time", v: s.biggest_win != null ? usd(s.biggest_win) : null },
+        { k: "Worst drop from a high, 90 days", v: worst90 != null ? usd(-worst90) : null },
+      ] },
+      { title: "Record", rows: [
+        { k: "12-week consistency", v: up != null && known ? `${up} of ${known} weeks up` : null,
+          sub: known && known < 12 ? "since their first trade" : null, weeks: up != null && known ? weeks : null },
+        { k: `Won, ${readPeriod(s)}`, v: s.settled ? `${s.won} of ${s.settled}` : null, sub: "checked trades that settled" },
+        { k: `Last ${closed?.length || 50} closed positions`, v: closed?.some((c) => c.result) ? `${ended("won")} won · ${ended("lost")} lost · ${ended("sold")} sold` : null },
+        { k: "Longest run of losing weeks", v: weeks.length ? plural(longest, "week") : null },
+      ] },
+      { title: "Wallet", rows: [
+        { k: "Wallet", v: wallet != null ? usd(wallet) : reading ? "…" : null,
+          sub: reading ? "reading their wallet" : wallet != null ? `cash + open positions${asOf}` : cash != null || inPositions != null ? `only part of it could be read${asOf}` : "couldn't be read just now" },
+        { k: "Cash", v: cash != null ? usd(cash) : null },
+        { k: "In open positions", v: inPositions != null ? usd(inPositions) : null, sub: open != null ? (open >= 50 ? "50 or more open" : `${plural(open, "position")} open`) : null },
+        { k: `Usual trade, ${readPeriod(s)}`, v: s.typical_usd != null ? usd(s.typical_usd) : null, sub: share != null ? `${lbPct(share).replace("+", "")} of their wallet` : null },
+      ] },
+      { title: "How they trade", rows: [
+        { k: `Markets, ${readPeriod(s)}`, v: total ? cats.slice(0, 3).map((c) => `${esc(c.category)} ${Math.round((100 * c.bets) / total)}%`).join(" · ") : null },
+        { k: `Usual price, ${readPeriod(s)}`, v: band || (s.avg_price != null ? `${cents(s.avg_price)} on average` : null) },
+        { k: `New markets, ${readPeriod(s)}`, v: s.trades_per_day != null ? perDayText(s.trades_per_day) : null },
+        { k: "Held until the market settles", v: pct(s.held_share), sub: "last 50 closed positions" },
+        { k: "Resting orders (maker)", v: pct(s.maker_share), sub: "last 500 fills" },
+        { k: "How far the price moved before you could buy", v: gap != null ? centsSigned(gap).replace("+", "") : null },
+      ] },
+    ],
+  };
+}
+const weekBars = (weeks) => `<span class="lb-weeks" aria-hidden="true">${weeks.map((w) => `<i class="${w == null ? "none" : w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span>`;
+const numberRow = (r) => `<div><dt>${esc(r.k)}${r.sub ? `<small>${esc(r.sub)}</small>` : ""}</dt><dd>${r.weeks ? weekBars(r.weeks) : ""}${r.v ?? `<span class="lb-none">—</span>`}</dd></div>`;
+
+function renderProfile() {
+  const s = pf.s, d = pf.detail, n = pf.period, app = $("#app");
+  if (!s || !app) return;
+  if (pf.tab === "stats") pf.tab = "positions"; // the Stats tab's figures are in Their numbers now
+  const name = displayName(s.name, s.wallet);
+  const cats = s.categories || [];
+  const fresh = pf.account && !pf.account.error ? pf.account : null;
+  const acct = fresh || { cash_usd: s.cash_usd ?? null, positions_usd: s.positions_usd ?? null, read_at: s.account_at ?? null };
+  const nums = profileNumbers(s, d, acct, n);
   const chart = pfChart(s, n);
   const can = isCopyable(s);
   // Under Follow: their copy status, one line with a dot; "Why?" goes to the reason in Why they're here.
   const copyStatus = `<div class="pf-copy"><span class="status${can ? " in" : ""}"><i></i>${copyLabel(s)}${can && s.copy_return != null ? ` · est. ${lbPct(s.copy_return)} after fees` : ""}</span>
     · <button type="button" class="link" id="whycopy">Why?</button></div>`;
-  const period = (cls) => s.periods ? `<div class="lb-period ${cls}" role="group" aria-label="Period">${Object.keys(PF_PERIOD).map((p) => `<button type="button" data-pfperiod="${p}" aria-pressed="${n === p}">${p.toUpperCase()}</button>`).join("")}</div>` : "";
+  const period = s.periods ? `<div class="lb-period" role="group" aria-label="Period">${Object.keys(PF_PERIOD).map((p) => `<button type="button" data-pfperiod="${p}" aria-pressed="${n === p}">${p.toUpperCase()}</button>`).join("")}</div>` : "";
 
-  // why they're here: the verdict and their copy status (the engine's why_lines), the SDK's own warnings, then the
-  // facts, one short value each. Their usual trade is in the tiles above, their recent markets in Activity.
+  // why they're here: the verdict and their copy status (the engine's why_lines), the SDK's own warnings, and when
+  // they last bought. How they trade is in Their numbers, their recent markets in Activity.
   const why = s.why || {};
   const risks = (s.risks || []).map(sdkText);
   const lastAt = lastBuyAt(s, d);
-  const facts = [
-    ["Markets", why.trades ? esc(why.trades) : null],
-    ["Buys at", band || (s.avg_price != null ? `about ${cents(s.avg_price)}` : null)],
-    ["New markets", s.trades_per_day != null ? perDayText(s.trades_per_day) : null],
-    ["Holds", s.held_share != null ? `${Math.round(s.held_share * 100)}% of closed positions until the market settles` : null],
-    ["Last bought", lastAt ? `${ago(lastAt)} · <button type="button" class="link" id="pfactivity">See activity</button>` : null],
-  ].filter(([, v]) => v);
 
   // the tabs
   let body;
@@ -2247,67 +2296,44 @@ function renderProfile() {
         : open.length ? `<div>${open.slice(0, 12).map(openRow).join("")}</div>` : `<p class="pf-empty">No open trades.</p>`}
       <p class="pf-sec">Closed${closedSdk ? "" : " · settled trades we checked"}</p>
       ${(closedSdk || settled).length ? `<div>${(closedSdk || settled).slice(0, 12).map(closedRow).join("")}</div>` : `<p class="pf-empty">No settled trades yet. Results show up once their markets settle.</p>`}`;
-  } else if (pf.tab === "activity") {
+  } else {
     const trades = d && !d.error ? d.trades || [] : null;
     const act = trades ? trades.map((x) => ({ sell: x.action === "sell", title: x.title || x.market, outcome: x.outcome, usd: x.usd, price: x.price, at: x.at, url: x.url, us: x.us }))
       : (s.recent || []).map((b) => ({ sell: false, title: b.title || b.market, outcome: b.outcome, usd: b.usd, price: b.price, at: b.at, url: b.url }));
     body = act.length ? `<div>${act.slice(0, 20).map((a) => `<div class="pf-li"><div><div class="t">${a.sell ? "Sold" : "Bought"} ${a.outcome ? `<span class="pf-oc">${esc(a.outcome)}</span>` : ""}${esc(a.title)}</div>
         <div class="s">${usd(a.usd)} at ${cents(a.price)}${a.url ? ` · ${marketLink(a.url)}` : ""}${usInline(a.us)}</div></div><div class="r s">${ago(a.at)}</div></div>`).join("")}</div>`
       : `<p class="pf-empty">${trades ? "No trades yet." : "No buys in the last 30 days."}</p>`;
-  } else {
-    const weeks = s.pnl_weeks || [];
-    let run = 0, longest = 0; for (const w of weeks) { run = w < 0 ? run + 1 : 0; longest = Math.max(longest, run); }
-    const worst90 = pfChart(s, "90d")?.worst;
-    const dash = `<span class="lb-none">—</span>`;
-    // how their last closed positions ended (uselayer 0.7): held to the end and won or lost, or sold first
-    const closedKnown = d && Array.isArray(d.closed) ? d.closed.filter((c) => c.result) : [];
-    const closedN = d && Array.isArray(d.closed) ? d.closed.length : 0;
-    const ended = (k) => closedKnown.filter((c) => c.result === k).length;
-    const closedRecord = closedKnown.length ? `${ended("won")} won · ${ended("lost")} lost · ${ended("sold")} sold` : "";
-    body = `<div class="pf-group"><h3>Consistency</h3><div class="pf-kv">
-        <div><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)} weeks up` : dash}</b></div><div><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled} settled` : dash}</b></div>
-        <div><span>Last ${closedN || 50} closed positions</span><b>${closedRecord || dash}</b></div>
-        <div><span>All time without their biggest win</span><b>${without != null ? pl(without, usd(without, true)) : dash}</b></div><div><span>Longest run of losing weeks</span><b>${weeks.length ? longest : dash}</b></div></div></div>
-      <div class="pf-group"><h3>Risk</h3><div class="pf-kv">
-        <div><span>Usual trade, ${readPeriod(s)}</span><b>${s.typical_usd != null ? usd(s.typical_usd) : dash}</b></div><div><span>Of their wallet</span><b>${share != null ? lbPct(share).replace("+", "") : dash}</b></div>
-        <div><span>Biggest win, all time</span><b>${s.biggest_win != null ? usd(s.biggest_win) : dash}</b></div><div><span>Worst drop from a high, 90 days</span><b>${worst90 != null ? usd(-worst90) : dash}</b></div></div></div>
-      <div class="pf-group"><h3>Style</h3>
-        ${total ? `<div class="pf-mix" aria-hidden="true">${cats.slice(0, 4).map((c) => `<i style="flex:${c.bets}"></i>`).join("")}</div>` : ""}
-        <div class="pf-kv"><div><span>Markets, ${readPeriod(s)}</span><b>${total ? cats.slice(0, 3).map((c) => `${esc(c.category)} ${Math.round((100 * c.bets) / total)}%`).join(" · ") : dash}</b></div>
-        <div><span>Usual price, ${readPeriod(s)}</span><b>${band || (s.avg_price != null ? `${cents(s.avg_price)} on average` : dash)}</b></div>
-        <div><span>New markets, ${readPeriod(s)}</span><b>${s.trades_per_day != null ? perDayText(s.trades_per_day) : dash}</b></div><div><span>Held until the market settles, last 50 closed positions</span><b>${s.held_share != null ? `${Math.round(s.held_share * 100)}%` : dash}</b></div></div></div>
-      <div class="pf-group"><h3>Execution</h3><div class="pf-kv">
-        <div><span>Resting orders (maker), last 500 fills</span><b>${s.maker_share != null ? `${Math.round(s.maker_share * 100)}%` : dash}</b></div><div><span>How far the price moved before you could buy</span><b>${gap != null ? centsSigned(gap).replace("+", "") : dash}</b></div></div></div>
-      <details class="fold"><summary>How we measure this</summary>${worthDetails(s)}</details>`;
   }
 
   app.innerHTML = `${pf.from === "explore" ? `<a class="back" href="#/traders/explore">← Explore</a>` : `<a class="back" href="#/traders">← Traders</a>`}
     <div class="pf-head">${avatar(s.wallet, 64)}
       <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${tier(s.segment, true)}</div><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null, s.stored_at ? `checked ${ago(s.stored_at * 1000)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy || s.stored_at ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div>${copyStatus}</div></div>
-    <div class="pf-stats">
-      <div class="pf-stat"><span>Profit, ${PF_PERIOD[n]}</span><b>${profit != null ? pl(profit, usd(profit, true)) : "—"}</b><small>${started ? `since their first trade, ${ago(started)}` : perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit"}</small></div>
-      <div class="pf-stat"><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)}` : "—"}</b><small>${weeksOf(s) && weeksOf(s) < 12 ? "weeks up, since their first trade. " : "weeks up. "}${WEEK_COUNTS}</small></div>
-      <div class="pf-stat"><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>checked trades that settled</small></div>
-      <div class="pf-stat"><span>Usual trade, ${readPeriod(s)}</span><b>${s.typical_usd != null ? usd(s.typical_usd) : "—"}</b><small>${share != null ? `${lbPct(share).replace("+", "")} of their wallet` : s.trades_per_day != null ? perDayText(s.trades_per_day) : ""}</small></div>
-      <div class="pf-stat"><span>Wallet</span><b>${walletTile[0]}</b><small>${walletTile[1]}</small></div>
-    </div>
-    ${s.periods ? `<p class="pf-statnote">7D/30D/90D changes the profit figure and chart. Consistency, win record and usual trade are for the fixed periods shown.</p>` : ""}
-    <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Profit</h2>${period("")}</div>
-      ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
-        : `<p class="pf-empty">Their profit history isn't available yet.</p>`}
-      ${profit != null && per.realized != null && per.unrealized != null ? `<p class="pf-statnote">From trading, after fees: ${pl(per.realized, usd(per.realized, true))} taken (sold or settled) and ${pl(per.unrealized, usd(per.unrealized, true))} on positions still open.${per.income ? ` Rewards and rebates (${usd(per.income)}) aren't counted.` : ""}</p>` : ""}</section>
-    <section class="pf-card"><h2>Why they're here</h2>
-      ${why.listed ? `<p class="pf-verdict">${esc(why.listed)}</p>` : ""}
-      <p class="pf-copying" id="pfcopy">${boldStatus(why.copying || s.copy_why || `${copyLabel(s)}.`)}${s.copy_return != null ? ` ${esc(copyFigure(s))}.` : ""}</p>
-      ${risks.length ? `<div class="pf-warn">${WARN_ICON}<p>${risks.map(esc).join(" ")}</p></div>` : ""}
-      ${facts.length ? `<dl class="pf-facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` : ""}
-    </section>
-    ${s.directory && s.directory.group === "limited" && s.directory.evidence === "quick" ? `<section class="pf-card"><h2>What we know so far</h2>
-      <p class="pf-copying">Limited evidence: fewer than 8 bets in the last 30 days, which is too few to judge skill either way.</p>
-      <dl class="pf-facts">${evidenceFacts(s.directory).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl></section>` : ""}
-    <div class="pf-tabs" role="tablist">${[["positions", "Positions"], ["activity", "Activity"], ["stats", "Stats"]].map(([k, l]) => `<button type="button" role="tab" data-pftab="${k}" aria-selected="${pf.tab === k}">${l}</button>`).join("")}</div>
-    <div>${body}</div>`;
+    <div class="pf-grid">
+      <aside class="pf-card pf-side" aria-label="Their numbers">
+        <div class="pf-card-head"><h2>Their numbers</h2>${period}</div>
+        <div class="pf-hero"><span>${esc(nums.hero.k)}</span><b>${nums.hero.v ?? "—"}</b><small>${esc(nums.hero.sub)}</small></div>
+        ${nums.groups.map((g) => `<h3>${esc(g.title)}</h3><dl class="pf-rows">${g.rows.map(numberRow).join("")}</dl>`).join("")}
+        ${s.periods ? `<p class="pf-statnote">Only profit follows ${Object.keys(PF_PERIOD).map((p) => p.toUpperCase()).join("/")}. Every other figure names its own period.</p>` : ""}
+      </aside>
+      <div class="pf-main">
+        <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Profit, ${PF_PERIOD[n]}</h2></div>
+          ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
+            : `<p class="pf-empty">Their profit history isn't available yet.</p>`}</section>
+        <section class="pf-card"><h2>Why they're here</h2>
+          ${why.listed ? `<p class="pf-verdict">${esc(why.listed)}</p>` : ""}
+          <p class="pf-copying" id="pfcopy">${boldStatus(why.copying || s.copy_why || `${copyLabel(s)}.`)}${s.copy_return != null ? ` ${esc(copyFigure(s))}.` : ""}</p>
+          ${risks.length ? `<div class="pf-warn">${WARN_ICON}<p>${risks.map(esc).join(" ")}</p></div>` : ""}
+          ${lastAt ? `<dl class="pf-facts"><dt>Last bought</dt><dd>${ago(lastAt)} · <button type="button" class="link" id="pfactivity">See activity</button></dd></dl>` : ""}
+        </section>
+        ${s.directory && s.directory.group === "limited" && s.directory.evidence === "quick" ? `<section class="pf-card"><h2>What we know so far</h2>
+          <p class="pf-copying">Limited evidence: fewer than 8 bets in the last 30 days, which is too few to judge skill either way.</p>
+          <dl class="pf-facts">${evidenceFacts(s.directory).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl></section>` : ""}
+        <div class="pf-tabs" role="tablist">${[["positions", "Positions"], ["activity", "Activity"]].map(([k, l]) => `<button type="button" role="tab" data-pftab="${k}" aria-selected="${pf.tab === k}">${l}</button>`).join("")}</div>
+        <div>${body}</div>
+        <details class="fold"><summary>How we measure this</summary>${worthDetails(s)}</details>
+      </div>
+    </div>`;
   $$("[data-pfperiod]", app).forEach((b) => (b.onclick = () => { pf.period = b.dataset.pfperiod; renderProfile(); }));
   $$("[data-pftab]", app).forEach((b) => (b.onclick = () => { pf.tab = b.dataset.pftab; renderProfile(); }));
   $("#whycopy", app).onclick = () => {
