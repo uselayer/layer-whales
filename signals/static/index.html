@@ -2195,7 +2195,9 @@ const WARN_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" st
 // weeks: their weekly results for the bars }. `summary` sits at the top (on a phone, before the chart), `groups`
 // below it, `fold` in "How we measure this". Only the hero (realized P&L) and the chart follow 7D/30D/90D.
 // Left out until they count settled positions never redeemed (Polymarket's closed positions leave those losers
-// out): the last closed positions' won/lost/sold record and the share held until the market settles.
+// out): the last closed positions' won/lost/sold record and the share held until the market settles. The worst
+// drop from a high too, here and on the chart: it's one reading a day of the hourly curve, at the hour the score was made, so a
+// game in play at that hour sets it. It comes back once the SDK works it out from the whole hourly curve.
 function profileNumbers(s, d, acct, n) {
   const P = PF_PERIOD[n], pct = (x) => x == null ? null : `${Math.round(x * 100)}%`;
   const money = (x) => x == null ? null : pl(x, usd(x, true));
@@ -2213,7 +2215,6 @@ function profileNumbers(s, d, acct, n) {
   const reading = pf.account === null && cash == null && inPositions == null;
   const when = acct.read_at ? `as of ${ago(acct.read_at)}` : "now";
   const up = weeksUp(s), known = weeksOf(s), weeks = s.pnl_weeks || [];
-  const worst90 = pfChart(s, "90d")?.worst;
   const cats = (s.categories || []).filter((c) => c.bets), events = cats.reduce((a, c) => a + c.bets, 0);
   const shares = cats.map((c) => [c.category, Math.round((100 * c.bets) / events)]).filter(([, p]) => p >= 5).slice(0, 3);
   const band = Array.isArray(s.price_band) ? `${cents(s.price_band[0])}–${cents(s.price_band[1])}` : null;
@@ -2247,10 +2248,6 @@ function profileNumbers(s, d, acct, n) {
     fold: [
       { k: `Won, ${readPeriod(s)}`, v: s.settled ? `${s.won} of ${s.settled}` : null,
         sub: "checked trades that settled; won = the outcome they bought paid out, even if they sold first" },
-      // One reading a day, at the hour the score was made: a game in play at that hour can set it (#129's notes).
-      // Back in Record once the SDK works it out from the whole hourly curve.
-      { k: "Worst drop from a high", v: worst90 != null ? usd(-worst90) : null,
-        sub: "trading profit, last 90 days · read once a day, so it can miss or exaggerate a drop within a day" },
       { k: "Resting orders (maker)", v: pct(s.maker_share), sub: "last 500 fills" },
       { k: "How far the price moved before you could buy", v: gap != null ? centsSigned(gap).replace("+", "") : null, sub: "a minute after they bought, on average" },
       { k: "Biggest win, all time", v: s.biggest_win != null ? usd(s.biggest_win) : null, sub: "Polymarket's figure" },
@@ -2270,6 +2267,9 @@ function renderProfile() {
   const fresh = pf.account && !pf.account.error ? pf.account : null;
   const acct = fresh || { cash_usd: s.cash_usd ?? null, positions_usd: s.positions_usd ?? null, read_at: s.account_at ?? null };
   const nums = profileNumbers(s, d, acct, n);
+  // when the figures from their check (chart, realized P&L, record, how they trade) were worked out: every score
+  // carries it, kept (stored_at) or not, so the header always says how old they are
+  const checkedAt = s.stored_at ?? s.scored_at ?? null;
   const chart = pfChart(s, n);
   const can = isCopyable(s);
   // Under Follow: their copy status, one line with a dot; "Why?" goes to the reason in Why they're here.
@@ -2313,7 +2313,7 @@ function renderProfile() {
 
   app.innerHTML = `${pf.from === "explore" ? `<a class="back" href="#/traders/explore">← Explore</a>` : `<a class="back" href="#/traders">← Traders</a>`}
     <div class="pf-head">${avatar(s.wallet, 64)}
-      <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${tier(s.segment, true)}</div><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null, s.stored_at ? `checked ${ago(s.stored_at * 1000)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy || s.stored_at ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
+      <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${tier(s.segment, true)}</div><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null, checkedAt ? `checked ${ago(checkedAt * 1000)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy || checkedAt ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div>${copyStatus}</div></div>
     <div class="pf-grid">
       <section class="pf-card pf-sum" aria-label="Their numbers">
@@ -2322,7 +2322,7 @@ function renderProfile() {
         <dl class="pf-rows">${nums.summary.map(numberRow).join("")}</dl>
       </section>
       <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Trading profit, ${PF_PERIOD[n]}</h2></div>
-        ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span><span>Profit taken plus positions still open</span></div>`
+        ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Profit taken plus positions still open</span></div>`
           : `<p class="pf-empty">Their profit history isn't available yet.</p>`}</section>
       <section class="pf-card pf-det" aria-label="More of their numbers">
         ${nums.groups.map((g) => `<h3>${esc(g.title)}</h3><dl class="pf-rows">${g.rows.map(numberRow).join("")}</dl>`).join("")}

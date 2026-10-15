@@ -3,7 +3,9 @@ SDK's reads are fixed answers."""
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -73,6 +75,18 @@ def test_a_traders_page_carries_the_why_lines(api: TestClient) -> None:
     assert set(why) == {"trades", "how", "listed", "copying"} and why["copying"].startswith("Copyable: ")
 
 
+def test_a_score_made_on_a_traders_page_says_when_and_the_page_shows_it(monkeypatch: pytest.MonkeyPatch, api: TestClient) -> None:
+    """Users see how old a profile's figures are: a score worked out on the spot (kept until the next check)
+    carries when, as kept ones do, and the header's "checked X ago" reads either."""
+    w = "0x" + "7" * 40
+    monkeypatch.setattr(engine, "checker", lambda: SimpleNamespace(score=lambda x, **k: SimpleNamespace(to_dict=lambda: {"wallet": x})))
+    monkeypatch.setattr(engine, "_directory_later", lambda write: None)
+    before = time.time()
+    s = engine._score_of(w)
+    assert before <= s["scored_at"] <= time.time() and engine._score_of(w)["scored_at"] == s["scored_at"]  # kept, with when
+    assert "const checkedAt = s.stored_at ?? s.scored_at ?? null;" in api.get("/").text
+
+
 def test_the_profile_card_and_the_price_check_have_the_new_lines(api: TestClient) -> None:
     page = api.get("/").text
     for words in ('class="pf-verdict"', 'id="pfcopy"', 'class="pf-warn"', 'class="pf-facts"', "Their numbers", 'class="pf-grid"', 'class="pf-rows"',
@@ -82,7 +96,7 @@ def test_the_profile_card_and_the_price_check_have_the_new_lines(api: TestClient
                   "Order book and market status read at", "for context."):  # fmt: skip
         assert words in page, words
     for gone in ("<b>Lately</b>", "<b>Worth knowing</b>", "<b>Consistent</b>", "<b>Can you copy them</b>",
-                 "What copying it costs", "within 3¢ of their price", 'class="pf-stats"', '["stats", "Stats"]', "Held until the market settles:"):  # the old lines
+                 "What copying it costs", "within 3¢ of their price", 'class="pf-stats"', '["stats", "Stats"]', "Held until the market settles:", "Worst drop"):  # the old lines
         assert gone not in page, gone
 
 
@@ -117,9 +131,9 @@ def test_their_numbers_lead_with_realized_and_open_pnl_wallet_and_the_win_rate_s
     assert m["Wallet"]["v"] == "$1.1M" and m["Wallet"]["sub"].startswith("cash $800K + open positions $300K")
     assert m["Made money on"]["v"] is None  # "—" until the SDK reads every settled position
     assert [g["title"] for g in month["groups"]] == ["Record", "How they trade"]
-    # one reading a day can miss or exaggerate a drop: the fold's, not Record's, until the SDK uses the hourly curve
-    assert "Worst drop from a high" in [r["k"] for r in month["fold"]]
-    assert "Worst drop from a high" not in [r["k"] for g in month["groups"] for r in g["rows"]]
+    # worst drop is hidden until the SDK works it out from the whole hourly curve: one reading a day can miss or
+    # exaggerate a drop, depending on the hour the score was made
+    assert not [k for k in m if "drop" in k.lower()]
     assert m["Weeks up"]["v"] == "4 of 6" and m["Weeks up"]["sub"] == "since their first trade" and m["Weeks up"]["weeks"]
     assert m["Markets"]["v"] == "Sports 98%" and m["Markets"]["sub"] == "of 42 events checked, last 30 days"  # under 5% left out
     assert m["Usual opening buy"]["v"] == "$24.8K" and m["Usual price paid"]["v"] == "35¢–54¢"
