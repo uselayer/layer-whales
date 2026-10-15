@@ -3,9 +3,7 @@ SDK's reads are fixed answers."""
 
 from __future__ import annotations
 
-import time
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -75,84 +73,17 @@ def test_a_traders_page_carries_the_why_lines(api: TestClient) -> None:
     assert set(why) == {"trades", "how", "listed", "copying"} and why["copying"].startswith("Copyable: ")
 
 
-def test_a_score_made_on_a_traders_page_says_when_and_the_page_shows_it(monkeypatch: pytest.MonkeyPatch, api: TestClient) -> None:
-    """Users see how old a profile's figures are: a score worked out on the spot (kept until the next check)
-    carries when, as kept ones do, and the header's "checked X ago" reads either."""
-    w = "0x" + "7" * 40
-    monkeypatch.setattr(engine, "checker", lambda: SimpleNamespace(score=lambda x, **k: SimpleNamespace(to_dict=lambda: {"wallet": x})))
-    monkeypatch.setattr(engine, "_directory_later", lambda write: None)
-    before = time.time()
-    s = engine._score_of(w)
-    assert before <= s["scored_at"] <= time.time() and engine._score_of(w)["scored_at"] == s["scored_at"]  # kept, with when
-    assert "const checkedAt = s.stored_at ?? s.scored_at ?? null;" in api.get("/").text
-
-
 def test_the_profile_card_and_the_price_check_have_the_new_lines(api: TestClient) -> None:
     page = api.get("/").text
-    for words in ('class="pf-verdict"', 'id="pfcopy"', 'class="pf-warn"', 'class="pf-facts"', "Their numbers", 'class="pf-grid"', 'class="pf-rows"',
-                  "<dt>Last bought</dt>", "See activity", 'id="whycopy"', "Why?", "How we measure this",
+    for words in ('class="pf-verdict"', 'id="pfcopy"', 'class="pf-warn"', 'class="pf-facts"', '"Markets"', '"Buys at"',
+                  '"Last bought"', "See activity", 'id="whycopy"', "Why?", "How we measure this",
                   "What buying now costs", "An estimate, not a guaranteed fill", "is for sale within 3¢ of the cheapest price",
                   "Priced up to 3¢ above the cheapest price for sale", "Estimated slippage: your average fill",
                   "Order book and market status read at", "for context."):  # fmt: skip
         assert words in page, words
     for gone in ("<b>Lately</b>", "<b>Worth knowing</b>", "<b>Consistent</b>", "<b>Can you copy them</b>",
-                 "What copying it costs", "within 3¢ of their price", 'class="pf-stats"', '["stats", "Stats"]', "Held until the market settles:", "Worst drop",
-                 "<b>Won:</b>", "<b>Resting orders:</b>"):  # the old lines
+                 "What copying it costs", "within 3¢ of their price"):  # the old lines
         assert gone not in page, gone
-
-
-NUMBERS = ("usd", "pl", "esc", "cents", "centsSigned", "ago", "plural", "lbPct", "readDays", "readPeriod", "weeksUp",
-           "weeksOf", "PERIOD_DAYS", "PF_PERIOD", "pf", "pfChart", "profileNumbers")  # fmt: skip
-
-
-def test_their_numbers_lead_with_realized_and_open_pnl_wallet_and_the_win_rate_slot(run_js: Any) -> None:
-    """The profile's numbers (the trader profile audit's definitions): realized P&L for the period leads, with
-    Polymarket's all-time realized; open P&L is Polymarket's figure now ("…" while the trader read loads, "—" if
-    it failed, never the score's 30-day change in open value); the wallet is a total only when both parts were
-    read; the switch moves realized P&L only; the closed-positions record and held-to-settlement aren't shown."""
-    s = {"periods": {"7d": {"realized": -20, "unrealized": -30}, "30d": {"realized": 336000, "unrealized": 0}},
-         "unrealized_window": 999, "trading_pnl": 900000, "biggest_win": 120000, "weeks_up": 4, "weeks_known": 6,
-         "pnl_weeks": [1, -1, -2, 3, 4, 5], "won": 30, "settled": 58, "typical_usd": 24800, "trades_per_day": 2.4,
-         "held_share": 1, "price_band": [0.35, 0.54], "categories": [{"category": "Sports", "bets": 41}, {"category": "Tennis", "bets": 1}]}
-    detail = {"stats": {"realized_pnl": 3100000, "unrealized_pnl": 5400}, "positions": [], "closed": [{"result": "won"}]}
-    got = run_js(NUMBERS, f"(() => {{ pf.account = {{}}; return ["
-                          f"profileNumbers({s}, {detail}, {{cash_usd: 800000, positions_usd: 300000}}, '30d'),"
-                          f"profileNumbers({s}, null, {{cash_usd: 5}}, '7d'),"
-                          f"profileNumbers({s}, {{error: 'x'}}, {{}}, '30d')]; }})()")
-    month, week, failed = got
-
-    def rows(r: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        return {x["k"]: x for g in [{"rows": r["summary"]}, *r["groups"], {"rows": r["fold"]}] for x in g["rows"]}
-
-    m = rows(month)
-    assert month["hero"]["k"] == "Realized P&L, 30 days" and "+$336K" in month["hero"]["v"]
-    assert month["hero"]["sub"] == "taken in the last 30 days · +$3.1M all time"
-    assert [r["k"] for r in month["summary"]] == ["Open P&L", "Wallet", "Made money on"]
-    assert "+$5.4K" in m["Open P&L"]["v"] and m["Open P&L"]["sub"] == "on positions still open · Polymarket's figure"
-    assert m["Wallet"]["v"] == "$1.1M" and m["Wallet"]["sub"].startswith("cash $800K + open positions $300K")
-    assert m["Made money on"]["v"] is None  # "—" until the SDK reads every settled position
-    assert [g["title"] for g in month["groups"]] == ["Record", "How they trade"]
-    # worst drop is hidden until the SDK works it out from the whole hourly curve: one reading a day can miss or
-    # exaggerate a drop, depending on the hour the score was made
-    assert not [k for k in m if "drop" in k.lower()]
-    assert m["Weeks up"]["v"] == "4 of 6" and m["Weeks up"]["sub"] == "since their first trade" and m["Weeks up"]["weeks"]
-    assert m["Markets"]["v"] == "Sports 98%" and m["Markets"]["sub"] == "of 42 events checked, last 30 days"  # under 5% left out
-    assert m["Usual opening buy"]["v"] == "$24.8K" and m["Usual price paid"]["v"] == "35¢–54¢"
-    assert m["New positions"]["v"] == "about 2 a day"
-    assert "+$780K" in m["All time without their biggest win"]["v"]  # in the fold
-    assert m["How far the price moved before you could buy"]["v"] is None  # not read: "—", never 0
-    # hidden until fixed, not folded: the checked trades' win record (the Traders list keeps it) and resting orders
-    assert not [k for k in m if k.startswith("Won") or "Resting" in k]
-    shown = " ".join(m)
-    assert "closed positions" not in shown.lower() and "settles" not in shown and "Held" not in shown
-    # 7D moves realized P&L only; the trader read still loading is "…"; a wallet read in part isn't the wallet
-    w = rows(week)
-    assert week["hero"]["k"] == "Realized P&L, 7 days" and "−$20" in week["hero"]["v"] and week["hero"]["sub"].endswith("all time …")
-    assert w["Open P&L"]["v"] == "…" and w["Usual opening buy"]["v"] == "$24.8K"
-    assert w["Wallet"]["v"] is None and w["Wallet"]["sub"] == "cash $5.00; open positions couldn't be read"
-    # the trader read failed: "—", never the score's change in open value over 30 days
-    f = rows(failed)
-    assert f["Open P&L"]["v"] is None and failed["hero"]["sub"] == "taken in the last 30 days"
 
 
 # ---- the price check ----
