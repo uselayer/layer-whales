@@ -236,9 +236,14 @@ it went out: new, big, exit, told, group, so the counts split by reason):
 
 ## Side findings
 
-- `pending` is keyed by transaction hash (`INSERT OR IGNORE`), so a second fill in the same transaction isn't added to
-  an alert's dollars. 0–9% of fills a trader makes (NM-P: 507 of 53,421). Matching production, the replay does the
-  same.
+- `pending` was keyed by transaction hash (`INSERT OR IGNORE`), so a second fill in the same transaction wasn't added
+  to an alert's dollars (0–9% of a trader's fills; NM-P 507 of 53,421). Matching production at b31049e, the replay
+  does the same. **Fixed separately in #119** (`_fill_key`, ec0fc74), confirmed in the running server's source on
+  2026-10-15. User impact before the fix, from this replay (Oct 12 – Oct 14 16:00 UTC):
+  - Owner's follows: 11 of 1,066 buy alerts (1.0%, all NM-P) showed too few dollars. The median was $437 short (53%
+    of the buy), the largest $1,470 ("$1,105" on a $2,575 Sabalenka buy). Average price off by at most 0.97¢.
+  - All 18 traders: 47 of 20,119 (0.2%), up to $1,956 short; average price up to 3.7¢ off (10 alerts ≥ 1¢).
+  - Which trades were alerted didn't change: followed traders' alerts have no dollar threshold.
 - On Oct 14 the cap was reached at 05:14. `held` was empty and no summaries were sent that day: once
   the cap is reached nothing is held.
 

@@ -125,8 +125,8 @@ limits    = 16 immediate a day per person (past that, unusual trades go to the t
 7. **Copy:** the welcome text and limit message describe the new rule (`CONNECTED`, `CAP_TEXT`).
 8. **Tests** in `tests/test_alerts.py`: unit building, the backfill pager, classification, the 16+4 split, hold
    before cap, the summary layout and the 4,096 trim. Keep the at-most-once delivery rules as they are.
-9. **Optional fix found on the way:** `pending` is keyed by transaction hash, so a second fill in one transaction
-   isn't added (1–9% of fills). Key it by (transaction, token, fill index) instead.
+9. (The fill-counting bug found on the way, `pending` keyed by transaction hash, was fixed separately in #119 and
+   isn't part of this proposal.)
 
 ## API cost
 
