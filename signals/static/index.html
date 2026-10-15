@@ -2197,9 +2197,12 @@ const WARN_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" st
 // Left out until they count settled positions never redeemed (Polymarket's closed positions leave those losers
 // out): the last closed positions' won/lost/sold record and the share held until the market settles. The worst
 // drop from a high too, here and on the chart: it's one reading a day of the hourly curve, at the hour the score was made, so a
-// game in play at that hour sets it. It comes back once the SDK works it out from the whole hourly curve.
+// game in play at that hour sets it. It comes back once the SDK works it out from the whole hourly curve. Also
+// hidden until fixed (the owner's call): the win record of checked trades ("won" is the outcome they bought paying
+// out, even when they sold first at a loss, and its count differs by where the score came from until #124; the
+// Traders list keeps it) and the resting-orders share (its comparison feed stops at 500 rows, so it can read high).
 function profileNumbers(s, d, acct, n) {
-  const P = PF_PERIOD[n], pct = (x) => x == null ? null : `${Math.round(x * 100)}%`;
+  const P = PF_PERIOD[n];
   const money = (x) => x == null ? null : pl(x, usd(x, true));
   const realized = s.periods?.[n]?.realized ?? (n === "30d" ? s.realized_window : null) ?? null; // the score's curve
   const started = s.pnl_since && Date.now() - new Date(s.pnl_since) < PERIOD_DAYS[n] * 864e5 ? s.pnl_since : null;
@@ -2246,9 +2249,6 @@ function profileNumbers(s, d, acct, n) {
       ] },
     ],
     fold: [
-      { k: `Won, ${readPeriod(s)}`, v: s.settled ? `${s.won} of ${s.settled}` : null,
-        sub: "checked trades that settled; won = the outcome they bought paid out, even if they sold first" },
-      { k: "Resting orders (maker)", v: pct(s.maker_share), sub: "last 500 fills" },
       { k: "How far the price moved before you could buy", v: gap != null ? centsSigned(gap).replace("+", "") : null, sub: "a minute after they bought, on average" },
       { k: "Biggest win, all time", v: s.biggest_win != null ? usd(s.biggest_win) : null, sub: "Polymarket's figure" },
       { k: "All time without their biggest win", v: money(without), sub: "trading profit, including positions still open" },
@@ -2364,11 +2364,9 @@ function worthDetails(s) {
     <p class="note">${esc(sdkText(s.source))} · last ${Math.round((new Date(s.window[1]) - new Date(s.window[0])) / 864e5)} days · ${plural(s.bets, "separate trade")} checked · ${conf}
       · <a class="ext" href="https://polymarket.com/profile/${esc(s.wallet)}" target="_blank" rel="noopener">${INTL} profile ↗</a></p>
     <h3>What the numbers mean</h3><ul>
-      <li><b>Won:</b> of the trades we checked (their first buy in each market over the ${readPeriod(s)}, bought at 2¢–98¢, up to 60), how many settled their way. Selling early doesn't change it.</li>
       <li><b>Usual opening buy:</b> the middle of their first buys into each position over the ${readPeriod(s)}. Adding to a position isn't counted.</li>
       <li><b>New positions:</b> how many outcomes they bought into for the first time, a day.</li>
       <li><b>Closed positions</b> (the Positions tab): their last 50, from Polymarket, which leaves out settled positions they never redeemed. "Sold" means they sold at least half before the market settled.</li>
-      <li><b>Resting orders:</b> of their last 500 fills.</li>
       ${readDays(s) < 30 ? `<li>They trade a lot: we read their last 5,000 fills, which go back ${readDays(s)} days, not 30.</li>` : ""}
     </ul>
     <h3>The checks</h3><ul class="checks">${s.checks.map((c) => `<li><b>${mark(c.passed)}</b><div><b>${esc(sdkText(c.title))}.</b> ${esc(sdkText(c.detail))}</div></li>`).join("")}</ul>

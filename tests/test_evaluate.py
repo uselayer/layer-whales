@@ -96,7 +96,8 @@ def test_the_profile_card_and_the_price_check_have_the_new_lines(api: TestClient
                   "Order book and market status read at", "for context."):  # fmt: skip
         assert words in page, words
     for gone in ("<b>Lately</b>", "<b>Worth knowing</b>", "<b>Consistent</b>", "<b>Can you copy them</b>",
-                 "What copying it costs", "within 3¢ of their price", 'class="pf-stats"', '["stats", "Stats"]', "Held until the market settles:", "Worst drop"):  # the old lines
+                 "What copying it costs", "within 3¢ of their price", 'class="pf-stats"', '["stats", "Stats"]', "Held until the market settles:", "Worst drop",
+                 "<b>Won:</b>", "<b>Resting orders:</b>"):  # the old lines
         assert gone not in page, gone
 
 
@@ -138,14 +139,16 @@ def test_their_numbers_lead_with_realized_and_open_pnl_wallet_and_the_win_rate_s
     assert m["Markets"]["v"] == "Sports 98%" and m["Markets"]["sub"] == "of 42 events checked, last 30 days"  # under 5% left out
     assert m["Usual opening buy"]["v"] == "$24.8K" and m["Usual price paid"]["v"] == "35¢–54¢"
     assert m["New positions"]["v"] == "about 2 a day"
-    assert m["Won, last 30 days"]["v"] == "30 of 58" and "+$780K" in m["All time without their biggest win"]["v"]  # in the fold
-    assert m["Resting orders (maker)"]["v"] is None  # not read: "—", never 0
+    assert "+$780K" in m["All time without their biggest win"]["v"]  # in the fold
+    assert m["How far the price moved before you could buy"]["v"] is None  # not read: "—", never 0
+    # hidden until fixed, not folded: the checked trades' win record (the Traders list keeps it) and resting orders
+    assert not [k for k in m if k.startswith("Won") or "Resting" in k]
     shown = " ".join(m)
     assert "closed positions" not in shown.lower() and "settles" not in shown and "Held" not in shown
     # 7D moves realized P&L only; the trader read still loading is "…"; a wallet read in part isn't the wallet
     w = rows(week)
     assert week["hero"]["k"] == "Realized P&L, 7 days" and "−$20" in week["hero"]["v"] and week["hero"]["sub"].endswith("all time …")
-    assert w["Open P&L"]["v"] == "…" and w["Won, last 30 days"]["v"] == "30 of 58"
+    assert w["Open P&L"]["v"] == "…" and w["Usual opening buy"]["v"] == "$24.8K"
     assert w["Wallet"]["v"] is None and w["Wallet"]["sub"] == "cash $5.00; open positions couldn't be read"
     # the trader read failed: "—", never the score's change in open value over 30 days
     f = rows(failed)
