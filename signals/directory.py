@@ -193,8 +193,11 @@ CHECK_CATEGORIES = ("SPORTS", "CRYPTO", "POLITICS", "ECONOMICS", "CULTURE", "WEA
 CHECK_BOARDS = (("PNL", "MONTH", None, 1000), ("PNL", "WEEK", None, 50), ("PNL", "ALL", None, 50),
                 ("VOL", "MONTH", None, 50), *(("PNL", "MONTH", c, 50) for c in CHECK_CATEGORIES))  # fmt: skip
 _CHECK_BOARDS = ("PNL WEEK OVERALL", "PNL ALL OVERALL", "VOL MONTH OVERALL", *(f"PNL MONTH {c}" for c in CHECK_CATEGORIES))
+# The unary + keeps SQLite off sightings_by_source (source, last_seen) for this check, so it looks up the wallet's own
+# sightings by the primary key. Without it, production's SQLite (3.46, no ANALYZE) walked every recent leaderboard
+# sighting (~765K) for each wallet in the queue: 13 s a round under the directory's lock (0.7 s with it, 2026-10-16).
 _LISTED = f"""EXISTS (SELECT 1 FROM sightings s WHERE s.wallet = q.wallet AND s.source = 'leaderboard'
-  AND s.last_seen >= ? AND ((s.place = 'PNL MONTH OVERALL' AND s.rank <= 1000)
+  AND +s.last_seen >= ? AND ((s.place = 'PNL MONTH OVERALL' AND s.rank <= 1000)
   OR (s.place IN ({", ".join(f"'{b}'" for b in _CHECK_BOARDS)}) AND s.rank <= 50)))"""
 
 
