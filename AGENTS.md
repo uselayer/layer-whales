@@ -88,14 +88,17 @@ behind Vercel (see README, "Hosting").
   wait or 30 s, 1, 2, 4 min, for up to 30 minutes, after a restart too) only when Telegram surely didn't take it:
   it was never reached, or it said 429. When it may have (a 5xx, no answer once the request went out, the engine
   stopping mid-request) it's recorded as unknown, with why, never asked again. A refusal fails it, and a chat that
-  blocked the bot is disconnected. At most
-  20 alerts per person per UTC day, then one "You've reached today's alert limit; more tomorrow" and nothing until
-  the next day. When 2+ traders you follow buy the same outcome, each within 6 hours of the one before (1 hour in
+  blocked the bot is disconnected. Every trade of a trader you follow alerts unless you chose fewer for them
+  (`alert_for` in follows.json: only bets over an amount, or a summary every 6 hours; `_wants`), and a sale of
+  something their alert told you about always comes. Following a busy trader (over 20 alerts a day over the past
+  week: `_measure_pace`, kept in alerts.db `pace`) says so with an amount about 3 of their bets a day reached, worded
+  as an estimate from last week, never a promise. At most 200 alerts per person per UTC day (a safety limit), then
+  one message that says when alerts resume (00:00 UTC, and how long until then) and nothing until the next day. When 2+ traders you follow buy the same outcome, each within 6 hours of the one before (1 hour in
   Sports and Esports), the second buy sends one grouped alert (each one's price and buy time, the price now, how
   long before the alert the latest buy was) and later buys edit it in place; it counts once. Every alert has
   "Useful / Not useful" (one vote per alert and account, changeable). Big trades ($10,000 or more) in your chosen
   markets alert you whoever the trader, with the same facts, at most 5
-  a day within the 20. Only a choice made where the page asks (onboarding, or the Feed's "Your markets · Change")
+  a day within the daily cap. Only a choice made where the page asks (onboarding, or the Feed's "Your markets · Change")
   is kept on the account (per account like follows); Traders' chips only filter the view, and nothing saved or []
   (Skip, all markets) means no big-trade alerts. For a trader copying isn't offered for, an alert is never
   "you can still get in" and never green.

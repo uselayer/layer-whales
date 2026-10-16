@@ -22,6 +22,7 @@ from signals import app as engine
 FAPI = "clerk.signals.test"
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 SAM, ANN, BOB, WHALE = ("0x" + c * 40 for c in "abcd")
+CAP = "You've reached today's limit of 200 alerts. Alerts resume at 00:00 UTC, in "
 
 
 def auth(sub: str = "user_1") -> dict[str, str]:
@@ -140,12 +141,12 @@ def test_twenty_alerts_a_day_then_one_limit_message_then_nothing_until_tomorrow(
     monkeypatch.setattr(engine, "_today", lambda now=None: day["d"])
     user()
     sent = [engine._send("user_1", "555", "buy", lambda aid: f"alert {aid}") for _ in range(engine.DAILY_CAP)]
-    assert all(sent) and len(engine.tg.sent) == 20
+    assert all(sent) and len(engine.tg.sent) == engine.DAILY_CAP
     assert engine._send("user_1", "555", "whale", lambda aid: "one more") is None
-    assert engine.tg.sent[-1]["text"] == engine.CAP_TEXT and "still in your Feed" in engine.CAP_TEXT
+    assert engine.tg.sent[-1]["text"].startswith(CAP) and "still in your Feed" in engine.tg.sent[-1]["text"]
     assert "reply_markup" not in engine.tg.sent[-1]
     assert engine._send("user_1", "555", "group", lambda aid: "and another") is None
-    assert len(engine.tg.sent) == 21  # nothing more today, not even the limit message again
+    assert len(engine.tg.sent) == engine.DAILY_CAP + 1  # nothing more today, not even the limit message again
     assert engine._send("user_2", "777", "buy", lambda aid: "someone else") is not None  # per person
     day["d"] = "2026-10-14"  # the next UTC day
     assert engine._send("user_1", "555", "buy", lambda aid: "fresh") is not None
@@ -322,7 +323,9 @@ def test_connecting_describes_the_alert_rules(api: TestClient, monkeypatch: pyte
                   "at what price, the price now and when they traded", "alerts are never instant",
                   "Not every trade gets its own message", "buys of one outcome within 30 minutes come as one",
                   "more buys of that outcome (or more sells of it) are left out for 6 hours", "two or more traders you follow buy the same thing",
-                  "all but decided (2¢ or less, 98¢ or more)", "trades of $10,000 or more", "At most 20 alerts a day",
+                  "all but decided (2¢ or less, 98¢ or more)", "trades of $10,000 or more", "At most 200 alerts a day",
+                  "unless you choose fewer for them", "only bets over an amount you pick", "one summary every 6 hours",
+                  "Fewer alerts under any alert", "A sale of something they alerted you about still comes right away",
                   "Following: Sam"):  # fmt: skip
         assert words in text, words
     assert "$100" not in text and "whatever the amount" not in text and "every trade" not in text.replace("Not every trade", "")
@@ -440,7 +443,7 @@ def test_the_limit_message_is_tried_again_when_it_fails(api: TestClient, monkeyp
     assert engine._send("user_1", "555", "buy", lambda aid: "y") is None
     monkeypatch.setattr(engine, "tg", real)
     engine._send("user_1", "555", "buy", lambda aid: "z")
-    assert real.sent[-1]["text"] == engine.CAP_TEXT and len(real.sent) == 21  # sent on the next try, once
+    assert real.sent[-1]["text"].startswith(CAP) and len(real.sent) == engine.DAILY_CAP + 1  # sent on the next try, once
 
 
 def test_a_big_trade_at_the_daily_cap_sends_the_limit_message_instead(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -456,8 +459,8 @@ def test_a_big_trade_at_the_daily_cap_sends_the_limit_message_instead(api: TestC
     engine.whale_pass(users, time.time())
     engine._cache.clear()
     rows.append(big(WHALE))
-    assert engine.whale_pass(users, time.time()) == 0  # under the 5 big trades, but over the 20
-    assert engine.tg.sent[-1]["text"] == engine.CAP_TEXT
+    assert engine.whale_pass(users, time.time()) == 0  # under the 5 big trades, but over the daily cap
+    assert engine.tg.sent[-1]["text"].startswith(CAP)
 
 
 def test_stop_alerts_from_another_chat_changes_nobody_elses_follows(api: TestClient) -> None:
@@ -1201,8 +1204,8 @@ def test_retries_never_take_anyone_past_the_daily_cap(api: TestClient, monkeypat
         engine._send("user_1", "555", "buy", lambda aid, i=i: f"alert {i} {aid}")
     engine._retry_due(time.time() + 10)
     alerts = [m for m in tg.sent if m["text"].startswith("alert ")]
-    assert len(alerts) == engine.DAILY_CAP  # the three that failed first went out later, within the 20
-    assert [m["text"] for m in tg.sent if not m["text"].startswith("alert ")] == [engine.CAP_TEXT]
+    assert len(alerts) == engine.DAILY_CAP  # the three that failed first went out later, within the cap
+    assert [m["text"][: len(CAP)] for m in tg.sent if not m["text"].startswith("alert ")] == [CAP]
 
 
 def test_a_crash_after_an_alert_was_kept_but_before_telegram_was_asked_sends_it_once_after(
@@ -1253,7 +1256,7 @@ def test_an_alerts_db_from_before_delivery_states_keeps_its_alerts_as_sent(api: 
     assert m["alerts"]["sent"] == 1 and m["alerts"]["delivery"]["sent"] == 1
 
 
-# ---- one busy trader can't use up the day: TRADER_DAILY each, then a summary ----
+# ---- every trade by default; per trader: only bets over an amount, or a summary; busy traders get a warning ----
 
 
 def _buys(w: str, n: int, start: int = 0) -> list[int]:
@@ -1267,48 +1270,112 @@ def _held(uid: str = "user_1") -> list[tuple[Any, ...]]:
         return con.execute("SELECT trader, outcome, side, usd FROM held WHERE uid = ? ORDER BY rowid", (uid,)).fetchall()
 
 
-def test_five_alerts_a_day_from_one_trader_then_their_trades_are_held_while_others_still_alert(api: TestClient) -> None:
+def _choose(uid: str, w: str, mode: str, usd: float | None = None) -> None:
+    d = engine._load_follows()
+    d["users"][uid].setdefault("alert_for", {})[w] = {"mode": mode} | ({"usd": usd} if usd else {})
+    engine._save_follows(d)
+
+
+def test_every_trade_of_a_busy_trader_alerts_with_no_limit_per_trader(api: TestClient) -> None:
     user()
-    assert _buys(SAM, 7) == [1, 1, 1, 1, 1, 0, 0]  # the sixth and seventh wait for a summary
-    texts = [m["text"] for m in engine.tg.sent]
-    assert "That's 5 alerts from Sam today" in texts[4] and not any("That's 5" in t for t in texts[:4])
-    assert "one summary every 3 hours" in texts[4] and "still comes right away" in texts[4]
-    assert [(t, s, u) for t, _, s, u in _held()] == [(SAM, "buy", 1000.0), (SAM, "buy", 1000.0)]
-    assert _buys(ANN, 1) == [1]  # another trader isn't held back
-    assert engine._send("user_1", "555", "whale", lambda aid: "big", trader=SAM, outcome="w") is not None  # nor big trades
-    assert engine._sent_today("user_1") == 7 and engine._sent_today("user_1", engine.TRADER_KINDS, SAM) == 5
-    assert "5 from any one trader" in engine.CONNECTED and "a summary counts as one alert" in engine.CONNECTED
+    assert _buys(SAM, 12) == [1] * 12 and _held() == []
+    assert not any("alerts from Sam today" in m["text"] for m in engine.tg.sent)
+    assert engine.DAILY_CAP == 200 and not hasattr(engine, "TRADER_DAILY")
 
 
-def test_a_traders_buys_and_sells_share_their_five(api: TestClient) -> None:
-    user()
-    assert _buys(SAM, 3) == [1, 1, 1]
-    for i in range(2):
-        assert engine._send("user_1", "555", "sell", lambda aid: "sold", trader=SAM, outcome=f"s{i}", usd=50) is not None
-    assert _buys(SAM, 1, start=3) == [0]
-    assert engine._send("user_1", "555", "sell", lambda aid: "sold", trader=SAM, outcome="s2", usd=70) is None
-    assert [s for _, _, s, _ in _held()] == ["buy", "sell"]
+def test_the_limit_message_says_when_alerts_resume() -> None:
+    at = datetime(2026, 10, 13, 21, 40, 30, tzinfo=UTC).timestamp()
+    text = engine.cap_text(at)
+    assert text.startswith(CAP + "2 h 19 min.") and "still in your Feed" in text
+    assert engine.cap_text(datetime(2026, 10, 13, 23, 55, tzinfo=UTC).timestamp()).startswith(CAP + "5 min.")
 
 
-def test_a_sale_of_something_they_alerted_you_about_still_comes_past_their_five(
+def test_what_one_trade_does_for_each_choice() -> None:
+    u: dict[str, Any] = {"alert_for": {SAM: {"mode": "over", "usd": 1500}, ANN: {"mode": "summary"}}}
+    assert engine._wants(u, BOB, 5) == "send"  # every trade by default
+    assert engine._wants(u, SAM, 1499) == "skip" and engine._wants(u, SAM, 1500) == "send"
+    assert engine._wants(u, ANN, 50_000) == "hold"
+    assert engine._wants(u, SAM, 10, told=True) == "send" and engine._wants(u, ANN, 10, told=True) == "send"
+
+
+def test_only_bets_over_an_amount_and_a_sale_you_were_told_about_still_comes(
     api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     user(follows=(SAM,))
+    _choose("user_1", SAM, "over", 1500)
     trades: list[WhaleTrade] = []
-    markets = [f"0xm{i}:0" for i in range(6)]
-    live_reads(monkeypatch, detail_of(trades, dict.fromkeys(markets, 0.50)))
+    live_reads(monkeypatch, detail_of(trades, {"0xa:0": 0.5, "0xb:0": 0.5, "0xc:0": 0.5}))
     t0 = datetime.now(UTC) - timedelta(minutes=10)
     engine.alert_pass(now=t0.timestamp() - 60)  # first round: noted only
-    trades += [trade(SAM, t0, market=m, i=m) for m in markets]
+    trades += [trade(SAM, t0, usd=1000, market="0xa:0", i="a"), trade(SAM, t0, usd=2000, market="0xb:0", i="b")]
     engine._cache.clear()
-    assert engine.alert_pass(now=t0.timestamp() + 60) == 5  # the sixth buy (0xm5) is held
-    assert [o for _, o, _, _ in _held()] == ["tok-0xm5:0"]
-    trades += [sold(SAM, t0 + timedelta(minutes=2), market="0xm0:0"), sold(SAM, t0 + timedelta(minutes=2), market="0xm5:0")]
+    assert engine.alert_pass(now=t0.timestamp() + 60) == 1  # the $2,000 buy; the $1,000 one is only in the Feed
+    assert "($2,000)" in engine.tg.sent[-1]["text"] and _held() == []
+    trades += [sold(SAM, t0 + timedelta(minutes=2), usd=300, market="0xb:0"), sold(SAM, t0 + timedelta(minutes=2), usd=300, market="0xa:0")]
     engine._cache.clear()
-    assert engine.alert_pass(now=t0.timestamp() + 3 * 60) == 1  # the sale of 0xm0, which Sam's alert told you about
-    assert "<b>Sam</b> sold" in engine.tg.sent[-1]["text"] and engine._sent_today("user_1") == 6  # within the 20
-    assert [(o, s) for _, o, s, _ in _held()] == [("tok-0xm5:0", "buy"), ("tok-0xm5:0", "sell")]  # not told: held
-    assert engine._sold_recently(SAM, "tok-0xm5:0", t0.timestamp() + 4 * 60)  # held counts for the 6-hour rule too
+    assert engine.alert_pass(now=t0.timestamp() + 3 * 60) == 1  # the sale of 0xb, which their alert told you about
+    assert "<b>Sam</b> sold" in engine.tg.sent[-1]["text"] and "($300)" in engine.tg.sent[-1]["text"]
+
+
+def test_summary_only_holds_their_trades_for_one_summary_every_six_hours(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user(follows=(SAM, ANN))
+    _choose("user_1", SAM, "summary")
+    trades: list[WhaleTrade] = []
+    live_reads(monkeypatch, detail_of(trades, {"0xa:0": 0.5, "0xb:0": 0.5}))
+    t0 = datetime.now(UTC) - timedelta(minutes=10)
+    engine.alert_pass(now=t0.timestamp() - 60)
+    trades += [trade(SAM, t0, usd=700, market="0xa:0", i="a"), trade(SAM, t0, usd=300, market="0xb:0", i="b")]
+    engine._cache.clear()
+    assert engine.alert_pass(now=t0.timestamp() + 60) == 0 and engine.tg.sent == []
+    assert [(t, s, u) for t, _, s, u in _held()] == [(SAM, "buy", 700.0), (SAM, "buy", 300.0)]
+    users = engine._load_follows()["users"]
+    held_at = t0.timestamp() + 60  # the round that held them
+    assert engine.SUMMARY_S == 6 * 3600 and engine._summaries(users, held_at + engine.SUMMARY_S - 60) == 0  # not yet
+    assert engine._summaries(users, held_at + engine.SUMMARY_S + 1) == 1
+    now = held_at
+    lines = engine.tg.sent[-1]["text"].splitlines()
+    assert lines[0].startswith("From traders you follow, since ") and lines[1] == "• <b>Sam</b>: 2 trades, 2 buys ($1,000)"
+    assert lines[2] == "You chose a summary every 6 hours for these traders. Every trade is in your Feed."
+    assert ">Open your Feed</a>" in lines[3] and engine._sent_today("user_1") == 1 and _held() == []  # counts once
+    assert engine._summaries(users, now + 2 * engine.SUMMARY_S) == 0
+
+
+def test_a_summary_past_the_daily_cap_isnt_sent_and_the_limit_message_goes_once(api: TestClient) -> None:
+    user()
+    engine._hold("user_1", SAM, "tok-x", "buy", 100.0, time.time())
+    for _ in range(engine.DAILY_CAP):
+        engine._send("user_1", "555", "buy", lambda aid: "x")
+    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0
+    assert engine.tg.sent[-1]["text"].startswith(CAP) and len(engine.tg.sent) == engine.DAILY_CAP + 1 and _held() == []
+
+
+def test_a_summary_waiting_on_telegram_is_kept_across_a_restart_and_sent_once(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user()
+    engine._hold("user_1", SAM, "tok-x", "buy", 100.0, time.time())
+    tg = FlakyTelegram(engine.TelegramError("Telegram: Too Many Requests: retry after 20", 429, 20.0))
+    monkeypatch.setattr(engine, "tg", tg)
+    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0
+    with engine._db() as con:
+        assert con.execute("SELECT kind, state FROM alerts WHERE kind = 'summary'").fetchall() == [("summary", "retry")]
+    assert _held() == []  # cleared with it, so it's never summed up twice
+    restart(monkeypatch)
+    assert engine._retry_due(time.time() + 31) == 1 and tg.sent[0]["text"].startswith("From traders you follow")
+    restart(monkeypatch)
+    assert engine._retry_due(time.time() + 3600) == 0 and len(tg.sent) == 1
+
+
+def test_a_held_buy_since_told_by_a_group_is_left_out_of_the_summary(api: TestClient) -> None:
+    user()
+    t0 = datetime.now(UTC)
+    engine._hold("user_1", SAM, "tok-0xg:0", "buy", 100.0, t0.timestamp() - 60)
+    engine._deliver("user_1", "555", new_buy(ANN, t0, market="0xg:0"), "Politics")
+    engine._deliver("user_1", "555", new_buy(BOB, t0 + timedelta(minutes=5), market="0xg:0"), "Politics")  # the group
+    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0  # the group told you
+    assert _held() == []
 
 
 def test_told_means_their_buy_alert_or_a_group_with_their_buy_in_it(api: TestClient) -> None:
@@ -1323,74 +1390,149 @@ def test_told_means_their_buy_alert_or_a_group_with_their_buy_in_it(api: TestCli
     assert engine._told("user_1", BOB, "tok-0xg:0", now) and not engine._told("user_1", SAM, "tok-0xg:0", now)
 
 
-def test_a_summary_goes_out_three_hours_after_the_first_held_trade_counts_once_and_only_once(api: TestClient) -> None:
-    user()
-    users = {"user_1": {"chat": "555"}}
-    _buys(SAM, 7)
-    _buys(ANN, 6)
-    engine._send("user_1", "555", "sell", lambda aid: "sold", trader=SAM, outcome="s", usd=250)
-    t = time.time()
-    assert engine._summaries(users, t + engine.SUMMARY_S - 60) == 0 and len(_held()) == 4  # not yet
-    assert engine._summaries(users, t + engine.SUMMARY_S + 1) == 1
-    lines = engine.tg.sent[-1]["text"].splitlines()
-    assert lines[0].startswith("More from traders you follow, since ") and lines[0].endswith(" UTC:")
-    assert lines[1:3] == ["• <b>Sam</b>: 3 more trades, 2 buys ($2,000) and 1 sell ($250)", "• <b>Ann</b>: 1 more trade, 1 buy ($1,000)"]
-    assert "Every trade is in your Feed." in lines[3] and ">Open your Feed</a>" in lines[4] and "/go/" in lines[4]
-    assert engine._sent_today("user_1") == 11 and _held() == []  # 5 + 5 + the summary, once
-    assert engine._summaries(users, t + 2 * engine.SUMMARY_S) == 0 and len(engine.tg.sent) == 11
-
-
-def test_a_summary_past_the_daily_cap_isnt_sent_and_the_limit_message_goes_once(api: TestClient) -> None:
-    user()
-    _buys(SAM, 6)
-    for _ in range(engine.DAILY_CAP - 5):
-        engine._send("user_1", "555", "buy", lambda aid: "x")
-    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0
-    assert engine.tg.sent[-1]["text"] == engine.CAP_TEXT and len(engine.tg.sent) == engine.DAILY_CAP + 1 and _held() == []
-
-
-def test_a_summary_waiting_on_telegram_is_kept_across_a_restart_and_sent_once(
-    api: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    user()
-    _buys(SAM, 6)
-    tg = FlakyTelegram(engine.TelegramError("Telegram: Too Many Requests: retry after 20", 429, 20.0))
-    monkeypatch.setattr(engine, "tg", tg)
-    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0
+def test_choosing_what_you_get_from_a_trader_on_the_page(api: TestClient) -> None:
+    user(follows=(SAM,))
+    r = api.put(f"/api/me/follows/{SAM}/alerts", json={"mode": "over", "usd": 1700}, headers=auth())
+    assert r.status_code == 200 and r.json()["alert_for"] == {SAM: {"mode": "over", "usd": 1700.0}}
+    assert r.json()["daily_cap"] == 200 and r.json()["summary_hours"] == 6
+    assert api.put(f"/api/me/follows/{SAM}/alerts", json={"mode": "over"}, headers=auth()).status_code == 400  # no amount
+    assert api.put(f"/api/me/follows/{SAM}/alerts", json={"mode": "over", "usd": -5}, headers=auth()).status_code == 400
+    assert api.put(f"/api/me/follows/{SAM}/alerts", json={"mode": "some"}, headers=auth()).status_code == 400
+    assert api.put(f"/api/me/follows/{ANN}/alerts", json={"mode": "summary"}, headers=auth()).status_code == 404  # not followed
+    r = api.put(f"/api/me/follows/{SAM}/alerts", json={"mode": "all"}, headers=auth())
+    assert r.json()["alert_for"] == {SAM: {"mode": "all", "usd": None}}
+    api.put(f"/api/me/follows/{SAM}/alerts", json={"mode": "summary"}, headers=auth())
+    api.delete(f"/api/me/follows/{SAM}", headers=auth())
+    r = api.post("/api/me/follows", json={"wallet": SAM}, headers=auth())
+    assert r.json()["alert_for"] == {SAM: {"mode": "all", "usd": None}}  # following again starts at every trade
     with engine._db() as con:
-        assert con.execute("SELECT kind, state FROM alerts WHERE kind = 'summary'").fetchall() == [("summary", "retry")]
-    assert _held() == []  # cleared with it, so it's never summed up twice
-    restart(monkeypatch)
-    assert engine._retry_due(time.time() + 31) == 1 and tg.sent[0]["text"].startswith("More from traders you follow")
-    restart(monkeypatch)
-    assert engine._retry_due(time.time() + 3600) == 0 and len(tg.sent) == 1
+        assert [r[0] for r in con.execute("SELECT target FROM events WHERE kind = 'alert_mode'")] == ["over", "all", "summary"]
 
 
-def test_a_group_still_forms_when_one_trader_is_past_their_five_and_the_summary_leaves_it_out(api: TestClient) -> None:
-    user()
-    _buys(SAM, 5)
-    t0 = datetime.now(UTC)
-    assert engine._deliver("user_1", "555", new_buy(SAM, t0, market="0xg:0"), "Politics") == 0  # held
-    assert engine._deliver("user_1", "555", new_buy(ANN, t0 + timedelta(minutes=5), market="0xg:0"), "Politics") == 1
-    group = engine.tg.sent[-1]["text"].splitlines()
-    assert group[0].startswith("<b>2 traders you follow bought Yes</b>") and group[1].startswith("· Sam paid")  # Sam's held buy
-    assert engine._sent_today("user_1", engine.TRADER_KINDS, SAM) == 5  # a group isn't one of Sam's five
-    assert engine._summaries({"user_1": {"chat": "555"}}, time.time() + engine.SUMMARY_S + 1) == 0  # the group told you
-    assert _held() == [] and len(engine.tg.sent) == 6
+def _rows(*bets: tuple[float, float, float, str, str]) -> list[dict[str, Any]]:
+    """/activity trade rows: (time, dollars, price, outcome token, side)."""
+    return [{"timestamp": ts, "usdcSize": usd, "size": usd / p, "price": p, "asset": tok, "side": side,
+             "transactionHash": f"0x{i}"} for i, (ts, usd, p, tok, side) in enumerate(bets)]  # fmt: skip
 
 
-def test_a_failed_alert_doesnt_use_up_one_of_a_traders_five(api: TestClient) -> None:
-    user()
-    _buys(SAM, 5)
-    with engine._db() as con:
-        con.execute("UPDATE alerts SET state = 'failed' WHERE rowid = (SELECT MIN(rowid) FROM alerts)")
-    assert _buys(SAM, 2, start=5) == [1, 0]
+def test_a_traders_bets_add_up_as_alerts_do() -> None:
+    t = 1_791_000_000.0
+    buys, sells = engine._pace_bets(_rows(
+        (t, 100, 0.5, "a", "BUY"), (t + 30, 50, 0.5, "a", "BUY"),  # one bet: fills within a minute add up
+        (t + 300, 999, 0.5, "a", "BUY"),  # the same outcome again within 6 hours: no new bet, too late to add up
+        (t + 6 * 3600, 70, 0.5, "a", "BUY"),  # 6 hours on: a new bet
+        (t, 500, 0.99, "b", "BUY"),  # at a settled price: never alerted, never counted
+        (t, 40, 0.6, "a", "SELL"),
+    ))  # fmt: skip
+    assert sorted(buys) == [70, 150] and sells == [40]
 
 
-def test_a_traders_five_start_again_on_the_next_utc_day(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    day = {"d": "2026-10-13"}
-    monkeypatch.setattr(engine, "_today", lambda now=None: day["d"])
-    user()
-    assert _buys(SAM, 6) == [1, 1, 1, 1, 1, 0]
-    day["d"] = "2026-10-14"
-    assert _buys(SAM, 1, start=6) == [1]
+class _Activity:
+    """A stand-in for the SDK's /activity reads: ``rows`` newest first, 500 a page, paged back by ``end``."""
+
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self.rows, self.reads = sorted(rows, key=lambda r: -r["timestamp"]), 0
+
+    def activity(self, wallet: str, *, type: str, start: int, end: int | None = None, limit: int = 500) -> list[dict[str, Any]]:
+        self.reads += 1
+        return [r for r in self.rows if r["timestamp"] >= start and (end is None or r["timestamp"] <= end)][:limit]
+
+
+def _busy(monkeypatch: pytest.MonkeyPatch, per_day: int, now: float, big: int = 0) -> _Activity:
+    """A trader who made ``per_day`` $50 bets a day for a week (each its own outcome), and ``big`` $2,000 ones a day."""
+    rows = []
+    for d in range(7):
+        for i in range(per_day):
+            rows += _rows((now - d * 86400 - i * 60 - 30, 50, 0.5, f"t{d}-{i}", "BUY"))
+        for i in range(big):
+            rows += _rows((now - d * 86400 - i * 60 - 45, 2000, 0.5, f"big{d}-{i}", "BUY"))
+    for i, r in enumerate(rows):
+        r["transactionHash"] = f"0x{i}"
+    act = _Activity(rows)
+    monkeypatch.setattr(engine, "background", lambda: type("W", (), {"_poly": act})())
+    return act
+
+
+def test_how_busy_a_trader_is_and_the_amount_suggested(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    now = time.time()
+    act = _busy(monkeypatch, 100, now, big=3)
+    p = engine._measure_pace(SAM, now)
+    assert p["per_day"] == pytest.approx(103) and p["days"] == 7 and p["usd"] == 2000  # about 3 a day reach $2,000
+    assert act.reads == 2 and engine._pace(SAM)["per_day"] == pytest.approx(103)  # 721 trades: two reads of 500
+    monkeypatch.setattr(engine, "background", lambda: type("W", (), {"_poly": _Activity([])})())  # no trades
+    assert engine._measure_pace(BOB, now) == {"per_day": 0, "usd": None, "days": 7, "at": now}
+    assert engine._about(1679) == "$1,700" and engine._about(404) == "$400" and engine._about(37) == "$37"
+
+
+def test_following_a_busy_trader_says_so_with_an_estimate_not_a_promise(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    _busy(monkeypatch, 100, time.time(), big=3)
+    engine._pace_after_follow("user_1", SAM)
+    m = engine.tg.sent[-1]
+    assert m["text"].startswith("<b>Sam</b> is a busy trader: about 103 alerts a day over the past week.")
+    assert "Based on their past week, bets of about $2,000 or more came roughly 3 times a day." in m["text"]
+    assert "That's an estimate from last week, not a promise of how many alerts you'll get." in m["text"]
+    assert "At most 200 alerts a day in all." in m["text"]
+    keys = [[(b["text"], b["callback_data"]) for b in row] for row in m["reply_markup"]["inline_keyboard"]]
+    assert keys == [[("Every trade", f"am:{SAM}:a"), ("Only bets over $2,000", f"am:{SAM}:o")],
+                    [("A summary every 6 hours", f"am:{SAM}:s")]]  # fmt: skip
+
+
+def test_a_quiet_trader_or_no_telegram_gets_no_warning(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    _busy(monkeypatch, 10, time.time())
+    engine._pace_after_follow("user_1", SAM)  # 10 a day: not busy
+    user("user_2", chat=None, follows=(ANN,))  # type: ignore[arg-type]
+    _busy(monkeypatch, 100, time.time())
+    engine._pace_after_follow("user_2", ANN)  # busy, but no Telegram to tell
+    assert engine.tg.sent == [] and engine._pace(ANN)["per_day"] == pytest.approx(100)
+    r = api.get("/api/me", headers=auth("user_2")).json()
+    assert r["pace"] == {ANN: {"per_day": 100.0, "usd": 50.0, "busy": True}}  # the page shows it instead
+
+
+def test_a_trader_busy_enough_to_reach_the_limit_says_so(api: TestClient) -> None:
+    p = {"per_day": 506.0, "usd": 2100.0, "days": 7.0, "at": time.time()}
+    text = engine._busy_text(SAM, p)
+    assert "about 506 alerts a day" in text and "At their pace, every trade would reach your limit of 200 alerts a day." in text
+    assert "At most 200 alerts a day in all." in engine._busy_text(SAM, p | {"per_day": 103.0})
+
+
+def _tap(data: str, chat: int = 555) -> None:
+    engine._on_update({"callback_query": {"id": "q", "data": data, "message": {"chat": {"id": chat}, "message_id": 1}}})
+
+
+def test_fewer_alerts_under_an_alert_offers_the_choices_and_a_tap_saves_one(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    user(follows=(SAM,))
+    assert engine._keyboard("abc", SAM)["inline_keyboard"][1] == [
+        {"text": "Stop alerts from Sam", "callback_data": f"unf:{SAM}"}, {"text": "Fewer alerts", "callback_data": f"few:{SAM}"}]
+    _busy(monkeypatch, 100, time.time(), big=3)
+    engine._measure_pace(SAM)
+    _tap(f"few:{SAM}")
+    text = engine.tg.sent[-1]["text"]
+    assert text.startswith("From <b>Sam</b> you get every trade.") and "about 103 alerts a day" in text and "not a promise" in text
+    _tap(f"am:{SAM}:o")
+    assert engine.tg.sent[-1]["text"] == "Done: from <b>Sam</b> you'll get only bets of $2,000 or more."
+    assert engine._choice(engine._load_follows()["users"]["user_1"], SAM) == ("over", 2000.0)
+    _tap(f"am:{SAM}:s")
+    assert engine._choice(engine._load_follows()["users"]["user_1"], SAM) == ("summary", None)
+    _tap(f"am:{SAM}:a")
+    assert engine._choice(engine._load_follows()["users"]["user_1"], SAM) == ("all", None)
+    n = len(engine.tg.sent)
+    _tap(f"am:{ANN}:s")  # not someone this chat follows: nothing
+    _tap(f"am:{SAM}:s", chat=999)  # not a connected chat: nothing
+    assert len(engine.tg.sent) == n and engine._load_follows()["users"]["user_1"].get("alert_for") == {}
+
+
+def test_a_trader_page_shows_the_choice_and_a_busy_traders_estimate(run_js: Any) -> None:
+    got = run_js(("esc", "alertSetHtml"), f"""(() => {{
+      globalThis.auth = {{ me: {{ summary_hours: 6,
+        alert_for: {{ "{SAM}": {{ mode: "over", usd: 1700 }}, "{ANN}": {{ mode: "all" }} }},
+        pace: {{ "{SAM}": {{ per_day: 440.2, usd: 1700, busy: true }}, "{ANN}": {{ per_day: 4, usd: null, busy: false }} }} }} }};
+      return [alertSetHtml("{SAM}"), alertSetHtml("{ANN}")];
+    }})()""")  # fmt: skip
+    busy, quiet = got
+    assert "They trade a lot: about 440 alerts a day over the past week." in busy
+    assert "bets of about $1,700 or more came roughly 3 times a day. That's an estimate from last week, not a promise." in busy
+    assert 'value="over" selected' in busy and 'value="1700"' in busy and "A summary every 6 hours" in busy
+    assert 'data-over hidden' not in busy  # the amount shows with "only bets over"
+    assert "They trade a lot" not in quiet and 'value="all" selected' in quiet and "data-over hidden" in quiet

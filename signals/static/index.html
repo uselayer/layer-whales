@@ -394,6 +394,11 @@
   .pf-cta small { color: var(--muted); font-size: 13px; max-width: 280px; }
   .pf-cta .btn[disabled] { background: var(--soft); color: var(--faint); cursor: default; }
   .pf-follow { display: contents; }
+  .alert-set { display: grid; gap: 6px; justify-items: end; max-width: 340px; }
+  .alert-set .busy { margin: 0; color: var(--muted); font-size: 12.5px; text-align: right; }
+  .alert-set .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .alert-set input { width: 7.5em; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px;
+    padding: 5px 12px; font: inherit; font-size: 14px; }
   .pf-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 22px; }
   .pf-stat { background: var(--card); padding: 14px 16px; min-width: 0; }
   .pf-stat > span { display: block; font-size: 12px; color: var(--muted); }
@@ -709,7 +714,36 @@ function followHtml(wallet) {
   const alerts = !auth.alerts ? `<small>Alerts aren't switched on yet.</small>`
     : auth.me.telegram ? `<small>Alerts on Telegram · <button class="link" data-unfollow="${w}">Unfollow</button></small>`
     : `<button class="btn small" data-tg>Connect Telegram to get alerts</button><small><button class="link" data-unfollow="${w}">Unfollow</button></small>`;
-  return `<span class="btn ghost" style="cursor:default">Following ✓</span>${alerts}`;
+  return `<span class="btn ghost" style="cursor:default">Following ✓</span>${alerts}${auth.alerts ? alertSetHtml(wallet) : ""}`;
+}
+// What you get from a trader you follow: every trade (the default), only bets over an amount, or a summary every few
+// hours. A busy trader (more than 20 alerts a day over the past week) says so, with an amount about 3 of their bets
+// a day reached: an estimate from last week, not a promise.
+function alertSetHtml(wallet) {
+  const w = esc(wallet), c = auth.me?.alert_for?.[wallet] || { mode: "all" }, p = auth.me?.pace?.[wallet];
+  const hours = auth.me?.summary_hours || 6, amount = c.usd || p?.usd || "";
+  const busy = p?.busy ? `<p class="busy">They trade a lot: about ${Math.round(p.per_day).toLocaleString()} alerts a day over the past week.${p.usd
+    ? ` Based on their past week, bets of about $${p.usd.toLocaleString()} or more came roughly 3 times a day. That's an estimate from last week, not a promise.` : ""}</p>` : "";
+  const opt = (v, l) => `<option value="${v}" ${c.mode === v ? "selected" : ""}>${l}</option>`;
+  return `<div class="alert-set">${busy}<div class="row"><select class="lb-sort" data-mode="${w}" aria-label="What you get from them">`
+    + `${opt("all", "Every trade")}${opt("over", "Only bets over an amount")}${opt("summary", `A summary every ${hours} hours`)}</select></div>`
+    + `<div class="row" data-over ${c.mode === "over" ? "" : "hidden"}><span>$</span><input type="number" min="1" step="1" inputmode="numeric" `
+    + `value="${amount}" data-usd aria-label="Only bets of at least this many dollars"><button class="btn small" data-save-over="${w}">Save</button></div></div>`;
+}
+async function saveAlerts(wallet, body) {
+  try {
+    auth.me = await api(`/api/me/follows/${wallet}/alerts`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    toast("Saved. Every trade stays in your Feed.");
+  } catch (e) { toast(esc(e.message)); }
+  redrawFollow();
+}
+// After following: how busy they are is measured on the engine (up to a minute for the busiest), so look again a few times.
+async function waitForPace(wallet) {
+  for (let i = 0; i < 12 && auth.me?.follows.includes(wallet) && !auth.me?.pace?.[wallet] && $("#follow"); i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    auth.me = await api("/api/me").catch(() => auth.me);
+  }
+  redrawFollow();
 }
 function redrawFollow() {
   const el = $("#follow");
@@ -718,7 +752,18 @@ function redrawFollow() {
   $$("[data-follow]", el).forEach((b) => (b.onclick = () => whenSignedIn(async () => {
     try { auth.me = await post("/api/me/follows", { wallet: b.dataset.follow }); } catch (e) { toast(esc(e.message)); }
     redrawFollow();
+    waitForPace(b.dataset.follow);
   })));
+  $$("[data-mode]", el).forEach((s) => (s.onchange = () => {
+    if (s.value !== "over") return saveAlerts(s.dataset.mode, { mode: s.value });
+    $("[data-over]", el).hidden = false; // pick the amount first, then Save
+    $("[data-usd]", el).focus();
+  }));
+  $$("[data-save-over]", el).forEach((b) => (b.onclick = () => {
+    const usd = Number($("[data-usd]", el).value);
+    if (!(usd > 0)) return toast("Enter an amount in dollars, more than $0.");
+    saveAlerts(b.dataset.saveOver, { mode: "over", usd });
+  }));
   $$("[data-unfollow]", el).forEach((b) => (b.onclick = async () => {
     try { auth.me = await api(`/api/me/follows/${b.dataset.unfollow}`, { method: "DELETE" }); } catch (e) { toast(esc(e.message)); }
     redrawFollow();
