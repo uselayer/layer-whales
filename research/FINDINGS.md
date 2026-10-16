@@ -88,3 +88,87 @@ Limits:
 - Pool is wallets active in currently open markets, so it requires activity in window B (not success).
 - Copy is valued at the hour mark with Polymarket's taker fee; holding to settlement is on the bets in the
   sample that settled.
+
+## Frequent vs selective traders: does a longer window find good traders the 30-day rules miss? (13 Oct 2026)
+
+**Question:** is Signals finding genuinely good traders, or only those who trade often enough for its rules? The
+scorer needs 8 independent bets in 30 days before it can judge skill, so a trader who makes a few careful bets a
+month can never be recommended.
+
+**Design:** pre-registered in `frequency-preregistered.md`, amended once before any outcome was looked at.
+- **Pool:** 450 wallets drawn without hindsight: everyone trading in closed markets that ended before 14 Aug, in
+  four volume bands, with a trade in the 90 days before.
+- **Bands,** from their trades before the cut-off, 150 per band:
+  - frequent: 8+ markets in 30 days
+  - selective: under 8 in 30 days, 8+ in 90
+  - sparse: 3–7 in 90
+- **Three outcomes, judged separately:**
+  1. Profitability: trading P&L afterwards.
+  2. Repeatable skill: their 5-minute edge, and their own hold-to-settlement return.
+  3. Copyability: a copier 1–6 minutes late, after fees.
+- **Part 1:** select on 30 or 90 days before 14 Aug, measure the next 60 days.
+- **Part 2:** today's SDK method, selecting on 30 days before 13 Sep, measuring the next 30.
+- **Output:** `frequency-results-1.txt`, `frequency-results-2.txt`. Raw scores: `frequency-scores*.jsonl.gz`.
+
+**First, a data limit:** Polymarket's price history keeps 5-minute prices for about 60 days.
+
+| Bet age | Bets with a 5-minute price |
+|---|---|
+| under 60 days | 98–100% |
+| 60–69 days | 22% |
+| 70+ days | ~0% |
+
+Settlement results stay available. So a 90-day version of the SDK's skill and copy tests can't be computed from
+Polymarket's data: `score(days=90)` silently judges only the last ~60 days. Part 1 therefore selected on what
+lasts, the trader's own settlement return and their P&L.
+
+| | Frequent | Selective | Sparse |
+|---|---|---|---|
+| Share of the 4,680 wallets checked (290 more had under 3 markets) | 67% | 24% | 3% |
+| Still trading in the next 60 days | 76% | 30% | 27% |
+| In profit over the next 60 days (everyone) | 20% | 14% | 19% |
+| Made $100+ / lost $100+ over the next 60 days | 13 / 55 | 2 / 7 | 2 / 6 |
+| Best 90-day rule's picks in profit afterwards | 50% (12 picks, z +2.4) | 20% (5 picks) | — |
+| …of those picks, made $100+ | 4 | 0 | — |
+
+**1. Profitability:**
+- Picking frequent traders on a 90-day settlement return roughly doubles the share still in profit afterwards (50%
+  vs 20%; with profit as well, 57%). That passes the pre-registered bar, but the median pick made about $0 and
+  4 of 12 made $100+.
+- For selective traders no rule passed. Of every selective trader any 30- or 90-day rule picked in Part 1, none
+  made $100 in the next 60 days. As a group they lost money (−$9,960) and 70% stopped trading.
+- In Part 2 (select on 14 Aug–13 Sep, measure the next 30 days), selective traders who had made money stayed in
+  profit more often (42% vs 12%, z +3.4), but the median was again $0. Two of 19 made $100+.
+
+**2. Repeatable skill:**
+- Only one rule passed, for a group of 2 wallets (frequent, `R30-both`). Every other pick group's later 5-minute
+  edge was negative (down to −5.4¢) or not distinguishable from zero (at most +3¢, on 1–2 wallets, or +0.2¢ on
+  29). Their own settlement return was indistinguishable from zero.
+- On adjacent, fully priced 30-day windows (Part 2), frequent traders' own settlement return carried over at
+  +0.50 and their 5-minute edge at +0.30 (about 50 wallets each). That is the strongest persistence seen so far
+  (the earlier test found +0.06), but on a small sample.
+
+**3. Copyability:** no rule passed in any band. A copier's 1-hour result was negative for nearly every group (down
+to −9¢ a contract) and never more than +0.4¢ (2-wallet groups). Holding a copy to settlement was never
+distinguishable from zero. All as in the earlier test.
+
+**Today's method:** in Part 2 it recommended 1 of 450 wallets. That wallet made $317, too few to judge.
+
+What it says:
+1. In this pool, the 8-bets rule isn't hiding a group of good selective traders. Selective traders are common
+   (about a quarter of active wallets), but most stop trading within two months, and as a group they lose money.
+   No rule, on 30 or 90 days of their record, picked ones who went on to make money that mattered.
+2. A longer window can't simply be switched on: the SDK's skill and copy tests have no prices past ~60 days.
+   Judging over 90 days would mean a different test (settlement return, P&L). On frequent traders that test picked
+   more who stayed in profit, but not ones whose skill or copies held up.
+3. Scoring standards stay as they are. Phase 3 keeps every wallet and labels selective ones "Not enough recent
+   evidence", and they're scored the day they reach 8 bets.
+
+Limits:
+- **The pool is mostly small accounts** (median profit afterwards $0). A big selective bettor, say a few $50k
+  political bets a month, is rare in a random draw of 150 and isn't answered here. That needs a pool drawn by
+  account size before the cut-off.
+- One period (May–Oct 2026).
+- Selective picks are few (5–37 per rule), so their ranges are wide.
+- 60 checked bets per score.
+- Copy is valued at the hour mark.

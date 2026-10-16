@@ -1,0 +1,4820 @@
+{
+ "T": 1786665600,
+ "markets": [
+  {
+   "cid": "0x537f6665963a4b62a64af8878fa18d77355dfc8ef4c040f7e862d10b93ed7328",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - June 15, 5:30AM-5:45AM ET"
+  },
+  {
+   "cid": "0x0322539b2defca1134c0716befe114d771114270835f89d4b191218ca0a6b40b",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 16, 3:30PM-3:45PM ET"
+  },
+  {
+   "cid": "0xf5af9c2283d85921b0a10ce7409e426a05a1638eb98503808186278c934ff6fb",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Paris be 37\u00b0C on July 14?"
+  },
+  {
+   "cid": "0x3e4e5478c54aef16ce8b4e3ec9979256bc6e6e6b19da251a0428e49cda56ad04",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Mexico City be 23\u00b0C on July 13?"
+  },
+  {
+   "cid": "0xcb5a89a14075b549d58a367b483395cb10c0dc795e2d8a34060e9c394445dea0",
+   "band": 1000.0,
+   "question": "ITF Huamantla: Marco Alvarez vs Alvin Nicholas Tudorica"
+  },
+  {
+   "cid": "0x866015841e51bb0e63ce8e10fcf39753b4372fa77e48c2a3e66678175e19512e",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Guangzhou be 38\u00b0C on June 21?"
+  },
+  {
+   "cid": "0x566602bd4be0f7c33f9135c192057e6aa0532d1115e3b0c4fb1874f8cd3472b0",
+   "band": 1000.0,
+   "question": "Solana Up or Down - July 10, 10:30AM-10:35AM ET"
+  },
+  {
+   "cid": "0x4c59284e0518598f54091705dad41abb08e533ce813567e919f180cf2ee80b35",
+   "band": 1000.0,
+   "question": "R\u012bga FC vs. ETO FC: O/U 2.5"
+  },
+  {
+   "cid": "0xed2fed904ba9cb6a295286b53be9e24646e3b481514281724210da743a7751d3",
+   "band": 1000.0,
+   "question": "Will Norway finish second in Group I in the 2026 FIFA World Cup Group Stage?"
+  },
+  {
+   "cid": "0xa73cb4973803bfc61246c397544ad706298430379a44267310dee9c840ef0487",
+   "band": 1000.0,
+   "question": "Will Trump say \"Central Casting\" during White House Correspondents Dinner?"
+  },
+  {
+   "cid": "0x4f4154281edbd111be5f9df46e7c8ae94841fcfca8d9dbfcc31d8d55a45df09c",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Los Angeles be between 74-75\u00b0F on June 25?"
+  },
+  {
+   "cid": "0x194285a71b2a0640f91c1d93a0b35ed9774be9dd95a0fde49659b201d2509153",
+   "band": 1000.0,
+   "question": "Map Handicap: BIG (-1.5) vs NIP (+1.5)"
+  },
+  {
+   "cid": "0xab1f3765a7aeaddfeff0f8ce7d65a6d5b042c57c7b4faac854307ddaa3c6021c",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 10, 9:55AM-10:00AM ET"
+  },
+  {
+   "cid": "0x1ee5aeaca3bde5b0213d27ea93d72f1e3ed557d5f39bd193fc5e7d470571b2bc",
+   "band": 1000.0,
+   "question": "Spread: Qingdao Xihaian FC (-2.5)"
+  },
+  {
+   "cid": "0x58f92a27a6b6be3f926ef8e5158902e94ad159ba3a9cf26f0a1ca3d009c1afe1",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Shenzhen be 30\u00b0C on June 17?"
+  },
+  {
+   "cid": "0x2c3609f9d3db7b776daea52464d1d2e6eb9353d835a463c9c769437fce25a347",
+   "band": 1000.0,
+   "question": "Austria to win the second half?"
+  },
+  {
+   "cid": "0xf00f1caa59610fc9bda7645a397a7c4c6873070e0c17b8d5cd4d33b44d8bcdf0",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 8, 11:05AM-11:10AM ET"
+  },
+  {
+   "cid": "0x5c5adaefd92f45f0461551d6b5bd1f5b94ed9de3a724fe05775adef74c06a2c6",
+   "band": 1000.0,
+   "question": "Will \"Supergirl\" Opening Weekend Box Office be between 52m and 58m?"
+  },
+  {
+   "cid": "0xb7cd3882679326119cbb2e9a3c3682aad0774034b9a8e16251ae37d19520464d",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 1, 1:25PM-1:30PM ET"
+  },
+  {
+   "cid": "0x067dec62cab0516c7dc830448f90eef9f77df1ce9e0be53ad1f331357e92f427",
+   "band": 1000.0,
+   "question": "FC Twente '65 vs. Ferencv\u00e1rosi TC: O/U 4.5"
+  },
+  {
+   "cid": "0x2fd844ea47b7684e14b2b32599c611dca3832c783ce83b8c89bd73cc84263241",
+   "band": 1000.0,
+   "question": "FK Lokomotiv Moskva vs. FK Akron Tolyatti: O/U 0.5"
+  },
+  {
+   "cid": "0x364ebd41279946ccef0811de0d88b2cb4275f9fee5a309415d9efc92e99e8e3b",
+   "band": 1000.0,
+   "question": "South Africa vs. Canada: O/U 12.5 Total Corners"
+  },
+  {
+   "cid": "0x65c4abf7eb496ae50d3618cccd0db9e124afbb9f3b84c96128598b1415f89b0e",
+   "band": 1000.0,
+   "question": "Royal Antwerp FC vs. SK Beveren: O/U 1.5"
+  },
+  {
+   "cid": "0x47881eceba57793e1cd25cf825640914b2f4a1118aed4450dbd2ab9eb868cf50",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - June 21, 8:10AM-8:15AM ET"
+  },
+  {
+   "cid": "0x65ce08640330a7f126eba42aa0c68b742cfa7c220f3dcba222d1466eff8c3fa3",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - June 30, 10:25AM-10:30AM ET"
+  },
+  {
+   "cid": "0x383db9aa5c802c6f1387080d340c4e7b111cc85c4e439b8cd0082fac1af9e9af",
+   "band": 1000.0,
+   "question": "AD Pasto vs. \u00c1guilas Doradas Rionegro: O/U 3.5"
+  },
+  {
+   "cid": "0x22743b49a9eb97193814cd3883394cc0573f2a22bf383fec340c41c2d01ec4e5",
+   "band": 1000.0,
+   "question": "Exact Score: CD Santa Clara 1 - 0 CD Nacional?"
+  },
+  {
+   "cid": "0xb0cb4d68e4cbce3e97a3b636b7a567147f76a89ee817c916dc0fcd9c182b5135",
+   "band": 1000.0,
+   "question": "ITF Tokyo: Hikaru Sato vs Yuno Kitahara"
+  },
+  {
+   "cid": "0xa0f8242995214fd01abfa25012032a52067e8b975a4c8202e280a007e3af5e1e",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Tokyo be 19\u00b0C or below on June 23?"
+  },
+  {
+   "cid": "0xc4c5402895a959c876712dbc06b85acba6f581b4a3e21aab8e3796a83764a179",
+   "band": 1000.0,
+   "question": "Counter-Strike: MEIA NOITE vs ALKA (BO3) - CCT South America Challengers #2 Playoffs"
+  },
+  {
+   "cid": "0xdb58e9d2ce42d055c2dea7c5814750966bb6e62ea116ec9e94e9e4aa04d49eda",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Sao Paulo be 25\u00b0C on July 3?"
+  },
+  {
+   "cid": "0xf238c569e3499f01c48d284b366111494155b29946250ccf857af1b5aeddf8d5",
+   "band": 1000.0,
+   "question": "Counter-Strike: Esport BERG vs SINQU Rehti - Map 1 Winner"
+  },
+  {
+   "cid": "0x3c255513bc9d8fdbcf27ac3534314eaa9088319272ef2e81c4e024df01149ebe",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - June 16, 8:55AM-9:00AM ET"
+  },
+  {
+   "cid": "0x287669a8dcdbc9dc04073059c27417162ca0e56ce13f2709653daa201dedb56e",
+   "band": 1000.0,
+   "question": "Will Ethereum dip to $1,850 on July 23?"
+  },
+  {
+   "cid": "0xf8ea350233cf4b27d162f6361b3c1ed9f8471693c0cea0c247d772e7d7822daa",
+   "band": 1000.0,
+   "question": "Will the price of Ethereum be between $1,700 and $1,800 on July 24?"
+  },
+  {
+   "cid": "0xfb0621d3a485955f227324e431c858ac85f54a5f53165595239718617d35c737",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Madrid be 34\u00b0C or below on July 21?"
+  },
+  {
+   "cid": "0x2136d219e6f404e82a30d6807dc60f7186454121e289c44f28f9b9e1f10f7dd8",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Wuhan be 30\u00b0C on July 5?"
+  },
+  {
+   "cid": "0x24fd77ef04009db99f9837d34080a3fb0fa88cc2437552b6d0ceca1dc8cac881",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Helsinki be 18\u00b0C on August 12?"
+  },
+  {
+   "cid": "0x6a77717d5de9137e4dc620b98105f965c7e693d7b67133e3f394c5e0752e5a82",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Paris be 30\u00b0C or below on July 8?"
+  },
+  {
+   "cid": "0x87e5122f02a8e22e96d4c425fab5585635c5d0581d509a9b618ebda1d7e269a5",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Warsaw be 24\u00b0C on June 18?"
+  },
+  {
+   "cid": "0x8bbb918add994fb30795643c4dbe52fb61c66fb466bf6dac3a590de98564edb3",
+   "band": 1000.0,
+   "question": "Spread: Houston Astros (-1.5)"
+  },
+  {
+   "cid": "0xf2566d05bd6e3ce9add709b1d44e83812be1cf63ab106344d1f519eb06ff6497",
+   "band": 1000.0,
+   "question": "Will the highest temperature in London be 29\u00b0C on July 26?"
+  },
+  {
+   "cid": "0x143d5466088bd0035ebf617158eadae61f37dc41900b3897376f6443e54b9b92",
+   "band": 1000.0,
+   "question": "Counter-Strike: ex-RUSTEC vs Just Players - Map 2 Winner"
+  },
+  {
+   "cid": "0x271886570af8bab2ee083d632f6071383bd44cf2d5ab29d2d2fad66d80435ac8",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 20, 8:30PM-8:35PM ET"
+  },
+  {
+   "cid": "0x097449b557fc457adcbcf6043390d2c983a01be2f4e4dcd448fbcb2324bd7e0d",
+   "band": 1000.0,
+   "question": "Will Chris Gotterup win the 2026 Genesis Scottish Open?"
+  },
+  {
+   "cid": "0x88affad7260842b0d926e2b3ffe547ae8b356732d9fd3bcfca76eaa3f8302578",
+   "band": 1000.0,
+   "question": "HNK Hajduk Split vs. NK Istra 1961: O/U 2.5"
+  },
+  {
+   "cid": "0x473f0c785df725ffb9f2a5a25409e6fc6a444df0bc6acf6247b1c262ebb91599",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 29, 11:40AM-11:45AM ET"
+  },
+  {
+   "cid": "0x193f06a06817bddfeb2f2f552931133dabc412bd483cdc6600ba56a9f86d8888",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 18, 3:30PM-3:35PM ET"
+  },
+  {
+   "cid": "0x6150d72f7ffa7666ff68dbbdcab3be661673b7268360f30be3a4854776368076",
+   "band": 1000.0,
+   "question": "S\u00e3o Bernardo FC vs. Cuiab\u00e1 EC: O/U 4.5"
+  },
+  {
+   "cid": "0x80a282acfd87e5a389a84eabdb3d1424eeacba37225734ef4396a4c08e1910c5",
+   "band": 1000.0,
+   "question": "Games Total: O/U 2.5"
+  },
+  {
+   "cid": "0x019e163b3cca9fa88f1536278853a43fa108c8f6e21c53152027e253e918ac1b",
+   "band": 1000.0,
+   "question": "ITF Wuning: Yan Cheng Chen vs Arvid Nordquist"
+  },
+  {
+   "cid": "0x655e8c381e6c6f3aa19432b84ff27be613a427400c82bbe6da73fbede0c9bc48",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 26, 8:05AM-8:10AM ET"
+  },
+  {
+   "cid": "0xaeec8a83985acb9eb43ca1c3a687646b48058570b98e44c23d4176a75ee20d62",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - June 19, 11:55AM-12:00PM ET"
+  },
+  {
+   "cid": "0x28c05f7b7fca197fb382adeb13628d63e7f62c78c0844bd8f4a3f4d25bd15ce9",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - June 29, 7:45AM-8:00AM ET"
+  },
+  {
+   "cid": "0xb1b1e78205c2ea08a92cd1248d68f3ae55ba06d9e827729454987f1c0b70b47d",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Helsinki be 17\u00b0C on July 9?"
+  },
+  {
+   "cid": "0x5ddf5dfc5a2d9027fa9e49bf47911b10fbadb9a38e885775890a450562d09603",
+   "band": 1000.0,
+   "question": "Labour leadership election scheduled by December 31, 2026?"
+  },
+  {
+   "cid": "0x659fafeb561a2e5b54032ffd5bb53181145ccb899cd812d6a21f7009563deb2a",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Moscow be 21\u00b0C on June 27?"
+  },
+  {
+   "cid": "0x8592ec1c356466671bc6e1d4ab23bce0821903ec36a5d65b8432b34c701e0a92",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Beijing be 29\u00b0C on June 21?"
+  },
+  {
+   "cid": "0xdca1d538d0658495f5864485fb6847364e8e9feb26194b3154bce7b05703089d",
+   "band": 1000.0,
+   "question": "Will the highest temperature in Cape Town be 24\u00b0C on August 3?"
+  },
+  {
+   "cid": "0x40e3ab7a6f874300a413ce7a6922bd5b3f19b09798f714d8e6c504e8628784bf",
+   "band": 1000.0,
+   "question": "Ethereum Up or Down - July 10, 12:00PM-12:15PM ET"
+  },
+  {
+   "cid": "0x956de1240efb0c4ae571dcc83159191683317668958f4ba7fe14297d56cce037",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 17, 11:40PM-11:45PM ET"
+  },
+  {
+   "cid": "0x7f5b3203937660508b8cdab11594581101864111b1a6b8afd799020ca49e9562",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 22, 3:30AM-3:35AM ET"
+  },
+  {
+   "cid": "0x5ef6dfcb55bf3a6f81383f0ca323293c309d6a9566572387709bc16cf7765cb2",
+   "band": 10000.0,
+   "question": "Counter-Strike: Esport Academy Copenhagen vs Walczaki (BO3) - Super DraculaN Group B"
+  },
+  {
+   "cid": "0x1d2c3298e3ea77c406561a27337470e88cad1546f9b685561a0e1f208daef288",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 14, 2:05PM-2:10PM ET"
+  },
+  {
+   "cid": "0x6b9cb30955aba79f266d9836d704c4eab8616393c63b886bfdb854b3be74f7bd",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 23, 6:25AM-6:30AM ET"
+  },
+  {
+   "cid": "0xe067d7e641096262f08249bf3905d40c01b8a885a7467dfd118ffa321e429425",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 13, 9:55AM-10:00AM ET"
+  },
+  {
+   "cid": "0x8478fd4089524ac51ed43fb451c87c2b65085bd1f0da9b2250db347a93a408dd",
+   "band": 10000.0,
+   "question": "Map Handicap: FaZe (-1.5) vs EYEBALLERS (+1.5)"
+  },
+  {
+   "cid": "0xf97024f075e133f62c2dbeb92e479980b487672d43238c707ddb05b177de23d8",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 17, 4:55AM-5:00AM ET"
+  },
+  {
+   "cid": "0x85faa1d7ebfc38f05c156aaa99668dc56f7356a5e313f550f347bad9d010c2ab",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 26, 12:35AM-12:40AM ET"
+  },
+  {
+   "cid": "0xcc832ef3ecb023d400ecd5dbab81b6b28011e6e1faa158cd44ef0e2b0944b171",
+   "band": 10000.0,
+   "question": "Exact Score: Canada 1 - 2 Qatar?"
+  },
+  {
+   "cid": "0x5a093228209db8596501ef4659e583501045bb58e714d72ee6e4c10f3fad7e93",
+   "band": 10000.0,
+   "question": "National Bank Open: Benjamin Bonzi vs Yannick Hanfmann"
+  },
+  {
+   "cid": "0x249a6350f23ba37fb4035446aac589f7c66982d7f8895446811bb93ef45a7e08",
+   "band": 10000.0,
+   "question": "Haiti leading at halftime?"
+  },
+  {
+   "cid": "0x02a6249ea8d7a7d78adffe654f18569a45c494c9f72f3f60a23cdf97adc9793e",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 14, 8:00AM-8:05AM ET"
+  },
+  {
+   "cid": "0x2cc563b05d8858f3485fa4b23758d4756eb2aa4e8f97d67ec00249d01a1bbaab",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 16, 8:50AM-8:55AM ET"
+  },
+  {
+   "cid": "0x8e4a26faf949ef4c540e76b865deda4425993d15b79da2b712b1927edfa60970",
+   "band": 10000.0,
+   "question": "Saudi Arabia leading at halftime?"
+  },
+  {
+   "cid": "0x26af7420fdf1d51b2a94f572799fba520d5628ee5d6f02a4ee4b4a639e57aea6",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 28, 3:10AM-3:15AM ET"
+  },
+  {
+   "cid": "0x1b200c70d5998bc4121c05853076667e994a132ff5b1f7c1734bb7def1acadcf",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 21, 12:25PM-12:30PM ET"
+  },
+  {
+   "cid": "0x63ef2b92424fbb11eb389546ae483b11ec318c097e984d3e6f578d949451f3d5",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 16, 3:20PM-3:25PM ET"
+  },
+  {
+   "cid": "0x74cce8ceff0d994e603a670f90378207cad2cfc2f3f48f0cd2ec732bbb89e4fe",
+   "band": 10000.0,
+   "question": "Will N\u00f5mme Kalju FC win on 2026-07-09?"
+  },
+  {
+   "cid": "0x2608628438afaa156734e131325f643da5a89d1ddbbe1c23b3efdbbaa6bd1942",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 17, 11:10AM-11:15AM ET"
+  },
+  {
+   "cid": "0xab9e785fc040b56105ead77d63173f1a073469ddd857c3694e57acb0d25ac8da",
+   "band": 10000.0,
+   "question": "Will the price of Bitcoin be above $56,000 on July 10?"
+  },
+  {
+   "cid": "0x4caea70ba71852f57ad5464f409ad9b2b61f2550a24dfea06ca8b0645b636e17",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 23, 4:40AM-4:45AM ET"
+  },
+  {
+   "cid": "0xf35bb817175b966ae52b525d45af4b1ad3d5fdb34261cac1c7a692eeea02d597",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 21, 5:35AM-5:40AM ET"
+  },
+  {
+   "cid": "0x9929f45d2928424e72b37c8372ccca7ff6ddf3adb5f786bb7e3886a7e3e1e21e",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 8, 6:35AM-6:40AM ET"
+  },
+  {
+   "cid": "0x27cbc061952617434c843c434973174e1ebe335887258b7867cd3585d78cb1f5",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 2, 1:10PM-1:15PM ET"
+  },
+  {
+   "cid": "0xcef695d558b4a4dd94f1a269a20bc56772eddf10e63273e4ca2ad8dc4bae4b89",
+   "band": 10000.0,
+   "question": "LoL: PCIFIC  vs Bushido Wildcats (BO3) - TCL Play-Ins"
+  },
+  {
+   "cid": "0x16051df3afb1cbe3be58c882c13e325a65e351c09975d69f85a08d1e473d04f7",
+   "band": 10000.0,
+   "question": "St. Louis City SC vs. Sporting Kansas City: O/U 3.5"
+  },
+  {
+   "cid": "0x9a74a39d984223e39e0c96c80435a7efb8d8f718d1875a1b429b64a971bc797c",
+   "band": 10000.0,
+   "question": "Will Elon Musk post 400-419 tweets from June 9 to June 16, 2026?"
+  },
+  {
+   "cid": "0x6e6d4da69aad3ec1b9d63effde630ff977c765d8beebd5fc9a89ca49b930a9ca",
+   "band": 10000.0,
+   "question": "Counter-Strike: Inner Circle Academy vs BIG Academy (BO3) - NODWIN Clutch Series Play-In Group B"
+  },
+  {
+   "cid": "0xc2a4f79ba63441c51fb55c6be5e05fce860a9c594881f19efb58f943b6c77aa4",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 28, 11:45AM-11:50AM ET"
+  },
+  {
+   "cid": "0x075228a9709cdbea4f2ecf8286b1e70e27e18a4e07cc499ccb1c1ea7bdb0bbba",
+   "band": 10000.0,
+   "question": "SPY (SPY) Up or Down on July 20?"
+  },
+  {
+   "cid": "0x9f3137c2cfee087e622bf465f69ebf045fe56e2d544768c0e3bcd457bd2e33f3",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 9, 10:35PM-10:40PM ET"
+  },
+  {
+   "cid": "0x60a7a10136cf2273716c3985426113aa8d6525d934ef974772a0ff82dc759a1b",
+   "band": 10000.0,
+   "question": "Will FC Drita win on 2026-07-14?"
+  },
+  {
+   "cid": "0xa33d7ffef408a6ef2a78727b1bff9cd749ad8278faf61cc0fbc58f9e368de894",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 25, 4:50AM-4:55AM ET"
+  },
+  {
+   "cid": "0x09f096a92fbcb4c9421ff632f5535fab0cc4e45adc4759a023b867ac53dba027",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 20, 2:25PM-2:30PM ET"
+  },
+  {
+   "cid": "0xe6fa5b05b1f93e02a6a59347026ae8646613639bd4d4b9acbaae5884aff2b281",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 26, 1:05AM-1:10AM ET"
+  },
+  {
+   "cid": "0x5ac7cc30d65e987bd1a92823b5088c5d960178e53254e2cfe8f771fde2a2950d",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 28, 2:05PM-2:10PM ET"
+  },
+  {
+   "cid": "0xa39fafa59851b43e8bd5091dfc5267ed0432723b80ba0483b84aca6c6e20eb65",
+   "band": 10000.0,
+   "question": "Will Bitcoin dip to $60,000 August 3-9?"
+  },
+  {
+   "cid": "0x3b0dad1513f3d4e857a2f7f5c67fd1611a1eda333a60095e95b83e5c0f68c58a",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 3, 7:50AM-7:55AM ET"
+  },
+  {
+   "cid": "0x645f9a3f97ad749af48c7b674faaa472ab6d63a2770204c860e93d9b9978daf7",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 18, 5:10PM-5:15PM ET"
+  },
+  {
+   "cid": "0xdcf9f437b7943e40b5a12d7837aa806647ac36734bc4dd91724c340cbed16926",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 16, 1:45PM-1:50PM ET"
+  },
+  {
+   "cid": "0xec2888d3b5b43a8e4bc08ccb7ef221deb2a9b6b97c6e3e4b4c9efce385695e2e",
+   "band": 10000.0,
+   "question": "Andrew Tate released from custody by July 31, 2026?"
+  },
+  {
+   "cid": "0x29a2cf3128502db91c60f7445e468e3f723d272a59c47e1606984345822a89e5",
+   "band": 10000.0,
+   "question": "Exact Score: T\u00fcrkiye 2 - 1 United States?"
+  },
+  {
+   "cid": "0xd4428eeec7a90f36bb5a7322d1d8db882388cc1698eecab65bd3d541110fa2a6",
+   "band": 10000.0,
+   "question": "T\u00fcrkiye vs. Paraguay: O/U 0.5"
+  },
+  {
+   "cid": "0xc5dfd3373c746f9e36a7d3fa9bdde810ecdad240c8ad1d8de5edcee0f1b2987d",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 11, 8:50PM-8:55PM ET"
+  },
+  {
+   "cid": "0xffc418c1bb218ea36d8199fd54d2f344bfb90e5b1c087d31744a2b3e4782e8eb",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 19, 7:45PM-7:50PM ET"
+  },
+  {
+   "cid": "0x99266b88fc5b92d5d746b52b1723c9f02fcc2e5c7a18f493e8bb99ae714de0f7",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 9, 9:45PM-10:00PM ET"
+  },
+  {
+   "cid": "0x1a8297234ac837660b9db10a539dd434e86fa22bdcb2c4bea7b179a6f8cde8d0",
+   "band": 10000.0,
+   "question": "Dallas Wings vs. Washington Mystics: O/U 167.5"
+  },
+  {
+   "cid": "0xda955101f07f6e7e08ee6b37712787b87617a0d6cf5099f0c9a9c17da2bc902c",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 22, 4:05PM-4:10PM ET"
+  },
+  {
+   "cid": "0xac5fe4f182aa5642be801d46ab1d51f8fe08bf2a13045409cf28bb7a0385ed39",
+   "band": 10000.0,
+   "question": "SPY (SPY) Up or Down on July 8?"
+  },
+  {
+   "cid": "0x7edaf5d91600189a98108dcedfaf9f41f08ef511ad487ef1b18a8b62297ffde3",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 30, 2:35AM-2:40AM ET"
+  },
+  {
+   "cid": "0xe189565e4bf9be22f4d85477c7c1d879831529ffbe0dac2c7232415792ec0bd5",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 17, 4:00AM-4:05AM ET"
+  },
+  {
+   "cid": "0xa0cfe98f53d1a9ad52b12ccffc1de3ba2fbcdc9b50cfeefc2c50c9007f2c1337",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - August 8, 4:45PM-4:50PM ET"
+  },
+  {
+   "cid": "0x1fcdf52b6d9db26f61c7d7a9c39bde9bc426733720a0faaea3a46f53875c5dc9",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - June 20, 5:20PM-5:25PM ET"
+  },
+  {
+   "cid": "0xd77d86cadee020f3ff62cbe866ac6b8260138538df5dbfd5f0a17a1189781060",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 10, 9:35AM-9:40AM ET"
+  },
+  {
+   "cid": "0x43d7a80b59391170aa18fe10c8f24a77896d321cca774349cc743ee2d7a36c2e",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 9, 10:40AM-10:45AM ET"
+  },
+  {
+   "cid": "0xe5a9876bc0e524f7aa1c478a9092bf60e59a707ce0ff1dac90fbf4c208839c39",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 21, 3:30AM-3:35AM ET"
+  },
+  {
+   "cid": "0x96d2eee62ea51bf9fda38956e5accdfb4c752fcd5c83990aea9787d4edf600b0",
+   "band": 10000.0,
+   "question": "Bitcoin Up or Down - July 5, 12:10PM-12:15PM ET"
+  },
+  {
+   "cid": "0xacbb7b30d8a4b3635e487bb0427c10a2801e4f1fde473b24881819624f923476",
+   "band": 10000.0,
+   "question": "Baltimore Orioles vs. Los Angeles Angels: O/U 9.5"
+  },
+  {
+   "cid": "0x8ff46046670cb36486dcbdaebf281dcdfa83ec18a0a09ae08463d2a15e4bc188",
+   "band": 10000.0,
+   "question": "Will the price of Bitcoin be above $68,000 on June 20?"
+  },
+  {
+   "cid": "0x3c1093d8cf4bcb5c526903456ec2b9ac990947f7e7cecc084cd9e7dd290e5276",
+   "band": 100000.0,
+   "question": "LoL: JD Gaming vs Team WE (BO3) - LPL Group Ascend"
+  },
+  {
+   "cid": "0xf9938e76c911d8909ee03b556a17ad471d0543998ad7f0f27253f2930e2f8695",
+   "band": 100000.0,
+   "question": "Dota 2: L1ga Team vs 4ikibamboni (BO3) - The International Europe Closed Qualifier Playoffs"
+  },
+  {
+   "cid": "0x505d51bc2efe9c91054867d91492f72730c893fbf92484ee7d6c39c5569e24af",
+   "band": 100000.0,
+   "question": "France leading at halftime?"
+  },
+  {
+   "cid": "0x3848eb101766129be9aac471e19461697c8d160e53ac54f292b05f6cbbbe1016",
+   "band": 100000.0,
+   "question": "Counter-Strike: Sharks vs FURIA (BO3) - BLAST Bounty Qualifier"
+  },
+  {
+   "cid": "0x7cfe39eb9390a84ddefd9a2cb06014aaed214c23588fca468e0d5983740dc661",
+   "band": 100000.0,
+   "question": "Will the United Kingdom send warships through the Strait of Hormuz by June 30, 2026?"
+  },
+  {
+   "cid": "0x8f272c8e34cc2fcc13777a12e3811382e6ef796bc250dd011a1071ba8caddf93",
+   "band": 100000.0,
+   "question": "Chicago Cubs vs. Colorado Rockies"
+  },
+  {
+   "cid": "0xeaa2afb8617dcda8f5aaf16c8918083ee7221032830deb276503053465199362",
+   "band": 100000.0,
+   "question": "LoL: Shifters vs GIANTX - Game 2 Winner"
+  },
+  {
+   "cid": "0x608b260059adb2315f3a649419ab8f684f0d741db319aae9c08f93fe2a268f31",
+   "band": 100000.0,
+   "question": "Will Iran close its airspace by June 15?"
+  },
+  {
+   "cid": "0x7f22fff06f0357be1c5641ffb7a7d7214858973da12866f573bee01dd36f351b",
+   "band": 100000.0,
+   "question": "Will the Minnesota Timberwolves win the NBA Western Conference Finals?"
+  },
+  {
+   "cid": "0xf08cd93b8ccaa13bd6ee51558bf7c6525925bef3073478e480538f6359f12962",
+   "band": 100000.0,
+   "question": "Toronto Blue Jays vs. Washington Nationals"
+  },
+  {
+   "cid": "0x399b69600812f9997ee0dcac06c74c9351f230baa53765eacbc443a77bc520b9",
+   "band": 100000.0,
+   "question": "Will Shri Thanedar be the Democratic Nominee for MI-13?"
+  },
+  {
+   "cid": "0x8b7d662ea87e4f9f52e1c4ccae3186508698069075c6665e7c5ce8b32ce1c47c",
+   "band": 100000.0,
+   "question": "Exact Score: Norway 2 - 0 England?"
+  },
+  {
+   "cid": "0x3fcacbc007e5c3605b165a2ef512815a04916b0a87fa71f63657039795a8dbfb",
+   "band": 100000.0,
+   "question": "New York Mets vs. Philadelphia Phillies"
+  },
+  {
+   "cid": "0x57924924e3903f1005489be2e434e43637ebbfed31d0f3077302b0567936c015",
+   "band": 100000.0,
+   "question": "Spread: United States (-1.5)"
+  },
+  {
+   "cid": "0xe78d1da9592917fb1e21b72eab9c1e6a5e54b6c711c3edc07de686f8d10809b4",
+   "band": 100000.0,
+   "question": "LoL: Team Heretics vs Fnatic - Game 2 Winner"
+  },
+  {
+   "cid": "0xb53ffde43e35724684bb172626e409c0fe93b57bb82a09264755073d1982f899",
+   "band": 100000.0,
+   "question": "Will Folarin Balogun be the top goalscorer at the 2026 FIFA World Cup?"
+  },
+  {
+   "cid": "0xbcb7437f18d7584756c00348a33bc65312caf06ae719750dbdd02f684bd5dd0c",
+   "band": 100000.0,
+   "question": "Wimbledon ATP: Jannik Sinner vs Miomir Kecmanovic"
+  },
+  {
+   "cid": "0x89851cf1631ca7307e3f643cf5699f00a79d6485ee373ec82c58a09aa3e4e946",
+   "band": 100000.0,
+   "question": "Estoril Open: Roman Andres Burruchaga vs Alexander Blockx"
+  },
+  {
+   "cid": "0xf62af500627ef1a0cb81081b0c09de59d76c4eddcbd8f14ebf7e1f092c4a28e4",
+   "band": 100000.0,
+   "question": "Exact Score: Switzerland 1 - 3 Colombia?"
+  },
+  {
+   "cid": "0xe49e3a1e70ae6fd491ae0b002201be73b04c5a3a336f949a7a625bc0503953b2",
+   "band": 100000.0,
+   "question": "Arizona Diamondbacks vs. St. Louis Cardinals: O/U 8.5"
+  },
+  {
+   "cid": "0x0bda7d19fd1660374bf901a19a3d46d3c910bdfe6f530dcf9f428b2e4a54b41f",
+   "band": 100000.0,
+   "question": "Norway vs. England: Norway O/U 0.5"
+  },
+  {
+   "cid": "0x11e4780f48d73417a4863618e288e78c8848e2ef4f744dca4cabdff154af5e3c",
+   "band": 100000.0,
+   "question": "Will Sweden vs. Tunisia end in a draw?"
+  },
+  {
+   "cid": "0x559902409510d8db5cf54ccdc96c01568bba2a7a19843d7d815e2c187d868828",
+   "band": 100000.0,
+   "question": "Washington Nationals vs. San Francisco Giants"
+  },
+  {
+   "cid": "0xe54f2dc88adda1f328beaa9cf54913c1240f0188b3ceca8779f83fb0d5e145dd",
+   "band": 100000.0,
+   "question": "St. Louis Cardinals vs. Kansas City Royals"
+  },
+  {
+   "cid": "0xcbf0b584d791f8d2d428cbdb148217ce5ab49a54934aa2ad5374a995741609e6",
+   "band": 100000.0,
+   "question": "Switzerland vs. Algeria: O/U 3.5"
+  },
+  {
+   "cid": "0xb0074c6af8daed8677ce89160dbc7c659625aa31a4584faa7070d418b98044fa",
+   "band": 100000.0,
+   "question": "Will B8 win IEM Cologne Major 2026?"
+  },
+  {
+   "cid": "0x8f21e67bc25fcaa809f3f739e7bfc9d4e1a42e915709d32632d5438c068e1e8e",
+   "band": 100000.0,
+   "question": "Will 80 ships transit the Strait of Hormuz on any day by June 30, 2026?"
+  },
+  {
+   "cid": "0x673660084bc702185ae9537b0cfbbc2800c033a22b08bca758be4a144aed6652",
+   "band": 100000.0,
+   "question": "Will Rafael Leao be the top goalscorer at the 2026 FIFA World Cup?"
+  },
+  {
+   "cid": "0x9031561489f77ba1f89c0b963170a6853c39840e6e89a6a658a05d12b60a1ff0",
+   "band": 100000.0,
+   "question": "Will Trump and Putin meet next in Russia?"
+  },
+  {
+   "cid": "0xd88cbd1c16dc47cf4edb66df252b29056042c6abc9400c6e170b3604b5900f23",
+   "band": 100000.0,
+   "question": "LoL: T1 vs Kiwoom DRX (BO1) - KeSPA Cup Group Stage"
+  },
+  {
+   "cid": "0xfc7e0c5bf5560e39ac944c4fa41e5f907d54cdb1ea5857377d9f94d65a760009",
+   "band": 100000.0,
+   "question": "LoL: Top Esports vs Team WE - Game 2 Winner"
+  },
+  {
+   "cid": "0x43c295d3de01887d6bb874bc001abbb81b832a4174c3d812ea22360090073726",
+   "band": 100000.0,
+   "question": "Dota 2: Vici Gaming vs Yakult Brothers (BO3) - Games of the Future Playoffs"
+  },
+  {
+   "cid": "0x36145debe128892ac6b9fd149e566639ecc5eb7a22a3f6884caf02c5c709e798",
+   "band": 100000.0,
+   "question": "Counter-Strike: magic vs TheMongolz (BO1) - Esports World Cup Group D"
+  },
+  {
+   "cid": "0x5ee7f9810c26a8d6800dde1fe536cb082110ab9b7e40e0bac87fdc1246d12d4a",
+   "band": 100000.0,
+   "question": "Seattle Mariners vs. Los Angeles Dodgers"
+  },
+  {
+   "cid": "0x3f7795dbbd0653cbbcdc299a5e5253d9b6dde423dfb7a35458c7a3d3b42a5a22",
+   "band": 100000.0,
+   "question": "LoL: T1 vs Hanwha Life Esports - Game 2 Winner"
+  },
+  {
+   "cid": "0x0c351aa0657af6a0b1c3168ef437ad040430d718b245be59c98411b212affcb0",
+   "band": 100000.0,
+   "question": "Dota 2: Vici Gaming vs Team Yandex - Game 2 Winner"
+  },
+  {
+   "cid": "0x620864d2007a22d19782ae9cce0bdc59b39b9e67836c2bb87f3b5431c5fe22a5",
+   "band": 100000.0,
+   "question": "Wimbledon WTA: Solana Sierra vs Coco Gauff"
+  },
+  {
+   "cid": "0x1cd9ef1839a80ef347028d0584e2fc248708c73229919bc6cca3f5a90e501738",
+   "band": 100000.0,
+   "question": "Atlanta Braves vs. San Diego Padres"
+  },
+  {
+   "cid": "0xa08bf5e2acca8cf3f85209795cf278128a30869c5a8bfb97851e19fd21d0d21e",
+   "band": 100000.0,
+   "question": "Epstein client list released by June 30?"
+  },
+  {
+   "cid": "0x140c41f4491c885da7763e4111ca13fb169d907d73d3918429f98e1c1862aab9",
+   "band": 100000.0,
+   "question": "Will WTI Crude Oil (WTI) hit (HIGH) $80 in July?"
+  },
+  {
+   "cid": "0x1a98b3d6cebd2baf51e1b53611c10efc60bf542eb5f5656caa9269eee7889f8e",
+   "band": 100000.0,
+   "question": "LoL: LGD Gaming vs Top Esports - Game 1 Winner"
+  },
+  {
+   "cid": "0x4efb10f393b316f77ad9297451ccc1e0bc178b1787ce86c352ffd62e2d6f6cec",
+   "band": 100000.0,
+   "question": "Will G2 Esports win MSI 2026?"
+  },
+  {
+   "cid": "0x2cfbd8aabc3519021dc16ab0c7e0f42b0fdac191e64bcc3c42c2319c4c0117f3",
+   "band": 100000.0,
+   "question": "Will Donavan McKinney be the Democratic Nominee for MI-13?"
+  },
+  {
+   "cid": "0x85afab9788db5749a1da9dc68735419bb59c4f102e8f63acaa33656cc0ad76fd",
+   "band": 100000.0,
+   "question": "Nottingham Open: Marie Bouzkova vs Emma Navarro"
+  },
+  {
+   "cid": "0x09396b2e3cec4ced5c176724d51bd577c15051a283db94cae83a747efd015f3f",
+   "band": 100000.0,
+   "question": "Los Angeles Dodgers vs. Chicago Cubs"
+  },
+  {
+   "cid": "0x42cfa041ee57ab29cc9a8d4cde31b57dd40550e4a2522511f121a2690b4d4ce0",
+   "band": 100000.0,
+   "question": "Dota 2: Rune Eaters vs LGD Gaming - Game 2 Winner"
+  },
+  {
+   "cid": "0xa4647d0f97565f60a9331c203140ab854a26758f8d35321b9e88c179d97619f3",
+   "band": 100000.0,
+   "question": "Spain vs. Belgium: 1st Half O/U 0.5"
+  },
+  {
+   "cid": "0xd447c4612bec6d0c110abc60e33af1482718e794a4ddac29a6fc44beb4e8ea7d",
+   "band": 100000.0,
+   "question": "New York Yankees vs. Chicago White Sox"
+  },
+  {
+   "cid": "0xfd7bc8c2b08924ce8e14222d839b913c2883254c824ea0512dd9646afbf64ae4",
+   "band": 100000.0,
+   "question": "Norway vs. England: O/U 4.5"
+  },
+  {
+   "cid": "0xe4e97ed7d3d550e4e5a3fcf0babd8fbae86a0728861bd6d313e8ded97d8f3df2",
+   "band": 100000.0,
+   "question": "Counter-Strike: Monte vs Team Nemesis (BO1) - XSE Pro League Group Stage"
+  },
+  {
+   "cid": "0x24e8d428add25d6d86d5fb220979eb0ca82966dd060d42490b4ba10784f5ca46",
+   "band": 100000.0,
+   "question": "Canada vs. Morocco: O/U 0.5"
+  },
+  {
+   "cid": "0x4a575a7cce7e0a3d40e3b92bb5ef3f00882c9e51e2ae41ac7d727d0ee5a10a9d",
+   "band": 100000.0,
+   "question": "Wimbledon ATP: Jan-Lennard Struff vs Daniil Medvedev"
+  },
+  {
+   "cid": "0x04ba2011a9bd82d9773f34928d5d0e9bd0f36e0bab504689e11e467fcdf7ec23",
+   "band": 100000.0,
+   "question": "Los Angeles Dodgers vs. New York Mets"
+  },
+  {
+   "cid": "0x51eb5c0499991ea63c6b905ebee25d9fc0f529dd9ae292df353f67598348a5fb",
+   "band": 100000.0,
+   "question": "Mubadala Citi DC Open: Naomi Osaka vs Alexandra Eala"
+  },
+  {
+   "cid": "0x7c4086d5115e92305222b061448de094b98959d7534f8998e4e20cf9907f29e3",
+   "band": 100000.0,
+   "question": "Exact Score: Brazil 3 - 1 Norway?"
+  },
+  {
+   "cid": "0x68698ae6f6d90e1ea6cd69ad517ac0be1b16bf95d90a54627632539e2377d1a7",
+   "band": 100000.0,
+   "question": "Dota 2: Xtreme Gaming vs LGD Gaming - Game 1 Winner"
+  },
+  {
+   "cid": "0x3c42cef46df181fafb20312bb0f3ec02f62a9fcd8eb742bbd6a9fa1679f6a600",
+   "band": 100000.0,
+   "question": "Spread: France (-3.5)"
+  },
+  {
+   "cid": "0xb87df3ecfdb937e0d5bd495d7cc7e88062097616e0c59ce478e101eff5020eb7",
+   "band": 100000.0,
+   "question": "Starmer out by March 31, 2026?"
+  },
+  {
+   "cid": "0x7cdecaacb1d5729fbe63f281e2c144c5f9d696c4c98f856b99c60dd309ef8ae8",
+   "band": 100000.0,
+   "question": "Dota 2: Team Falcons vs BetBoom Team - Game 2 Winner"
+  },
+  {
+   "cid": "0xe75d6690754a5d653b5cda86df00da7017b56e8e2ae1b469948287c17b663476",
+   "band": 100000.0,
+   "question": "France vs. Spain: O/U 4.5"
+  },
+  {
+   "cid": "0x6b049bc3befa02c22d0cfaee77625fc94e9a6d571f00c015ba7a3b442e306fbc",
+   "band": 1000000.0,
+   "question": "LoL: T1 vs Karmine Corp (BO3) - Esports World Cup Playoffs"
+  },
+  {
+   "cid": "0xb8c4eb2bc36fb256ac730f0d1d05cf5ff6649a7d8d5ed779544dfa068da1cd18",
+   "band": 1000000.0,
+   "question": "Will Spain win on 2026-07-06?"
+  },
+  {
+   "cid": "0x184ca107b54330d8e47c581aebc31426e9063943edd4c98ddafe2eb01307f62b",
+   "band": 1000000.0,
+   "question": "Will Paraguay win on 2026-07-04?"
+  },
+  {
+   "cid": "0xdb4b2f370c3d0e996fbb32213c87aa5402936e3d4882432b6738e2f5661b79a6",
+   "band": 1000000.0,
+   "question": "Will Cura\u00e7ao win the 2026 FIFA World Cup?"
+  },
+  {
+   "cid": "0x914abe14ed078456f247cc648e2ae1e9579150d85ddab7670266fa8fcd350889",
+   "band": 1000000.0,
+   "question": "Will Argentina vs. Switzerland end in a draw?"
+  },
+  {
+   "cid": "0xd86a816093fcd0a0e1ca440bc5ce199bd3c5a8d6139e044b076958164f8c5423",
+   "band": 1000000.0,
+   "question": "US x Iran permanent peace deal by June 15, 2026?"
+  },
+  {
+   "cid": "0x94e50623d3cfdc1256e16ff372062d42c282bec8af620bb732a19fb4b0dce580",
+   "band": 1000000.0,
+   "question": "Mexico vs. England: Team to Advance"
+  },
+  {
+   "cid": "0x543da007c2f149346cf9f9f21021f1b2e10c46c78fcd0c9297c0c21f10c94626",
+   "band": 1000000.0,
+   "question": "Will the Los Angeles Clippers win the 2026 NBA Finals?"
+  },
+  {
+   "cid": "0x33a87d02fa01e958929385c74b8627d32cc4474e9ebd312d268865c5207147fa",
+   "band": 1000000.0,
+   "question": "Will Jordan win the 2026 FIFA World Cup?"
+  },
+  {
+   "cid": "0x8ec18580b64a06864f892eb5c597f83deb05e29684c475f118e55d137fb5e000",
+   "band": 1000000.0,
+   "question": "Spread: France (-2.5)"
+  },
+  {
+   "cid": "0x22e7b5e35423e76842dd3a5e1a21d13793811080d5e7b2896d0c001bd5e97d54",
+   "band": 1000000.0,
+   "question": "Will the Oklahoma City Thunder win the 2026 NBA Finals?"
+  },
+  {
+   "cid": "0xbdb326038e98f139550add22cab891493f7093118096eb005cd7d3224aaf4f5e",
+   "band": 1000000.0,
+   "question": "Spread: Spain (-2.5)"
+  },
+  {
+   "cid": "0x0c9ea0b1503b95b499975674aefdbd6c235f68885f2a812e97ca96016b207e43",
+   "band": 1000000.0,
+   "question": "Will Argentina win on 2026-07-19?"
+  },
+  {
+   "cid": "0x89c45b9308fb21b268fde5a742ac0540929638a9c8a9ac9867345b5fe954421f",
+   "band": 1000000.0,
+   "question": "England vs. DR Congo: Team to Advance"
+  },
+  {
+   "cid": "0x344327632a0ab1c28b40003f14bfe75cb7d5bd65c58b4e34199cfc17a77104fe",
+   "band": 1000000.0,
+   "question": "Will Saudi Arabia vs. Uruguay end in a draw?"
+  },
+  {
+   "cid": "0x74ab826996f3c909455311ee5c4fee7faa696988b2c51a4d1d09f81e367ead19",
+   "band": 1000000.0,
+   "question": "Belgium vs. Senegal: O/U 2.5"
+  },
+  {
+   "cid": "0x965ebc5d79eb1ec02cad67245a44b9e45b33359018f013fb6cf81d5bbf7bcc8d",
+   "band": 1000000.0,
+   "question": "Will Uzbekistan win the 2026 FIFA World Cup?"
+  },
+  {
+   "cid": "0xd0fa27da024261ba5edb5e9eda33651a224fb5a2137d3c9e73b216109b12dd79",
+   "band": 1000000.0,
+   "question": "Will Uruguay vs. Spain end in a draw?"
+  },
+  {
+   "cid": "0xdf9b5fe5a7cac5e2c26cd36a08bb1456d61ba7e00c96868e57d38b5775c78ae9",
+   "band": 1000000.0,
+   "question": "C\u00f4te d'Ivoire vs. Norway: Team to Advance"
+  },
+  {
+   "cid": "0x4822d1452ba17d280b2c271db0e58df7866c9b494040649ab6c6ae8bb7363b18",
+   "band": 1000000.0,
+   "question": "Will France vs. England end in a draw?"
+  },
+  {
+   "cid": "0x35155be9ad199e97505970a5dfb2b4bca7a9d1bb7b731389a590091997998a78",
+   "band": 1000000.0,
+   "question": "Tesla launches unsupervised full self driving (FSD) by June 30?"
+  },
+  {
+   "cid": "0xc112ff35c760ee66738e288067c3de90a2b44a28a9e2f4488989d498be03b292",
+   "band": 1000000.0,
+   "question": "US obtains Iranian enriched uranium by June 30?"
+  },
+  {
+   "cid": "0xfa40932295e57674d1988b9ec901f86e0a472c26e2d7baf232a84a13100708b5",
+   "band": 1000000.0,
+   "question": "Will the text of the US-Iran agreement be released by June 16? "
+  },
+  {
+   "cid": "0x675bba4df50fd123f7fbfbafa67e9b75f4092d85ce0f9148ce78fc945964c856",
+   "band": 1000000.0,
+   "question": "Will Paraguay win the 2026 FIFA World Cup?"
+  },
+  {
+   "cid": "0x0c4cd2055d6ea89354ffddc55d6dbcef9355748112ea952fc925f3db6a5c457f",
+   "band": 1000000.0,
+   "question": "Will Argentina win the 2026 FIFA World Cup?"
+  },
+  {
+   "cid": "0xc90f95af1a5d4e392fe9cc484f1b1a0983687865e7b85910ae89300c2076e4a1",
+   "band": 1000000.0,
+   "question": "Will Canada win on 2026-06-18?"
+  },
+  {
+   "cid": "0x13e1cc703a120883a709d3bb29707097952845d61ca6793ea2b4328bae2a7451",
+   "band": 1000000.0,
+   "question": "Will the Boston Celtics win the 2026 NBA Finals?"
+  },
+  {
+   "cid": "0xb5c0abeecb5502e6e8d83155c27819174d8317af3c425c3afc5a8c45257a3793",
+   "band": 1000000.0,
+   "question": "Will the Fed increase interest rates by 25 bps after the July 2026 meeting?"
+  },
+  {
+   "cid": "0x5efa976ebe94080bbda7e45605333ff8f30156cc91604d66c41eb52fd3e25f3e",
+   "band": 1000000.0,
+   "question": "Israel x Iran permanent peace deal by June 30, 2026?"
+  },
+  {
+   "cid": "0x057885f5f49261eb41504e24899a88e53cb364ddf95e3c0df5608200feaddff8",
+   "band": 1000000.0,
+   "question": "Will Norway win on 2026-06-26?"
+  },
+  {
+   "cid": "0x82179a07a8cd8bcffc30a05138c847d932df1d821f637100a1de5e9bb2f892f7",
+   "band": 1000000.0,
+   "question": "Panama vs. Croatia: O/U 2.5"
+  },
+  {
+   "cid": "0x7f631610811039f03e85106365e1ef4a34dc6bf8329acb700734a7d859dcc5a2",
+   "band": 1000000.0,
+   "question": "C\u00f4te d'Ivoire vs. Norway: O/U 2.5"
+  },
+  {
+   "cid": "0xfb22501ffce04e5a029bcc79ebb9e6a534cc676677c1354e29d29e3adfd08f46",
+   "band": 1000000.0,
+   "question": "England vs. Argentina: O/U 2.5"
+  },
+  {
+   "cid": "0x5a9395dae6c7643ea06e7a555580a5526e81073aea9c9306363529c5b76a8f8b",
+   "band": 1000000.0,
+   "question": "US x Iran Effective Ceasefire by July 31?"
+  },
+  {
+   "cid": "0x597e0e209cef883bb95c6905f07d8066c3ef35652087d3611c43b93f0ed237c2",
+   "band": 1000000.0,
+   "question": "Will Portugal win on 2026-06-27?"
+  },
+  {
+   "cid": "0x136f5a0c27a62cf9a2e40a4f48425e43d61b9571a53a2529372c0065f3218a73",
+   "band": 1000000.0,
+   "question": "Iran x Israel/US conflict ends by June 30?"
+  },
+  {
+   "cid": "0xa7b5b123f9fd38f83fbe19773a5d04e38208b370ca66be27b9688155e7b5c60a",
+   "band": 1000000.0,
+   "question": "Will Argentina win on 2026-07-07?"
+  },
+  {
+   "cid": "0xfbf7ab9e6b6d324ffe436bab8c7a1e10aeb8200e10c1e1dbb35d2959becebc1e",
+   "band": 1000000.0,
+   "question": "Will the Golden State Warriors win the 2026 NBA Finals?"
+  },
+  {
+   "cid": "0x4882b26f86a381553f8b5742e99c615a2ef95599c64feacba3fb826d18e745aa",
+   "band": 1000000.0,
+   "question": "Will Iraq win on 2026-06-22?"
+  },
+  {
+   "cid": "0x4f3421fb2daf5cca7430ed8d8132463963081572d75434393a1808fdb8829fe8",
+   "band": 1000000.0,
+   "question": "Will Portugal win the 2026 FIFA World Cup?"
+  },
+  {
+   "cid": "0xa0b56d7e621c7cbcfa47fe1a9c24f3409e189180fd6bda55b7a8113129839afc",
+   "band": 1000000.0,
+   "question": "Will China invade Taiwan by June 30, 2026?"
+  },
+  {
+   "cid": "0x8e7a03cb1970e2ad6533b01892403516b6b3f5b5fa90ed7d104c28b27e40ba00",
+   "band": 1000000.0,
+   "question": "MicroStrategy sells any Bitcoin by June 30, 2026?"
+  },
+  {
+   "cid": "0x2f204628fdab76ab18a96c8b05ae7a13a3ff74b0047e63c22668c3ed28e7822b",
+   "band": 1000000.0,
+   "question": "Argentina vs. Switzerland: O/U 2.5"
+  },
+  {
+   "cid": "0x97d575b72f12355f393ac5dfd2258ba24c06fdbe5355451b8d59256dfc3748e6",
+   "band": 1000000.0,
+   "question": "Will Portugal vs. Spain end in a draw?"
+  },
+  {
+   "cid": "0xe690620297dfea974d20df84b4cf90460e46a26ec864353482717b90509a3c0b",
+   "band": 1000000.0,
+   "question": "Will Germany win on 2026-06-25?"
+  },
+  {
+   "cid": "0xa526b8d2898ec27db4a6c096b6e5f2a5829305a77d738cf740389f10d5c585be",
+   "band": 1000000.0,
+   "question": "Belgium vs. IR Iran: O/U 2.5"
+  },
+  {
+   "cid": "0xb81d9a63be774f9c3db1b96af4d0e869128643a29c6eb922c0d8a20137880120",
+   "band": 1000000.0,
+   "question": "Will Argentina win on 2026-07-03?"
+  },
+  {
+   "cid": "0xa49fc89bfb87bb302bfc43567709850565161bdaed5bc506bff4b85fd3c5c2ee",
+   "band": 1000000.0,
+   "question": "Will the Phoenix Suns win the 2026 NBA Finals?"
+  },
+  {
+   "cid": "0x26c84897f375ef75367a1fea2bcf3a1601950962c9424f8635b966cc5d9ff4ba",
+   "band": 1000000.0,
+   "question": "Will DR Congo win on 2026-06-27?"
+  },
+  {
+   "cid": "0xa71f817655a1e3388855598499fbe5dbb1f7904a376b7a792869b19279365dc1",
+   "band": 1000000.0,
+   "question": "Portugal vs. DR Congo: O/U 2.5"
+  },
+  {
+   "cid": "0x1671cdf5bcf8748efcee39c259d1d9fe92f811bc7c0016d4de111ff9e505e502",
+   "band": 1000000.0,
+   "question": "Will Russia test a nuclear weapon by June 30 2026?"
+  },
+  {
+   "cid": "0x6e86fc1b3d5ebabc61316fa5543b7b88338cfafa76e38183aaf654b425fbd648",
+   "band": 1000000.0,
+   "question": "Spread: England (-1.5)"
+  },
+  {
+   "cid": "0x83d646ac5646bf847f2dc0ce9c18c4d8909bbb7b050b31075afb9b67d3802b33",
+   "band": 1000000.0,
+   "question": "United States vs. Belgium: Team to Advance"
+  },
+  {
+   "cid": "0x1dd1595fb6b528bd285ea3af2e8a80a5b6a07f6eefd23b280a525652084e676c",
+   "band": 1000000.0,
+   "question": "Argentina vs. Austria: O/U 2.5"
+  },
+  {
+   "cid": "0xc6f7e4a015ec643eb49c749da19553a2257add76278a252805a12dfa85103269",
+   "band": 1000000.0,
+   "question": "Will Sweden win on 2026-06-14?"
+  },
+  {
+   "cid": "0x652a7e27819c8aa682f1013295dd637c000133862850d96143e48a1815b94d38",
+   "band": 1000000.0,
+   "question": "Will Croatia win on 2026-06-23?"
+  },
+  {
+   "cid": "0x81b06cb917c9a2aabc67a7765bc3c640e88a699bbf451b29915049c0766cde04",
+   "band": 1000000.0,
+   "question": "US x Iran ceasefire by June 30?"
+  },
+  {
+   "cid": "0xebb200cb08bbe89c2523a345947d083a992e27cc479cf1b5568407751e026d2c",
+   "band": 1000000.0,
+   "question": "Will Belgium win on 2026-06-21?"
+  },
+  {
+   "cid": "0x4d39d238893ea8f7e0f4d53822a594129b9a98a1fc18744dab57351742e6a702",
+   "band": 1000000.0,
+   "question": "Will Argentina vs. Egypt end in a draw?"
+  },
+  {
+   "cid": "0xb361c29b5481164886627cb175ed76792df30902e66ec329c0a3853f807fe8e9",
+   "band": 1000000.0,
+   "question": "Will England win on 2026-06-17?"
+  }
+ ],
+ "classified": {
+  "sparse": 150,
+  "frequent": 3116,
+  "selective": 1123,
+  "too_few": 290,
+  "error": 1
+ },
+ "groups": {
+  "frequent": [
+   {
+    "wallet": "0xcf3a757bedfc4567bbfb6ec784f1bdd725f5fbfd",
+    "buys_30d": 48,
+    "buys_90d": 48,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x4a073859013270247c8002e1e17999e04383de1b",
+    "buys_30d": 17,
+    "buys_90d": 500,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xed599e36d03534bef3d9c47387059b0af1237ac3",
+    "buys_30d": 317,
+    "buys_90d": 338,
+    "trades": 339,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x07055b7915931e3f308bac105f58e2edda986f2f",
+    "buys_30d": 251,
+    "buys_90d": 793,
+    "trades": 868,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x9bd2ece067caa5cff23a27214c48623e0383506d",
+    "buys_30d": 374,
+    "buys_90d": 382,
+    "trades": 484,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xf4406246b7dcf70eaa9d6650fb3d6b7c0df47ab4",
+    "buys_30d": 265,
+    "buys_90d": 512,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xc92e6fffe10db24ea09243aba5838bc7a0928174",
+    "buys_30d": 14,
+    "buys_90d": 130,
+    "trades": 178,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xff1d6fb2277b8826bc8cecfdbb6ada1056a03dfc",
+    "buys_30d": 194,
+    "buys_90d": 194,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xaa57cd0782fb4583206ce547379e6442db61a128",
+    "buys_30d": 190,
+    "buys_90d": 190,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x3f3e4b7f9624f51c5d50f56ac0d0bfa6f9e97bef",
+    "buys_30d": 58,
+    "buys_90d": 187,
+    "trades": 324,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x6203a0791b01c7c4cfe69cf74eac422884fc6280",
+    "buys_30d": 24,
+    "buys_90d": 75,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x72abe52af7032fa1c7078a16ddb341c94fe9e1ee",
+    "buys_30d": 206,
+    "buys_90d": 206,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x8c35d206d9c2d446c84e86a48b91d2a5ea2ece11",
+    "buys_30d": 32,
+    "buys_90d": 82,
+    "trades": 135,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xcf37bbb2c1687b70ea553b6fe05f740251d7993f",
+    "buys_30d": 102,
+    "buys_90d": 102,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x5c765f1c7975f741c692f472072d66043aa27409",
+    "buys_30d": 33,
+    "buys_90d": 281,
+    "trades": 445,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xb8ac63f5152081649e84e4b2273f03e3424e2995",
+    "buys_30d": 441,
+    "buys_90d": 441,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x47875f5d2234a8d667bb06b4029de77a8250db20",
+    "buys_30d": 191,
+    "buys_90d": 191,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x33fbaa905cc6bac96cbc433209ec0dce40d0897c",
+    "buys_30d": 104,
+    "buys_90d": 348,
+    "trades": 805,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x0dc5a561af3e3d14bec8b8fc7ef2c0776252a303",
+    "buys_30d": 26,
+    "buys_90d": 164,
+    "trades": 306,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x4a3aeeb7e8fe556a8c2d319348ef8e50b203af71",
+    "buys_30d": 319,
+    "buys_90d": 319,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x98b81478367efb098bdca9193cabd5094fb34ab2",
+    "buys_30d": 16,
+    "buys_90d": 200,
+    "trades": 559,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x65d492ccdc174eea97244849e5fcad732e1d0ce6",
+    "buys_30d": 120,
+    "buys_90d": 506,
+    "trades": 522,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x3abac874823efe9bc6918949aaa9ecabc18074c0",
+    "buys_30d": 11,
+    "buys_90d": 133,
+    "trades": 253,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xabdd4677e264998a6caef5adf3881549cf38cb3f",
+    "buys_30d": 48,
+    "buys_90d": 181,
+    "trades": 192,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x5356a6e379734c62f22b864fb0c6a1d2b3fa5f32",
+    "buys_30d": 232,
+    "buys_90d": 658,
+    "trades": 678,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xf31b940ec653f80696334136f3445ae2fb2ab7ae",
+    "buys_30d": 224,
+    "buys_90d": 666,
+    "trades": 691,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x3e9e4543670b97e40139f1dd4d23ba1fe791b594",
+    "buys_30d": 13,
+    "buys_90d": 75,
+    "trades": 112,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x94889b1ef66b48e7f4d55c841224d07c146f6b27",
+    "buys_30d": 100,
+    "buys_90d": 156,
+    "trades": 991,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xe6045f0fd18c0c661d4cb4de5b7696cc499a0fb6",
+    "buys_30d": 19,
+    "buys_90d": 110,
+    "trades": 260,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x07323f1acb77f3c8e22d4d679ef618ba98ced9c3",
+    "buys_30d": 137,
+    "buys_90d": 137,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x61e0cb043c88e34d1502139a682c75d286284b62",
+    "buys_30d": 38,
+    "buys_90d": 144,
+    "trades": 313,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xa76ecc1e0fb35b8583ac329df3cf5b603387dcb6",
+    "buys_30d": 139,
+    "buys_90d": 234,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xf387570fc0f9d8fa1f07ce798fc98ff909a361c0",
+    "buys_30d": 69,
+    "buys_90d": 74,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x2b528b26a9c27539d8b0461082f8f1b9d2375dc6",
+    "buys_30d": 351,
+    "buys_90d": 948,
+    "trades": 985,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xe72b5161380c12a3da4ea6d53be7b9e85e693c9c",
+    "buys_30d": 132,
+    "buys_90d": 380,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x2288784f9c6bff618cf4234b9e18553b230c9d22",
+    "buys_30d": 772,
+    "buys_90d": 984,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xd8e1d87a2809e2efe044c3ecb7f24a837799331c",
+    "buys_30d": 31,
+    "buys_90d": 121,
+    "trades": 261,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x962cf6655629d7d931776f97bafd8225a1591866",
+    "buys_30d": 99,
+    "buys_90d": 176,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x451226f31d9ba955fabfdb1cfecfee440fb71857",
+    "buys_30d": 490,
+    "buys_90d": 734,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xf67085afc2e99bdd8fc3b67d9312b92a05d4e778",
+    "buys_30d": 45,
+    "buys_90d": 108,
+    "trades": 223,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x7be5602c32426ad785094317ede035221de3a53b",
+    "buys_30d": 587,
+    "buys_90d": 895,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x1cdd071bb612de6d66d0c882b676c663697de595",
+    "buys_30d": 114,
+    "buys_90d": 114,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xcbf920a604c503bcdeb39f1165b95433c4ee7f7f",
+    "buys_30d": 16,
+    "buys_90d": 77,
+    "trades": 157,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x0257015350ca626adbc5a5c0394ad4e482888a02",
+    "buys_30d": 254,
+    "buys_90d": 420,
+    "trades": 948,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x6782bc54bc0470318db2f05572597f41bcbbb550",
+    "buys_30d": 18,
+    "buys_90d": 75,
+    "trades": 102,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x2ecb34e1cb95b3c8d9d3e2905668d3eee03a7645",
+    "buys_30d": 286,
+    "buys_90d": 286,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x97714c2f2737c359f1068b47b895dac84447db67",
+    "buys_30d": 472,
+    "buys_90d": 472,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x7c5081ebbd1e6291cdfa304b9d9061694e8f66b2",
+    "buys_30d": 400,
+    "buys_90d": 569,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x9aa07a637500769bc35eee5ff31497d8c0db8779",
+    "buys_30d": 186,
+    "buys_90d": 433,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x310070742fbff4894d32a97d04c55837c5404179",
+    "buys_30d": 96,
+    "buys_90d": 123,
+    "trades": 872,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xacaff47fe67229179b3e7409ba3de84d153c1f47",
+    "buys_30d": 51,
+    "buys_90d": 143,
+    "trades": 471,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xe5c4ffddf5eb13d2616ecb3411537124b08c8a72",
+    "buys_30d": 342,
+    "buys_90d": 342,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x8bfa1eedbf96cc9ca03fccf627909d148692a8de",
+    "buys_30d": 84,
+    "buys_90d": 311,
+    "trades": 672,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x565696f11e34c119f06d840aedd8253245aedc08",
+    "buys_30d": 271,
+    "buys_90d": 309,
+    "trades": 811,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xafb358f3323fd6e9d95cc1369fcfd5987510c5e5",
+    "buys_30d": 8,
+    "buys_90d": 158,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x8ff2bbaace2cd050b7f7fce29bb95a058d9454b8",
+    "buys_30d": 39,
+    "buys_90d": 612,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x082a7925e91318a566faead2e59ddfc8bd86cc8a",
+    "buys_30d": 37,
+    "buys_90d": 360,
+    "trades": 969,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x6790790e4fc8168ffcb16c8215bbcd77beab07cf",
+    "buys_30d": 436,
+    "buys_90d": 486,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x49d562e64dae238e39043ea7642acd5213928cf1",
+    "buys_30d": 963,
+    "buys_90d": 963,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x3e9770ed138a65a99b34ba1448aea53598458908",
+    "buys_30d": 264,
+    "buys_90d": 298,
+    "trades": 681,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xe84f8e41ad5ad780e24f7bcbdca23b5f615ab777",
+    "buys_30d": 191,
+    "buys_90d": 191,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xaf20b20cff7fe01e1ae741179954fe2f55d08990",
+    "buys_30d": 753,
+    "buys_90d": 753,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x27eb7b85c51a254a81fcdb3e43033bfce90ab0c4",
+    "buys_30d": 443,
+    "buys_90d": 443,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x59522ea5aa1996169b81179c9945e3206e49db2f",
+    "buys_30d": 75,
+    "buys_90d": 186,
+    "trades": 489,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x07225f5c171656346e7545d20f3f4ff0fedd7518",
+    "buys_30d": 185,
+    "buys_90d": 610,
+    "trades": 641,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xcf8c0559d5b2475c2d4b0661ab8133da3c665830",
+    "buys_30d": 60,
+    "buys_90d": 184,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xb36c4eb24176235b909d96d0a20aaed02ac8da2f",
+    "buys_30d": 332,
+    "buys_90d": 499,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xd68eba02e662023b16e4d134c1fcd8875c1e8048",
+    "buys_30d": 436,
+    "buys_90d": 436,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x9219dd565d7521e95f273b7eea68dbb08d40027c",
+    "buys_30d": 380,
+    "buys_90d": 380,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xb3039e6306e818fa093de2e3c2d761a0d823c89e",
+    "buys_30d": 211,
+    "buys_90d": 677,
+    "trades": 699,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x451ebf20c0ae3ff07e03da41af470d10a16111c5",
+    "buys_30d": 36,
+    "buys_90d": 106,
+    "trades": 134,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x559e377c4b47ef1647c06a4936ec90de925b838a",
+    "buys_30d": 443,
+    "buys_90d": 443,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x5c55b689bdf8c031fab24bbe1b57c6e289ac4164",
+    "buys_30d": 861,
+    "buys_90d": 861,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x7ba20ba62c6d1debf0ed8ae0db48b3cc8a4a5a0a",
+    "buys_30d": 336,
+    "buys_90d": 336,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xbe6b570666a369433781067d9cd7f2f3f34441aa",
+    "buys_30d": 200,
+    "buys_90d": 200,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xfb34cac3cb5eb80fd4be86ce12c559fedf48ecc0",
+    "buys_30d": 18,
+    "buys_90d": 22,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x3e69375f65f77f2923b5fa3b1f7c9e1367b77a30",
+    "buys_30d": 671,
+    "buys_90d": 671,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xdc3cf2d73e231771ba17a17e4065fc00ccf07a9f",
+    "buys_30d": 110,
+    "buys_90d": 525,
+    "trades": 542,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x9f52071b6fdcd304bf00b155336873a7005fb086",
+    "buys_30d": 27,
+    "buys_90d": 190,
+    "trades": 391,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xd4846896594fab4b40bbda95143ecb68b5e07055",
+    "buys_30d": 45,
+    "buys_90d": 56,
+    "trades": 145,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x8e8a6a1c127f5f29c87e22553f1ffc9d0662b9f8",
+    "buys_30d": 17,
+    "buys_90d": 311,
+    "trades": 496,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xb8bd14f0a25a14153749f718d87fb646a102fc74",
+    "buys_30d": 41,
+    "buys_90d": 342,
+    "trades": 554,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x785e0358dc3b0f2dff35ddd8e066f6127bb957c0",
+    "buys_30d": 204,
+    "buys_90d": 631,
+    "trades": 651,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x5231c443e599ce86d615eb23f2e961652a7d4907",
+    "buys_30d": 15,
+    "buys_90d": 103,
+    "trades": 142,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x50a74b6f933c1d0297cfdab11841693d177d5c13",
+    "buys_30d": 10,
+    "buys_90d": 19,
+    "trades": 28,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x4cb2bbf0a049470bf046a120c0386f835cad4db3",
+    "buys_30d": 20,
+    "buys_90d": 59,
+    "trades": 67,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xe32e871dc7a33fed1ea19b3eb46e7f976bcefd1f",
+    "buys_30d": 111,
+    "buys_90d": 111,
+    "trades": 154,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xbb99f85a8d885131f23ab796ed710caaa2485ca3",
+    "buys_30d": 71,
+    "buys_90d": 145,
+    "trades": 345,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x221953b90c4f1acd3aaf893a2b040ee8c65c44e2",
+    "buys_30d": 129,
+    "buys_90d": 289,
+    "trades": 645,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xff42cc3d10b3cb0566292de1c5af03e1c3f501a4",
+    "buys_30d": 62,
+    "buys_90d": 62,
+    "trades": 125,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x1b8cf620a4127b1b114e4326b81bd60643d220e4",
+    "buys_30d": 88,
+    "buys_90d": 178,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x0b90bc22518d083d665efbfe2c211774853e672e",
+    "buys_30d": 14,
+    "buys_90d": 359,
+    "trades": 511,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xcfeac35ce3bf82a8cd667a1b99c6545bcf40182a",
+    "buys_30d": 303,
+    "buys_90d": 586,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x9b4e92b4d973ba2763f55065832f0d4015b1150c",
+    "buys_30d": 653,
+    "buys_90d": 653,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x0f6f74a2dce3d9804c0eddee9d2706062275d78b",
+    "buys_30d": 57,
+    "buys_90d": 458,
+    "trades": 933,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x458869373de7d0ec3d5fa1adcf2a68a5ddbec406",
+    "buys_30d": 8,
+    "buys_90d": 28,
+    "trades": 82,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x4d0e9b029700163625c551a0073636f3dc5ec45b",
+    "buys_30d": 140,
+    "buys_90d": 184,
+    "trades": 962,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x42b316bd04bc6ed3d075ebf174e861fb883dc57e",
+    "buys_30d": 9,
+    "buys_90d": 219,
+    "trades": 426,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xd908f1992487c4de0e9134c484cd1afc33029a3b",
+    "buys_30d": 56,
+    "buys_90d": 56,
+    "trades": 100,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x7fa6c6474e20e9f6ce388847be32611667e216f9",
+    "buys_30d": 22,
+    "buys_90d": 76,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x4402f0618ffe4acdcc7741beb4c5f83a243e11b8",
+    "buys_30d": 393,
+    "buys_90d": 393,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xef82b8cbfca96d14de28bd3a79bf05c5f51fbb0f",
+    "buys_30d": 9,
+    "buys_90d": 78,
+    "trades": 158,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x05fa6956d9806085b21e651dc1dcaddb8f137f19",
+    "buys_30d": 31,
+    "buys_90d": 96,
+    "trades": 100,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xa34fe3922730e66f3c6df41a1d4679d932491cfa",
+    "buys_30d": 178,
+    "buys_90d": 190,
+    "trades": 294,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xbd14da5083afdef8518339c2c1b7b19a491576b4",
+    "buys_30d": 344,
+    "buys_90d": 344,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xb597b674c0dfdb6bcce8d58b4b1d204e6381ad46",
+    "buys_30d": 520,
+    "buys_90d": 704,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xccbb3b31d034543c0235246b45c2a0418ee9ddec",
+    "buys_30d": 596,
+    "buys_90d": 596,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x9b3f000102cdd6c22d4b676f222728538bcc2e7c",
+    "buys_30d": 52,
+    "buys_90d": 52,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x6b567b1778a437250df33e59cbeeb7473d99159f",
+    "buys_30d": 193,
+    "buys_90d": 650,
+    "trades": 667,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x405876e6b5dea06e099a25ec0e9eeeef506349d2",
+    "buys_30d": 13,
+    "buys_90d": 85,
+    "trades": 234,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x8a3f789c0cf35edb58b9c1fefbf2864bae901f9d",
+    "buys_30d": 890,
+    "buys_90d": 890,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x907384df254bc348f470ed7b6156bc9ce9c8402e",
+    "buys_30d": 9,
+    "buys_90d": 23,
+    "trades": 42,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x3b241eb14ec150df698a6d5a0deeecb2ecc311ef",
+    "buys_30d": 215,
+    "buys_90d": 215,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xbfa398c090fe85a7f601ad934d5fe4ad731c3cb7",
+    "buys_30d": 169,
+    "buys_90d": 169,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x5089b072e429c2e5d11e76c86098d169238cc2f2",
+    "buys_30d": 286,
+    "buys_90d": 352,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xa868e59a21a4c304c2573735fe87e19dc11f2038",
+    "buys_30d": 45,
+    "buys_90d": 45,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x2fb9a2064f1cc0ea5567552619819c1d3bdec9d4",
+    "buys_30d": 41,
+    "buys_90d": 461,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xae993133ac4546e78b615719460f838c10bdb7e8",
+    "buys_30d": 305,
+    "buys_90d": 387,
+    "trades": 810,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x436b1071f6a8d7ae51f6b63246397282fb46bda3",
+    "buys_30d": 30,
+    "buys_90d": 116,
+    "trades": 239,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x6c121ea3f9154a6800755545ff0a7205245256d7",
+    "buys_30d": 373,
+    "buys_90d": 387,
+    "trades": 768,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x27ce684cb8de37972d5a0ad0c89cc0523c13d0ef",
+    "buys_30d": 309,
+    "buys_90d": 707,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x158f73102a9cc0f2db84246cb6d7f4d3f4202b05",
+    "buys_30d": 952,
+    "buys_90d": 952,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xf8db958026a23e539ec67836d4420298958b2a35",
+    "buys_30d": 31,
+    "buys_90d": 637,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xa383e8937ce63067bf7ce06dc44181ef9080a2f0",
+    "buys_30d": 450,
+    "buys_90d": 450,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x4d1de0d8bf27bbb1f34545e974cfb794ac8e01ac",
+    "buys_30d": 475,
+    "buys_90d": 475,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xcae2e2ce07d5d08c2f44209518a492141cc5da48",
+    "buys_30d": 511,
+    "buys_90d": 511,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xa78ed5260b5a38f03d9e8e59481f673748e27cbc",
+    "buys_30d": 405,
+    "buys_90d": 632,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x987b6dfea5fa91271c72a44206c62ab5d87c3d00",
+    "buys_30d": 76,
+    "buys_90d": 426,
+    "trades": 771,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x852eaa709e9e502489b3c3f6c967493342a9ca77",
+    "buys_30d": 167,
+    "buys_90d": 173,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xffe7bc0ace62133defaab3133f436034115e471d",
+    "buys_30d": 47,
+    "buys_90d": 644,
+    "trades": 698,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x93bea0dc454da4990cd1e5abd238831a0a03af87",
+    "buys_30d": 64,
+    "buys_90d": 260,
+    "trades": 438,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x0be34ffafafa7f3a2998b15b05e04d36cb2835fe",
+    "buys_30d": 390,
+    "buys_90d": 390,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xcae67f88407631a4b69e51e643421a265022d92e",
+    "buys_30d": 22,
+    "buys_90d": 22,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xa047582335186507d864064411f66492eb454ffa",
+    "buys_30d": 398,
+    "buys_90d": 398,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x10ef48324b3ebc06d9137794c70285e8e37a7d7b",
+    "buys_30d": 70,
+    "buys_90d": 70,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x2d97527aff33140f367a5a8fa4c58b555309252a",
+    "buys_30d": 213,
+    "buys_90d": 669,
+    "trades": 684,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x0cb9ce1be2d9cd3cd498e8ee9b6ad805de78b221",
+    "buys_30d": 474,
+    "buys_90d": 980,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xec6f94504229c9ada9496ae68cd16bea274b40f2",
+    "buys_30d": 104,
+    "buys_90d": 162,
+    "trades": 299,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x02b6bc4f22fe74202794be043e2176e506a3e113",
+    "buys_30d": 562,
+    "buys_90d": 562,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xc73ac07aba05c2d9055ecac4ec25f480d90607f3",
+    "buys_30d": 8,
+    "buys_90d": 61,
+    "trades": 141,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xfd5a25def796ca377e5b22fb7b60e3007d40aa7a",
+    "buys_30d": 151,
+    "buys_90d": 151,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x94d22bf045f9a1d1cb37a40a4a8c86fd8917cfbd",
+    "buys_30d": 64,
+    "buys_90d": 64,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x1a441b376f9e82eb9643a449b8b74d1b84e25e33",
+    "buys_30d": 31,
+    "buys_90d": 146,
+    "trades": 635,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x23262a745c55b2ec5dd75252e2d48135c4f26426",
+    "buys_30d": 934,
+    "buys_90d": 934,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x55b82a7c96b5bd47e18d9d54cdf392621445dc99",
+    "buys_30d": 103,
+    "buys_90d": 273,
+    "trades": 294,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x320e72c247e92b3706bf90ad9609de7cf4fa5772",
+    "buys_30d": 17,
+    "buys_90d": 148,
+    "trades": 228,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x1b39225998a5616d93222697caf95787f2badaa9",
+    "buys_30d": 473,
+    "buys_90d": 473,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xf49e3d8d4f6f6bf3cab01f2410b3075e53790d5b",
+    "buys_30d": 116,
+    "buys_90d": 422,
+    "trades": 441,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0x71b0fd94f734ca916c90ae4b2dae38cb8a379ef4",
+    "buys_30d": 90,
+    "buys_90d": 153,
+    "trades": 717,
+    "cut": false,
+    "band": "frequent"
+   },
+   {
+    "wallet": "0xbe60cf62f6d3f78ce67d248a5a775ef57fc6c2f7",
+    "buys_30d": 116,
+    "buys_90d": 424,
+    "trades": 1000,
+    "cut": true,
+    "band": "frequent"
+   }
+  ],
+  "selective": [
+   {
+    "wallet": "0x6c7c19f0567e03bd3f5f77352f77e3f9646d96dd",
+    "buys_30d": 5,
+    "buys_90d": 50,
+    "trades": 100,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xdb901a6bfb946b4c66b5fe399603e3924d2fe599",
+    "buys_30d": 0,
+    "buys_90d": 40,
+    "trades": 56,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x8e5c7fb53d67c2efc650b47fb8dfcc8bce71de2d",
+    "buys_30d": 0,
+    "buys_90d": 111,
+    "trades": 165,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xc8201e7fe1b036a670d76aef88e8cc56cea9f4d2",
+    "buys_30d": 7,
+    "buys_90d": 33,
+    "trades": 348,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xaac4a58ce84ce56719bbd5d1fa397278bbab4515",
+    "buys_30d": 0,
+    "buys_90d": 13,
+    "trades": 18,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x46a3cce76e0438bd1f5c0a23338649ed50a2eb21",
+    "buys_30d": 6,
+    "buys_90d": 58,
+    "trades": 84,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x129fe5be4981550fce49970de2e50d1885338153",
+    "buys_30d": 0,
+    "buys_90d": 24,
+    "trades": 51,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x5933d0aa7b59571691a8b01248f197dadd0b8c12",
+    "buys_30d": 0,
+    "buys_90d": 41,
+    "trades": 73,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x83b9886d3cb9b3b0fb47e3e63992b2ead3141def",
+    "buys_30d": 0,
+    "buys_90d": 30,
+    "trades": 147,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x38218fbaed474136da25b5e758225d2ff1900ad3",
+    "buys_30d": 4,
+    "buys_90d": 10,
+    "trades": 29,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xc62df8bbfb9281176a4c935bb996715fefff6f2e",
+    "buys_30d": 0,
+    "buys_90d": 61,
+    "trades": 96,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x12974068263fbab8ecdc9120cd8ee6423b9dbd13",
+    "buys_30d": 6,
+    "buys_90d": 244,
+    "trades": 399,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x60ae6173b847349aa3cdf057868bf7036892df06",
+    "buys_30d": 0,
+    "buys_90d": 8,
+    "trades": 10,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xa7383ae099f5d38177ac98b47f6e921fbb96abe6",
+    "buys_30d": 6,
+    "buys_90d": 33,
+    "trades": 37,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x62e88161cbfa3a9d05c0a985f7c24f6d0ecc129a",
+    "buys_30d": 0,
+    "buys_90d": 69,
+    "trades": 125,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xaeb036a14193873b54613eb5dcd695435d93e10c",
+    "buys_30d": 0,
+    "buys_90d": 12,
+    "trades": 62,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x7153dcdef8dba9f900bb9ecd4ced11d316dfe87f",
+    "buys_30d": 1,
+    "buys_90d": 76,
+    "trades": 126,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xee51f95f39f647b4deb73b107debb8fcecdf6e85",
+    "buys_30d": 0,
+    "buys_90d": 13,
+    "trades": 17,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xd69792135c13c187bf1d1dd65235e8121bb3def2",
+    "buys_30d": 0,
+    "buys_90d": 120,
+    "trades": 211,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x4520aac15d53d7935662c6c470d8794625f09182",
+    "buys_30d": 5,
+    "buys_90d": 180,
+    "trades": 406,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb90cd3ac28914113e0b15e87e2eb07899d4a775a",
+    "buys_30d": 0,
+    "buys_90d": 35,
+    "trades": 43,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb04d45daea2c82e21c1db1cc1cc27ff7d04890fd",
+    "buys_30d": 0,
+    "buys_90d": 113,
+    "trades": 273,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x6ddb4496d1395e58be2fc7e3ab309d6586a13f22",
+    "buys_30d": 0,
+    "buys_90d": 13,
+    "trades": 14,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x07f8f6919a59401edca8a54334cefeb77dde242a",
+    "buys_30d": 0,
+    "buys_90d": 46,
+    "trades": 87,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x22958a92987fe818aba5cfa0d03d34d56b9817e6",
+    "buys_30d": 0,
+    "buys_90d": 217,
+    "trades": 384,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xba61cee6254e5c9dc7a054ace143f0c0db13beed",
+    "buys_30d": 0,
+    "buys_90d": 17,
+    "trades": 22,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x7d786df5f84ae6816f08ac304262bbc7be4db68f",
+    "buys_30d": 0,
+    "buys_90d": 99,
+    "trades": 115,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x413fa4676c85a60bec92dff14d26a14dd3c91747",
+    "buys_30d": 0,
+    "buys_90d": 32,
+    "trades": 44,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xf217e21e7ca632d076227757e4657fafeba186d0",
+    "buys_30d": 4,
+    "buys_90d": 11,
+    "trades": 18,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb35c8c1cd9b1cc8cd8c19febb82107719ebdf2c1",
+    "buys_30d": 0,
+    "buys_90d": 66,
+    "trades": 108,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xc892fae6baaad9b51e0c06fed0c367b484fad2b4",
+    "buys_30d": 4,
+    "buys_90d": 19,
+    "trades": 22,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xe0329fce36221d045b77a1f41ce6138f7f57f879",
+    "buys_30d": 0,
+    "buys_90d": 9,
+    "trades": 14,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x58e9d54a05b3741567b648c617456649d2c24ff3",
+    "buys_30d": 0,
+    "buys_90d": 11,
+    "trades": 45,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xacc537720f8dfd2e5437b869229cb9986dd1efd9",
+    "buys_30d": 0,
+    "buys_90d": 177,
+    "trades": 349,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x23ec3de9e39d6ef6a1247daa0fb9d8216c86c434",
+    "buys_30d": 7,
+    "buys_90d": 22,
+    "trades": 65,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x5c59d8d45268291908bb78114a57294b75f81052",
+    "buys_30d": 1,
+    "buys_90d": 21,
+    "trades": 40,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x68a13ada13df336194dd5732e54a10d0c469e0d3",
+    "buys_30d": 0,
+    "buys_90d": 52,
+    "trades": 65,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x30509a7f5665b8e9653e15fa33daeed02ec7544c",
+    "buys_30d": 0,
+    "buys_90d": 53,
+    "trades": 81,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xd381b9acee94260c31c7f84c156907528d1e7459",
+    "buys_30d": 1,
+    "buys_90d": 20,
+    "trades": 28,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xd6cfd07b339d69c8bec2957f76c2b4f0b4ed0425",
+    "buys_30d": 0,
+    "buys_90d": 85,
+    "trades": 150,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xaf800c6226ae94932c31e3d3c52a0e3b5129894a",
+    "buys_30d": 0,
+    "buys_90d": 60,
+    "trades": 63,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb275f9dbc313bfd777287ecaea994b35ad422e2b",
+    "buys_30d": 0,
+    "buys_90d": 104,
+    "trades": 129,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x6958cba30d23c6c7c86a9d0585e783f4e87fcc0f",
+    "buys_30d": 0,
+    "buys_90d": 47,
+    "trades": 126,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb78a54f0e9719f41036d1fcca9f068bed4a061c4",
+    "buys_30d": 0,
+    "buys_90d": 269,
+    "trades": 795,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x34eca8de11ebbab6d3121ba97a41942eb5777483",
+    "buys_30d": 0,
+    "buys_90d": 82,
+    "trades": 226,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xc1fa07b72cb6216e05533717e52fba784a32e150",
+    "buys_30d": 0,
+    "buys_90d": 74,
+    "trades": 106,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xeacbadb4e77a99808b9b152bbfcd064ef203ffbc",
+    "buys_30d": 6,
+    "buys_90d": 60,
+    "trades": 127,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xa32db54ed36a5dc07fc6bd1c192a60f8703d777f",
+    "buys_30d": 7,
+    "buys_90d": 50,
+    "trades": 132,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x6b33f1396a7a2e9f3ee4e254f7f08d5f709df191",
+    "buys_30d": 0,
+    "buys_90d": 25,
+    "trades": 33,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x0fb8c13b96970a42d4a83172041c93a3ad9f5135",
+    "buys_30d": 0,
+    "buys_90d": 227,
+    "trades": 460,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xa5e73f9bc86b7dd2e72a747821dd68ce08ff5493",
+    "buys_30d": 0,
+    "buys_90d": 44,
+    "trades": 113,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb4df99d796c35d47ab7663cea83ad97007eb5d3e",
+    "buys_30d": 0,
+    "buys_90d": 9,
+    "trades": 12,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xffcd6e358d84c3180ac385e94ebaa77f0a2cf405",
+    "buys_30d": 0,
+    "buys_90d": 10,
+    "trades": 12,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x4df954668bdf8d6e6033930b1b9f672e3e26f1d8",
+    "buys_30d": 1,
+    "buys_90d": 23,
+    "trades": 29,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xd1fe649e6bf549404e984948a4adaa98033bd91c",
+    "buys_30d": 1,
+    "buys_90d": 22,
+    "trades": 43,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xba4248db13e42d4c5aae9900faa19c7a8c3427d2",
+    "buys_30d": 0,
+    "buys_90d": 150,
+    "trades": 313,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x0c13c50cb0b0b5e826bd9d34adf04cf151c91a68",
+    "buys_30d": 0,
+    "buys_90d": 32,
+    "trades": 38,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xf90ce2df87d9f9b0e71ae44785bbb3211d830850",
+    "buys_30d": 0,
+    "buys_90d": 103,
+    "trades": 193,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x84606b8b546cc987e372bb9b639b6371234cd023",
+    "buys_30d": 0,
+    "buys_90d": 290,
+    "trades": 436,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x21e744a787b2cb6501ce5309ff1753e28d8ebfeb",
+    "buys_30d": 0,
+    "buys_90d": 325,
+    "trades": 694,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x207c6848d0822cd9f189bc5d2495633a8557f5b0",
+    "buys_30d": 3,
+    "buys_90d": 15,
+    "trades": 29,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x9aa84cd335765b054cbf61916363d6e731d25e72",
+    "buys_30d": 0,
+    "buys_90d": 86,
+    "trades": 427,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x3381cc67519ace3f1edb75d47c92778d258643e8",
+    "buys_30d": 0,
+    "buys_90d": 612,
+    "trades": 738,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xf5f84c264b527be42e4a1f7f287a16f528f18335",
+    "buys_30d": 0,
+    "buys_90d": 23,
+    "trades": 47,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xcf1d2339086426f2c0922711dc43941ada17e338",
+    "buys_30d": 0,
+    "buys_90d": 63,
+    "trades": 69,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xa1a72f3865501213662f983015a452a4a51425ed",
+    "buys_30d": 0,
+    "buys_90d": 66,
+    "trades": 100,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x70fc122c55592062b20cb93c7be3fc1650424651",
+    "buys_30d": 0,
+    "buys_90d": 26,
+    "trades": 48,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x089ef600a241ba3825f0f300e86e31f66f8e3afa",
+    "buys_30d": 0,
+    "buys_90d": 59,
+    "trades": 199,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x4711c1e143cc42153e5da4dfb87d6844009fd55a",
+    "buys_30d": 0,
+    "buys_90d": 88,
+    "trades": 122,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x6a5638040d483850f1043712c91b24dbd75dcfe8",
+    "buys_30d": 0,
+    "buys_90d": 120,
+    "trades": 155,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xf74c4ce24e05d329ae86dcb940dea3688c18434c",
+    "buys_30d": 0,
+    "buys_90d": 43,
+    "trades": 269,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x03c890d67f9256117f407fe76f2a4c55d8233d82",
+    "buys_30d": 0,
+    "buys_90d": 230,
+    "trades": 389,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xe91aaf278836499f4d2d456d849aebbcc67171f5",
+    "buys_30d": 1,
+    "buys_90d": 237,
+    "trades": 858,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x7093d4c5250447e18e7a59cf815751810f0b3431",
+    "buys_30d": 3,
+    "buys_90d": 8,
+    "trades": 15,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x9d6c46e813322e05d02102f1562a23f5c8283407",
+    "buys_30d": 0,
+    "buys_90d": 17,
+    "trades": 20,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x5b2d3550ebb5f83239afa3eb15c9de6b54184f3c",
+    "buys_30d": 2,
+    "buys_90d": 9,
+    "trades": 9,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xbe2956ee08cc298835a9539ac2f6016fe0da69f9",
+    "buys_30d": 0,
+    "buys_90d": 100,
+    "trades": 168,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb49624c4dbc5e1f85cf5b9f24dfd303e90a86f10",
+    "buys_30d": 0,
+    "buys_90d": 14,
+    "trades": 15,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x614b6bf6a59deaec1b6300bad99b951d875f780b",
+    "buys_30d": 0,
+    "buys_90d": 35,
+    "trades": 78,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x9dc5c4f2372c3d08d2f6c4c4606f6f7c75f058fb",
+    "buys_30d": 4,
+    "buys_90d": 114,
+    "trades": 215,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x3935767447c8d8130a4734d8eb0034dbeb2ac917",
+    "buys_30d": 5,
+    "buys_90d": 306,
+    "trades": 322,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x455a4ca68c03ea7fd67d94c35b1a5a1c8c08af2f",
+    "buys_30d": 1,
+    "buys_90d": 84,
+    "trades": 152,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x3e41a5ffcae20090e2a2421bf51689cc87ee9469",
+    "buys_30d": 4,
+    "buys_90d": 23,
+    "trades": 36,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xcad1e9f1d6ed95edf2937b6a83979c78fda6a7ba",
+    "buys_30d": 2,
+    "buys_90d": 24,
+    "trades": 28,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x1b9a97c5d5f78bc1d61f5ad07f0aa1eb0379166b",
+    "buys_30d": 0,
+    "buys_90d": 55,
+    "trades": 64,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xdaa4e31884dc77a8da0a081631a6b91a1008ce1b",
+    "buys_30d": 2,
+    "buys_90d": 8,
+    "trades": 8,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x07ec5aaf5dcf15dcd692205f4b5b7efcd51320ee",
+    "buys_30d": 1,
+    "buys_90d": 9,
+    "trades": 9,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xa1233ec84ae047c058ae96340246df11e4bba2e5",
+    "buys_30d": 0,
+    "buys_90d": 57,
+    "trades": 72,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x4b5b343aa5c12d4794332687261a7117a33e77f3",
+    "buys_30d": 0,
+    "buys_90d": 109,
+    "trades": 298,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x1aa115c6a04f74562c32df4857151e71d35a2bfc",
+    "buys_30d": 0,
+    "buys_90d": 25,
+    "trades": 53,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xdd985692633affb6b251c79ccbecf0f7d796e357",
+    "buys_30d": 1,
+    "buys_90d": 51,
+    "trades": 111,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xf65cf9325a9babc0a203e4721bf9b0aee59caae5",
+    "buys_30d": 0,
+    "buys_90d": 179,
+    "trades": 364,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xa363151f3a20060bfeaab345c6cfebbdec6746c8",
+    "buys_30d": 0,
+    "buys_90d": 164,
+    "trades": 546,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x4784d5ebe9968f824606c76d402366d61fb42f0c",
+    "buys_30d": 0,
+    "buys_90d": 148,
+    "trades": 271,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x560a266e9517e1a1f20455dcfd0e26c3b99808e8",
+    "buys_30d": 3,
+    "buys_90d": 10,
+    "trades": 10,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb543133e0027ea46ff027365c05da9eb5a9f410f",
+    "buys_30d": 2,
+    "buys_90d": 8,
+    "trades": 8,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x627fc9d6adf3e0f2b71e862a129eeb5d97c1595c",
+    "buys_30d": 0,
+    "buys_90d": 254,
+    "trades": 472,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x0b5918f17e33af0e3265167af4fce6961ebebe19",
+    "buys_30d": 0,
+    "buys_90d": 689,
+    "trades": 782,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x2f724efb673992679a57c847c0d5a0a9121ea8ef",
+    "buys_30d": 0,
+    "buys_90d": 87,
+    "trades": 141,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x7f2661f91450161c87e955b268df93e827dce8c4",
+    "buys_30d": 0,
+    "buys_90d": 33,
+    "trades": 55,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x197e7221bc74d2209efd73ab04e069738df0259a",
+    "buys_30d": 2,
+    "buys_90d": 79,
+    "trades": 107,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x16c851563de07837cf675a6e0aa152301b162f76",
+    "buys_30d": 0,
+    "buys_90d": 100,
+    "trades": 115,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xfd3cb80a0da4cef08d3570b9219d74b221e8df93",
+    "buys_30d": 0,
+    "buys_90d": 34,
+    "trades": 52,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x3f799dc4027d539c232b74932b1f3f4416da9290",
+    "buys_30d": 1,
+    "buys_90d": 105,
+    "trades": 182,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x3cfbc5d223e0d253c87b5b9a3f47b9bc95458f6f",
+    "buys_30d": 1,
+    "buys_90d": 81,
+    "trades": 144,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xd2abb3b0fdff2d9a95a4edf4988ab4561d568432",
+    "buys_30d": 0,
+    "buys_90d": 151,
+    "trades": 403,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x46549df5b8b810f10b4f0ae658d3b50dadd3f29f",
+    "buys_30d": 3,
+    "buys_90d": 89,
+    "trades": 131,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x61d9b1f5582134ca35dc8f23b1eabb1136a16015",
+    "buys_30d": 0,
+    "buys_90d": 50,
+    "trades": 95,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xe37ab1dd6fff5cea8dac4597a5ac088536cbdda4",
+    "buys_30d": 0,
+    "buys_90d": 280,
+    "trades": 538,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xd15bb6898f8e2bfdd7ef6b62f87612fea2540906",
+    "buys_30d": 0,
+    "buys_90d": 89,
+    "trades": 271,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x86e5dc3c49ef9183c7e497797d86fc1168015d45",
+    "buys_30d": 0,
+    "buys_90d": 34,
+    "trades": 40,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x2918b0129e7ef4e47dfb53ad52a5fd503bba3e5e",
+    "buys_30d": 0,
+    "buys_90d": 27,
+    "trades": 106,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xc78913397823e025ee6fa3dc6edd4e6ed2677972",
+    "buys_30d": 2,
+    "buys_90d": 60,
+    "trades": 128,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xee4ff978e3fd593aaec804a3289940bd1d26a453",
+    "buys_30d": 0,
+    "buys_90d": 32,
+    "trades": 47,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x6740b542580cab8e25450becdf773e19cc7dbd1b",
+    "buys_30d": 0,
+    "buys_90d": 360,
+    "trades": 707,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x323bea72ad5303d5ea6a03f41821d097796385b2",
+    "buys_30d": 5,
+    "buys_90d": 256,
+    "trades": 312,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xdca0a37566e34bfd0224d0ed03fb80d92bd0a27c",
+    "buys_30d": 3,
+    "buys_90d": 129,
+    "trades": 206,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x7fb18ea3b3e8eb4932244596f791354a4e524ee0",
+    "buys_30d": 0,
+    "buys_90d": 29,
+    "trades": 95,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x2194f13d7edf606b2e0160e051afe8d65efb3a90",
+    "buys_30d": 0,
+    "buys_90d": 40,
+    "trades": 382,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xfeb62967b03452ab34a1d4cba0c8207037655f3a",
+    "buys_30d": 0,
+    "buys_90d": 134,
+    "trades": 490,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x80ce23002f42e7dbe4754fdacfe7baed8d9089cb",
+    "buys_30d": 0,
+    "buys_90d": 29,
+    "trades": 35,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xcdced8ba9bc4ba9aa2bf1259e61e7d6d2b26fa11",
+    "buys_30d": 1,
+    "buys_90d": 95,
+    "trades": 187,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x38ef0dcbff5887af7147853733446d85c25133c0",
+    "buys_30d": 0,
+    "buys_90d": 19,
+    "trades": 33,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xf307de25b80a51d680573425abec67b9729416c5",
+    "buys_30d": 0,
+    "buys_90d": 33,
+    "trades": 54,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xbca91eff66b35163885c60b1801a9a9b3de5d17c",
+    "buys_30d": 0,
+    "buys_90d": 20,
+    "trades": 25,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x6476afc3fbab47a52ae624c3c0180578d56d98ab",
+    "buys_30d": 0,
+    "buys_90d": 158,
+    "trades": 185,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xa1b0dd7eb1c43a148049508478d7315ed87f2dd9",
+    "buys_30d": 2,
+    "buys_90d": 29,
+    "trades": 45,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x8be63568ee6fd4958916ab5314d0f136a2ef2858",
+    "buys_30d": 0,
+    "buys_90d": 51,
+    "trades": 83,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x463225d9a1fc4c090d6a6384b11a450abdf9dbc2",
+    "buys_30d": 0,
+    "buys_90d": 45,
+    "trades": 65,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x64825eaa3dbe182f30a5dbf7530b6053fb9434b0",
+    "buys_30d": 6,
+    "buys_90d": 49,
+    "trades": 87,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb774645c9dcfaa47062d805c6537e756ac58a82d",
+    "buys_30d": 0,
+    "buys_90d": 151,
+    "trades": 229,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xe611e4b016882bcd52757a1d62aecb9f09542970",
+    "buys_30d": 0,
+    "buys_90d": 325,
+    "trades": 896,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x707cf38a4989ee252e7c21d195d2836d3ce6bb74",
+    "buys_30d": 0,
+    "buys_90d": 80,
+    "trades": 127,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xd27eebe26a691ba4593c3ef322bb1c65c42dc972",
+    "buys_30d": 0,
+    "buys_90d": 30,
+    "trades": 33,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x76c3630c539b00b93b00919ec863e90e37ccb702",
+    "buys_30d": 0,
+    "buys_90d": 28,
+    "trades": 42,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xc2ecdaf9ba7b5cc39eb2b38e091c954818325588",
+    "buys_30d": 1,
+    "buys_90d": 12,
+    "trades": 12,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x18b99087a5b51c2b51c2997e145a7fc9d597997c",
+    "buys_30d": 0,
+    "buys_90d": 40,
+    "trades": 62,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x680752b22046b325a04a58f3934ee9b2a4914107",
+    "buys_30d": 1,
+    "buys_90d": 156,
+    "trades": 258,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x7f1702c2eb026105d415d6dcd9094a82f824a832",
+    "buys_30d": 0,
+    "buys_90d": 154,
+    "trades": 574,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x46c371202c872cc11ead8bb949eadb63d093ed7d",
+    "buys_30d": 0,
+    "buys_90d": 52,
+    "trades": 64,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb167155707198ea368ae565ef1223f13a9df1bd1",
+    "buys_30d": 0,
+    "buys_90d": 14,
+    "trades": 33,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x151c969fd7c67fe65bade241a452c3db49d3094f",
+    "buys_30d": 4,
+    "buys_90d": 65,
+    "trades": 84,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xa8d18fea8daba0be7cda25fedf71dd75c37678af",
+    "buys_30d": 4,
+    "buys_90d": 9,
+    "trades": 9,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x82f9e1b3f33da0ac2cff74bbcb8b543a8f135655",
+    "buys_30d": 1,
+    "buys_90d": 10,
+    "trades": 10,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x19cc70f8e78caa84ac244f83dcce27f52f031215",
+    "buys_30d": 0,
+    "buys_90d": 48,
+    "trades": 91,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x20759a66d4ae405083a77c5fd944e0eaf75909d0",
+    "buys_30d": 0,
+    "buys_90d": 389,
+    "trades": 777,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x0fbb5ced8f13a979f3cc235d8843641d0660bb0b",
+    "buys_30d": 3,
+    "buys_90d": 10,
+    "trades": 11,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x0e8da0e70745cb389cc621e1e7b1c06a76508d84",
+    "buys_30d": 0,
+    "buys_90d": 51,
+    "trades": 76,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0x6a57283704dfa9fd9285e901cf53c173d2b79e28",
+    "buys_30d": 1,
+    "buys_90d": 89,
+    "trades": 168,
+    "cut": false,
+    "band": "selective"
+   },
+   {
+    "wallet": "0xb19366efd1d119df2c5511f6c225c8ae285deb5a",
+    "buys_30d": 0,
+    "buys_90d": 147,
+    "trades": 239,
+    "cut": false,
+    "band": "selective"
+   }
+  ],
+  "sparse": [
+   {
+    "wallet": "0x2928a12d7e6a0d0b730efb0a5dfe3d0dd67b96de",
+    "buys_30d": 5,
+    "buys_90d": 5,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xee908b26c21b38bf130fb0e344c14f205cf7a659",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 14,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xa5f9518df5c23cefc200f87ae64316229deab3a4",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x31d51ed2131ac4bf6f6e30ab50304fcdbbc875e0",
+    "buys_30d": 6,
+    "buys_90d": 6,
+    "trades": 1000,
+    "cut": true,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x66ca926015224eb94ed0dbec91ccb0b43a682fb5",
+    "buys_30d": 1,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x99614cc976c52d304ea9edadb3c94339ea9db294",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 26,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xcbba64cddd05171925ffd05d8f8abd38c83fdbff",
+    "buys_30d": 7,
+    "buys_90d": 7,
+    "trades": 1000,
+    "cut": true,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xf45f5f6a0f251a039816674705fbdc7419cdfeec",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 21,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x8c9c9fa55346e7e9bbe671ec29d549cbf920e847",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x874140c7a55afd00428c8b913c3221d00c38acea",
+    "buys_30d": 1,
+    "buys_90d": 7,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x6daff8ae4cbc6413db5f81d3f428aa046b1a53d0",
+    "buys_30d": 1,
+    "buys_90d": 6,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xbeccd7eae2e37a211ce0bcb606e3d6c2923490de",
+    "buys_30d": 4,
+    "buys_90d": 5,
+    "trades": 12,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x840b77843a5753678c8a6f38dc057e78a99ccbd3",
+    "buys_30d": 6,
+    "buys_90d": 6,
+    "trades": 15,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x87525d8192cc9eb9307f6e5a75106ed667b51b0b",
+    "buys_30d": 5,
+    "buys_90d": 5,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x8c637ee9698c7583a47ee92e337ae2863f40b564",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x4a0c0f99918f2854941d8a6ca7b3907d1573aaf0",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 11,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x8e1445d8c8fe28865b2d59ad0ede8713afc88cb7",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xc5f0cf09fd629cd1491f172be52143cfa308b81e",
+    "buys_30d": 1,
+    "buys_90d": 7,
+    "trades": 11,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xf721918448336c36d97c4312b119b21788b96012",
+    "buys_30d": 1,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x0e5bd76779e74304d08e759072abf126d87da593",
+    "buys_30d": 5,
+    "buys_90d": 5,
+    "trades": 1000,
+    "cut": true,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x880337744c960fd52a1682d8ee69a554d5a5ea2d",
+    "buys_30d": 6,
+    "buys_90d": 6,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x8c40c12c934908df99fb9d6ed4bbbe47dac89b20",
+    "buys_30d": 1,
+    "buys_90d": 6,
+    "trades": 13,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x455f2ef6f9bd01afb121b4866638665a74752f8a",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x40c62e9bdcc0901c3ec6d8025bb7e12b8eaa6aff",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 4,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x207c89c457fe5217c93766a56db0d5a40e7caeda",
+    "buys_30d": 7,
+    "buys_90d": 7,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x6e0e1a717bf4603aa0a54261dfd4b6e5fa7a4503",
+    "buys_30d": 2,
+    "buys_90d": 4,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x1c634720c60b12a5cef73062c461d351fb04ab42",
+    "buys_30d": 3,
+    "buys_90d": 7,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x80adc1bbf9fc845e62a91c831930567ce5898155",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xcebf2e47bf23b01a2dc7db9a21b06860f3aea2fb",
+    "buys_30d": 7,
+    "buys_90d": 7,
+    "trades": 11,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x3a77118eb0f32251aa7496856b8944c3d5a55faf",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x97d3b5bbda3c2a2686a7c5168a12f99f8daf24ea",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x0d1d2ecc36017fc48ddde325bbeb0394a53aeb2e",
+    "buys_30d": 3,
+    "buys_90d": 6,
+    "trades": 1000,
+    "cut": true,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x1d03a7d02f034396b74f991cbe961223f12bf3c0",
+    "buys_30d": 3,
+    "buys_90d": 3,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xe0d6421acc313b3ec1a21178bd2f07b5a7122ed8",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x5db10f6ce58a1a84cac4201878f697cffa2312b0",
+    "buys_30d": 1,
+    "buys_90d": 5,
+    "trades": 11,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xd6cd886400f4eb3fa2974d3403f7b49f286be1e7",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x2bf2756b8334d02d9cae0fa676c59486d33f45bc",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 1000,
+    "cut": true,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xad8fa14c214dd611e9b3310df55015d94faa6b52",
+    "buys_30d": 1,
+    "buys_90d": 4,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x84cfc85f51dd9f7b8622ebcf4939389dc8d999c6",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 24,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xafffd04796698bf2e5197fe470833cc486c82198",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xf5b06b7904f73517eca2b36d576776cf477f120a",
+    "buys_30d": 4,
+    "buys_90d": 4,
+    "trades": 19,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x8f03e03cb14742d62064590b1546de56e0212167",
+    "buys_30d": 2,
+    "buys_90d": 6,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xc787978f2545af96d7ffc7d5473f879991abf2b5",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xf673bb14746bc1cb1000b25ba322bc123dcdfe8a",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 4,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xfc767acda37d212038773c12dffc5122a3106ea1",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x6b085c38e1edc28ee6ccf8e71a5b6151c008cf2c",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xb8e3225d32b4ff211bd9f8c04366bdb744671d62",
+    "buys_30d": 6,
+    "buys_90d": 6,
+    "trades": 19,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x0267bfed73982b6be4abdceb2abacd63f747c9be",
+    "buys_30d": 3,
+    "buys_90d": 3,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xfdad7407e8dc2790a42588238d310b5db3e772ef",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x4e3b8fa9ca6e564dbfd2a60ceffd1e4680b3956a",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x25a3b328e3b9edebb8ef53d010f8e3b96c1b8323",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x2b3e77f8c7f60d7f7800adfdce432a500666006a",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xf8a1febd85b9ddb267361fcc5468ef7e7642f8c9",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x7e31e01c6090a41069ff9c278dc3e3d1cbabacaf",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xc91d80752455e265fe2da6ebc25ecad0155385fe",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 11,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xb30a3e142d282cbd9d1065099466394f5a811ba3",
+    "buys_30d": 1,
+    "buys_90d": 6,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x7bfba392ad54927fa2307c390af6b37f7a269109",
+    "buys_30d": 3,
+    "buys_90d": 3,
+    "trades": 1000,
+    "cut": true,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xef0d0456fb9cf6839c7a35d39e3dbca6c5460703",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 16,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x3ba62a1c9b97c3d277c06bd6a348804de6e62b2e",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xcd706d9b1c9ed1463eea9da57c3ad87772cb11e8",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 23,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x8e64f1e385509e70e667fde6cc0bc3fb27f28e7e",
+    "buys_30d": 3,
+    "buys_90d": 6,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x97c2a073750581905d11ad6e3b73a5ae62e8ba78",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 26,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x048c696b2684641a6de9ddfa3654bba372503d47",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xfa48935617d8ca1ae13b604ffbb96768957c6767",
+    "buys_30d": 1,
+    "buys_90d": 4,
+    "trades": 4,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x94e63de797642ef2746d001361100ac6669be804",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xf24b4e898838845c7f1ce935775a163e189292fd",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x9b7bdf7dab1ba22e697c087c06b0afcc625ff687",
+    "buys_30d": 6,
+    "buys_90d": 6,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x4e06d5ca98bfb038b04d352835d2f5aa380f8679",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x1b8cb5159c1b9f58e048f4bb4deff8874ec4d1b3",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 96,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x96c365cdff64eaf41030cbe92fd2af0b6ec25477",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xcde69b77006d69ad83c6f4b2c943f47893bc228a",
+    "buys_30d": 1,
+    "buys_90d": 3,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x7aecc2908553ea90de639b5ba2ab72662e1cb487",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 28,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x3348d145702946e7590f9bb5293bff40a961f75b",
+    "buys_30d": 1,
+    "buys_90d": 3,
+    "trades": 3,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x0c3ca746447f38237ea474d3626f6ede4a6e1679",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xba85b78d167f5dce00922ebb5cd23ee5469c8016",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 22,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x41073cc558c7402bd6e8e087a3af972233253478",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xbb3a1235449829c7335ec4f3be4859193b1430d6",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 22,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x69035ca0fcbf947d079877a644ad2d3ad57acd73",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 11,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x6ef4fdd33fb093860e67301a198f024462b0b7f9",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 17,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x2573a4619fff452604506fe0477adbce00a159d5",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 14,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xb8e1a628775c939e52e68080c5bd2bce42f60a7f",
+    "buys_30d": 5,
+    "buys_90d": 5,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x031a2cdb840584b92495d0c0e40ad2eae99b0a99",
+    "buys_30d": 1,
+    "buys_90d": 7,
+    "trades": 12,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x0370fa4c99f6a91862a47cb4b15eb7f097c828e3",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xf361203df2d1d86bdb1c8b90d99a51f6f9bf3f3d",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 4,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x65ead63ad7f90d8bba6926b42e5c07542edfd5ab",
+    "buys_30d": 2,
+    "buys_90d": 5,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x28294c9344298c9f3f27113e575a6b18c2e308e6",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 14,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xacc94cbd3a0e085e3af5a6081147fce75207585a",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x409d9915fdb8e726328f0fd4a04fabe4f6deeb8e",
+    "buys_30d": 1,
+    "buys_90d": 6,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xdcfbd8a42136dedbab11d0ad5e8099f428773ff0",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x46355845f1b16e7144cee65e4965ca9ee023a277",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x28c5b312ef50e6181409a6ee4010efacd96d6d40",
+    "buys_30d": 3,
+    "buys_90d": 3,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x49f0de1b00e957d6dfca5f0a61541ee9f94476ba",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x739fd7c19330a64557f68845e22de59c2480e5f7",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 46,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x5261afe37ba239bd5c60eeff2ce36949ff1b44ba",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 17,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xc57bc9c024785ca0cd4b6d03452202677825d794",
+    "buys_30d": 5,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xb3c7882057505ed1d1de200ea39082c6b4065ce5",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 22,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xf294b48a1ef8129631a775d2d7d74bcc8b06b67e",
+    "buys_30d": 4,
+    "buys_90d": 4,
+    "trades": 12,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x2f5753c2e0fdced47eadf503739737c1a28166b1",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x5bd5e20463b6383ad582243c2e9739a2e9b9b783",
+    "buys_30d": 1,
+    "buys_90d": 6,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x5d53b2f8f10e36e173d63dbaffb8ebad768f94ab",
+    "buys_30d": 2,
+    "buys_90d": 6,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xdfb62e5cf3e2a37edf8a0150d57c07033052d72a",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x4141ce18db5853c626b4a5b28b4fff965a138249",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x64006efcf18e97ba0a37ba981fe09a9ac086ed1a",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x9756df102256e290240b9530bb94a40e2e767576",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 3,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x8d6b30a7fb7eee3cbd35fcd05065dc3792a9c6d0",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 24,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x04f20bad24bdd354b340a1137adc27f8c2a4086e",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x18d498545586eaddb49e17475efc88798c89d6cf",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xcdc5cd4b04ec66e5ac84690cc20ec98913b065d5",
+    "buys_30d": 7,
+    "buys_90d": 7,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xbdbe8a99b0392ebfc8cfe6c4cb20f4cf82de4475",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xc365e9bb6d80ee953b5733bd7c46db4bfecbeae9",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 13,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x82385986efc371cee9abe9828c676d80b0a6f1ba",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x93d6c143ec7a14ceaccd13fc2514df3f2ff35cad",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x4879e56a9b18022eb1ba948dd6a9048cb6da757c",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x2c4f3de576263497a736daa236afc3e010b5590c",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x53e1bbb37130398f446105ac4a1cc2ea74bd0f05",
+    "buys_30d": 1,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xff6b8db0afe31c45da1683f282e774a76340765f",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xc6a5d46fb6c8f9430b73a11fbc0fb2c67db9ec7a",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xc58e49c0ac1fec5012fc5c671fdee7a810a16fe6",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x50cdf10b4b46c7451d00bd0b31bfdd7c2a3fdfb7",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 13,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x2a0ebb3a39a0109433d7140fd959545c3cd7a6fc",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 176,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x590fd4f3d27eeaa3dd748a0669c43bed45be890e",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 14,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x02e7f29f3e612a95a9ccca7131ce7dd5d56b59e5",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 1000,
+    "cut": true,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x76899fbcecb0576f526b62b21ddb01ae1a2e201f",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xab4778ab7b2592bfd00f1079d78ef6048d493307",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 12,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xcae4d51f5f48aebad397a9e8f5ff0956799a08b2",
+    "buys_30d": 5,
+    "buys_90d": 5,
+    "trades": 14,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x71df53b4b3255205d6aca84079e5d6413fc82e52",
+    "buys_30d": 4,
+    "buys_90d": 4,
+    "trades": 11,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x2733020d15c03bde83401c0bf777e59b46e04240",
+    "buys_30d": 6,
+    "buys_90d": 6,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x320e0dc9d69fb67e2eafca35a51f9b7d3eca7c82",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 52,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x9ccff51d0066d5e89ae3ceb86d9f5e8fdd1b5d22",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 4,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x77954d8ff44899192f2cfd782934d12e285e0ab3",
+    "buys_30d": 7,
+    "buys_90d": 7,
+    "trades": 13,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x26a00a38c2113c1c09dd68b975aa45bce1a749fa",
+    "buys_30d": 0,
+    "buys_90d": 4,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xa037872a30b0575c3c85b54377b45d3ea1d78824",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xed2ab6ce889faae40f4d83c326b9e23d4664bb70",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xff3c69e6ef87b5290aaae0e796d6bf7dc9f6373f",
+    "buys_30d": 1,
+    "buys_90d": 5,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x6c5d99999b6ad3dd2ff864c528092752c6b2a412",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 6,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x8e681930307f0c0d88f006b3c9d168b5d0cbdfea",
+    "buys_30d": 1,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x3f27d3a3dd3537e25f6b7b284d5cec86b091bfd4",
+    "buys_30d": 1,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xe2d54d74d26f761da376e4b9c675af97e338a45b",
+    "buys_30d": 6,
+    "buys_90d": 6,
+    "trades": 9,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x5c717f4e849aaff2308d42c7b14307b1a87d703c",
+    "buys_30d": 1,
+    "buys_90d": 4,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x790b0a5888e7e92d1e0dea50f8671b858b15c307",
+    "buys_30d": 1,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xc2ba7e65906e6d55b2488865a4e29f00ef2e1d8f",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x0a64f3e8921eec2a56574e70dc0c6f3f8c5b42c8",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 28,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xe743ff295b434cab50f17f5b5704a18dc35ceac0",
+    "buys_30d": 0,
+    "buys_90d": 6,
+    "trades": 10,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x9addf8dc2000df53be84217ff9a37135d290f8d6",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 8,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xdb3d006d812c8df8534683a3d01ff223b109bd92",
+    "buys_30d": 2,
+    "buys_90d": 7,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xec05f6751881dd47a0383f95ffc79f4026b7e4b8",
+    "buys_30d": 0,
+    "buys_90d": 7,
+    "trades": 7,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x2f5bb96e2da56a85e7bfddcad6e48f73e9bbe747",
+    "buys_30d": 7,
+    "buys_90d": 7,
+    "trades": 1000,
+    "cut": true,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0xd4525f8ecadc00a34539bf296adcfe63d00c9cf4",
+    "buys_30d": 2,
+    "buys_90d": 6,
+    "trades": 13,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x6943a8a1728752aed30e24d36ff89b899628c201",
+    "buys_30d": 0,
+    "buys_90d": 5,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   },
+   {
+    "wallet": "0x4346106f566a50e1a1d86a6974ff7e52a1733716",
+    "buys_30d": 0,
+    "buys_90d": 3,
+    "trades": 5,
+    "cut": false,
+    "band": "sparse"
+   }
+  ]
+ }
+}
