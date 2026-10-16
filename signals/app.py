@@ -1104,11 +1104,59 @@ def _monitor_flush() -> None:
         _monitor_state["error"] = f"{type(e).__name__}: {e}"
 
 
+# The scorer keeps each price history it reads as one small file in STORE_DIR/price-cache (uselayer's PriceTape), and
+# never removes any: ~300K of them used up the volume's 305,824 inodes on 2026-10-16 at 1.9 of 5 GB, and SQLite could
+# no longer open directory.db (every page that reads it answered 500). The newest PRICE_CACHE_KEEP files stay (a
+# rescore within days reads the same histories); the rest go, at launch and every PRICE_CACHE_PRUNE_S.
+PRICE_CACHE_KEEP = 100_000
+PRICE_CACHE_PRUNE_S = 3600
+INODES_WARN = 0.8  # a share of the volume's inodes in use that's logged, before it can stop the store
+
+
+def prune_price_cache(folder: Path | None = None, keep: int = PRICE_CACHE_KEEP) -> int:
+    """Remove all but the newest ``keep`` files of the price cache; how many were removed. A file that's gone by the
+    time it's removed (the scorer's own) is skipped."""
+    folder = STORE_DIR / "price-cache" if folder is None else folder
+    try:
+        files = [(e.stat().st_mtime, e.path) for e in os.scandir(folder) if e.is_file()]
+    except FileNotFoundError:
+        return 0
+    if len(files) <= keep:
+        return 0
+    files.sort()
+    removed = 0
+    for _, path in files[: len(files) - keep]:
+        try:
+            os.remove(path)
+            removed += 1
+        except FileNotFoundError:
+            pass
+    return removed
+
+
+def _store_housekeeping() -> None:
+    """The price cache kept to PRICE_CACHE_KEEP files, and a warning in the logs when the store's inodes run low."""
+    try:
+        removed = prune_price_cache(keep=PRICE_CACHE_KEEP)
+        st = os.statvfs(STORE_DIR)
+        used = 1 - st.f_ffree / st.f_files if st.f_files else 0.0
+        if removed or used >= INODES_WARN:
+            print(f"store: {removed} old price-cache files removed; inodes {used:.0%} used", flush=True)
+    except OSError as e:
+        print(f"store: housekeeping failed: {type(e).__name__}: {e}", flush=True)
+
+
 def _monitor_loop() -> None:
-    """Each SAMPLE_S, the engine's resources, and the counts kept; each MONITOR_LOG_S, any warning to the logs."""
+    """Each SAMPLE_S, the engine's resources, and the counts kept; each MONITOR_LOG_S, any warning to the logs. At
+    launch and every PRICE_CACHE_PRUNE_S, the store's housekeeping (``_store_housekeeping``)."""
     sampler = _monitor_state["sampler"] = monitoring.Sampler(STORE_DIR)
     logged = time.monotonic()
+    _store_housekeeping()
+    pruned = time.monotonic()
     while not _monitor_stop.wait(monitoring.SAMPLE_S):
+        if time.monotonic() - pruned >= PRICE_CACHE_PRUNE_S:
+            pruned = time.monotonic()
+            _store_housekeeping()
         try:
             sampler.sample()
         except OSError:
