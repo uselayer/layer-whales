@@ -19,10 +19,32 @@ def test_the_price_cache_keeps_its_newest_files_and_removes_the_rest(tmp_path: P
         f.write_text("[]")
         os.utime(f, (1_000 + i, 1_000 + i))  # 0.json oldest, 9.json newest
     (folder / "sub").mkdir()  # not a file: left alone
-    assert engine.prune_price_cache(folder, keep=4) == 6
+    assert engine.prune_price_cache(folder, keep=4, most=2) == 2  # launch's share: the oldest only
+    assert sorted(p.name for p in folder.iterdir())[:2] == ["2.json", "3.json"]
+    assert engine.prune_price_cache(folder, keep=4) == 4
     assert sorted(p.name for p in folder.iterdir()) == ["6.json", "7.json", "8.json", "9.json", "sub"]
     assert engine.prune_price_cache(folder, keep=4) == 0  # nothing more to do
     assert engine.prune_price_cache(tmp_path / "none", keep=4) == 0  # no cache yet
+
+
+def test_launch_prunes_the_cache_before_anything_opens_the_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+    from typing import Any
+
+    order: list[str] = []
+
+    class Thread:
+        def __init__(self, target: Any, **_: Any) -> None:
+            self.name = getattr(target, "__name__", "thread")
+
+        def start(self) -> None:
+            order.append(self.name)
+
+    monkeypatch.setattr(engine.threading, "Thread", Thread)
+    monkeypatch.setattr(engine, "_store_housekeeping", lambda most=None: order.append(f"prune {most}"))
+    monkeypatch.setattr(engine, "_directory_later", lambda write: order.append("directory write"))
+    asyncio.run(engine.lifespan(engine.app).__aenter__())  # launch only: shutdown would stop the module's loops
+    assert order[0] == f"prune {engine.PRICE_CACHE_LAUNCH_MOST}" and "_worth_loop" in order and "directory write" in order
 
 
 def test_housekeeping_says_what_it_removed_and_warns_on_inodes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

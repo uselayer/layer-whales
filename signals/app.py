@@ -88,6 +88,9 @@ def venue_on(venue: str) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # first, before anything opens the store (a volume out of inodes can't open directory.db), but only the oldest
+    # PRICE_CACHE_LAUNCH_MOST: enough room in seconds, inside Railway's 120 s health check; the monitor does the rest
+    _store_housekeeping(most=PRICE_CACHE_LAUNCH_MOST)
     threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
     threading.Thread(target=_live_loop, daemon=True).start()  # keeps the Feed's and alerts' trader reads filled
     _directory_later(_directory_import)  # the scores kept before the directory had them (once: then a no-op)
@@ -1107,15 +1110,19 @@ def _monitor_flush() -> None:
 # The scorer keeps each price history it reads as one small file in STORE_DIR/price-cache (uselayer's PriceTape), and
 # never removes any: ~300K of them used up the volume's 305,824 inodes on 2026-10-16 at 1.9 of 5 GB, and SQLite could
 # no longer open directory.db (every page that reads it answered 500). The newest PRICE_CACHE_KEEP files stay (a
-# rescore within days reads the same histories); the rest go, at launch and every PRICE_CACHE_PRUNE_S.
+# rescore within days reads the same histories); the rest go, oldest first: the oldest PRICE_CACHE_LAUNCH_MOST at
+# launch, before anything opens the store (``lifespan``, so a full volume recovers on deploy), the rest at the
+# monitor's first sample, then every PRICE_CACHE_PRUNE_S. Only regular files directly in price-cache: a cache, re-read
+# from Polymarket when needed.
 PRICE_CACHE_KEEP = 100_000
+PRICE_CACHE_LAUNCH_MOST = 30_000  # removed before launch goes on (~8 s per 30K measured locally; the volume is slower)
 PRICE_CACHE_PRUNE_S = 3600
 INODES_WARN = 0.8  # a share of the volume's inodes in use that's logged, before it can stop the store
 
 
-def prune_price_cache(folder: Path | None = None, keep: int = PRICE_CACHE_KEEP) -> int:
-    """Remove all but the newest ``keep`` files of the price cache; how many were removed. A file that's gone by the
-    time it's removed (the scorer's own) is skipped."""
+def prune_price_cache(folder: Path | None = None, keep: int = PRICE_CACHE_KEEP, most: int | None = None) -> int:
+    """Remove all but the newest ``keep`` files of the price cache, oldest first and at most ``most`` of them; how
+    many were removed. A file that's gone by the time it's removed (the scorer's own) is skipped."""
     folder = STORE_DIR / "price-cache" if folder is None else folder
     try:
         files = [(e.stat().st_mtime, e.path) for e in os.scandir(folder) if e.is_file()]
@@ -1125,7 +1132,7 @@ def prune_price_cache(folder: Path | None = None, keep: int = PRICE_CACHE_KEEP) 
         return 0
     files.sort()
     removed = 0
-    for _, path in files[: len(files) - keep]:
+    for _, path in files[: len(files) - keep][:most]:
         try:
             os.remove(path)
             removed += 1
@@ -1134,10 +1141,11 @@ def prune_price_cache(folder: Path | None = None, keep: int = PRICE_CACHE_KEEP) 
     return removed
 
 
-def _store_housekeeping() -> None:
-    """The price cache kept to PRICE_CACHE_KEEP files, and a warning in the logs when the store's inodes run low."""
+def _store_housekeeping(most: int | None = None) -> None:
+    """The price cache kept to PRICE_CACHE_KEEP files (at most ``most`` removed this time), and a warning in the logs
+    when the store's inodes run low."""
     try:
-        removed = prune_price_cache(keep=PRICE_CACHE_KEEP)
+        removed = prune_price_cache(keep=PRICE_CACHE_KEEP, most=most)
         st = os.statvfs(STORE_DIR)
         used = 1 - st.f_ffree / st.f_files if st.f_files else 0.0
         if removed or used >= INODES_WARN:
@@ -1147,12 +1155,11 @@ def _store_housekeeping() -> None:
 
 
 def _monitor_loop() -> None:
-    """Each SAMPLE_S, the engine's resources, and the counts kept; each MONITOR_LOG_S, any warning to the logs. At
-    launch and every PRICE_CACHE_PRUNE_S, the store's housekeeping (``_store_housekeeping``)."""
+    """Each SAMPLE_S, the engine's resources, and the counts kept; each MONITOR_LOG_S, any warning to the logs. Every
+    PRICE_CACHE_PRUNE_S, the store's housekeeping (``_store_housekeeping``; ``lifespan`` does it first at launch)."""
     sampler = _monitor_state["sampler"] = monitoring.Sampler(STORE_DIR)
     logged = time.monotonic()
-    _store_housekeeping()
-    pruned = time.monotonic()
+    pruned = time.monotonic() - PRICE_CACHE_PRUNE_S  # the rest of launch's housekeeping at the first sample
     while not _monitor_stop.wait(monitoring.SAMPLE_S):
         if time.monotonic() - pruned >= PRICE_CACHE_PRUNE_S:
             pruned = time.monotonic()
