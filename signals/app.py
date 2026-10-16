@@ -57,6 +57,7 @@ from signals.directory import (
     CHECK_BOARDS,
     EVIDENCE,
     EXPLORE_GROUPS,
+    LANES,
     LISTED_FRESH_S,
     QUICK_TRADES,
     SORTS,
@@ -632,7 +633,11 @@ NEW_SHARE = 0.5
 SCORE_READS = 50  # a full score's reads, about (measured 49 over a random 80, 2026-10-14)
 READS_DECAY = 0.98  # each round, older reads count a little less, so the share follows what's due lately
 _evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None, "leaderboards": None,
-                                   "since_launch": dict.fromkeys(OUTCOMES, 0), "reads": {"new": 0.0, "other": 0.0}}  # fmt: skip
+                                   "since_launch": dict.fromkeys(OUTCOMES, 0), "reads": {"new": 0.0, "other": 0.0},
+                                   # never-looked-at wallets' reads and how many, by lane (Directory.due's LANES)
+                                   "lanes": {lane: {"reads": 0.0, "wallets": 0.0} for lane in LANES},
+                                   # what came of each lane's wallets since launch: a lane's yield, for the owner
+                                   "lane_outcomes": {lane: dict.fromkeys((*OUTCOMES, "recommended"), 0) for lane in LANES}}  # fmt: skip
 
 
 def presented_wallets() -> frozenset[str]:
@@ -661,10 +666,22 @@ def _reserve_new() -> bool:
     return total > 0 and r["new"] / total < NEW_SHARE
 
 
-def _count_reads(kind: str, outcome: str) -> None:
+def _count_reads(kind: str, outcome: str, lane: str | None = None) -> None:
     quick = 0 if kind in ("presented", "recommended") else 1
     reads = quick + (SCORE_READS if outcome == "scored" else 0)
     _evaluate_state["reads"]["new" if kind == "new" else "other"] += reads
+    if lane in _evaluate_state["lanes"]:
+        _evaluate_state["lanes"][lane]["reads"] += reads
+        _evaluate_state["lanes"][lane]["wallets"] += 1
+        _evaluate_state["lane_outcomes"][lane][outcome] += 1
+
+
+def _lane_shares() -> tuple[dict[str, float], dict[str, float]]:
+    """Each lane's reads lately, and what one wallet from it costs on average (LANE_COST until it has a few)."""
+    lanes = _evaluate_state["lanes"]
+    reads = {k: v["reads"] for k, v in lanes.items()}
+    cost = {k: v["reads"] / v["wallets"] for k, v in lanes.items() if v["wallets"] >= 5}
+    return reads, cost
 
 
 def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None) -> QuickLook:
@@ -731,8 +748,9 @@ def evaluate_one(item: dict[str, Any]) -> str:
         d.score_failed(w, f"{type(e).__name__}: {e}")
         return "failed"
     d.keep_scores([_with_odds(scored) | {"format": WORTH_FORMAT}], "background")
-    if (lane := item.get("lane")) and scored.get("segment") in RECOMMENDED:  # each queue lane's yield (#88), by day
-        monitoring.usage.add("evaluated_lane", f"{lane}:recommended")
+    if (lane := item.get("lane")) in LANES and scored.get("segment") in RECOMMENDED:  # each queue lane's yield
+        _evaluate_state["lane_outcomes"][lane]["recommended"] += 1  # since launch, in /api/directory
+        monitoring.usage.add("evaluated_lane", f"{lane}:recommended")  # by day, in /api/monitoring
     return "scored"
 
 
@@ -744,7 +762,12 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
     reads = _evaluate_state["reads"]
     for k in reads:
         reads[k] *= READS_DECAY
-    due = directory().due(EVALUATE_BATCH, presented=presented_wallets(), new_first=_reserve_new())
+    for lane in _evaluate_state["lanes"].values():
+        lane["reads"] *= READS_DECAY
+        lane["wallets"] *= READS_DECAY
+    lane_reads, lane_cost = _lane_shares()
+    due = directory().due(EVALUATE_BATCH, presented=presented_wallets(), new_first=_reserve_new(),
+                          lane_reads=lane_reads, lane_cost=lane_cost)  # fmt: skip
     if due:
         _on_leaderboard(due)
     done = dict.fromkeys(OUTCOMES, 0)
@@ -757,7 +780,7 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
             return
         got = evaluate_one(item)
         with lock:
-            _count_reads(item["kind"], got)
+            _count_reads(item["kind"], got, item.get("lane"))
             done[got] += 1
             _evaluate_state["since_launch"][got] += 1
             monitoring.usage.add("evaluated", f"{item['kind']}:{got}")
