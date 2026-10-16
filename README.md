@@ -83,7 +83,7 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
     **Search name or wallet**, the period (7D / 30D / 90D, once the SDK provides it) and the sort: Recommended
     (the checks' order), Most consistent, Profit, Win rate, Most active, Copy result.
   - Columns, grouped: **Track record** (12-week consistency, profit, trend, won X of Y settled in the last 30
-    days), **Style** (their usual trade over the last 30 days and how often they trade), **Copying** (what a copy a few minutes late made
+    days, with how many the prices they paid implied: a trade bought at 80¢ wins about 80% of the time), **Style** (their usual trade over the last 30 days and how often they trade), **Copying** (what a copy a few minutes late made
     after fees, as a share of what it paid). On a phone each trader is one card.
   - Weeks in profit, trend, 7D/90D and the "per $ traded" return come from the SDK's profit history (uselayer
     0.6). Until then they show "—" and **Most consistent** says "coming soon"; nothing is made up.
@@ -102,10 +102,13 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
   - **A trader's profile** (from the leaderboard or a wallet search): their market and last trade, a link to their
     Polymarket profile, their tier, and their copy status under Follow (Copyable, Copy not proven, Costly to copy
     or Not offered, with "Why?"). A stat strip (profit and per $ traded for the
-    period, 12-week consistency, win record and usual trade over the last 30 days, wallet; a note says the period
-    switch changes only profit), a profit chart for 7D / 30D / 90D with the stretches
-    below their previous high shaded, and **Why they're here**: why they're on the list, their copy status and its reason, the SDK's
-    own warnings as a callout, then a short table (markets, buys at, new markets, holds, last bought). Tabs: **Positions** (open, with "You can still get in", and
+    period, 12-week consistency, win record (with what their prices implied) and usual trade over the last 30 days,
+    wallet; a note says the period switch changes only profit, and when these figures were worked out, while
+    Positions and Activity are read now), a profit chart for 7D / 30D / 90D, ending when the score was worked out, with the stretches
+    below their previous high shaded, and **Why they're here**: why they're on the list (for a listed trader who
+    trades more than one kind of market, where the same test holds on its own: "The same shows in Politics on its own
+    (28 trades)."), their copy status and its reason, the SDK's own warnings as a callout (a best day worth more than
+    all their profit in words, not "10731%"), then a short table (markets, buys at, new markets, holds, last bought). Tabs: **Positions** (open, with "You can still get in", and
     closed), **Activity** (their recent buys and sells) and **Stats** (consistency, risk, style, execution), with
     the evidence (each check, how the price moved after their buys, by category, the trades checked) under **How
     we measure this**. The wallet is their cash (read on-chain) plus open positions; anything that can't be read shows "—", never $0.

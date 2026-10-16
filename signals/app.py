@@ -1598,7 +1598,25 @@ def worth_wallet(wallet: str, request: Request, score: int = 1) -> dict[str, Any
             _directory_note_later([Seen(w, "search")])
         s = check_now(w, request)
     b = _board(s)
-    return with_links(s) | b | {"why": why_lines(s | b)} | ({"directory": row} if row is not None else {})
+    return (with_links(s) | b | {"why": why_lines(s | b), "risks": _risks(s)}
+            | ({"directory": row} if row is not None else {}))  # fmt: skip
+
+
+_BEST_DAY = re.compile(r"(\d+)% of their trading profit over these (\d+(?:\.\d+)?) days came on one day\.")
+
+
+def _risks(s: dict[str, Any]) -> list[str]:
+    """The SDK's warnings as a trader page shows them. A best day worth more than all their trading profit (they
+    lost money on the other days, taken together) reads as a broken number ("10731% of their trading profit…"), so
+    it's said in words."""
+    out = []
+    for r in s.get("risks") or []:
+        m = _BEST_DAY.fullmatch(r)
+        if m and int(m.group(1)) > 100:
+            r = (f"Their best day made more than their whole trading profit over these {m.group(2)} days: taken"
+                 " together, they lost money on the other days.")  # fmt: skip
+        out.append(r)
+    return out
 
 
 # ---- "Why they're here" on a trader's page: plain lines, from what the check kept ----
@@ -1658,6 +1676,12 @@ def why_lines(s: dict[str, Any]) -> dict[str, str | None]:
         listed = f"The price tends to move their way within minutes after they buy{over}, and it holds without their best trades."
     else:
         listed = f"Not on our list: {_trade_words(s['reason'])}" if s.get("reason") else "Not on our list."
+    # The same test within one kind of market (the SDK's strong categories: the price moved their way there over 8
+    # trades or more), said only for a listed trader who trades more than one kind, so it never reads against the tier.
+    strong = [c for c in cats if c.get("strong") and c["category"] in (s.get("strong_categories") or [])]
+    if section in ("sharp", "rising") and len(cats) > 1 and strong:
+        listed += " " + " ".join(f"The same shows in {c['category']} on its own ({(c.get('edge') or {}).get('n') or c['bets']} trades)."
+                                 for c in strong[:2])  # fmt: skip
     record = []
     profit = ((s.get("periods") or {}).get("30d") or {}).get("trading_pnl")
     if profit is None:
@@ -1865,7 +1889,9 @@ def _score_of(wallet: str) -> dict[str, Any]:
         return kept  # the directory's own, as Explore's pages reuse it
     if w not in _worth_one:
         try:
-            _worth_one[w] = checker().score(w).to_dict()  # its own share of Polymarket's reads, never the Feed's
+            # its own share of Polymarket's reads, never the Feed's; won, settled and odds over every checked trade
+            # (as the check and the background count them), before the directory keeps 30 of them
+            _worth_one[w] = _with_odds(checker().score(w).to_dict())
         except VenueError as e:
             if _WALLET.fullmatch(w):
                 why = f"{type(e).__name__}: {e}"

@@ -143,7 +143,11 @@ behind Vercel (see README, "Hosting").
     "Buy on Polymarket" link, which only opens the market, "Check your price" and "What buying now costs" stay
     for everyone: neutral market data, not a copy cue. Every figure names its period: only profit and trend follow the 7D/30D/90D switch; consistency is 12 weeks,
     win record and usual trade the last 30 days. Consistency is "X of N weeks up", where a week counts profit
-    taken plus the change in value of trades still open. A copy estimate prices the copy at the ask (uselayer
+    taken plus the change in value of trades still open. A win record always comes with what the prices they paid
+    implied ("Won 40 of 46 · their prices implied about 34"): a raw count flatters a trader who buys at 90¢, and it's
+    counted over every checked trade wherever the score came from. A trader page says when its figures were worked
+    out (the score's window end), never "Today", and that Positions and Activity are read now. A warning that reads
+    as a broken number (a best day over 100% of their profit) is said in words. A copy estimate prices the copy at the ask (uselayer
     0.8.1's `copy_entry`), never the middle price. A positive copy estimate that isn't reliably above zero says so
     ("If you'd bought after them: +0.7% after fees (range −1.2% to +2.6%), but we can't tell that from luck"),
     never shown as a gain.

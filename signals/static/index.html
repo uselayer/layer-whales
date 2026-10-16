@@ -1686,10 +1686,10 @@ function renderWorth() {
       <span class="lb-cons">${up == null || !known ? `<span class="lb-none">—</span>` : `<span class="lb-weeks" aria-hidden="true">${s.pnl_weeks.map((w) => `<i class="${w == null ? "none" : w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span><span class="lb-sub">${up} of ${known} weeks up</span>`}</span>
       <span class="lb-pnl">${profit == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(profit, usd(profit, true))}</span><span class="lb-sub">${perDollar != null ? `${lbPct(perDollar)} per $ traded` : `${days} days`}</span>`}</span>
       <span class="lb-trend">${lbSpark(s, days)}</span>
-      <span class="lb-won">${s.settled ? `<span class="lb-main">${s.won} of ${s.settled}</span><span class="lb-sub">${readDays(s) < 30 ? `settled · ${readDays(s)} days` : "settled"}</span>` : `<span class="lb-none">—</span>`}</span>
+      <span class="lb-won">${s.settled ? `<span class="lb-main">${s.won} of ${s.settled}</span><span class="lb-sub">${[readDays(s) < 30 ? `settled · ${readDays(s)} days` : "settled", impliedWins(s) != null ? `prices implied ${impliedWins(s)}` : ""].filter(Boolean).join(" · ")}</span>` : `<span class="lb-none">—</span>`}</span>
       <span class="lb-usual">${s.typical_usd != null ? `<span class="lb-main">${usd(s.typical_usd)}</span><span class="lb-sub">${perDayText(s.trades_per_day)}</span>` : `<span class="lb-none">—</span>`}</span>
       <span class="lb-copy">${copyMain}<span class="lb-sub">${copySub}</span></span>
-      <span class="lb-meta">${[s.settled ? `${readPeriod(s).replace("l", "L")}: won ${s.won} of ${s.settled}` : "", s.typical_usd != null ? `usually ${usd(s.typical_usd)}` : "", perDayText(s.trades_per_day)].filter(Boolean).join(" · ")}</span>
+      <span class="lb-meta">${[s.settled ? `${readPeriod(s).replace("l", "L")}: won ${s.won} of ${s.settled}${impliedWins(s) != null ? ` (prices implied ${impliedWins(s)})` : ""}` : "", s.typical_usd != null ? `usually ${usd(s.typical_usd)}` : "", perDayText(s.trades_per_day)].filter(Boolean).join(" · ")}</span>
       <span class="lb-copyline">${isCopyable(s) ? `Copyable.${copy != null ? ` ${copyEstimate(s)}` : ""}` : `<span class="lb-muted">${copyLabel(s)}.${copy != null ? ` ${copyEstimate(s)}` : ""}</span>`}</span>
     </a>`;
   };
@@ -2149,6 +2149,11 @@ async function loadProfileExtras(wallet, s) {
   if (location.hash === `#/worth/${wallet}` && pf.s === s) renderProfile();
 }
 
+// When a trader's score was worked out: its window ends then (whoever scored it: the check, the background, a page).
+const scoredAt = (s) => (Array.isArray(s.window) && s.window[1]) || (s.stored_at ? s.stored_at * 1000 : null);
+// The win count their prices implied: a trade bought at 80¢ wins about 80% of the time, so this is the count to
+// expect from the prices alone. None when the check didn't work it out.
+const impliedWins = (s) => s.odds != null && s.settled ? Math.round(s.odds * s.settled) : null;
 function pfChart(s, n) {
   const days = { "7d": 7, "30d": 30, "90d": 90 }[n];
   const raw = (s.pnl_daily || []).slice(-(days + 1)).map((p) => p[1]);
@@ -2169,7 +2174,7 @@ function pfChart(s, n) {
     <polygon points="${peaks.map(xy).join(" ")} ${pts.map(xy).reverse().join(" ")}" fill="var(--line)"/>
     <polyline points="${line}" fill="none" stroke="${tone}" stroke-width="2" stroke-linejoin="round"/>
     <circle cx="${X(last).toFixed(1)}" cy="${Y(pts[last]).toFixed(1)}" r="4" fill="${tone}"/>
-    <text x="${L}" y="${H - 6}">${PF_PERIOD[n]} ago</text><text x="${W - R}" y="${H - 6}" text-anchor="end">Today</text></svg>`;
+    <text x="${L}" y="${H - 6}">${PF_PERIOD[n]} ago</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${scoredAt(s) ? (ago(scoredAt(s)) === "just now" ? "Now" : ago(scoredAt(s))) : "Latest"}</text></svg>`;
   return { svg, worst };
 }
 
@@ -2265,7 +2270,7 @@ function renderProfile() {
     const ended = (k) => closedKnown.filter((c) => c.result === k).length;
     const closedRecord = closedKnown.length ? `${ended("won")} won · ${ended("lost")} lost · ${ended("sold")} sold` : "";
     body = `<div class="pf-group"><h3>Consistency</h3><div class="pf-kv">
-        <div><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)} weeks up` : dash}</b></div><div><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled} settled` : dash}</b></div>
+        <div><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)} weeks up` : dash}</b></div><div><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled} settled${impliedWins(s) != null ? ` · prices implied ${impliedWins(s)}` : ""}` : dash}</b></div>
         <div><span>Last ${closedN || 50} closed positions</span><b>${closedRecord || dash}</b></div>
         <div><span>All time without their biggest win</span><b>${without != null ? pl(without, usd(without, true)) : dash}</b></div><div><span>Longest run of losing weeks</span><b>${weeks.length ? longest : dash}</b></div></div></div>
       <div class="pf-group"><h3>Risk</h3><div class="pf-kv">
@@ -2283,16 +2288,16 @@ function renderProfile() {
 
   app.innerHTML = `${pf.from === "explore" ? `<a class="back" href="#/traders/explore">← Explore</a>` : `<a class="back" href="#/traders">← Traders</a>`}
     <div class="pf-head">${avatar(s.wallet, 64)}
-      <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${tier(s.segment, true)}</div><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null, s.stored_at ? `checked ${ago(s.stored_at * 1000)}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy || s.stored_at ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
+      <div class="grow"><div class="pf-name"><h1>${esc(name)}</h1>${tier(s.segment, true)}</div><div class="pf-tag">${[cats[0]?.category, s.last_buy ? `active ${ago(s.last_buy)}` : null, scoredAt(s) ? `checked ${ago(scoredAt(s))}` : null].filter(Boolean).map(esc).join(" · ")}${cats[0] || s.last_buy || scoredAt(s) ? " · " : ""}${profileLink(`https://polymarket.com/profile/${s.wallet}`)}</div></div>
       <div class="pf-cta"><div id="follow" class="pf-follow" data-wallet="${esc(s.wallet)}"></div>${copyStatus}</div></div>
     <div class="pf-stats">
       <div class="pf-stat"><span>Profit, ${PF_PERIOD[n]}</span><b>${profit != null ? pl(profit, usd(profit, true)) : "—"}</b><small>${started ? `since their first trade, ${ago(started)}` : perDollar != null ? `${lbPct(perDollar)} per $ traded` : "trading profit"}</small></div>
       <div class="pf-stat"><span>12-week consistency</span><b>${up != null && weeksOf(s) ? `${up} of ${weeksOf(s)}` : "—"}</b><small>${weeksOf(s) && weeksOf(s) < 12 ? "weeks up, since their first trade. " : "weeks up. "}${WEEK_COUNTS}</small></div>
-      <div class="pf-stat"><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>checked trades that settled</small></div>
+      <div class="pf-stat"><span>Won, ${readPeriod(s)}</span><b>${s.settled ? `${s.won} of ${s.settled}` : "—"}</b><small>${impliedWins(s) != null ? `their prices implied about ${impliedWins(s)}` : "checked trades that settled"}</small></div>
       <div class="pf-stat"><span>Usual trade, ${readPeriod(s)}</span><b>${s.typical_usd != null ? usd(s.typical_usd) : "—"}</b><small>${share != null ? `${lbPct(share).replace("+", "")} of their wallet` : s.trades_per_day != null ? perDayText(s.trades_per_day) : ""}</small></div>
       <div class="pf-stat"><span>Wallet</span><b>${walletTile[0]}</b><small>${walletTile[1]}</small></div>
     </div>
-    ${s.periods ? `<p class="pf-statnote">7D/30D/90D changes the profit figure and chart. Consistency, win record and usual trade are for the fixed periods shown.</p>` : ""}
+    ${s.periods || scoredAt(s) ? `<p class="pf-statnote">${s.periods ? "7D/30D/90D changes the profit figure and chart. Consistency, win record and usual trade are for the fixed periods shown. " : ""}${scoredAt(s) ? `These figures are from when we checked them, ${ago(scoredAt(s))}; Positions and Activity are read now.` : ""}</p>` : ""}
     <section class="pf-card pf-chart"><div class="pf-card-head"><h2>Profit</h2>${period("")}</div>
       ${chart ? `${chart.svg}<div class="pf-legend"><span><i></i>Below their previous high</span><span>Worst drop: ${usd(-chart.worst)}</span></div>`
         : `<p class="pf-empty">Their profit history isn't available yet.</p>`}
@@ -2329,7 +2334,7 @@ function worthDetails(s) {
     <p class="note">${esc(sdkText(s.source))} · last ${Math.round((new Date(s.window[1]) - new Date(s.window[0])) / 864e5)} days · ${plural(s.bets, "separate trade")} checked · ${conf}
       · <a class="ext" href="https://polymarket.com/profile/${esc(s.wallet)}" target="_blank" rel="noopener">${INTL} profile ↗</a></p>
     <h3>What the numbers mean</h3><ul>
-      <li><b>Won:</b> of the trades we checked (their first buy in each market over the ${readPeriod(s)}, bought at 2¢–98¢, up to 60), how many settled their way. Selling early doesn't change it.</li>
+      <li><b>Won:</b> of the trades we checked (their first buy in each market over the ${readPeriod(s)}, bought at 2¢–98¢, up to 60), how many settled their way. Selling early doesn't change it. <b>Prices implied</b> is how many the prices they paid said to expect: a trade bought at 80¢ wins about 80% of the time, so winning about as many as their prices implied says nothing either way about skill.</li>
       <li><b>Usual trade:</b> the middle of their first buys in each market over the ${readPeriod(s)}. Adding to a trade isn't counted.</li>
       <li><b>New markets:</b> how many markets they bought into for the first time, a day.</li>
       <li><b>Closed positions:</b> their last 50, from Polymarket. "Sold" means they sold at least half before the market settled.</li>
