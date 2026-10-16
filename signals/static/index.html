@@ -353,12 +353,21 @@
     .ex-row { grid-template-columns: 40px minmax(0, 1fr) 330px 150px; } /* fixed, so every row's figures line up */
   }
   .lb-board { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
-  .lb-cols { display: grid; grid-template-columns: 28px minmax(0, 1fr) 180px 120px 96px 104px 116px 136px; gap: 12px; align-items: center; padding: 14px 18px; }
+  /* one figure per cell, figures right-aligned so their sizes line up down the column */
+  .lb-cols { display: grid; grid-template-columns: 28px minmax(0, 1fr) 92px 84px 68px 94px 164px 80px 76px 124px; gap: 12px; align-items: center; padding: 11px 18px; }
+  .lb-num { text-align: right; justify-self: end; }
+  /* every column name has a plain one-line description under it (not a tooltip: always visible) */
+  .lb-head { align-items: start; }
+  .lb-head .lb-num { justify-self: stretch; }
+  .lb-desc { display: block; margin-top: 3px; font-size: 11px; line-height: 1.35; font-weight: 400; color: var(--faint); white-space: normal; }
   .lb-groups { padding-block: 10px 0; background: var(--soft); font-size: 12px; color: var(--muted); font-weight: 500; }
   .lb-groups span { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
   .lb-head { padding-block: 8px 10px; background: var(--soft); font-size: 12px; color: var(--muted); }
-  .lb-head button { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: inherit; text-align: left; cursor: pointer; }
+  .lb-head button { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: inherit; text-align: inherit; cursor: pointer; }
+  .lb-head .lb-lab { white-space: nowrap; }
   .lb-head button[aria-pressed="true"] { color: var(--fg); font-weight: 600; }
+  .lb-arrow { margin-left: 3px; color: var(--faint); }
+  .lb-head button[aria-pressed="true"] .lb-arrow { color: var(--fg); }
   .lb-row { border-top: 1px solid var(--line); color: inherit; }
   .lb-row:hover { background: var(--soft); }
   .lb-rank { color: var(--faint); font-size: 14px; }
@@ -367,13 +376,20 @@
   .lb-sub { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; }
   .lb-main { display: block; font-weight: 600; }
   .lb-none { color: var(--faint); }
+  .lb-line { white-space: nowrap; }
+  .lb-line .lb-main { display: inline; }
+  .lb-line .lb-sub, .lb-cons .lb-sub { display: inline; }
+  .lb-lbl { display: none; }
+  .lb-cons { display: flex; align-items: center; gap: 8px; }
   .lb-weeks { display: flex; gap: 2px; margin-bottom: 4px; }
+  .lb-cons .lb-weeks { margin: 0; }
+  .lb-trend { display: flex; align-items: center; color: var(--fg); }
   .lb-weeks i { width: 7px; height: 12px; border-radius: 2px; background: var(--line); }
   .lb-weeks i.up { background: var(--gain); }
   .lb-weeks i.down { background: color-mix(in srgb, var(--loss) 45%, var(--line)); }
   .lb-weeks i.none { background: none; box-shadow: inset 0 0 0 1px var(--line); }
-  .lb-trend { display: flex; align-items: center; color: var(--fg); }
   .lb-muted { color: var(--faint); }
+  .lb-copy { white-space: nowrap; }
   .lb-meta, .lb-copyline { display: none; }
   .lb-more { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; padding: 12px; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; }
   .lb-sec { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; padding: 18px 18px 10px; border-top: 1px solid var(--line); }
@@ -453,7 +469,7 @@
   }
 
   @media (max-width: 1180px) {
-    .lb-cols { grid-template-columns: 28px minmax(0, 1fr) 160px 108px 88px 96px 104px 128px; }
+    .lb-cols { grid-template-columns: 28px minmax(0, 1fr) 84px 76px 62px 90px 160px 76px 68px 116px; gap: 10px; }
   }
   @media (max-width: 1040px) {
     .lb-toolbar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; }
@@ -462,9 +478,10 @@
     .lb-search { flex: 1 1 100%; min-width: 0; } .lb-search input { width: 100%; }
     .lb-groups, .lb-head { display: none; }
     .lb-cols { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "who trend pnl" "cons cons cons" "meta meta meta" "copy copy copy"; gap: 6px 12px; padding: 16px; }
-    .lb-rank, .lb-won, .lb-usual, .lb-copy { display: none; }
-    .lb-who { grid-area: who; } .lb-pnl { grid-area: pnl; text-align: right; } .lb-trend { grid-area: trend; }
-    .lb-cons { grid-area: cons; display: flex; align-items: center; gap: 8px; margin-top: 4px; } .lb-cons .lb-weeks { margin: 0; }
+    .lb-rank, .lb-ret, .lb-won, .lb-set, .lb-drop, .lb-copy { display: none; }
+    .lb-who { grid-area: who; } .lb-pnl { grid-area: pnl; } .lb-trend { grid-area: trend; }
+    .lb-lbl { display: inline; }
+    .lb-cons { grid-area: cons; margin-top: 4px; }
     .lb-meta { grid-area: meta; display: block; font-size: 14px; color: var(--muted); }
     .lb-copyline { grid-area: copy; display: block; font-size: 14px; }
     .lb-sub { white-space: normal; }
@@ -1542,7 +1559,7 @@ function onboardingPage() {
 }
 // ---- traders: a leaderboard of the traders we recommend ----
 // One bar: market chips (the onboarding interests), Copyable only, search by name or wallet, period, sort.
-// Profit history (weeks in profit, trend, 7D/90D) comes from the SDK's next release; until then those columns
+// Profit history (weeks in profit, 7D/90D) comes from the SDK's next release; until then those columns
 // show "—" and "Most consistent" waits. Never a made-up number for a real trader (sample data is local-only).
 const SEG_ORDER = ["proven", "quiet", "rising"]; // the tiers we recommend, in order
 const RANKED = 25;
@@ -1633,7 +1650,13 @@ const LB_SORTS = {
   won: ["Win rate", byDesc(winRateOf)],
   active: ["Most active", byDesc((s) => s.trades_per_day)],
   copying: ["Copy estimate", byDesc((s) => s.copy_rank)],
+  return: ["Return per $", byDesc((s) => perDollarOf(s, lb.period))],
+  settled: ["Most settled trades", byDesc((s) => s.settled)],
 };
+// Fewer than 4 weeks since their first trade: "New" instead of a rank (the same 4 weeks Most consistent ranks from).
+const isNewTrader = (s) => s.weeks_known != null && s.weeks_known < 4;
+// The markets they're good at (where the checks found their edge strong), or the one they trade most.
+const goodAt = (s) => { const strong = (s.categories || []).filter((c) => c.strong).map((c) => c.category); return strong.length ? strong.slice(0, 2).join(", ") : s.categories?.[0]?.category; };
 function lbSpark(s, days, w = 76, h = 26) {
   const pts = (s.pnl_daily || []).slice(-(days + 1)).map((p) => p[1]); // n days: n + 1 end-of-day points
   if (pts.length < 2) return `<span class="lb-none">—</span>`;
@@ -1670,33 +1693,41 @@ function renderWorth() {
     .filter((s) => !q || (s.name || "").toLowerCase().includes(q) || s.wallet.startsWith(q))
     .sort(LB_SORTS[sort][1]);
 
-  const head = (key, label) => `<button type="button" data-lbsort="${key}" aria-pressed="${sort === key}" ${key === "consistent" && !history ? "disabled" : ""}>${label}</button>`;
-  const row = (s, i, open) => {
+  // Every column answers one question a trader asks, says so in a line under its name, and sorts where it can
+  // (↕, ↓ on the one in use). The order stays Recommended's: skilled traders first, in Sharps and Rising.
+  const head = (key, label, desc, num) => {
+    const inner = `<span class="lb-lab">${label}${key ? `<span class="lb-arrow" aria-hidden="true">${sort === key ? "↓" : "↕"}</span>` : ""}</span><span class="lb-desc">${desc}</span>`;
+    return key ? `<button type="button" class="${num ? "lb-num" : ""}" data-lbsort="${key}" aria-pressed="${sort === key}" ${key === "consistent" && !history ? "disabled" : ""}>${inner}</button>`
+      : `<span class="${num ? "lb-num" : ""}">${inner}</span>`;
+  };
+  const row = (s, i, open, rank) => {
     const up = weeksUp(s), known = weeksOf(s), profit = profitOf(s, n), perDollar = perDollarOf(s, n), copy = s.copy_return;
     const notRec = !SEG_ORDER.includes(s.segment) ? ` · ${esc(TIER[s.segment]?.[0] || "Not recommended")}` : "";
-    const cat = s.categories?.[0]?.category;
+    const winPct = s.settled ? `${Math.round((100 * s.won) / s.settled)}%` : null;
     // Copyable or not: a trader who isn't never gets a figure that reads as a gain, only their status (copyLabel).
-    const copyMain = isCopyable(s) ? (copy == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(copy, lbPct(copy))}</span>`)
-      : `<span class="lb-main lb-muted">${copyLabel(s)}</span>`;
-    const copySub = isCopyable(s) ? (copyRange(s) ? `range ${copyRange(s)}` : "estimate, after fees")
-      : copy != null ? `estimate ${lbPct(copy)}` : "";
+    const copyMain = isCopyable(s) ? (copy == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(copy, lbPct(copy))}</span><span class="lb-sub">${copyRange(s) ? `range ${copyRange(s)}` : "estimate, after fees"}</span>`)
+      : `<span class="lb-muted">${copyLabel(s)}</span>`;
+    const none = `<span class="lb-none">—</span>`;
     return `<a class="lb-cols lb-row" href="#/worth/${esc(s.wallet)}" ${i >= RANKED && !open ? "hidden" : ""}>
-      <span class="lb-rank">${i + 1}</span>
-      <span class="lb-who">${avatar(s.wallet, 40)}<span style="min-width:0"><span class="nm">${esc(displayName(s.name, s.wallet))}</span><span class="lb-sub">${[cat, s.last_buy ? `active ${ago(s.last_buy)}` : ""].filter(Boolean).map(esc).join(" · ")}${notRec}</span></span></span>
-      <span class="lb-cons">${up == null || !known ? `<span class="lb-none">—</span>` : `<span class="lb-weeks" aria-hidden="true">${s.pnl_weeks.map((w) => `<i class="${w == null ? "none" : w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span><span class="lb-sub">${up} of ${known} weeks up</span>`}</span>
-      <span class="lb-pnl">${profit == null ? `<span class="lb-none">—</span>` : `<span class="lb-main">${pl(profit, usd(profit, true))}</span><span class="lb-sub">${perDollar != null ? `${lbPct(perDollar)} per $ traded` : `${days} days`}</span>`}</span>
+      <span class="lb-rank">${rank}</span>
+      <span class="lb-who">${avatar(s.wallet, 36)}<span style="min-width:0"><span class="nm">${esc(displayName(s.name, s.wallet))}</span><span class="lb-sub">${[goodAt(s), s.last_buy ? `active ${ago(s.last_buy)}` : ""].filter(Boolean).map(esc).join(" · ")}${notRec}</span></span></span>
+      <span class="lb-pnl lb-num lb-line">${profit == null ? none : `<span class="lb-main">${pl(profit, usd(profit, true))}</span>`}</span>
+      <span class="lb-ret lb-num lb-line">${perDollar == null ? none : `<span class="lb-main">${pl(perDollar, lbPct(perDollar))}</span>`}</span>
+      <span class="lb-won lb-num lb-line">${winPct ? `<span class="lb-main">${winPct}</span>` : none}</span>
+      <span class="lb-set lb-num lb-line">${s.settled ? `<span class="lb-main">${s.settled}</span>` : none}</span>
+      <span class="lb-cons">${up == null || !known ? none : `<span class="lb-weeks" aria-hidden="true">${s.pnl_weeks.map((w) => `<i class="${w == null ? "none" : w > 0 ? "up" : w < 0 ? "down" : ""}"></i>`).join("")}</span><span class="lb-sub">${up} of 12<span class="lb-lbl"> weeks in profit</span></span>`}</span>
       <span class="lb-trend">${lbSpark(s, days)}</span>
-      <span class="lb-won">${s.settled ? `<span class="lb-main">${s.won} of ${s.settled}</span><span class="lb-sub">${readDays(s) < 30 ? `settled · ${readDays(s)} days` : "settled"}</span>` : `<span class="lb-none">—</span>`}</span>
-      <span class="lb-usual">${s.typical_usd != null ? `<span class="lb-main">${usd(s.typical_usd)}</span><span class="lb-sub">${perDayText(s.trades_per_day)}</span>` : `<span class="lb-none">—</span>`}</span>
-      <span class="lb-copy">${copyMain}<span class="lb-sub">${copySub}</span></span>
-      <span class="lb-meta">${[s.settled ? `${readPeriod(s).replace("l", "L")}: won ${s.won} of ${s.settled}` : "", s.typical_usd != null ? `usually ${usd(s.typical_usd)}` : "", perDayText(s.trades_per_day)].filter(Boolean).join(" · ")}</span>
-      <span class="lb-copyline">${isCopyable(s) ? `Copyable.${copy != null ? ` ${copyEstimate(s)}` : ""}` : `<span class="lb-muted">${copyLabel(s)}.${copy != null ? ` ${copyEstimate(s)}` : ""}</span>`}</span>
+      <span class="lb-drop lb-num lb-line">${none}</span>
+      <span class="lb-copy">${copyMain}</span>
+      <span class="lb-meta">${[perDollar != null ? `Return ${lbPct(perDollar)} per $` : "", winPct ? `won ${winPct} of ${s.settled} settled` : ""].filter(Boolean).join(" · ")}</span>
+      <span class="lb-copyline">${isCopyable(s) ? `Copyable.${copy != null ? ` ${copyEstimate(s)}` : ""}` : `<span class="lb-muted">${copyLabel(s)}</span>`}</span>
     </a>`;
   };
 
-  // One list of rows, with its own ranks and "Show more": a section, or every checked trader.
-  const rows = (list, key) => `${list.map((s, i) => row(s, i, lb.more[key])).join("")}
-      ${list.length > RANKED && !lb.more[key] ? `<button type="button" class="lb-more" data-lbmore="${key}">Show ${list.length - RANKED} more</button>` : ""}`;
+  // One list of rows, with its own ranks and "Show more": a section, or every checked trader. A new trader is
+  // marked "New" and takes no rank, so the numbers stay 1, 2, 3 among the rest.
+  const rows = (list, key) => { let r = 0; return `${list.map((s, i) => row(s, i, lb.more[key], isNewTrader(s) ? "New" : ++r)).join("")}
+      ${list.length > RANKED && !lb.more[key] ? `<button type="button" class="lb-more" data-lbmore="${key}">Show ${list.length - RANKED} more</button>` : ""}`; };
   // Recommended traders come in sections by tier: Sharps, then Rising, each when it has anyone. Copying is each
   // row's copy status ("Copyable only" filters on it); while nobody can be copied, the "Copying is paused"
   // callout above the list says so. "See all checked traders" stays one marked list.
@@ -1710,8 +1741,8 @@ function renderWorth() {
   let body;
   if (shown.length) {
     body = `<div class="lb-board ${history ? "" : "lb-nohist"}">
-      <div class="lb-cols lb-groups" aria-hidden="true"><span style="grid-column:3 / span 4">Track record</span><span style="grid-column:7">Style</span><span style="grid-column:8">Copying</span></div>
-      <div class="lb-cols lb-head"><span>#</span><span>Trader</span>${head("consistent", "12-week consistency")}${head("profit", "Profit")}<span>Trend</span>${head("won", "Won, 30 days")}${head("active", "Usual trade, 30 days")}${head("copying", "Copy estimate")}</div>
+      <div class="lb-cols lb-groups" aria-hidden="true"><span style="grid-column:3 / span 4">Results</span><span style="grid-column:7 / span 3">Consistency and risk</span><span style="grid-column:10">Copying</span></div>
+      <div class="lb-cols lb-head"><span>#</span><span>Trader<span class="lb-desc">The markets they're good at</span></span>${head("profit", `Profit, ${n.toUpperCase()}`, "Open trades at today's price", true)}${head("return", "Return per $", "Profit per $1 traded", true)}${head("won", "Win rate", "Picked the winner, 30 days", true)}${head("settled", "Settled trades", "Last 30 days", true)}${head("consistent", "Weeks in profit", "Out of the last 12")}${head(null, "Trend", "Profit over the period")}${head(null, "Biggest drop", "Coming soon", true)}${head("copying", "Copy status", "Buying after them")}</div>
       ${sections ?? rows(shown, "all")}</div>`;
   } else if (q && isWalletQuery(q)) {
     body = emptyState("That wallet isn't in this list", "We can still check its trades, including your own wallet. It usually takes under a minute.", `<a class="btn" href="#/worth/${esc(q)}">Check this wallet</a>`);
@@ -1740,7 +1771,7 @@ function renderWorth() {
           ? `<option value="consistent" disabled>Most consistent (coming soon)</option>` : `<option value="${k}" ${sort === k ? "selected" : ""}>${l}</option>`).join("")}</select>
       </div>
     </div>
-    ${sample ? `<p class="lb-note">Sample profit history (SIGNALS_MOCK=1): weeks in profit, trend and 7D/90D are made up here, to review the page. They never show on the hosted app.</p>` : ""}
+    ${sample ? `<p class="lb-note">Sample profit history (SIGNALS_MOCK=1): weeks in profit and 7D/90D are made up here, to review the page. They never show on the hosted app.</p>` : ""}
     ${paused ? pausedNote(`We don't loosen the checks to fill this list. <button class="link" id="howpaused">Why it's paused</button>`) : ""}
     ${body}
     ${passedLink()}
@@ -1749,8 +1780,8 @@ function renderWorth() {
       ${sort === "consistent" ? " · Most consistent ranks by weeks up out of the weeks they've traded (of the last 12), from 4 weeks" : ""}
       ${sort === "won" ? " · Win rate ranks from 10 settled trades, so a few lucky wins don't top it" : ""}
       ${sort === "copying" ? " · Copy estimate ranks by the bottom of its range, from 8 trades" : ""}
-      ${periods ? " · 7D/30D/90D changes profit and trend only: consistency always covers the last 12 weeks, wins and usual trade the last 30 days" : ""}
-      ${history ? "" : " · Weeks in profit, trend and 7D/90D arrive with the next data update"}
+      ${periods ? " · 7D/30D/90D changes profit, return per $ and trend: win rate and settled trades always cover the last 30 days (fewer for the busiest traders, whose page says how many), weeks in profit the last 12 weeks" : ""}
+      ${history ? "" : " · Weeks in profit and 7D/90D arrive with the next data update"}
       <br>${lb.all ? `Showing every checked trader except market makers and arbitrage · <button class="link" id="lbrec">Recommended only</button>` : `${left ? `${left} left out: an edge but losing lately, edge not proven, parlays (skill unmeasured), limited evidence, big profit with the edge unproven or resting on one win, market makers and arbitrage ·<button class="link" id="lbrec">See all checked traders</button>` : ""}`}
       · <a class="link" href="#/traders/top">Top profit</a>
       ${st.error ? ` · <span style="color:var(--danger)">Last check failed: ${esc(st.error)}</span>` : ""}</p>`;

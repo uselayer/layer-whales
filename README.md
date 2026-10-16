@@ -29,7 +29,7 @@ Then open http://127.0.0.1:8790.
 - `SIGNALS_PORT` (default 8790) and `SIGNALS_STORE_DIR` (default `~/.uselayer/signals`) change the port and
   where the Worth following results and price history live. `SIGNALS_WORTH_WALLETS` (default 200)
   is how many wallets Worth following checks.
-- `SIGNALS_MOCK=1` fills the leaderboard's profit-history columns (weeks in profit, trend, 7D/90D) with made-up
+- `SIGNALS_MOCK=1` fills the leaderboard's profit-history columns (weeks in profit, 7D/90D) with made-up
   sample values, marked as such, to review the page before the SDK provides them. Local only: ignored hosted.
 
 ## What's on the page
@@ -81,11 +81,15 @@ follows it ("Your markets: … · Change" opens the same picker), so the two alw
   their way before a copy gets in) or **Not offered**. A Proven sharp can be costly to copy.
   - One bar: on the left the market chips (your onboarding choice) and **Copyable only**; on the right
     **Search name or wallet**, the period (7D / 30D / 90D, once the SDK provides it) and the sort: Recommended
-    (the checks' order), Most consistent, Profit, Win rate, Most active, Copy result.
-  - Columns, grouped: **Track record** (12-week consistency, profit, trend, won X of Y settled in the last 30
-    days), **Style** (their usual trade over the last 30 days and how often they trade), **Copying** (what a copy a few minutes late made
-    after fees, as a share of what it paid). On a phone each trader is one card.
-  - Weeks in profit, trend, 7D/90D and the "per $ traded" return come from the SDK's profit history (uselayer
+    (the checks' order), Most consistent, Profit, Win rate, Most active, Copy result, Return per $, Most settled
+    trades.
+  - Columns, each answering a question traders ask, with a one-line description under its name: **Results**
+    (profit for the period, return per $ traded, win rate, settled trades in the last 30 days), **Consistency and
+    risk** (weeks in profit out of the last 12, trend, biggest drop: "—" until its figure is fixed), **Copying**
+    (copy status). Under the name, the markets they're good at. One figure per cell; the price move after they
+    buy, how often they trade and the copy estimate are on the trader's page. A trader with under 4 weeks of
+    history is marked New instead of ranked. On a phone each trader is one card.
+  - Weeks in profit, 7D/90D and the "per $ traded" return come from the SDK's profit history (uselayer
     0.6). Until then they show "—" and **Most consistent** says "coming soon"; nothing is made up.
   - A trader matches your markets when it's the category they trade most or one they're strong in. Searching a
     full wallet that isn't in the list offers **Check this wallet** (scored in up to a minute), including your
