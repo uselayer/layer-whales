@@ -1,0 +1,22 @@
+Reads per score, uselayer builds side by side (2026-10-15 ~05:00 UTC). 73 wallets (Signals' 43 recommended + 30
+research controls), scored live (days=30, sample=60) with bench_run.py, every data-API and Gamma read counted.
+All five builds ran at the same time from fresh processes; no errors.
+
+Builds: 0.12.0 = b6782ba (production); #26 = 2c1d9be; #26+#27 = e160f4c (merged to main as 830d01e);
+#26+#28 = maker-spread-skill before main was merged in; #26+#27+#28 = the two merged.
+
+build              mean   (vs 0.12.0)  median  capped(16)  others(57)  taker-feed reads
+0.12.0 (prod)      64.6   +0.0%        71.0    83.3        59.3        0.00
++#26               72.5   +12.3%       78.0    94.5        66.3        0.00
++#26 +#27          72.8   +12.7%       78.0    95.7        66.3        0.00
++#26 +#28          77.7   +20.4%       84.0    100.5       71.3        5.22
++#26 +#27 +#28     78.0   +20.7%       84.0    101.6       71.3        5.22
+
+Per endpoint, mean per score, 0.12.0 → #26+#27+#28:
+  /v2/prices-history 45.5 → 51.5   /activity 8.5 → 10.7   /trades?market (taker feed) 0 → 5.2
+  /markets 5.6, /closed-positions 1, /trades 1, /v2/user-pnl 1, /v2/user-stats 1, /value 1 (unchanged)
+
+Production on 0.12.0 (/api/monitoring by_day, 2026-10-15 UTC so far): 28,150 background reads, 2,821
+screenings (1 read each), 453 full scores, so (28,150 − 2,821) / 453 ≈ 56 reads per full score; × 1.207 ≈ 68.
+The same work then takes (453 × 68 + 2,821) / 28,150 ≈ 1.19× the reads; at the fixed 4 reads/s background
+budget that's ~16% fewer evaluations an hour.
