@@ -26,6 +26,7 @@ from signals.directory import (
     RECHECK_QUIET_S,
     RECHECK_SCORED_S,
     RETRY_S,
+    _LISTED,
     Directory,
     QuickLook,
     Seen,
@@ -246,6 +247,16 @@ def test_a_phase_2_directory_gets_a_schedule_from_what_it_already_knows(tmp_path
     assert again.wallet(AMY)["next_check"] == T0 - 3600 + BACKGROUND_RESCORE_S  # type: ignore[index]  # not at once
     assert again.wallet(BEN)["next_check"] == T0 - DAY and again.wallet(BEN)["seen_category"] == "Weather"  # type: ignore[index]
     assert [g["wallet"] for g in again.due(10, now=T0)] == [BEN]
+
+
+def test_the_queues_leaderboard_check_looks_up_each_wallets_own_sightings(d: Directory) -> None:
+    # on sightings_by_source it walked every recent leaderboard sighting for each wallet: 13 s a round in production
+    d.add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", rank=3)], at=T0)
+    with d._db() as con:
+        plan = " / ".join(r[3] for r in con.execute(f"EXPLAIN QUERY PLAN SELECT wallet FROM wallets q WHERE {_LISTED}",
+                                                     (T0 - DAY,)))  # fmt: skip
+    assert "sightings_by_source" not in plan and "sqlite_autoindex_sightings_1 (wallet=? AND source=?)" in plan, plan
+    assert [g["on_leaderboard"] for g in d.due(10, now=T0)] == [True]
 
 
 # ---- the budget ----
