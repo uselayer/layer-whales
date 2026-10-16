@@ -1,0 +1,3 @@
+# Raw Polymarket pulls (51 MB): rebuild with research/notable_pull.py (see research/notable-findings.md)
+*.jsonl.gz
+*.pkl

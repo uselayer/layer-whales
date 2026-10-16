@@ -1,0 +1,9 @@
+window 2026-10-14T03:54 → 2026-10-14T16:00 UTC, traders 0xcf7379b4, 0xf2f6af4f
+alert-worthy buys: production 280, replay 289
+matched (same trader and outcome, first fill within 2 min): 275
+replay only: 14; production only: 5
+replay $ / production $ on matched: median 1.000, share within 1%: 96%
+production-only by hour: [('05', 2), ('06', 1), ('13', 1), ('15', 1)]
+alerts: production 20 (Counter({'0xcf7379b4': 19, '0xf2f6af4f': 1})), cap message 05:14
+alerts: replay 20 (Counter({'0xcf7379b4': 19, '0xf2f6af4f': 1})), cap reached 04:49
+the 20 alerts: 16 of production's 20 are the same trader and outcome in the replay

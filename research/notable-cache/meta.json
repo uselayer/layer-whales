@@ -1,0 +1,117 @@
+{
+ "0x06dc51826bc524d9a83770e7de9dd7e005b04524": {
+  "activity_rows": 101826,
+  "history_from": "2026-09-11T00:51:43+00:00",
+  "positions": 1933,
+  "pulled_at": 1791995519.8145201,
+  "since": "2026-09-11"
+ },
+ "0x12d6cccfc7470a3f4bafc53599a4779cbf2cf2a8": {
+  "activity_rows": 12564,
+  "positions": 92,
+  "pulled_at": 1791994970.6577961,
+  "since": "2026-09-11"
+ },
+ "0x1cc16713196d456f86fa9c7387dd326a7f73b8df": {
+  "activity_rows": 114,
+  "positions": 57,
+  "pulled_at": 1791995006.99582,
+  "since": "2026-09-11"
+ },
+ "0x23d81ba9371e576015c1e562db09c689f56b0288": {
+  "activity_rows": 3833,
+  "positions": 382,
+  "pulled_at": 1791995013.544062,
+  "since": "2026-09-11"
+ },
+ "0x2c3928af89565c352afe8e2a1b25deed77a056dc": {
+  "activity_rows": 633,
+  "positions": 51,
+  "pulled_at": 1791995010.774824,
+  "since": "2026-09-11"
+ },
+ "0x2e0b70d482e6b389e81dea528be57d825dd48070": {
+  "activity_rows": 444,
+  "positions": 74,
+  "pulled_at": 1791995022.26112,
+  "since": "2026-09-11"
+ },
+ "0x401ee31e9ebf9ab9f6315cd95faca5f950436fc9": {
+  "activity_rows": 6141,
+  "history_from": "2026-09-11T05:30:22+00:00",
+  "positions": 26,
+  "pulled_at": 1791995847.479648,
+  "since": "2026-09-11"
+ },
+ "0x44c1dfe43260c94ed4f1d00de2e1f80fb113ebc1": {
+  "activity_rows": 1327,
+  "positions": 302,
+  "pulled_at": 1791995003.018208,
+  "since": "2026-09-11"
+ },
+ "0x511f9c771449162349795d17becf8b37031acbe1": {
+  "activity_rows": 21222,
+  "history_from": "2026-09-11T00:06:10+00:00",
+  "positions": 8732,
+  "pulled_at": 1791995769.7822201,
+  "since": "2026-09-11"
+ },
+ "0x6575759174ad221bba9947bc3f18750ec769b198": {
+  "activity_rows": 3686,
+  "positions": 70,
+  "pulled_at": 1791995024.204442,
+  "since": "2026-09-11"
+ },
+ "0x924379a79c64b77ad5816ad362122a5f6228658e": {
+  "activity_rows": 2077,
+  "history_from": "2026-09-11T03:42:13+00:00",
+  "positions": 167,
+  "pulled_at": 1791995743.667841,
+  "since": "2026-09-11"
+ },
+ "0xad5353afe30c2da57709e2704ef3ccdcf67eef24": {
+  "activity_rows": 120031,
+  "history_from": "2026-10-05T10:44:59+00:00",
+  "positions": 10000,
+  "pulled_at": 1791995191.8585742,
+  "since": "2026-09-11"
+ },
+ "0xbe89905ca9a689f5129621b62fcf715b5a45b88c": {
+  "activity_rows": 992,
+  "positions": 103,
+  "pulled_at": 1791995000.0911958,
+  "since": "2026-09-11"
+ },
+ "0xcf7379b4b891c06d88807f6f70efa75378120215": {
+  "activity_rows": 58957,
+  "positions": 8097,
+  "pulled_at": 1791993522.3562381,
+  "since": "2026-09-11"
+ },
+ "0xd29312e2446a746bbd94408e1c475f1ec6d7d683": {
+  "activity_rows": 2238,
+  "history_from": "2026-09-25T11:40:26+00:00",
+  "positions": 87,
+  "pulled_at": 1791995841.048717,
+  "since": "2026-09-11"
+ },
+ "0xd67ba35aef659c872377a5ac2becb7ada7f85780": {
+  "activity_rows": 416,
+  "positions": 24,
+  "pulled_at": 1791995008.852978,
+  "since": "2026-09-11"
+ },
+ "0xf2f6af4f27ec2dcf4072095ab804016e14cd5817": {
+  "activity_rows": 1058,
+  "positions": 667,
+  "pulled_at": 1791994965.767762,
+  "since": "2026-09-11"
+ },
+ "0xfb07f48542d2b655e9d0bf1cc92a8a6feee8e2cc": {
+  "activity_rows": 5381,
+  "history_from": "2026-09-11T00:25:34+00:00",
+  "positions": 2916,
+  "pulled_at": 1791995750.7988591,
+  "since": "2026-09-11"
+ }
+}
