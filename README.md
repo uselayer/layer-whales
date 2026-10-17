@@ -177,7 +177,8 @@ usesignals.app is the same engine, run with `SIGNALS_HOSTED=1`:
   Each wallet also has its evaluation: a status (found, never scored; scored; or failed, the last try failed, an
   earlier score kept), when it was last scored and last tried, its last activity (the latest trade of theirs
   whose time we know: a Feed trade, or the last buy a score saw; a leaderboard or market sighting never sets
-  it), and the latest score's segment and main category. Every score worked out is kept, at no extra reads: the
+  it), and the latest score's segment and main category. A wallet without a score has only where it was first
+  seen, which Explore and its page name as "found in Tech", never as what they trade: a score says that. Every score worked out is kept, at no extra reads: the
   Worth following check's 200, a wallet scored on its page, and a try that failed. The latest score is kept whole
   (compressed, 30 checked bets, about 6 KB a wallet), every score's headline figures stay in its history, and the
   latest score's price test in each category in its own table. A score never replaces a newer one, so a wallet a
