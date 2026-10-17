@@ -373,6 +373,24 @@ def test_a_budget_gives_way_at_half_its_rate_while_followed_traders_are_read() -
     assert c.t == pytest.approx(1003.25)  # the slot booked while giving way, then 4 a second again
 
 
+def test_the_backgrounds_scorer_is_a_fresh_one_every_few_hours(monkeypatch: pytest.MonkeyPatch) -> None:
+    # the SDK's scorer keeps every market and price history it reads: the background's must not live as long as the app
+    clock = {"t": 50_000.0}
+    monkeypatch.setattr(engine.time, "monotonic", lambda: clock["t"])
+    monkeypatch.setattr(engine, "_background", {})
+    whales = engine.background()
+    first, budget = whales.scorer(), engine._background["budget"]
+    clock["t"] += engine.SCORER_FRESH_S - 1
+    assert engine.background().scorer() is first  # within the interval: the same one, its markets and prices kept
+    clock["t"] += 1
+    assert engine.background() is whales and engine._background["budget"] is budget  # same client, same budget
+    fresh = whales.scorer()
+    assert fresh is not first and fresh.tape._dir == first.tape._dir  # a new one, past prices still on disk
+    assert first.markets.get([]) == {}  # one already in use still works: a score running keeps the scorer it took
+    clock["t"] += 60
+    assert engine.background().scorer() is fresh
+
+
 def test_check_now_scores_on_its_own_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     real = REAL_CHECKER()  # the engine's own client, each Polymarket read taken from the checks budget
     assert isinstance(real._poly._http, BackgroundHttp) and real._poly._http.budget is engine._check_budget
