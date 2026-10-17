@@ -435,18 +435,27 @@ def directory() -> Directory:
 
 _background: dict[str, Any] = {}
 _background_lock = threading.Lock()
+# The background's scorer is replaced by a fresh one this often. uselayer 0.12's scorer keeps every market and price
+# history it reads in memory for as long as it lives (about 0.9 MB a score), and the background's lived as long as
+# the app: ~430 MB an hour on 2026-10-16, against an 8 GB limit. A score already running keeps the scorer it started
+# with; the next one takes the fresh scorer. Past price histories stay on disk (price-cache), so mostly markets are
+# read again.
+SCORER_FRESH_S = 3 * 3600
 
 
 def background() -> Whales:
     """The SDK's reads for the background (the check, the sweep, the evaluation): the engine's own client, so the
     per-host limits are shared with every other read, with each Polymarket read also taken from one budget of
-    BACKGROUND_RATE a second (signals/budget.py). Its scorer keeps price histories where the check keeps them."""
+    BACKGROUND_RATE a second (signals/budget.py). Its scorer keeps price histories where the check keeps them, and
+    is a fresh one every SCORER_FRESH_S."""
     with _background_lock:
         if "whales" not in _background:
             budget = Budget(BACKGROUND_RATE, yield_to=_reading_followed)  # half rate while alerts' reads run
             whales = Whales(BackgroundHttp(reads._http, budget), reads._layer, reads)  # type: ignore[arg-type]
-            whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
-            _background.update(budget=budget, whales=whales)
+            _background.update(budget=budget, whales=whales, scorer_at=-SCORER_FRESH_S)
+        if time.monotonic() - _background["scorer_at"] >= SCORER_FRESH_S:
+            _background["whales"].scorer(cache_dir=str(STORE_DIR / "price-cache"))
+            _background["scorer_at"] = time.monotonic()
         return _background["whales"]  # type: ignore[no-any-return]
 
 
