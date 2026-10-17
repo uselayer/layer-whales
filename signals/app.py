@@ -57,7 +57,6 @@ from signals.directory import (
     CHECK_BOARDS,
     EVIDENCE,
     EXPLORE_GROUPS,
-    LANES,
     LISTED_FRESH_S,
     QUICK_TRADES,
     SORTS,
@@ -88,6 +87,9 @@ def venue_on(venue: str) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # first, before anything opens the store (a volume out of inodes can't open directory.db), but only the oldest
+    # PRICE_CACHE_LAUNCH_MOST: enough room in seconds, inside Railway's 120 s health check; the monitor does the rest
+    _store_housekeeping(most=PRICE_CACHE_LAUNCH_MOST)
     threading.Thread(target=_worth_loop, daemon=True).start()  # last result shows at once; refresh behind it
     threading.Thread(target=_live_loop, daemon=True).start()  # keeps the Feed's and alerts' trader reads filled
     _directory_later(_directory_import)  # the scores kept before the directory had them (once: then a no-op)
@@ -433,18 +435,27 @@ def directory() -> Directory:
 
 _background: dict[str, Any] = {}
 _background_lock = threading.Lock()
+# The background's scorer is replaced by a fresh one this often. uselayer 0.12's scorer keeps every market and price
+# history it reads in memory for as long as it lives (about 0.9 MB a score), and the background's lived as long as
+# the app: ~430 MB an hour on 2026-10-16, against an 8 GB limit. A score already running keeps the scorer it started
+# with; the next one takes the fresh scorer. Past price histories stay on disk (price-cache), so mostly markets are
+# read again.
+SCORER_FRESH_S = 3 * 3600
 
 
 def background() -> Whales:
     """The SDK's reads for the background (the check, the sweep, the evaluation): the engine's own client, so the
     per-host limits are shared with every other read, with each Polymarket read also taken from one budget of
-    BACKGROUND_RATE a second (signals/budget.py). Its scorer keeps price histories where the check keeps them."""
+    BACKGROUND_RATE a second (signals/budget.py). Its scorer keeps price histories where the check keeps them, and
+    is a fresh one every SCORER_FRESH_S."""
     with _background_lock:
         if "whales" not in _background:
             budget = Budget(BACKGROUND_RATE, yield_to=_reading_followed)  # half rate while alerts' reads run
             whales = Whales(BackgroundHttp(reads._http, budget), reads._layer, reads)  # type: ignore[arg-type]
-            whales.scorer(cache_dir=str(STORE_DIR / "price-cache"))
-            _background.update(budget=budget, whales=whales)
+            _background.update(budget=budget, whales=whales, scorer_at=-SCORER_FRESH_S)
+        if time.monotonic() - _background["scorer_at"] >= SCORER_FRESH_S:
+            _background["whales"].scorer(cache_dir=str(STORE_DIR / "price-cache"))
+            _background["scorer_at"] = time.monotonic()
         return _background["whales"]  # type: ignore[no-any-return]
 
 
@@ -633,11 +644,7 @@ NEW_SHARE = 0.5
 SCORE_READS = 50  # a full score's reads, about (measured 49 over a random 80, 2026-10-14)
 READS_DECAY = 0.98  # each round, older reads count a little less, so the share follows what's due lately
 _evaluate_state: dict[str, Any] = {"running": False, "error": None, "paused_until": None, "leaderboards": None,
-                                   "since_launch": dict.fromkeys(OUTCOMES, 0), "reads": {"new": 0.0, "other": 0.0},
-                                   # never-looked-at wallets' reads and how many, by lane (Directory.due's LANES)
-                                   "lanes": {lane: {"reads": 0.0, "wallets": 0.0} for lane in LANES},
-                                   # what came of each lane's wallets since launch: a lane's yield, for the owner
-                                   "lane_outcomes": {lane: dict.fromkeys((*OUTCOMES, "recommended"), 0) for lane in LANES}}  # fmt: skip
+                                   "since_launch": dict.fromkeys(OUTCOMES, 0), "reads": {"new": 0.0, "other": 0.0}}  # fmt: skip
 
 
 def presented_wallets() -> frozenset[str]:
@@ -666,22 +673,10 @@ def _reserve_new() -> bool:
     return total > 0 and r["new"] / total < NEW_SHARE
 
 
-def _count_reads(kind: str, outcome: str, lane: str | None = None) -> None:
+def _count_reads(kind: str, outcome: str) -> None:
     quick = 0 if kind in ("presented", "recommended") else 1
     reads = quick + (SCORE_READS if outcome == "scored" else 0)
     _evaluate_state["reads"]["new" if kind == "new" else "other"] += reads
-    if lane in _evaluate_state["lanes"]:
-        _evaluate_state["lanes"][lane]["reads"] += reads
-        _evaluate_state["lanes"][lane]["wallets"] += 1
-        _evaluate_state["lane_outcomes"][lane][outcome] += 1
-
-
-def _lane_shares() -> tuple[dict[str, float], dict[str, float]]:
-    """Each lane's reads lately, and what one wallet from it costs on average (LANE_COST until it has a few)."""
-    lanes = _evaluate_state["lanes"]
-    reads = {k: v["reads"] for k, v in lanes.items()}
-    cost = {k: v["reads"] / v["wallets"] for k, v in lanes.items() if v["wallets"] >= 5}
-    return reads, cost
 
 
 def quick_check(wallet: str, scored_at: float | None = None, now: float | None = None) -> QuickLook:
@@ -748,9 +743,8 @@ def evaluate_one(item: dict[str, Any]) -> str:
         d.score_failed(w, f"{type(e).__name__}: {e}")
         return "failed"
     d.keep_scores([_with_odds(scored) | {"format": WORTH_FORMAT}], "background")
-    if (lane := item.get("lane")) in LANES and scored.get("segment") in RECOMMENDED:  # each queue lane's yield
-        _evaluate_state["lane_outcomes"][lane]["recommended"] += 1  # since launch, in /api/directory
-        monitoring.usage.add("evaluated_lane", f"{lane}:recommended")  # by day, in /api/monitoring
+    if (lane := item.get("lane")) and scored.get("segment") in RECOMMENDED:  # each queue lane's yield (#88), by day
+        monitoring.usage.add("evaluated_lane", f"{lane}:recommended")
     return "scored"
 
 
@@ -762,12 +756,7 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
     reads = _evaluate_state["reads"]
     for k in reads:
         reads[k] *= READS_DECAY
-    for lane in _evaluate_state["lanes"].values():
-        lane["reads"] *= READS_DECAY
-        lane["wallets"] *= READS_DECAY
-    lane_reads, lane_cost = _lane_shares()
-    due = directory().due(EVALUATE_BATCH, presented=presented_wallets(), new_first=_reserve_new(),
-                          lane_reads=lane_reads, lane_cost=lane_cost)  # fmt: skip
+    due = directory().due(EVALUATE_BATCH, presented=presented_wallets(), new_first=_reserve_new())
     if due:
         _on_leaderboard(due)
     done = dict.fromkeys(OUTCOMES, 0)
@@ -780,7 +769,7 @@ def evaluate_round(stop: threading.Event | None = None) -> dict[str, Any]:
             return
         got = evaluate_one(item)
         with lock:
-            _count_reads(item["kind"], got, item.get("lane"))
+            _count_reads(item["kind"], got)
             done[got] += 1
             _evaluate_state["since_launch"][got] += 1
             monitoring.usage.add("evaluated", f"{item['kind']}:{got}")
@@ -1104,11 +1093,63 @@ def _monitor_flush() -> None:
         _monitor_state["error"] = f"{type(e).__name__}: {e}"
 
 
+# The scorer keeps each price history it reads as one small file in STORE_DIR/price-cache (uselayer's PriceTape), and
+# never removes any: ~300K of them used up the volume's 305,824 inodes on 2026-10-16 at 1.9 of 5 GB, and SQLite could
+# no longer open directory.db (every page that reads it answered 500). The newest PRICE_CACHE_KEEP files stay (a
+# rescore within days reads the same histories); the rest go, oldest first: the oldest PRICE_CACHE_LAUNCH_MOST at
+# launch, before anything opens the store (``lifespan``, so a full volume recovers on deploy), the rest at the
+# monitor's first sample, then every PRICE_CACHE_PRUNE_S. Only regular files directly in price-cache: a cache, re-read
+# from Polymarket when needed.
+PRICE_CACHE_KEEP = 100_000
+PRICE_CACHE_LAUNCH_MOST = 30_000  # removed before launch goes on (~8 s per 30K measured locally; the volume is slower)
+PRICE_CACHE_PRUNE_S = 3600
+INODES_WARN = 0.8  # a share of the volume's inodes in use that's logged, before it can stop the store
+
+
+def prune_price_cache(folder: Path | None = None, keep: int = PRICE_CACHE_KEEP, most: int | None = None) -> int:
+    """Remove all but the newest ``keep`` files of the price cache, oldest first and at most ``most`` of them; how
+    many were removed. A file that's gone by the time it's removed (the scorer's own) is skipped."""
+    folder = STORE_DIR / "price-cache" if folder is None else folder
+    try:
+        files = [(e.stat().st_mtime, e.path) for e in os.scandir(folder) if e.is_file()]
+    except FileNotFoundError:
+        return 0
+    if len(files) <= keep:
+        return 0
+    files.sort()
+    removed = 0
+    for _, path in files[: len(files) - keep][:most]:
+        try:
+            os.remove(path)
+            removed += 1
+        except FileNotFoundError:
+            pass
+    return removed
+
+
+def _store_housekeeping(most: int | None = None) -> None:
+    """The price cache kept to PRICE_CACHE_KEEP files (at most ``most`` removed this time), and a warning in the logs
+    when the store's inodes run low."""
+    try:
+        removed = prune_price_cache(keep=PRICE_CACHE_KEEP, most=most)
+        st = os.statvfs(STORE_DIR)
+        used = 1 - st.f_ffree / st.f_files if st.f_files else 0.0
+        if removed or used >= INODES_WARN:
+            print(f"store: {removed} old price-cache files removed; inodes {used:.0%} used", flush=True)
+    except OSError as e:
+        print(f"store: housekeeping failed: {type(e).__name__}: {e}", flush=True)
+
+
 def _monitor_loop() -> None:
-    """Each SAMPLE_S, the engine's resources, and the counts kept; each MONITOR_LOG_S, any warning to the logs."""
+    """Each SAMPLE_S, the engine's resources, and the counts kept; each MONITOR_LOG_S, any warning to the logs. Every
+    PRICE_CACHE_PRUNE_S, the store's housekeeping (``_store_housekeeping``; ``lifespan`` does it first at launch)."""
     sampler = _monitor_state["sampler"] = monitoring.Sampler(STORE_DIR)
     logged = time.monotonic()
+    pruned = time.monotonic() - PRICE_CACHE_PRUNE_S  # the rest of launch's housekeeping at the first sample
     while not _monitor_stop.wait(monitoring.SAMPLE_S):
+        if time.monotonic() - pruned >= PRICE_CACHE_PRUNE_S:
+            pruned = time.monotonic()
+            _store_housekeeping()
         try:
             sampler.sample()
         except OSError:

@@ -26,6 +26,7 @@ from signals.directory import (
     RECHECK_QUIET_S,
     RECHECK_SCORED_S,
     RETRY_S,
+    _LISTED,
     Directory,
     QuickLook,
     Seen,
@@ -179,16 +180,15 @@ def test_the_check_scoring_a_wallet_after_a_quick_check_doesnt_undo_the_quick_ch
 # ---- the queue ----
 
 
-def test_recommended_traders_come_first_then_wallets_never_looked_at_then_the_rest(d: Directory) -> None:
-    d.add([Seen(BEN, "search")], at=T0 - 3 * DAY)  # never looked at: only the broad sample has them (wallet order)
-    d.add([Seen(CAL, "search")], at=T0 - DAY)
+def test_recommended_traders_come_first_then_the_newest_found_then_the_rest(d: Directory) -> None:
+    d.add([Seen(BEN, "search")], at=T0 - 3 * DAY)  # an old find, never looked at
+    d.add([Seen(CAL, "search")], at=T0 - DAY)  # a newer one
     d.keep_scores([score(AMY, "proven")], "check", at=T0 - BACKGROUND_RESCORE_S - 1)  # recommended, due again
     d.keep_scores([score(DAN, "no_edge")], "check", at=T0 - RECHECK_SCORED_S - 1)  # a recheck
     got = d.due(10, now=T0)
-    # never looked at (the sample lane: wallet order) and due again (the recheck lane) take turns
-    assert [(g["wallet"], g["kind"]) for g in got] == [(AMY, "recommended"), (BEN, "new"), (DAN, "recheck"), (CAL, "new")]
+    assert [(g["wallet"], g["kind"]) for g in got] == [(AMY, "recommended"), (CAL, "new"), (BEN, "new"), (DAN, "recheck")]
     assert d.due_counts(now=T0) == {"presented": 0, "recommended": 1, "new": 2, "recheck": 1}
-    assert [g["wallet"] for g in d.due(2, now=T0)] == [AMY, BEN]
+    assert [g["wallet"] for g in d.due(2, now=T0)] == [AMY, CAL]
 
 
 def test_a_recommended_trader_people_are_shown_is_rescored_every_6_hours_any_other_daily(d: Directory) -> None:
@@ -247,6 +247,16 @@ def test_a_phase_2_directory_gets_a_schedule_from_what_it_already_knows(tmp_path
     assert again.wallet(AMY)["next_check"] == T0 - 3600 + BACKGROUND_RESCORE_S  # type: ignore[index]  # not at once
     assert again.wallet(BEN)["next_check"] == T0 - DAY and again.wallet(BEN)["seen_category"] == "Weather"  # type: ignore[index]
     assert [g["wallet"] for g in again.due(10, now=T0)] == [BEN]
+
+
+def test_the_queues_leaderboard_check_looks_up_each_wallets_own_sightings(d: Directory) -> None:
+    # on sightings_by_source it walked every recent leaderboard sighting for each wallet: 13 s a round in production
+    d.add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", rank=3)], at=T0)
+    with d._db() as con:
+        plan = " / ".join(r[3] for r in con.execute(f"EXPLAIN QUERY PLAN SELECT wallet FROM wallets q WHERE {_LISTED}",
+                                                     (T0 - DAY,)))  # fmt: skip
+    assert "sightings_by_source" not in plan and "sqlite_autoindex_sightings_1 (wallet=? AND source=?)" in plan, plan
+    assert [g["on_leaderboard"] for g in d.due(10, now=T0)] == [True]
 
 
 # ---- the budget ----
@@ -361,6 +371,24 @@ def test_a_budget_gives_way_at_half_its_rate_while_followed_traders_are_read() -
     for _ in range(4):
         b.take()
     assert c.t == pytest.approx(1003.25)  # the slot booked while giving way, then 4 a second again
+
+
+def test_the_backgrounds_scorer_is_a_fresh_one_every_few_hours(monkeypatch: pytest.MonkeyPatch) -> None:
+    # the SDK's scorer keeps every market and price history it reads: the background's must not live as long as the app
+    clock = {"t": 50_000.0}
+    monkeypatch.setattr(engine.time, "monotonic", lambda: clock["t"])
+    monkeypatch.setattr(engine, "_background", {})
+    whales = engine.background()
+    first, budget = whales.scorer(), engine._background["budget"]
+    clock["t"] += engine.SCORER_FRESH_S - 1
+    assert engine.background().scorer() is first  # within the interval: the same one, its markets and prices kept
+    clock["t"] += 1
+    assert engine.background() is whales and engine._background["budget"] is budget  # same client, same budget
+    fresh = whales.scorer()
+    assert fresh is not first and fresh.tape._dir == first.tape._dir  # a new one, past prices still on disk
+    assert first.markets.get([]) == {}  # one already in use still works: a score running keeps the scorer it took
+    clock["t"] += 60
+    assert engine.background().scorer() is fresh
 
 
 def test_check_now_scores_on_its_own_budget(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -600,99 +628,3 @@ def test_when_the_boards_cant_be_read_either_the_sightings_stand_and_it_says_so(
     engine.directory().add([Seen(AMY, "search")])
     assert engine.evaluate_round()["done"]["scored"] == 1
     assert sdk.scored == [(AMY, False)] and "couldn't be read" in engine._evaluate_state["leaderboards"]
-
-
-# ---- the lanes for wallets never looked at ----
-
-
-def lanes_dir(d: Directory) -> dict[str, str]:
-    """Two leaderboard wallets, two off the boards (a big market trader, a Feed trade), one seen only in a small way."""
-    w = {k: "0x" + c * 40 for k, c in (("top", "1"), ("deep", "2"), ("whale", "3"), ("feed", "4"), ("small", "5"))}
-    d.add([Seen(w["top"], "leaderboard", "PNL MONTH POLITICS", category="Politics", rank=4),
-           Seen(w["deep"], "leaderboard", "PNL ALL OVERALL", rank=8000),
-           Seen(w["whale"], "market", "Sports", category="Sports", trades=2, usd=24000.0),
-           Seen(w["feed"], "feed", "Crypto", category="Crypto", trades=1, usd=900.0),
-           Seen(w["small"], "market", "Sports", category="Sports", trades=10, usd=40.0)], at=T0 - DAY)  # fmt: skip
-    return w
-
-
-def test_each_lane_takes_its_own_kind_of_wallet_and_they_take_turns(d: Directory) -> None:
-    w = lanes_dir(d)
-    got = d.due(6, now=T0)
-    # the leaderboard lane by best place (#4 before #8,000), the off-board one by dollars a trade ($12K before $900),
-    # the sample in wallet order over everyone (it can reach a leaderboard wallet too: it's a sample of all of them)
-    assert [(g["wallet"], g["lane"]) for g in got[:3]] == [(w["top"], "board"), (w["whale"], "off_board"), (w["deep"], "sample")]
-    assert got[3]["wallet"] == w["feed"] and got[3]["lane"] == "off_board"  # the board lane has nobody left untaken
-    assert sorted(g["wallet"] for g in got) == sorted(w.values())  # everyone, once
-
-
-def test_a_lane_that_used_more_of_the_reads_lately_waits_its_turn(d: Directory) -> None:
-    lanes_dir(d)
-    got = d.due(3, now=T0, lane_reads={"board": 100.0, "off_board": 0.0, "sample": 0.0})
-    assert [g["lane"] for g in got] == ["off_board", "sample", "off_board"]  # the board lane is 100 reads ahead
-    cheap = d.due(3, now=T0, lane_cost={"off_board": 60.0})  # a lane whose wallets cost more gets fewer of them
-    assert [g["lane"] for g in cheap] == ["board", "off_board", "sample"]
-    assert "board" not in {g["lane"] for g in got}
-
-
-def test_a_lane_with_nobody_left_gives_way_so_coverage_never_stops(d: Directory) -> None:
-    board = ["0x" + f"{i:040x}" for i in range(1, 6)]
-    d.add([Seen(x, "leaderboard", "PNL MONTH OVERALL", rank=i) for i, x in enumerate(board, 1)], at=T0 - DAY)
-    got = d.due(5, now=T0)
-    assert {g["wallet"] for g in got} == set(board) and {g["lane"] for g in got} <= {"board", "sample"}
-
-
-def test_a_wallets_best_place_and_biggest_trade_are_kept_and_an_older_directory_gets_them(tmp_path: Any) -> None:
-    path = tmp_path / "directory.db"
-    d = Directory(path)
-    d.add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", rank=300), Seen(AMY, "market", "Sports", trades=4, usd=800.0)])
-    d.add([Seen(AMY, "leaderboard", "VOL ALL OVERALL", rank=40), Seen(AMY, "feed", "Sports", trades=1, usd=150.0)])
-    d.add([Seen(AMY, "leaderboard", "PNL WEEK SPORTS", rank=120)])
-    w = d.wallet(AMY)
-    # best place on a day, week or month board (all-time boards left out: #40 there doesn't count); most a trade
-    assert (w["best_rank"], w["seen_usd"]) == (120, 200.0)  # type: ignore[index]
-    with sqlite3.connect(path) as con:  # as an older directory: no lanes yet
-        con.execute("DROP INDEX wallets_new_by_rank")
-        con.execute("DROP INDEX wallets_new_by_size")
-        con.execute("ALTER TABLE wallets DROP COLUMN best_rank")
-        con.execute("ALTER TABLE wallets DROP COLUMN seen_usd")
-    again = Directory(path)
-    assert (again.wallet(AMY)["best_rank"], again.wallet(AMY)["seen_usd"]) == (120, 200.0)  # type: ignore[index]
-
-
-def test_the_evaluation_keeps_each_lanes_reads(store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    import time
-
-    now = time.time()
-    sdk = FakeSdk({}, {})
-    monkeypatch.setattr(engine, "background", lambda: sdk)
-    monkeypatch.setitem(engine._evaluate_state, "lanes", {lane: {"reads": 0.0, "wallets": 0.0} for lane in engine.LANES})
-    monkeypatch.setitem(engine._evaluate_state, "lane_outcomes",
-                        {lane: dict.fromkeys((*engine.OUTCOMES, "recommended"), 0) for lane in engine.LANES})  # fmt: skip
-    engine.directory().add([Seen(AMY, "leaderboard", "PNL MONTH OVERALL", rank=3),
-                            Seen(BEN, "market", "Sports", trades=1, usd=5000.0)], at=now - DAY)  # fmt: skip
-    engine.evaluate_round()  # both dormant (no trades): a quick look each
-    lanes = engine._evaluate_state["lanes"]
-    assert lanes["board"]["wallets"] == 1 and lanes["off_board"]["wallets"] == 1 and lanes["board"]["reads"] == 1
-    assert engine._evaluate_state["lane_outcomes"]["board"]["dormant"] == 1  # each lane's yield, for /api/directory
-
-
-def test_a_wallet_only_on_all_time_boards_is_no_lane_but_the_sample_not_off_board(d: Directory) -> None:
-    alltime = "0x" + "9" * 40
-    d.add([Seen(alltime, "leaderboard", "PNL ALL OVERALL", rank=3), Seen(alltime, "market", "Sports", trades=1, usd=9000.0)],
-          at=T0 - DAY)  # fmt: skip
-    got = d.due(5, now=T0)
-    assert [(g["wallet"], g["lane"]) for g in got] == [(alltime, "sample")]  # on a board: never "off the boards"
-
-
-def test_a_selective_trader_due_again_is_rechecked_before_other_rechecks_and_alongside_new_wallets(d: Directory) -> None:
-    sel, other = "0x" + "8" * 40, "0x" + "7" * 40
-    d.add([Seen(w, "market", "Sports", trades=1, usd=50.0) for w in (sel, other)], at=T0 - 10 * DAY)
-    d.quick_checked(other, QuickLook(False, "dormant", 0, 0, None, None), at=T0 - 30 * DAY)
-    d.quick_checked(sel, QuickLook(False, "not_enough_recent_evidence", 5, 14, None, None), at=T0 - 2 * DAY)
-    new = ["0x" + f"{i:040x}" for i in range(1, 30)]
-    d.add([Seen(w, "market", "Sports", trades=1, usd=500.0) for w in new], at=T0 - DAY)
-    got = d.due(6, now=T0)
-    rechecks = [g["wallet"] for g in got if g["kind"] == "recheck"]
-    assert rechecks and rechecks[0] == sel  # selective first, even though the other is longer overdue
-    assert any(g["kind"] == "new" for g in got[:3])  # and not waiting for every new wallet

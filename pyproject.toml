@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn>=0.30",
-  "uselayer>=0.12.0",  # client.whales: top traders, scores, copy trading (0.12.0: whales.positions, open positions in one read; 0.11.0: parlays left out before sampling, edge_verdict, tiers parlays and edge_losing, "Limited evidence"; 0.10.0: tiers from skill and record, never copying, segment_of; 0.9.0: find_wallets, every leaderboard and markets of every size; 0.8.2: best_price on copy previews; 0.8.1: copies priced at the ask, copy_entry; 0.8.0: copyable = reliably above zero, realized/unrealized, weeks with history, account with read time)
+  "uselayer>=0.12.1",  # client.whales: top traders, scores, copy trading (0.12.1: a scorer's memory is bounded; 0.12.0: whales.positions, open positions in one read; 0.11.0: parlays left out before sampling, edge_verdict, tiers parlays and edge_losing, "Limited evidence"; 0.10.0: tiers from skill and record, never copying, segment_of; 0.9.0: find_wallets, every leaderboard and markets of every size; 0.8.2: best_price on copy previews; 0.8.1: copies priced at the ask, copy_entry; 0.8.0: copyable = reliably above zero, realized/unrealized, weeks with history, account with read time)
   "pyjwt[crypto]>=2.8",
 ]
 
