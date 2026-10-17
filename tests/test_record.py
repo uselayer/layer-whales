@@ -51,7 +51,9 @@ def test_the_record_is_polymarkets_figures_with_open_positions_biggest_first(api
     client, fake = api
     r = client.get(f"/api/record/{W.upper().replace('0X', '0x')}").json()
     assert fake.calls == [(W, engine.RECORD_TRADES, 0)]  # their trades for categories; no closed positions read
-    assert r["stats"] == {k: STATS[k] for k in r["stats"]} and "fees_paid" not in r["stats"]
+    # Polymarket's volume counts contracts, never dollars; its "trades" isn't a trade count: left out
+    kept = ("trading_pnl", "realized_pnl", "unrealized_pnl", "pnl", "income", "biggest_win")
+    assert r["stats"] == {k: STATS[k] for k in kept} | {"volume_contracts": 410000.0}
     assert r["open"] == {"count": 10, "at_least": False, "value": 9120.0}  # an unpriced one isn't counted as $0
     assert [p["title"] for p in r["positions"][:2]] == ["Big", "Small"] and len(r["positions"]) == engine.RECORD_POSITIONS
     assert r["positions"][0]["category"] == "Sports"
@@ -89,7 +91,7 @@ FACTS = ("usd", "pl", "esc", "cents", "tenths", "centsPair", "recordFacts", "rec
 
 
 def test_the_page_says_its_a_record_not_a_skill_test_and_unknown_stays_a_dash(run_js: Any) -> None:
-    rec = ('{stats: {trading_pnl: 5200, realized_pnl: 6000, unrealized_pnl: -800, volume_usd: 410000, trades: 1234,'
+    rec = ('{stats: {trading_pnl: 5200, realized_pnl: 6000, unrealized_pnl: -800, volume_contracts: 410000,'
            ' biggest_win: null}, open: {count: 50, at_least: true, value: 9120}, joined: "2024-03-01T00:00:00Z",'
            ' categories: [{category: "Sports", markets: 2}], positions: [{title: "Big <b>", outcome: "Yes", value: 9000,'
            ' avg_price: 0.4, current_price: 0.5, category: "Sports"}]}')  # fmt: skip
@@ -97,7 +99,8 @@ def test_the_page_says_its_a_record_not_a_skill_test_and_unknown_stays_a_dash(ru
     facts = dict(got[0])
     assert facts["Profit from trading"].startswith('<span class="gain">+$5.2K</span> all time')
     assert "+$6K closed, −$800 still open" in facts["Profit from trading"]
-    assert facts["Volume"] == "$410K traded, all time" and facts["Trades"] == "1,234" and facts["Biggest win"] == "—"
+    assert facts["Contracts traded"] == "410K, all time" and facts["Biggest win"] == "—"  # contracts, never "$"
+    assert "Volume" not in facts and "Trades" not in facts
     assert facts["Open now"].startswith("50+ positions over 1 contract, worth $9.1K")
     assert "smaller ones can still add to the −$800 still open" in facts["Open now"]
     assert facts["Joined"].startswith("Mar 2024")  # in UTC
@@ -108,5 +111,5 @@ def test_the_page_says_its_a_record_not_a_skill_test_and_unknown_stays_a_dash(ru
     assert "+$1.2K closed, nothing still open" in dict(tiny)["Profit from trading"]  # never "−$0.00 still open"
     assert got[1][0][0].startswith("Big &lt;b&gt;") and "40¢ → 50¢ · Sports" in got[1][0][1]  # titles escaped
     assert "not a test of skill" in got[2] and "buying after them" in got[2]
-    assert dict(got[3]) == {"Profit from trading": "—", "Volume": "—", "Trades": "—", "Biggest win": "—",
+    assert dict(got[3]) == {"Profit from trading": "—", "Contracts traded": "—", "Biggest win": "—",
                             "Open now": "No positions over 1 contract", "Markets": "—"}  # fmt: skip

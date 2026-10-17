@@ -57,6 +57,24 @@ def test_pages_and_reads(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
     assert api.get("/api/links/kalshi/amy").json()["links"] == []
 
 
+def test_polymarket_volume_is_contracts_and_its_trades_figure_is_left_out(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # uselayer 0.12 passes Polymarket's volume on as dollars, but it counts contracts (the fills' sizes added up),
+    # and its "trades" isn't how many trades they made: neither may reach the page as what it isn't.
+    pat = Trader(venue="polymarket", id="0xabc", name="pat", rank=1, pnl=900.0, volume=43e6, volume_unit="usd")
+    stats = {"trading_pnl": 900.0, "volume_usd": 43e6, "trades": 14, "biggest_win": 10.0}
+    monkeypatch.setattr(engine.reads.whales, "top", lambda *a, **k: [pat])
+    monkeypatch.setattr(engine.reads.whales, "trader", lambda *a, **k: TraderDetail(pat, "visible", stats, [], []))
+    assert api.get("/api/top?venue=polymarket").json()[0]["volume_unit"] == "contracts"
+    d = api.get("/api/trader/polymarket/0xabc").json()
+    assert d["trader"]["volume_unit"] == "contracts"
+    assert d["stats"] == {"trading_pnl": 900.0, "volume_contracts": 43e6, "biggest_win": 10.0}
+    # an SDK that gets them right (uselayer-sdk#30: dollars, contracts, fills): passed through as they are
+    fixed = {"volume_usd": 20e6, "volume_contracts": 43e6, "trades": 16002}
+    assert engine.poly_stats(fixed) == fixed
+
+
 SCORE = {"wallet": "0xabc", "name": "sharpie", "segment": "quiet", "action": "follow", "sample": [{"market": "m"}]}
 COPYABLE = SCORE | {"label": "Quiet sharps", "copyable": "yes", "copy": {"mean": 0.02, "margin": 0.01, "n": 30, "z": 4.0, "low": 0.01, "high": 0.03}}
 

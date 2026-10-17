@@ -186,7 +186,22 @@ def top(venue: str = "all", by: str = "pnl", limit: int = 25) -> list[dict[str, 
         )
     except VenueError as e:
         raise venue_error(e) from e
-    return [t.to_dict() for t in rows]
+    # Polymarket's leaderboard volume counts contracts, as Kalshi's does (uselayer 0.12 calls it dollars)
+    return [t.to_dict() | ({"volume_unit": "contracts"} if t.venue == "polymarket" else {}) for t in rows]
+
+
+def poly_stats(stats: dict[str, Any]) -> dict[str, Any]:
+    """A Polymarket trader's figures as uselayer 0.12 passes them on, with its two mislabelled ones put right. Its
+    ``volume_usd`` is Polymarket's ``volume``, which counts contracts (the sizes of every fill added up; dollars are
+    ``volume_usdc``, which it doesn't pass on), so it's kept as ``volume_contracts``. Its ``trades`` isn't how many
+    trades they made (that's Polymarket's ``trade_count``, not passed on either), so it's left out. An SDK that
+    passes ``volume_contracts`` on (uselayer-sdk#30) has both right: its figures pass through as they are."""
+    if "volume_contracts" in stats:
+        return stats
+    out = {k: v for k, v in stats.items() if k not in ("volume_usd", "trades")}
+    if "volume_usd" in stats:
+        out["volume_contracts"] = stats["volume_usd"]
+    return out
 
 
 @app.get("/api/trading-now")
@@ -228,6 +243,9 @@ def trader(venue: str, trader_id: str) -> dict[str, Any]:
     ]
     if venue == "polymarket":
         out["trades"] = [t | {"us": us_of(t["market"], t.get("token"), t.get("outcome"))} for t in out["trades"]]
+        if "volume_contracts" not in out["stats"]:  # uselayer 0.12: the trader's volume is contracts too
+            out["trader"]["volume_unit"] = "contracts"
+        out["stats"] = poly_stats(out["stats"])
     return out
 
 
@@ -1755,8 +1773,8 @@ def _record(wallet: str) -> dict[str, Any]:
         "wallet": wallet,
         "name": d.trader.name,
         "joined": d.joined,
-        "stats": {k: d.stats.get(k) for k in ("trading_pnl", "realized_pnl", "unrealized_pnl", "pnl", "income",
-                                              "volume_usd", "trades", "biggest_win")},  # fmt: skip
+        "stats": poly_stats({k: d.stats.get(k) for k in ("trading_pnl", "realized_pnl", "unrealized_pnl", "pnl",
+                                                         "income", "volume_usd", "biggest_win")}),  # fmt: skip
         "open": {"count": len(held), "at_least": len(held) >= 50, "value": round(sum(values), 2) if values else None},
         "positions": [p.to_dict() | {"category": cats.get(p.market)} for p in held[:RECORD_POSITIONS]],
         "categories": [{"category": c, "markets": n} for c, n in per.most_common()],

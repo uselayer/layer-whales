@@ -2036,8 +2036,8 @@ function recordFacts(rec) {
     ? new Date(rec.joined).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : null;
   return [
     ["Profit from trading", st.trading_pnl != null ? `${pl(st.trading_pnl, usd(st.trading_pnl, true))} all time${split}` : "—"],
-    ["Volume", st.volume_usd != null ? `${usd(st.volume_usd)} traded, all time` : "—"],
-    ["Trades", st.trades != null ? Number(st.trades).toLocaleString("en-US") : "—"],
+    // Polymarket's volume counts contracts, not dollars; how many trades they made isn't passed on yet, so no row
+    ["Contracts traded", st.volume_contracts != null ? `${usd(st.volume_contracts).slice(1)}, all time` : "—"],
     ["Biggest win", st.biggest_win != null ? usd(st.biggest_win) : "—"],
     // Polymarket's positions list leaves out any under 1 contract, which its open profit still counts: said, never "None"
     ["Open now", (open.count ? `${open.count}${open.at_least ? "+" : ""} position${open.count === 1 ? "" : "s"} over 1 contract${open.value != null ? `, worth ${usd(open.value)}` : ""}`
@@ -2100,7 +2100,7 @@ async function topView() {
   if (topOpts.venue === "all") topOpts.by = "pnl";
   const venues = kalshiOn() ? [["all", "Both venues"], ["kalshi", "Kalshi"], ["polymarket", "Polymarket"]] : [];
   const opts = `<div class="opts">${venues.map(([v, l]) => `<button data-venue="${v}" class="${topOpts.venue === v ? "on" : ""}">${l}</button>`).join("")}
-    ${venues.length ? `<span class="gap"></span>` : ""}${[["pnl", "By profit"], ["volume", "By volume"]].map(([v, l]) => `<button data-by="${v}" class="${topOpts.by === v ? "on" : ""}" ${v === "volume" && topOpts.venue === "all" ? 'disabled title="Pick one venue: Kalshi counts contracts, Polymarket dollars"' : ""}>${l}</button>`).join("")}</div>`;
+    ${venues.length ? `<span class="gap"></span>` : ""}${[["pnl", "By profit"], ["volume", "By volume"]].map(([v, l]) => `<button data-by="${v}" class="${topOpts.by === v ? "on" : ""}" ${v === "volume" && topOpts.venue === "all" ? 'disabled title="Pick one venue: each counts its own contracts"' : ""}>${l}</button>`).join("")}</div>`;
   box.innerHTML = opts + skelRows(8);
   const bindOpts = () => {
     $$("[data-venue]", box).forEach((b) => (b.onclick = () => { topOpts.venue = b.dataset.venue; topView(); }));
@@ -2378,7 +2378,7 @@ async function traderPage(venue, id) {
   const name = displayName(t.name, t.id);
   const tiles = venue === "kalshi"
     ? [["Contracts traded", t.volume != null ? usd(t.volume).slice(1) : "—"], ["Markets traded", s.markets_traded?.toLocaleString() ?? "—"]]
-    : [["Traded", usd(s.volume_usd)], ["Biggest win", usd(s.biggest_win)]];
+    : [["Contracts traded", s.volume_contracts != null ? usd(s.volume_contracts).slice(1) : "—"], ["Biggest win", usd(s.biggest_win)]];
   app.innerHTML = `${back}
     <div class="th">${avatar(`${venue}:${t.id}`, 64)}<div style="min-width:0"><h1 class="name">${esc(name)}</h1>
       <div class="badges"><span class="tier t3">${VENUE[venue]}</span>${t.x_handle ? `<span class="badge">@${esc(t.x_handle)}</span>` : ""}</div>
