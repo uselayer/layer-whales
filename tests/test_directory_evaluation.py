@@ -102,7 +102,7 @@ def test_a_read_cut_short_only_judges_the_time_it_covers() -> None:
 
 def test_each_reason_reads_as_a_sentence() -> None:
     assert reason_label("not_enough_recent_evidence", 5) == (
-        "Not enough recent evidence: 5 bets in the last 30 days, and 8 are needed to judge a trader")
+        "Not enough recent evidence: 5 markets traded in the last 30 days, and 8 are needed to judge a trader")
     assert reason_label("not_trading_lately") == "Not trading lately: no buy in the last 7 days"
     assert reason_label("dormant") == "Dormant: no buy in the last 90 days"
     assert reason_label(None) is None  # recommended
