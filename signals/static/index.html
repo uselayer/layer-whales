@@ -2174,7 +2174,7 @@ function pfChart(s, n) {
     <polygon points="${peaks.map(xy).join(" ")} ${pts.map(xy).reverse().join(" ")}" fill="var(--line)"/>
     <polyline points="${line}" fill="none" stroke="${tone}" stroke-width="2" stroke-linejoin="round"/>
     <circle cx="${X(last).toFixed(1)}" cy="${Y(pts[last]).toFixed(1)}" r="4" fill="${tone}"/>
-    <text x="${L}" y="${H - 6}">${PF_PERIOD[n]} ago</text><text x="${W - R}" y="${H - 6}" text-anchor="end">Today</text></svg>`;
+    <text x="${L}" y="${H - 6}">${PF_PERIOD[n]} ago</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${s.window?.[1] ? ago(s.window[1]) : "Latest"}</text></svg>`; // it ends when the score was worked out
   return { svg, worst };
 }
 
