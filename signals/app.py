@@ -1874,7 +1874,8 @@ def _score_of(wallet: str) -> dict[str, Any]:
         return kept  # the directory's own, as Explore's pages reuse it
     if w not in _worth_one:
         try:
-            _worth_one[w] = checker().score(w).to_dict()  # its own share of Polymarket's reads, never the Feed's
+            # its own share of Polymarket's reads, never the Feed's; with when, so the page can say how old it is
+            _worth_one[w] = checker().score(w).to_dict() | {"scored_at": time.time()}
         except VenueError as e:
             if _WALLET.fullmatch(w):
                 why = f"{type(e).__name__}: {e}"
